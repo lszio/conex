@@ -3,5 +3,6 @@ dist
 *.log
 .DS_Store
 .env
+.claude
 scripts/check-status-options.ts
 scripts/check-status-values.ts

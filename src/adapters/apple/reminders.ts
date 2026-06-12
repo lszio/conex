@@ -1,7 +1,10 @@
 // Apple Reminders 适配器 — 通过 AppleScript 操作 Reminders
 // 参见 ARCHITECTURE.md §5.2: Phase 1 用 AppleScript, Phase 3 迁移到 Swift/EventKit
 
-import { $ } from "bun";
+import { execFile } from "child_process";
+import { promisify } from "util";
+
+const execFileAsync = promisify(execFile);
 import type { ReminderData, ReminderList, AppleRemindersStatus } from "./types.js";
 
 const CONEX_LIST = "CONEX-Anytype";
@@ -53,8 +56,11 @@ export class AppleRemindersAdapter {
     /** 执行 AppleScript 并返回 stdout */
     private async runScript(script: string): Promise<string> {
         try {
-            const result = await $`osascript -e ${script}`;
-            return result.text().trim();
+            const { stdout } = await execFileAsync("osascript", ["-e", script], {
+                maxBuffer: 1024 * 1024, // 1MB
+                timeout: 30_000,        // 30s
+            });
+            return stdout.trim();
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : String(e);
             // AppleScript 错误通常是 stderr 中的内容

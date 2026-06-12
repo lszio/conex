@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist/cli",
+    "rootDir": "src/cli",
+    "paths": {
+      "../engine/*": ["../src/engine/*"],
+      "../store/*": ["../src/store/*"],
+      "../adapters/*": ["../src/adapters/*"],
+      "../mappers/*": ["../src/mappers/*"]
+    }
+  },
+  "include": ["src/cli/**/*.ts"]
+}

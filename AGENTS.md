@@ -62,11 +62,21 @@ CONEX 是 Anytype ↔ Apple 生态的同步桥接层。以 Anytype 为数据主�
 ## 验证方式
 
 ```bash
-bun test                           # 单元测试 (11 个)
+bun test                           # 单元测试 (13 个)
 bun run verify:anytype             # Anytype API 连通性
 bun run verify:apple               # Apple Reminders 操作
-bun run sync -- --space <id>       # 执行一次同步
+bun run sync -- --space <id>       # 执行一次双向同步
 bun run status                     # 查看同步状态
 bun run config show                # 查看配置
 bun run history                    # 同步历史
 ```
+
+## graphify
+
+This project has a graphify knowledge graph at graphify-out/.
+
+Rules:
+- Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure
+- If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
+- For cross-module "how does X relate to Y" questions, prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` over grep — these traverse the graph's EXTRACTED + INFERRED edges instead of scanning files
+- After modifying code files in this session, run `graphify update .` to keep the graph current (AST-only, no API cost)
