@@ -31,7 +31,7 @@ program
   .option("--space <id>", "限定同步到指定 Anytype 空间")
   .option("--batch-size <size>", "每批查询的对象数", "50")
   .action(async (options) => {
-    const engine = new SyncEngine({
+    const engine = await SyncEngine.create({
       spaceId: options.space,
       batchSize: parseInt(options.batchSize, 10) || 50,
     });
@@ -66,7 +66,7 @@ program
   .command("status")
   .description("查看 CONEX 各适配器状态和同步概览")
   .action(async () => {
-    const engine = new SyncEngine();
+    const engine = await SyncEngine.create();
     const store = getSyncStore();
 
     console.log("🔍 CONEX 状态\n");
@@ -117,14 +117,15 @@ const configCmd = program.command("config").description("查看和修改 CONEX �
 configCmd
   .command("show")
   .description("显示当前配置")
-  .action(() => {
+  .action(async () => {
     const store = getSyncStore();
     const config = store.listConfig();
 
     console.log("🔧 CONEX 配置\n");
 
+    const keySet = await hasApiKey();
     const keys: Record<string, string> = {
-      "anytype.api_key_set": hasApiKey() ? "✅ 已配置" : "❌ 未配置",
+      "anytype.api_key_set": keySet ? "✅ 已配置" : "❌ 未配置",
     };
 
     for (const row of config) {
@@ -144,10 +145,10 @@ configCmd
   .description("设置配置值")
   .argument("<key>", "配置键")
   .argument("<value>", "配置值")
-  .action((key: string, value: string) => {
+  .action(async (key: string, value: string) => {
     if (key === "anytype.api_key") {
-      saveCredentials({ apiKey: value });
-      console.log("✅ Anytype API Key 已保存到 ~/.conex/credentials.json");
+      await saveCredentials({ apiKey: value });
+      console.log("✅ Anytype API Key 已保存到 ~/.conex/config.yaml");
       process.exit(0);
     }
 

@@ -27,15 +27,16 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "verify:anytype": "bun run scripts/anytype-poll.ts",
-    "verify:apple": "bun run scripts/apple-test.ts"
+    "verify:apple": "bun run scripts/apple-test.ts",
+    "sync": "bun run src/cli/index.ts sync",
+    "status": "bun run src/cli/index.ts status",
+    "config": "bun run src/cli/index.ts config",
+    "history": "bun run src/cli/index.ts history"
   },
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ],
   "dependencies": {
+    "@layerc/core": "file:../layerc/packages/core",
     "commander": "^15.0.0",
+    "yaml": "^2.9.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
