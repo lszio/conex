@@ -2,14 +2,14 @@
 // 基于 Anytype OpenAPI v2025-11-08 的实际端点
 //
 // 关键端点:
-//   GET  /v1/spaces                          — 列出空间
-//   GET  /v1/spaces/{space_id}               — 获取空间详情
-//   GET  /v1/spaces/{space_id}/objects       — 列出对象
-//   GET  /v1/spaces/{space_id}/objects/{id}  — 获取对象详情
-//   PATCH /v1/spaces/{space_id}/objects/{id} — 更新对象
-//   POST /v1/search                          — 全局搜索
-//   POST /v1/spaces/{space_id}/search        — 空间内搜索
-//   GET  /v1/spaces/{space_id}/types         — 列出类型
+//   GET  /v1/spaces                            — 列出空间
+//   GET  /v1/spaces/{space_id}                 — 获取空间详情
+//   GET  /v1/spaces/{space_id}/objects         — 列出对象
+//   GET  /v1/spaces/{space_id}/objects/{id}    — 获取对象详情
+//   PATCH /v1/spaces/{space_id}/objects/{id}   — 更新对象
+//   POST /v1/search                            — 全局搜索
+//   POST /v1/spaces/{space_id}/search          — 空间内搜索
+//   GET  /v1/spaces/{space_id}/types           — 列出类型
 
 import { loadCredentials, hasApiKey } from "./auth.js";
 import type {
@@ -34,15 +34,30 @@ export class AnytypeAdapter {
   private baseUrl: string;
   private apiKey: string;
   private apiVersion: string;
+  private configured: boolean = false;
 
-  constructor() {
-    const creds = loadCredentials();
-    this.baseUrl = creds.apiBaseUrl;
-    this.apiKey = creds.apiKey;
-    this.apiVersion = creds.apiVersion;
+  private constructor() {
+    this.baseUrl = "";
+    this.apiKey = "";
+    this.apiVersion = "";
   }
 
-  get headers(): Record<string, string> {
+  /** 异步工厂方法 */
+  static async create(): Promise<AnytypeAdapter> {
+    const instance = new AnytypeAdapter();
+    const creds = await loadCredentials();
+    instance.baseUrl = creds.apiBaseUrl;
+    instance.apiKey = creds.apiKey;
+    instance.apiVersion = creds.apiVersion;
+    instance.configured = !!creds.apiKey;
+    return instance;
+  }
+
+  isConfigured(): boolean {
+    return this.configured;
+  }
+
+  private get headers(): Record<string, string> {
     return {
       Authorization: `Bearer ${this.apiKey}`,
       "Anytype-Version": this.apiVersion,
@@ -50,12 +65,6 @@ export class AnytypeAdapter {
     };
   }
 
-  /** 检查是否有可用的 API Key */
-  isConfigured(): boolean {
-    return hasApiKey();
-  }
-
-  /** 通用 HTTP 请求 */
   private async request<T>(
     method: string,
     path: string,
@@ -133,11 +142,7 @@ export class AnytypeAdapter {
     return data.data || [];
   }
 
-  /**
-   * 查询对象 — 使用 POST /v1/search
-   *
-   * Anytype 的搜索接口通过 types 字段过滤类型，使用 sort 对象指定排序。
-   */
+  /** 查询对象 — 使用 GET /v1/spaces/{spaceId}/objects (简单查询) 或 POST /v1/search (全文搜索) */
   async queryObjects(params: {
     type?: string;
     spaceId?: string;
@@ -203,7 +208,8 @@ export class AnytypeAdapter {
     return data.object;
   }
 
-  /** Update object properties using the correct API format.
+  /**
+   * Update object properties using the correct API format.
    *
    *  Examples:
    *    setProperties(spaceId, objId, [{ key: "status", select: "63454af7..." }])
@@ -250,9 +256,9 @@ export class AnytypeAdapter {
 /** 单例工厂 */
 let _instance: AnytypeAdapter | null = null;
 
-export function getAnytypeAdapter(): AnytypeAdapter {
+export async function getAnytypeAdapter(): Promise<AnytypeAdapter> {
   if (!_instance) {
-    _instance = new AnytypeAdapter();
+    _instance = await AnytypeAdapter.create();
   }
   return _instance;
 }
