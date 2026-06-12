@@ -36,12 +36,19 @@ export class SyncEngine {
     private mapper: TaskToReminderMapper;
     private config: SyncConfig;
 
-    constructor(config?: Partial<SyncConfig>) {
-        this.anytype = getAnytypeAdapter();
+    private constructor(config?: Partial<SyncConfig>) {
+        this.anytype = null as any; // 将在 init 中初始化
         this.reminders = new AppleRemindersAdapter();
         this.store = getSyncStore();
         this.mapper = new TaskToReminderMapper("forward");
         this.config = { ...DEFAULT_CONFIG, ...config };
+    }
+
+    /** 异步工厂方法 */
+    static async create(config?: Partial<SyncConfig>): Promise<SyncEngine> {
+        const engine = new SyncEngine(config);
+        engine.anytype = await AnytypeAdapter.create();
+        return engine;
     }
 
     /** 检查各适配器可用性 */

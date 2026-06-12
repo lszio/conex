@@ -1,12 +1,22 @@
 // Anytype API Key 认证管理
-// API Key 可以从 Anytype 应用 -> 设置 -> API Keys -> Create new 获取
+//
+// 配置来源（优先级高→低）:
+//   1. 环境变量: ANYTYPE_API_KEY, ANYTYPE_API_BASE_URL, ANYTYPE_API_VERSION
+//   2. YAML 配置文件: ~/.conex/config.yaml
+//   3. 硬编码默认值
+//
+// YAML 配置格式 (~/.conex/config.yaml):
+//   anytype:
+//     apiKey: "your-key"
+//     apiBaseUrl: "http://127.0.0.1:31009"
+//     apiVersion: "2025-11-08"
 
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
 
 const CONEX_DIR = join(homedir(), ".conex");
-const CREDENTIALS_FILE = join(CONEX_DIR, "credentials.json");
+const CONFIG_FILE = join(CONEX_DIR, "config.yaml");
 
 export interface AnytypeCredentials {
   apiKey: string;
@@ -14,54 +24,77 @@ export interface AnytypeCredentials {
   apiVersion: string;
 }
 
-/** 默认 Anytype API 连接配置 */
+/** 硬编码默认值 */
 function defaults(): AnytypeCredentials {
   return {
     apiKey: process.env.ANYTYPE_API_KEY || "",
     apiBaseUrl: process.env.ANYTYPE_API_BASE_URL || "http://127.0.0.1:31009",
-    apiVersion: "2025-11-08",
+    apiVersion: process.env.ANYTYPE_API_VERSION || "2025-11-08",
   };
 }
 
-/** 从环境变量或凭证文件加载 API Key */
-export function loadCredentials(): AnytypeCredentials {
-  const creds = defaults();
+/** 动态 import yaml（仅在文件存在时） */
+let _yamlParse: ((s: string) => unknown) | null = null;
+let _yamlStringify: ((v: unknown) => string) | null = null;
 
-  // 环境变量优先
-  if (creds.apiKey) return creds;
-
-  // 尝试从凭证文件读取
-  try {
-    if (existsSync(CREDENTIALS_FILE)) {
-      const saved = JSON.parse(
-        readFileSync(CREDENTIALS_FILE, "utf-8"),
-      ) as Partial<AnytypeCredentials>;
-      return { ...creds, ...saved };
-    }
-  } catch {
-    // 忽略文件读取错误
-  }
-
-  return creds;
+async function ensureYaml() {
+  if (_yamlParse) return;
+  const mod = await import("yaml");
+  _yamlParse = mod.parse;
+  _yamlStringify = mod.stringify;
 }
 
-/** 保存凭证到文件 */
-export function saveCredentials(creds: Partial<AnytypeCredentials>): void {
+async function loadYamlFile(): Promise<Record<string, unknown> | null> {
+  if (!existsSync(CONFIG_FILE)) return null;
+  try {
+    await ensureYaml();
+    const raw = readFileSync(CONFIG_FILE, "utf-8");
+    const parsed = _yamlParse!(raw);
+    if (parsed && typeof parsed === "object") return parsed as Record<string, unknown>;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** 加载凭证: 环境变量 → YAML 文件 → 默认值 */
+export async function loadCredentials(): Promise<AnytypeCredentials> {
+  const env = defaults();
+  if (env.apiKey) return env;
+
+  const parsed = await loadYamlFile();
+  if (parsed) {
+    const anytype = parsed.anytype as Record<string, unknown> | undefined;
+    if (anytype && typeof anytype === "object") {
+      return {
+        apiKey: String(anytype.apiKey ?? env.apiKey),
+        apiBaseUrl: String(anytype.apiBaseUrl ?? env.apiBaseUrl),
+        apiVersion: String(anytype.apiVersion ?? env.apiVersion),
+      };
+    }
+  }
+
+  return env;
+}
+
+/** 保存凭证到 ~/.conex/config.yaml */
+export async function saveCredentials(creds: Partial<AnytypeCredentials>): Promise<void> {
   mkdirSync(CONEX_DIR, { recursive: true });
+  await ensureYaml();
 
-  const existing: Partial<AnytypeCredentials> = existsSync(CREDENTIALS_FILE)
-    ? JSON.parse(readFileSync(CREDENTIALS_FILE, "utf-8"))
-    : {};
+  let existing: Record<string, unknown> = {};
+  const raw = (await loadYamlFile()) || {};
 
-  writeFileSync(
-    CREDENTIALS_FILE,
-    JSON.stringify({ ...existing, ...creds }, null, 2),
-    "utf-8",
-  );
+  const anytype = { ...(raw.anytype as Record<string, unknown> || {}), ...creds };
+  const merged = { ...raw, anytype };
+  writeFileSync(CONFIG_FILE, _yamlStringify!(merged), "utf-8");
 }
 
 /** 检查是否有可用的 API Key */
-export function hasApiKey(): boolean {
-  const creds = loadCredentials();
-  return creds.apiKey.length > 0;
+export async function hasApiKey(): Promise<boolean> {
+  if (process.env.ANYTYPE_API_KEY) return true;
+  const parsed = await loadYamlFile();
+  if (!parsed) return false;
+  const anytype = parsed.anytype as Record<string, unknown> | undefined;
+  return !!(anytype?.apiKey);
 }
