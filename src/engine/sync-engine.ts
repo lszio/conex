@@ -106,8 +106,10 @@ export class SyncEngine {
             // 4. 逐个处理
             for (const task of tasks) {
                 try {
-                    await this.syncOneTask(task);
-                    result.created += 1;
+                    const action = await this.syncOneTask(task);
+                    if (action === "created") result.created += 1;
+                    else if (action === "updated") result.updated += 1;
+                    else result.skipped += 1;
                 } catch (e) {
                     const msg = e instanceof Error ? e.message : String(e);
                     result.errors.push(`[${task.id}] ${task.name}: ${msg}`);
@@ -138,8 +140,8 @@ export class SyncEngine {
         return result;
     }
 
-    /** 同步单个任务 */
-    private async syncOneTask(task: AnytypeObject): Promise<void> {
+    /** 同步单个任务，返回操作类型 */
+    private async syncOneTask(task: AnytypeObject): Promise<"created" | "updated" | "skipped"> {
         // 1. 查找 ID 映射
         const idMap = this.store.getIdMap(task.id);
 
@@ -158,8 +160,15 @@ export class SyncEngine {
                 direction: "forward",
                 last_hash: currentHash,
             });
+            return "created";
         } else {
             // ── 已有映射: 检查是否需要更新 ──
+
+            // 哈希相同 → 内容无变化，跳过
+            if (idMap.last_hash === currentHash) {
+                return "skipped";
+            }
+
             const reminderData = this.mapper.toTarget(task);
 
             // 3. 冲突检测
@@ -183,6 +192,7 @@ export class SyncEngine {
                     ...idMap,
                     last_hash: currentHash,
                 });
+                return "updated";
             } else {
                 // Apple 侧提醒已被删除 → 重建
                 const newAppleId = await this.reminders.createReminder(reminderData);
@@ -196,6 +206,7 @@ export class SyncEngine {
                     apple_id: idMap.apple_id,
                     conflict_type: "deleted_on_one_side",
                 });
+                return "created";
             }
         }
     }

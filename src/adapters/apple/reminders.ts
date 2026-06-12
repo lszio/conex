@@ -19,21 +19,21 @@ function esc(str: string): string {
 
 /** 将 Date 转为 AppleScript 的 date 字面量字符串 */
 function dateToAppleScript(d: Date): string {
-    // AppleScript date: "Thursday, June 11, 2026 at 10:00:00 AM"
-    const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-    const months = ["January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December"];
-    const day = days[d.getDay()];
-    const month = months[d.getMonth()];
-    const date = d.getDate();
+    // 不依赖 locale 的日期字符串，使用组件逐个设置
     const year = d.getFullYear();
+    const month = d.getMonth() + 1;  // 1-based
+    const day = d.getDate();
     const hours = d.getHours();
     const minutes = d.getMinutes();
     const seconds = d.getSeconds();
-    const ampm = hours >= 12 ? "PM" : "AM";
-    const h12 = hours % 12 || 12;
-
-    return `date "${day}, ${month} ${date}, ${year} at ${h12}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")} ${ampm}"`;
+    return `(set _d to current date ¬
+        set year of _d to ${year} ¬
+        set month of _d to ${month} ¬
+        set day of _d to ${day} ¬
+        set hours of _d to ${hours} ¬
+        set minutes of _d to ${minutes} ¬
+        set seconds of _d to ${seconds} ¬
+        _d)`;
 }
 
 export class AppleRemindersAdapterError extends Error {
@@ -107,19 +107,32 @@ export class AppleRemindersAdapter {
 
     /** 获取近期完成的提醒（用于增量判断） */
     async getRecentCompletions(since: Date): Promise<ReminderData[]> {
-        const sinceStr = dateToAppleScript(since);
-        try {
-            const raw = await this.runScript(`
-                tell application "Reminders"
-                    set output to {}
-                    set sc to reminders in list "${esc(this.listName)}" whose completed is true and completion date > ${sinceStr}
-                    repeat with r in sc
-                        set end of output to name of r & "|SEP|" & id of r
-                    end repeat
-                    set AppleScript's text item delimiters to linefeed
-                    return output as string
-                end tell
-            `);
+      const y = since.getFullYear();
+      const m = since.getMonth() + 1;
+      const d = since.getDate();
+      const h = since.getHours();
+      const min = since.getMinutes();
+      const s = since.getSeconds();
+
+      try {
+        const raw = await this.runScript(`
+              tell application "Reminders"
+                  set _since to current date
+                  set year of _since to ${y}
+                  set month of _since to ${m}
+                  set day of _since to ${d}
+                  set hours of _since to ${h}
+                  set minutes of _since to ${min}
+                  set seconds of _since to ${s}
+                  set output to {}
+                  set sc to reminders in list "${esc(this.listName)}" whose completed is true and completion date > _since
+                  repeat with r in sc
+                      set end of output to name of r & "|SEP|" & id of r
+                  end repeat
+                  set AppleScript's text item delimiters to linefeed
+                  return output as string
+              end tell
+          `);
 
             return raw
                 .split("\n")
@@ -135,39 +148,62 @@ export class AppleRemindersAdapter {
 
     /** 创建提醒 */
     async createReminder(data: ReminderData): Promise<string> {
-        const parts: string[] = [];
-        parts.push(`set name of newReminder to "${esc(data.title)}"`);
+        // 先创建提醒（不含截止日期，避免 locale 问题）
+        const createParts: string[] = [];
+        createParts.push(`set name of newReminder to "${esc(data.title)}"`);
 
         if (data.notes) {
-            parts.push(`set body of newReminder to "${esc(data.notes)}"`);
-        }
-
-        if (data.dueDate) {
-            parts.push(`set due date of newReminder to ${dateToAppleScript(data.dueDate)}`);
+            createParts.push(`set body of newReminder to "${esc(data.notes)}"`);
         }
 
         if (data.priority !== undefined && data.priority >= 0) {
-            parts.push(`set priority of newReminder to ${data.priority}`);
+            createParts.push(`set priority of newReminder to ${data.priority}`);
         }
 
-        const conexTag = data.conexId ? ` [conex:${esc(data.conexId)}]` : "";
-
-        const script = `
+        const createScript = `
             tell application "Reminders"
                 set newReminder to make new reminder at list "${esc(this.listName)}"
-                ${parts.join("\n                ")}
-                set body of newReminder to (body of newReminder) & "${conexTag}"
+                ${createParts.join("\n                ")}
                 return id of newReminder
             end tell
         `;
 
-        const id = await this.runScript(script);
+        const id = await this.runScript(createScript);
 
         if (!id) {
             throw new AppleRemindersAdapterError("创建提醒后未能获取 ID");
         }
 
+        // 单独设置截止日期（如果有）
+        if (data.dueDate) {
+            await this.setDueDate(id, data.dueDate);
+        }
+
         return id;
+    }
+
+    /** 单独设置提醒的截止日期（避免 locale 问题） */
+    private async setDueDate(id: string, dueDate: Date): Promise<void> {
+        const y = dueDate.getFullYear();
+        const m = dueDate.getMonth() + 1;
+        const d = dueDate.getDate();
+        const h = dueDate.getHours();
+        const min = dueDate.getMinutes();
+        const s = dueDate.getSeconds();
+
+        await this.runScript(`
+            tell application "Reminders"
+                set targetReminder to reminder id "${esc(id)}"
+                set dueDate to current date
+                set year of dueDate to ${y}
+                set month of dueDate to ${m}
+                set day of dueDate to ${d}
+                set hours of dueDate to ${h}
+                set minutes of dueDate to ${min}
+                set seconds of dueDate to ${s}
+                set due date of targetReminder to dueDate
+            end tell
+        `);
     }
 
     /** 更新提醒 */
@@ -180,25 +216,27 @@ export class AppleRemindersAdapter {
         if (data.notes !== undefined) {
             parts.push(`set body of targetReminder to "${esc(data.notes)}"`);
         }
-        if (data.dueDate !== undefined) {
-            parts.push(`set due date of targetReminder to ${dateToAppleScript(data.dueDate)}`);
-        }
         if (data.priority !== undefined) {
             parts.push(`set priority of targetReminder to ${data.priority}`);
         }
 
-        if (parts.length === 0) return;
+        if (parts.length > 0) {
+            await this.runScript(`
+                tell application "Reminders"
+                    try
+                        set targetReminder to reminder id "${esc(id)}"
+                        ${parts.join("\n                    ")}
+                    on error errMsg
+                        return "ERROR: " & errMsg
+                    end try
+                end tell
+            `);
+        }
 
-        await this.runScript(`
-            tell application "Reminders"
-                try
-                    set targetReminder to reminder id "${esc(id)}"
-                    ${parts.join("\n                    ")}
-                on error errMsg
-                    return "ERROR: " & errMsg
-                end try
-            end tell
-        `);
+        // 单独设置截止日期（如果有）
+        if (data.dueDate !== undefined) {
+            await this.setDueDate(id, data.dueDate);
+        }
     }
 
     /** 完成提醒 */

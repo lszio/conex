@@ -1,8 +1,8 @@
 // CLI status 命令 — 查看各适配器状态和同步概览
 
 import { Command } from "commander";
-import { SyncEngine } from "../engine/sync-engine.js";
-import { getSyncStore } from "../store/db.js";
+import { SyncEngine } from "../../engine/sync-engine.js";
+import { getSyncStore } from "../../store/db.js";
 
 export const statusCommand = new Command("status")
     .description("查看 CONEX 各适配器状态和同步概览")

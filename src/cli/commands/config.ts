@@ -1,8 +1,8 @@
 // CLI config 命令 — 查看和修改 CONEX 配置
 
 import { Command } from "commander";
-import { getSyncStore } from "../store/db.js";
-import { hasApiKey, saveCredentials } from "../adapters/anytype/auth.js";
+import { getSyncStore } from "../../store/db.js";
+import { hasApiKey, saveCredentials } from "../../adapters/anytype/auth.js";
 
 export const configCommand = new Command("config")
     .description("查看和修改 CONEX 配置")

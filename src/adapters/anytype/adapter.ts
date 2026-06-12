@@ -1,179 +1,258 @@
 // Anytype REST API 客户端
-// 基于 Anytype OpenAPI v2025-11-08 规范的轻量 HTTP 客户端
+// 基于 Anytype OpenAPI v2025-11-08 的实际端点
+//
+// 关键端点:
+//   GET  /v1/spaces                          — 列出空间
+//   GET  /v1/spaces/{space_id}               — 获取空间详情
+//   GET  /v1/spaces/{space_id}/objects       — 列出对象
+//   GET  /v1/spaces/{space_id}/objects/{id}  — 获取对象详情
+//   PATCH /v1/spaces/{space_id}/objects/{id} — 更新对象
+//   POST /v1/search                          — 全局搜索
+//   POST /v1/spaces/{space_id}/search        — 空间内搜索
+//   GET  /v1/spaces/{space_id}/types         — 列出类型
 
 import { loadCredentials, hasApiKey } from "./auth.js";
-import type { AnytypeObject, AnytypeSpace, AnytypeListResponse, AnytypeObjectResponse } from "./types.js";
+import type {
+  AnytypeObject,
+  AnytypeSpace,
+  AnytypeListResponse,
+} from "./types.js";
 import type { AdapterStatus } from "../types.js";
 
 export class AnytypeAdapterError extends Error {
-    status: number;
-    code: string;
-    constructor(message: string, status: number, code: string) {
-        super(message);
-        this.name = "AnytypeAdapterError";
-        this.status = status;
-        this.code = code;
-    }
+  status: number;
+  code: string;
+  constructor(message: string, status: number, code: string) {
+    super(message);
+    this.name = "AnytypeAdapterError";
+    this.status = status;
+    this.code = code;
+  }
 }
 
 export class AnytypeAdapter {
-    private baseUrl: string;
-    private apiKey: string;
-    private apiVersion: string;
+  private baseUrl: string;
+  private apiKey: string;
+  private apiVersion: string;
 
-    constructor() {
-        const creds = loadCredentials();
-        this.baseUrl = creds.apiBaseUrl;
-        this.apiKey = creds.apiKey;
-        this.apiVersion = creds.apiVersion;
+  constructor() {
+    const creds = loadCredentials();
+    this.baseUrl = creds.apiBaseUrl;
+    this.apiKey = creds.apiKey;
+    this.apiVersion = creds.apiVersion;
+  }
+
+  get headers(): Record<string, string> {
+    return {
+      Authorization: `Bearer ${this.apiKey}`,
+      "Anytype-Version": this.apiVersion,
+      "Content-Type": "application/json",
+    };
+  }
+
+  /** 检查是否有可用的 API Key */
+  isConfigured(): boolean {
+    return hasApiKey();
+  }
+
+  /** 通用 HTTP 请求 */
+  private async request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    params?: Record<string, string | number>,
+  ): Promise<T> {
+    const url = new URL(path, this.baseUrl);
+    if (params) {
+      for (const [key, value] of Object.entries(params)) {
+        url.searchParams.set(key, String(value));
+      }
     }
 
-    /** 检查是否有可用的 API Key */
-    isConfigured(): boolean {
-        return hasApiKey();
+    const opts: RequestInit = {
+      method,
+      headers: this.headers,
+    };
+    if (body !== undefined) {
+      opts.body = JSON.stringify(body);
     }
 
-    /** 获取认证用的请求头 */
-    private get headers(): Record<string, string> {
-        return {
-            Authorization: `Bearer ${this.apiKey}`,
-            "Anytype-Version": this.apiVersion,
-            "Content-Type": "application/json",
-        };
+    const res = await fetch(url.toString(), opts);
+
+    if (!res.ok) {
+      let errMsg: string;
+      try {
+        const errBody = JSON.parse(await res.text()) as { message?: string };
+        errMsg = errBody.message || res.statusText;
+      } catch {
+        errMsg = res.statusText;
+      }
+      throw new AnytypeAdapterError(
+        `${method} ${path}: ${res.status} — ${errMsg}`,
+        res.status,
+        String(res.status),
+      );
     }
 
-    /** HTTP GET 请求 */
-    private async get<T>(path: string, params?: Record<string, string | number>): Promise<T> {
-        const url = new URL(path, this.baseUrl);
-        if (params) {
-            for (const [key, value] of Object.entries(params)) {
-                url.searchParams.set(key, String(value));
-            }
-        }
+    // 204 No Content
+    if (res.status === 204) return undefined as T;
 
-        const res = await fetch(url.toString(), {
-            method: "GET",
-            headers: this.headers,
-        });
+    return res.json() as Promise<T>;
+  }
 
-        if (!res.ok) {
-            const body = await res.text().catch(() => "unknown");
-            throw new AnytypeAdapterError(
-                `GET ${path}: ${res.status} ${res.statusText} — ${body.slice(0, 200)}`,
-                res.status,
-                String(res.status),
-            );
-        }
+  // ──────────────────────────────────────────
+  // 公共 API
+  // ──────────────────────────────────────────
 
-        return res.json() as Promise<T>;
+  /** 健康检查: 尝试获取空间列表来验证 API 连通性 */
+  async healthCheck(): Promise<AdapterStatus> {
+    const start = Date.now();
+    try {
+      const res = await fetch(
+        new URL("/v1/spaces", this.baseUrl).toString(),
+        { method: "GET", headers: this.headers },
+      );
+      const ok = res.ok;
+      return {
+        connected: ok,
+        lastCheck: new Date(),
+        version: ok ? this.apiVersion : undefined,
+      };
+    } catch (e) {
+      return {
+        connected: false,
+        lastCheck: new Date(),
+        error: String(e),
+      };
+    }
+  }
+
+  /** 列出所有空间 */
+  async listSpaces(): Promise<AnytypeSpace[]> {
+    const data = await this.request<AnytypeListResponse<AnytypeSpace>>("GET", "/v1/spaces");
+    return data.data || [];
+  }
+
+  /**
+   * 查询对象 — 使用 POST /v1/search
+   *
+   * Anytype 的搜索接口通过 types 字段过滤类型，使用 sort 对象指定排序。
+   */
+  async queryObjects(params: {
+    type?: string;
+    spaceId?: string;
+    limit?: number;
+    offset?: number;
+    lastSync?: string;    // ISO 8601，增量同步用
+    sort?: string;        // "lastModifiedDesc" | "createdDate" | "name"
+  } = {}): Promise<AnytypeObject[]> {
+    const searchBody: Record<string, unknown> = {};
+    const sortFieldMap: Record<string, string> = {
+      lastModifiedDesc: "last_modified_date",
+      createdDate: "created_date",
+      name: "name",
+    };
+
+    // 类型过滤
+    if (params.type) {
+      searchBody.types = [params.type.toLowerCase()];
     }
 
-    /** HTTP PATCH 请求（用于更新对象） */
-    private async patch<T>(path: string, body: unknown): Promise<T> {
-        const res = await fetch(new URL(path, this.baseUrl).toString(), {
-            method: "PATCH",
-            headers: this.headers,
-            body: JSON.stringify(body),
-        });
+    // 分页
+    searchBody.limit = params.limit ?? 50;
+    if (params.offset !== undefined) searchBody.offset = params.offset;
 
-        if (!res.ok) {
-            const text = await res.text().catch(() => "unknown");
-            throw new AnytypeAdapterError(
-                `PATCH ${path}: ${res.status} ${res.statusText} — ${text.slice(0, 200)}`,
-                res.status,
-                String(res.status),
-            );
-        }
-
-        return res.json() as Promise<T>;
+    // 排序
+    if (params.sort) {
+      const field = sortFieldMap[params.sort] || "last_modified_date";
+      searchBody.sort = { direction: "desc", property_key: field };
     }
 
-    // ──────────────────────────────────────────
-    // 公共 API
-    // ──────────────────────────────────────────
+    // 搜索端点
+    const endpoint = params.spaceId
+      ? `/v1/spaces/${params.spaceId}/search`
+      : "/v1/search";
 
-    /** 健康检查 */
-    async healthCheck(): Promise<AdapterStatus> {
-        const start = Date.now();
-        try {
-            const res = await fetch(new URL("/api/v1/health", this.baseUrl).toString(), {
-                method: "GET",
-                headers: this.headers,
-            });
-            const ok = res.status < 400;
-            return {
-                connected: ok,
-                lastCheck: new Date(),
-                version: ok ? String(res.status) : undefined,
-            };
-        } catch (e) {
-            return {
-                connected: false,
-                lastCheck: new Date(),
-                error: String(e),
-            };
-        }
-    }
-
-    /** 列出所有空间 */
-    async listSpaces(): Promise<AnytypeSpace[]> {
-        const data = await this.get<{ spaces: AnytypeSpace[] }>("/api/v1/spaces");
-        return data.spaces || [];
-    }
-
-    /** 查询对象列表 */
-    async queryObjects(params: {
-        type?: string;
-        spaceId?: string;
-        limit?: number;
-        offset?: number;
-        lastSync?: string;    // ISO 8601，增量同步用
-        sort?: string;        // "lastModifiedDesc" | "createdDate" | "name"
-    } = {}): Promise<AnytypeObject[]> {
-        const queryParams: Record<string, string | number> = {};
-
-        if (params.type) queryParams.type = params.type;
-        if (params.spaceId) queryParams.spaceId = params.spaceId;
-        if (params.limit !== undefined) queryParams.limit = params.limit;
-        if (params.offset !== undefined) queryParams.offset = params.offset;
-        if (params.sort) queryParams.sort = params.sort;
-        if (params.lastSync) {
-            // Anytype API 支持 lastModifiedAfter 参数进行增量查询
-            queryParams.lastModifiedAfter = params.lastSync;
-        }
-
-        const data = await this.get<AnytypeListResponse<AnytypeObject>>(
-            "/api/v1/objects",
-            queryParams,
+    try {
+      const data = await this.request<AnytypeListResponse<AnytypeObject>>(
+        "POST",
+        endpoint,
+        searchBody,
+      );
+      return data.data || [];
+    } catch (e) {
+      // 如果 spaces 内搜索失败，降级到全局搜索
+      if (params.spaceId) {
+        const data = await this.request<AnytypeListResponse<AnytypeObject>>(
+          "POST",
+          "/v1/search",
+          searchBody,
         );
-
-        return data.objects || [];
+        return data.data || [];
+      }
+      throw e;
     }
+  }
 
-    /** 根据 ID 获取单个对象 */
-    async getObject(id: string): Promise<AnytypeObject> {
-        const data = await this.get<AnytypeObjectResponse>(`/api/v1/objects/${encodeURIComponent(id)}`);
-        return data.object;
-    }
+  /** 根据 ID 获取单个对象详情 */
+  async getObject(spaceId: string, id: string): Promise<AnytypeObject> {
+    const data = await this.request<{ object: AnytypeObject }>(
+      "GET",
+      `/v1/spaces/${encodeURIComponent(spaceId)}/objects/${encodeURIComponent(id)}`,
+    );
+    return data.object;
+  }
 
-    /** 更新对象字段 */
-    async updateObject(id: string, fields: Partial<AnytypeObject>): Promise<void> {
-        await this.patch(`/api/v1/objects/${encodeURIComponent(id)}`, fields);
-    }
+  /** Update object properties using the correct API format.
+   *
+   *  Examples:
+   *    setProperties(spaceId, objId, [{ key: "status", select: "63454af7..." }])
+   *    setProperties(spaceId, objId, [{ key: "done", checkbox: true }])
+   */
+  async setProperties(
+    spaceId: string,
+    id: string,
+    props: Array<{ key: string; [k: string]: unknown }>,
+  ): Promise<void> {
+    await this.request(
+      "PATCH",
+      `/v1/spaces/${encodeURIComponent(spaceId)}/objects/${encodeURIComponent(id)}`,
+      { properties: props },
+    );
+  }
 
-    /** 列出对象的所有类型 */
-    async listTypes(): Promise<{ id: string; name: string }[]> {
-        const data = await this.get<{ types: { id: string; name: string }[] }>("/api/v1/types");
-        return data.types || [];
-    }
+  /** Convenience: set task status to DONE (uses status select property only) */
+  async setTaskDone(spaceId: string, taskId: string): Promise<void> {
+    await this.setProperties(spaceId, taskId, [
+      { key: "status", select: "63454af7c493f68e301890dd" }, // DONE tag key
+    ]);
+  }
+
+  /** Convenience: set task status to TODO (uses status select property only) */
+  async setTaskTodo(spaceId: string, taskId: string): Promise<void> {
+    await this.setProperties(spaceId, taskId, [
+      { key: "status", select: "63454ad0c493f68e301890db" }, // TODO tag key
+    ]);
+  }
+
+  /** 列出空间内的所有对象类型 */
+  async listTypes(spaceId: string): Promise<{ id: string; key: string; name: string }[]> {
+    const data = await this.request<{ data: { id: string; key: string; name: string }[] }>(
+      "GET",
+      `/v1/spaces/${encodeURIComponent(spaceId)}/types`,
+      undefined,
+      { limit: 100 },
+    );
+    return data.data || [];
+  }
 }
 
 /** 单例工厂 */
 let _instance: AnytypeAdapter | null = null;
 
 export function getAnytypeAdapter(): AnytypeAdapter {
-    if (!_instance) {
-        _instance = new AnytypeAdapter();
-    }
-    return _instance;
+  if (!_instance) {
+    _instance = new AnytypeAdapter();
+  }
+  return _instance;
 }

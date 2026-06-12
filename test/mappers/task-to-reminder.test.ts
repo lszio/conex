@@ -1,191 +1,234 @@
-// Task → Reminder 映射器单元测试
-
+// Task → Reminder 映射器单元测试 (基于新版 types)
 import { expect, describe, test } from "bun:test";
 import { TaskToReminderMapper, computeContentHash, extractConexIdFromNotes } from "../../src/mappers/task-to-reminder.js";
 import type { AnytypeObject } from "../../src/adapters/anytype/types.js";
+import { getProperty } from "../../src/adapters/anytype/types.js";
 import type { ReminderData } from "../../src/adapters/apple/types.js";
 
+/** 创建测试 AnytypeObject 的便捷函数 */
+function makeTask(overrides: Partial<AnytypeObject> & {
+  done?: boolean;
+  deadline?: string;
+  priorityName?: string;
+  description?: string;
+}): AnytypeObject {
+  const task: AnytypeObject = {
+    object: "object",
+    id: overrides.id || "tx123",
+    name: overrides.name || "买牛奶",
+    layout: "basic",
+    type: "task",
+    space_id: "space1",
+    archived: false,
+    snippet: overrides.description,
+    properties: [],
+  };
+
+  // 添加 done 属性
+  if (overrides.done !== undefined) {
+    task.properties!.push({
+      object: "property",
+      id: "prop-done",
+      key: "done",
+      name: "Done",
+      format: "checkbox",
+      checkbox: overrides.done,
+    });
+  }
+
+  // 添加 due_date 属性
+  if (overrides.deadline) {
+    task.properties!.push({
+      object: "property",
+      id: "prop-deadline",
+      key: "due_date",
+      name: "Due date",
+      format: "date",
+      date: overrides.deadline,
+    });
+  }
+
+  // 添加 priority 属性
+  if (overrides.priorityName) {
+    task.properties!.push({
+      object: "property",
+      id: "prop-priority",
+      key: "priority",
+      name: "Priority",
+      format: "select",
+      select: {
+        object: "tag",
+        id: "tag-pri",
+        key: "pri-key",
+        name: overrides.priorityName,
+        color: "red",
+      },
+    });
+  }
+
+  // 添加 status 属性
+  if (overrides.status) {
+    task.properties!.push({
+      object: "property",
+      id: "prop-status",
+      key: "status",
+      name: "Status",
+      format: "select",
+      select: {
+        object: "tag",
+        id: "tag-st",
+        key: "st-key",
+        name: overrides.status,
+        color: "ice",
+      },
+    });
+  }
+
+  return task;
+}
+
 describe("TaskToReminderMapper", () => {
-    const mapper = new TaskToReminderMapper("forward");
+  const mapper = new TaskToReminderMapper("forward");
 
-    test("toTarget: 基本映射 — 标题、描述、完成状态", () => {
-        const task: AnytypeObject = {
-            id: "tx123",
-            name: "买牛奶",
-            type: "Task",
-            description: "记得买全脂牛奶",
-            done: false,
-            lastModifiedDate: "2026-06-10T10:00:00Z",
-            createdDate: "2026-06-09T10:00:00Z",
-        };
-
-        const reminder = mapper.toTarget(task);
-
-        expect(reminder.title).toBe("买牛奶");
-        expect(reminder.notes).toContain("记得买全脂牛奶");
-        expect(reminder.isCompleted).toBe(false);
-        expect(reminder.conexId).toBe("tx123");
+  test("toTarget: status=DONE 映射为已完成的提醒", () => {
+    const task = makeTask({
+      id: "tx-done",
+      name: "已完成任务",
+      done: false,         // done checkbox 是 false
+      status: "DONE",      // 但 status 是 DONE
     });
 
-    test("toTarget: 截止日期映射", () => {
-        const task: AnytypeObject = {
-            id: "tx456",
-            name: "提交报告",
-            type: "Task",
-            deadline: "2026-06-15T17:00:00Z",
-            lastModifiedDate: "2026-06-10T10:00:00Z",
-            createdDate: "2026-06-09T10:00:00Z",
-        };
+    const reminder = mapper.toTarget(task);
 
-        const reminder = mapper.toTarget(task);
+    // 即使 done=false，因为 status=DONE，isCompleted=true
+    expect(reminder.isCompleted).toBe(true);
+    expect(reminder.notes).toContain("anytype://tx-done");
+    expect(reminder.notes).toContain("[conex:tx-done]");
+  });
 
-        expect(reminder.dueDate).toBeInstanceOf(Date);
-        expect(reminder.dueDate!.toISOString()).toContain("2026-06-15");
+  test("toTarget: status=TODO 映射为未完成的提醒", () => {
+    const task = makeTask({
+      id: "tx-todo",
+      name: "待办任务",
+      status: "TODO",
     });
 
-    test("toTarget: 优先级映射 (Anytype 3 → Apple 1)", () => {
-        const task: AnytypeObject = {
-            id: "tx789",
-            name: "紧急任务",
-            type: "Task",
-            priority: 3,
-            lastModifiedDate: "2026-06-10T10:00:00Z",
-            createdDate: "2026-06-09T10:00:00Z",
-        };
+    const reminder = mapper.toTarget(task);
 
-        const reminder = mapper.toTarget(task);
-        expect(reminder.priority).toBe(1); // high
+    expect(reminder.isCompleted).toBe(false);
+    // 状态信息 TODO 不显示（默认状态）
+    expect(reminder.notes).not.toContain("📌");
+  });
+
+  test("toTarget: status=WILL 显示状态标签", () => {
+    const task = makeTask({
+      id: "tx-will",
+      name: "计划任务",
+      status: "WILL",
     });
 
-    test("toTarget: 优先级映射 (Anytype 1 → Apple 9)", () => {
-        const task: AnytypeObject = {
-            id: "tx012",
-            name: "低优先级",
-            type: "Task",
-            priority: 1,
-            lastModifiedDate: "2026-06-10T10:00:00Z",
-            createdDate: "2026-06-09T10:00:00Z",
-        };
+    const reminder = mapper.toTarget(task);
 
-        const reminder = mapper.toTarget(task);
-        expect(reminder.priority).toBe(9); // low
+    expect(reminder.isCompleted).toBe(false);
+    expect(reminder.notes).toContain("📌 WILL");
+  });
+
+  test("toTarget: 截止日期映射", () => {
+    const task = makeTask({
+      id: "tx456",
+      name: "提交报告",
+      deadline: "2026-06-15T17:00:00Z",
     });
 
-    test("toTarget: 备注中写入 conexId 标签", () => {
-        const task: AnytypeObject = {
-            id: "tx999",
-            name: "追踪测试",
-            type: "Task",
-            lastModifiedDate: "2026-06-10T10:00:00Z",
-            createdDate: "2026-06-09T10:00:00Z",
-        };
+    const reminder = mapper.toTarget(task);
 
-        const reminder = mapper.toTarget(task);
-        expect(reminder.notes).toContain("[conex:tx999]");
+    expect(reminder.dueDate).toBeInstanceOf(Date);
+    expect(reminder.dueDate!.toISOString()).toContain("2026-06-15");
+  });
+
+  test("toTarget: 优先级映射 (Anytype High → Apple 1)", () => {
+    const task = makeTask({
+      id: "tx789",
+      name: "紧急任务",
+      priorityName: "High",
     });
 
-    test("toSource: 基本逆向映射", () => {
-        const reminder: ReminderData = {
-            title: "买牛奶",
-            notes: "记得买全脂牛奶\n[conex:tx123]",
-            isCompleted: true,
-            priority: 1,
-            conexId: "tx123",
-        };
+    const reminder = mapper.toTarget(task);
+    expect(reminder.priority).toBe(1); // high
+  });
 
-        const task = mapper.toSource(reminder);
-
-        expect(task.name).toBe("买牛奶");
-        expect(task.done).toBe(true);
-        expect(task.priority).toBe(3); // Apple 1 → Anytype 3
+  test("toTarget: 优先级映射 (Anytype Low → Apple 9)", () => {
+    const task = makeTask({
+      id: "tx012",
+      name: "低优先级",
+      priorityName: "Low",
     });
 
-    test("toSource: 从备注中提取 conexId", () => {
-        const reminder: ReminderData = {
-            title: "测试",
-            notes: "Some text\n[conex:tx555]",
-        };
+    const reminder = mapper.toTarget(task);
+    expect(reminder.priority).toBe(9); // low
+  });
 
-        const conexId = extractConexIdFromNotes(reminder.notes);
-        expect(conexId).toBe("tx555");
+  test("toTarget: 备注中写入 conexId 标签", () => {
+    const task = makeTask({
+      id: "tx999",
+      name: "追踪测试",
     });
 
-    test("computeContentHash: 相同内容产生相同哈希", () => {
-        const a: AnytypeObject = {
-            id: "t1",
-            name: "任务",
-            type: "Task",
-            done: false,
-            priority: 2,
-            lastModifiedDate: "2026-06-10T10:00:00Z",
-            createdDate: "2026-06-09T10:00:00Z",
-        };
+    const reminder = mapper.toTarget(task);
+    expect(reminder.notes).toContain("[conex:tx999]");
+  });
 
-        const b: AnytypeObject = {
-            id: "t2", // ID 不同
-            name: "任务",
-            type: "Task",
-            done: false,
-            priority: 2,
-            lastModifiedDate: "2026-06-10T10:00:00Z",
-            createdDate: "2026-06-09T10:00:00Z",
-        };
+  test("toSource: 基本逆向映射", () => {
+    const reminder: ReminderData = {
+      title: "买牛奶",
+      notes: "记得买全脂牛奶\n[conex:tx123]",
+      isCompleted: true,
+      priority: 1,
+      conexId: "tx123",
+    };
 
-        expect(computeContentHash(a)).toBe(computeContentHash(b));
-    });
+    const task = mapper.toSource(reminder);
 
-    test("computeContentHash: 不同内容产生不同哈希", () => {
-        const a: AnytypeObject = {
-            id: "t1",
-            name: "任务A",
-            type: "Task",
-            lastModifiedDate: "2026-06-10T10:00:00Z",
-            createdDate: "2026-06-09T10:00:00Z",
-        };
+    expect(task.name).toBe("买牛奶");
+    expect(task.snippet).toContain("记得买全脂牛奶");
+  });
 
-        const b: AnytypeObject = {
-            id: "t2",
-            name: "任务B",
-            type: "Task",
-            lastModifiedDate: "2026-06-10T10:00:00Z",
-            createdDate: "2026-06-09T10:00:00Z",
-        };
+  test("toSource: 从备注中提取 conexId", () => {
+    const reminder: ReminderData = {
+      title: "测试",
+      notes: "Some text\n[conex:tx555]",
+    };
 
-        expect(computeContentHash(a)).not.toBe(computeContentHash(b));
-    });
+    const conexId = extractConexIdFromNotes(reminder.notes);
+    expect(conexId).toBe("tx555");
+  });
 
-    test("detectConflict: 内容一致时无冲突", () => {
-        const a: AnytypeObject = {
-            id: "t1",
-            name: "任务",
-            type: "Task",
-            done: false,
-            lastModifiedDate: "2026-06-10T10:00:00Z",
-            createdDate: "2026-06-09T10:00:00Z",
-        };
+  test("computeContentHash: 相同内容产生相同哈希", () => {
+    const a = makeTask({ id: "t1", name: "任务", done: false, priorityName: "Medium" });
+    const b = makeTask({ id: "t2", name: "任务", done: false, priorityName: "Medium" });
 
-        const b: ReminderData = {
-            title: "任务",
-            isCompleted: false,
-        };
+    expect(computeContentHash(a)).toBe(computeContentHash(b));
+  });
 
-        expect(mapper.detectConflict(a, b)).toHaveLength(0);
-    });
+  test("computeContentHash: 不同内容产生不同哈希", () => {
+    const a = makeTask({ id: "t1", name: "任务A" });
+    const b = makeTask({ id: "t2", name: "任务B" });
 
-    test("detectConflict: 标题不一致时报告冲突", () => {
-        const a: AnytypeObject = {
-            id: "t1",
-            name: "任务A",
-            type: "Task",
-            lastModifiedDate: "2026-06-10T10:00:00Z",
-            createdDate: "2026-06-09T10:00:00Z",
-        };
+    expect(computeContentHash(a)).not.toBe(computeContentHash(b));
+  });
 
-        const b: ReminderData = {
-            title: "任务B",
-        };
+  test("detectConflict: 内容一致时无冲突", () => {
+    const a = makeTask({ id: "t1", name: "任务", done: false });
+    const b: ReminderData = { title: "任务", isCompleted: false };
 
-        const conflicts = mapper.detectConflict(a, b);
-        expect(conflicts.some((c: { field: string }) => c.field === "title")).toBe(true);
-    });
+    expect(mapper.detectConflict(a, b)).toHaveLength(0);
+  });
+
+  test("detectConflict: 标题不一致时报告冲突", () => {
+    const a = makeTask({ id: "t1", name: "任务A" });
+    const b: ReminderData = { title: "任务B" };
+
+    const conflicts = mapper.detectConflict(a, b);
+    expect(conflicts.some((c) => c.field === "title")).toBe(true);
+  });
 });

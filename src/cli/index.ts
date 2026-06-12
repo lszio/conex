@@ -6,6 +6,7 @@ import { syncCommand } from "./commands/sync.js";
 import { statusCommand } from "./commands/status.js";
 import { configCommand } from "./commands/config.js";
 import { historyCommand } from "./commands/history.js";
+import { daemonCommand } from "./commands/daemon.js";
 import { readFileSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -33,6 +34,7 @@ program.addCommand(syncCommand);
 program.addCommand(statusCommand);
 program.addCommand(configCommand);
 program.addCommand(historyCommand);
+program.addCommand(daemonCommand);
 
 // 默认显示帮助
 if (process.argv.length <= 2) {

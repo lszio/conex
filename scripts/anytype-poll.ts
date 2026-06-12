@@ -1,20 +1,12 @@
-// Anytype API 查询脚本 — 验证连通性
+// Anytype API 查询脚本 — 验证连通性 (v4: 使用实际 API 端点)
 // 使用: ANYTYPE_API_KEY=<key> bun run scripts/anytype-poll.ts
-// 必须先创建 API Key: 打开 Anytype → 设置 → API Keys → Create new
+import { loadCredentials } from "../src/adapters/anytype/auth.js";
 
-const API_BASE = process.env.ANYTYPE_API_BASE_URL || "http://127.0.0.1:31009";
-const API_KEY = process.env.ANYTYPE_API_KEY;
-
-if (!API_KEY) {
-  console.error("❌ 需要 ANYTYPE_API_KEY 环境变量");
-  console.error("   创建 API Key: Anytype → 设置 → API Keys → Create new");
-  console.error("   使用: ANYTYPE_API_KEY=<key> bun run scripts/anytype-poll.ts");
-  process.exit(1);
-}
-
+const creds = loadCredentials();
+const API_BASE = creds.apiBaseUrl;
 const headers = {
-  Authorization: `Bearer ${API_KEY}`,
-  "Anytype-Version": "2025-11-08",
+  Authorization: `Bearer ${creds.apiKey}`,
+  "Anytype-Version": creds.apiVersion,
   "Content-Type": "application/json",
 };
 
@@ -22,62 +14,67 @@ async function main() {
   console.log(`🔌 连接 Anytype API: ${API_BASE}`);
   console.log("──────────────────────────────────────");
 
-  // 1. 健康检查
-  console.log("\n1️⃣  健康检查");
+  // 1. 列出空间
+  console.log("\\n1️⃣  列出空间");
   try {
-    const res = await fetch(`${API_BASE}/api/v1/health`, { headers });
-    const text = await res.text();
-    console.log(`   状态: ${res.status} — ${text.slice(0, 200)}`);
+    const res = await fetch(`${API_BASE}/v1/spaces`, { headers });
+    const data = await res.json() as any;
+    const spaces = data.data || [];
+    console.log(`   空间数: ${spaces.length}`);
+    for (const space of spaces) {
+      console.log(`   📁 ${space.name} (${space.id.slice(0, 20)}...)`);
+    }
+
+    // 2. 选择一个空间查询 Task
+    const labry = spaces.find((s: any) => s.name === "labry");
+    const targetSpace = labry || spaces[0];
+    const spaceId = targetSpace.id;
+
+    console.log(`\\n2️⃣  查询 Task 对象 (空间: ${targetSpace.name})`);
+    const searchRes = await fetch(`${API_BASE}/v1/search`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        types: ["task"],
+        limit: 20,
+        sort: { direction: "desc", property_key: "last_modified_date" },
+      }),
+    });
+    const searchData = await searchRes.json() as any;
+    const tasks = searchData.data || [];
+    console.log(`   任务数: ${tasks.length} (展示前 20 个)`);
+
+    for (const task of tasks.slice(0, 20)) {
+      const props = (task.properties || []) as any[];
+      const done = props.find((p: any) => p.key === "done")?.checkbox || false;
+      const deadline = props.find((p: any) => p.key === "due_date")?.date || "";
+      const priority = props.find((p: any) => p.key === "priority")?.select?.name || "";
+      const status = props.find((p: any) => p.key === "status")?.select?.name || "";
+      const icon = done ? "✅" : "⬜";
+      console.log(`   ${icon} ${task.name || "(未命名)"}`);
+      if (deadline) console.log(`       截止: ${deadline}`);
+      if (status) console.log(`       状态: ${status}`);
+      if (priority) console.log(`       优先级: ${priority}`);
+    }
+
+    // 3. 类型列表
+    console.log(`\\n3️⃣  类型列表 (空间: ${targetSpace.name})`);
+    const typesRes = await fetch(`${API_BASE}/v1/spaces/${spaceId}/types?limit=50`, { headers });
+    const typesData = await typesRes.json() as any;
+    const types = typesData.data || [];
+    console.log(`   类型数: ${types.length}`);
+    for (const t of types) {
+      console.log(`   📄 ${t.name} (key: ${t.key})`);
+    }
+
   } catch (e) {
     console.log(`   ❌ 连接失败: ${e}`);
-    console.log("   确保 Anytype 桌面端正在运行");
+    console.log("   确保 Anytype 桌面端正在运行 (端口 31009)");
     process.exit(1);
   }
 
-  // 2. 列出空间
-  console.log("\n2️⃣  列出空间");
-  try {
-    const res = await fetch(`${API_BASE}/api/v1/spaces`, { headers });
-    const data = await res.json() as any;
-    console.log(`   空间数: ${data.spaces?.length || 0}`);
-    for (const space of data.spaces || []) {
-      console.log(`   - ${space.name} (${space.id})`);
-    }
-  } catch (e) {
-    console.log(`   ⚠️  查询空间失败: ${e}`);
-  }
-
-  // 3. 查询对象 (限制 5 条)
-  console.log("\n3️⃣  查询最近对象 (limit: 5)");
-  try {
-    const res = await fetch(`${API_BASE}/api/v1/objects?limit=5&sort=lastModifiedDesc`, { headers });
-    const data = await res.json() as any;
-    const objects = data.objects || data.data || [];
-    console.log(`   对象数: ${objects.length}`);
-    for (const obj of objects.slice(0, 5)) {
-      console.log(`   📄 ${obj.name || "(未命名)"} (type: ${obj.type || obj.layout || "?"})`);
-    }
-  } catch (e) {
-    console.log(`   ⚠️  查询对象失败: ${e}`);
-  }
-
-  // 4. 查询 Task 类型对象
-  console.log("\n4️⃣  查询 Task 类型对象 (limit: 5)");
-  try {
-    const res = await fetch(`${API_BASE}/api/v1/objects?type=Task&limit=5`, { headers });
-    const data = await res.json() as any;
-    const tasks = data.objects || data.data || [];
-    console.log(`   任务数: ${tasks.length}`);
-    for (const task of tasks.slice(0, 5)) {
-      console.log(`   ✅ ${task.name} (状态: ${task.done ? "完成" : "待办"})`);
-      if (task.deadline) console.log(`      截止: ${task.deadline}`);
-    }
-  } catch (e) {
-    console.log(`   ⚠️  查询 Task 失败: ${e}`);
-  }
-
-  console.log("\n──────────────────────────────────────");
-  console.log("✅ 验证完成");
+  console.log("\\n──────────────────────────────────────");
+  console.log("✅ 验证完成 — Anytype API 可用");
 }
 
 main().catch(console.error);

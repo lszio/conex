@@ -14,7 +14,7 @@ export { SyncEngine } from "./engine/sync-engine.js";
 export type { SyncConfig } from "./engine/sync-engine.js";
 
 export { mapperRegistry } from "./mappers/registry.js";
-export { TaskToReminderMapper, computeContentHash, extractConexIdFromNotes } from "./mappers/task-to-reminder.js";
+export { TaskToReminderMapper, computeContentHash, extractConexIdFromNotes, ANYTYPE_DEEP_LINK_PREFIX } from "./mappers/task-to-reminder.js";
 
 export { SyncStore, getSyncStore } from "./store/db.js";
 export type { IdMapRow, SyncStateRow, ConflictLogRow, ConfigRow } from "./store/db.js";

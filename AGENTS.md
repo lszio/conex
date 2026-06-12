@@ -1,67 +1,72 @@
 # AGENTS.md — CONEX Agent 工作指引
 
-> **最后更新**: 2026-06-10
-> **状态**: Phase 0 (策划/骨架阶段)
+> **最后更新**: 2026-06-12
+> **状态**: Phase 1 (单向同步 Anytype Tasks → Apple Reminders) ✅
 
 ---
 
 ## 项目定位
 
-CONEX 是 Anytype ↔ Apple 生态的同步桥接层。不是通用同步器，而是**单向渐进式**的项目：先 Anytype Tasks → Apple Reminders，再逐步扩展。
+CONEX 是 Anytype ↔ Apple 生态的同步桥接层。以 Anytype 为数据主锚点，向 Apple 生态单向同步。
 
 ## 当前状态
 
-- ✅ **ARCHITECTURE.md** — 完整架构设计
-- ✅ **README.md** — 项目说明
-- ✅ **package.json** (骨架)
-- 🔜 **Anytype API 连通性验证** — Phase 0 的第一步
-- 🔜 **AppleScript Reminders 脚本** — Phase 0 的第二步
+### ✅ Phase 0 — 验证与骨架
+- ✅ 项目骨架搭建 (TypeScript + Bun + CLI)
+- ✅ Anytype API 连通性验证 (`/v1/` 端点, `/v1/search` 查询)
+- ✅ AppleScript Reminders 操作验证 (创建/查询/删除)
+- ✅ SQLite 本地状态存储 (id_map, sync_state, conflict_log)
+
+### ✅ Phase 1 — 单向同步 Anytype Tasks → Apple Reminders
+- ✅ Anytype Adapter (search/CRUD)
+- ✅ Apple Reminders Adapter (AppleScript, locale 安全的日期处理)
+- ✅ Task→Reminder Mapper (含属性提取、优先级映射、冲突检测)
+- ✅ Sync Engine (创建/更新/跳过/冲突日志)
+- ✅ CLI sync/status/config/history 命令
+- ✅ 端到端测试: **55 个 Anytype Task → 55 个 Apple Reminders (零错误)**
+
+### ✅ Phase 2 — 守护模式 & 自动化
+- ✅ Hermes Skill 注册 (`conex-sync`)
+- ✅ 守护模式 (Hermes cronjob, 每 2 分钟自动同步, no_agent 模式)
+
+### ✅ Phase 3 — 双向同步 & 深度链接
+- ✅ **双向同步**: Apple Reminders 完成 → 写回 Anytype status=DONE
+- ✅ **status 属性映射**: 使用 Anytype `status` select 属性（TODO/DONE/WILL/PEND/QUIT），不依赖 `done` checkbox
+- ✅ **深层修复**: `setTaskDone` 只设置 `status: DONE`，不再设置 `done: checkbox:true`
+- ✅ **深度链接**: 每个 Reminder 备注含 `anytype://{id}`，iOS 上可直达 Anytype 对象
+- ✅ **守护进程模式**: `bun run daemon start --space <id>` 长期运行
+- ✅ **Hermes Cron 定时同步**: 每 2 分钟自动双向同步（无变更静默，零 token 消耗）
+
+### 🔜 Phase 4 — 更多适配器
+- [ ] Apple Calendar 适配器 (CalDAV)
+- [ ] Apple Notes 适配器 (AppleScript)
+- [ ] MCP Server
 
 ## 关键参考
 
 | 参考 | 位置 | 用途 |
 |------|------|------|
 | 架构设计 | `ARCHITECTURE.md` | 全景图、映射模型、同步流 |
-| Anytype MCP Server | `github.com/anyproto/anytype-mcp` | Anytype API 使用参考 |
-| Anytype API Docs | `github.com/anyproto/anytype-api` | OpenAPI 规范 |
-| 根项目 AGENTS.md | `../../AGENTS.md` | Labry 工程规范 |
-| 根项目 ARCHITECTURE.md | `../../ARCHITECTURE.md` | Labry 生态全览 |
-
-## 开发顺序
-
-```
-Phase 0 ─── 验证连通性
-  Task 1: 调通 Anytype REST API (查询 Objects)
-  Task 2: 编写 AppleScript 创建/查询 Reminders
-  Task 3: 验证 SQLite 本地存储
-
-Phase 1 ─── 单向同步 Anytype Tasks → Apple Reminders
-  Task 4: 实现 Anytype Adapter 核心
-  Task 5: 实现 Apple Reminders Adapter (AppleScript)
-  Task 6: 实现 Task→Reminder Mapper
-  Task 7: 实现 Sync Engine (单次)
-  Task 8: CLI sync/status 命令
-  Task 9: Hermes Skill 注册
-```
+| Anytype API | `developers.anytype.io` | OpenAPI v2025-11-08, `/v1/` 端点 |
+| 验证脚本 | `scripts/anytype-poll.ts` | Anytype API 连通性检查 |
+| 验证脚本 | `scripts/apple-test.ts` | Apple Reminders 操作测试 |
 
 ## 代码约定
 
-1. 遵循 Labry 根项目的 AGENTS.md (`../../AGENTS.md`) 所有约定
-2. 适配器通过构造函数注入配置，无全局状态
-3. 每个 Mapper 必须有单元测试
-4. SQLite 使用 WAL 模式
-5. 所有 Anytype 对象在 Apple 侧标记 `conex:{anytype_id}` 用于追踪
-6. 操作日志使用 JSON lines 格式输出到 `~/.conex/logs/`
+1. 适配器通过构造函数注入配置，无全局状态
+2. 每个 Mapper 必须有单元测试
+3. SQLite 使用 WAL 模式
+4. Anytype 对象在 Apple 侧标记 `conex:{anytype_id}` 用于追踪
+5. 操作日志使用 JSON lines 格式输出到 `~/.conex/logs/`
 
 ## 验证方式
 
 ```bash
-# Phase 0 验证
-bun run scripts/anytype-poll.ts    # 测试 Anytype API 连通性
-bun run scripts/apple-test.ts      # 测试 AppleScript Reminders 脚本
-
-# Phase 1 验证
-bun run src/cli sync              # 执行一次同步
-bun run src/cli status             # 查看同步状态
-bun test                           # 所有单元测试
+bun test                           # 单元测试 (11 个)
+bun run verify:anytype             # Anytype API 连通性
+bun run verify:apple               # Apple Reminders 操作
+bun run sync -- --space <id>       # 执行一次同步
+bun run status                     # 查看同步状态
+bun run config show                # 查看配置
+bun run history                    # 同步历史
 ```

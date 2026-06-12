@@ -1,7 +1,7 @@
 // CLI history 命令 — 查看同步历史
 
 import { Command } from "commander";
-import { getSyncStore } from "../store/db.js";
+import { getSyncStore } from "../../store/db.js";
 
 export const historyCommand = new Command("history")
     .description("查看同步历史和冲突日志")

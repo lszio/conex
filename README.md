@@ -22,9 +22,9 @@ bun run dev          # 交互式调试
 
 | 里程碑 | 状态 | 说明 |
 |--------|------|------|
-| Phase 0: 骨架 + 验证 | 🔜 待启动 | 搭建项目 + 验证 Anytype API + AppleScript |
-| Phase 1: 单向同步 | ⏳ 计划中 | Anytype Tasks → Apple Reminders |
-| Phase 2: 多适配器 | 📅 未来 | Calendar / Notes / 双向同步 |
+| Phase 0: 骨架 + 验证 | ✅ 已完成 | 项目骨架 + Anytype API 验证 + AppleScript 验证 |
+| **Phase 1: 单向同步** | **✅ 已完成** | **55 个 Anytype Task → Apple Reminders (零错误)** |
+| Phase 2: 多适配器 | 🔜 计划中 | Calendar / Notes / 双向同步 |
 | Phase 3: 生产化 | 📅 未来 | Swift CLI / MCP Server / 守护模式 |
 
 详见 [ARCHITECTURE.md](ARCHITECTURE.md)。
