@@ -9,6 +9,9 @@ import type { ReminderData, ReminderList, AppleRemindersStatus } from "./types.j
 
 const CONEX_LIST = "CONEX-Anytype";
 
+/** Swift 辅助二进制路径（EventKit 读写周期规则） */
+const EK_RECURRENCE_BIN = new URL("ek_recurrence", import.meta.url).pathname;
+
 /**
  * 安全转义字符串用于嵌入 AppleScript 字面量。
  * AppleScript 字符串使用双引号，需转义内部的 " 和 \。
@@ -185,6 +188,11 @@ export class AppleRemindersAdapter {
             await this.setDueDate(id, data.dueDate);
         }
 
+        // 单独设置闹钟（如果有）
+        if (data.alarmDate) {
+            await this.setAlarmDate(id, data.alarmDate);
+        }
+
         return id;
     }
 
@@ -208,6 +216,29 @@ export class AppleRemindersAdapter {
                 set minutes of dueDate to ${min}
                 set seconds of dueDate to ${s}
                 set due date of targetReminder to dueDate
+            end tell
+        `);
+    }
+
+    /** 单独设置提醒的闹钟时间（remind me date） */
+    private async setAlarmDate(id: string, alarmDate: Date): Promise<void> {
+        const y = alarmDate.getFullYear();
+        const m = alarmDate.getMonth() + 1;
+        const d = alarmDate.getDate();
+        const h = alarmDate.getHours();
+        const min = alarmDate.getMinutes();
+
+        await this.runScript(`
+            tell application "Reminders"
+                set targetReminder to reminder id "${esc(id)}"
+                set _alarm to current date
+                set year of _alarm to ${y}
+                set month of _alarm to ${m}
+                set day of _alarm to ${d}
+                set hours of _alarm to ${h}
+                set minutes of _alarm to ${min}
+                set seconds of _alarm to 0
+                set remind me date of targetReminder to _alarm
             end tell
         `);
     }
@@ -242,6 +273,11 @@ export class AppleRemindersAdapter {
         // 单独设置截止日期（如果有）
         if (data.dueDate !== undefined) {
             await this.setDueDate(id, data.dueDate);
+        }
+
+        // 单独设置闹钟（如果有）
+        if (data.alarmDate !== undefined) {
+            await this.setAlarmDate(id, data.alarmDate);
         }
     }
 
@@ -303,7 +339,35 @@ export class AppleRemindersAdapter {
                 tell application "Reminders"
                     try
                         set r to reminder id "${esc(id)}"
-                        set output to (name of r) & "|SEP|" & (body of r) & "|SEP|" & (completed of r as string)
+                        set _dueY to ""
+                        set _dueM to ""
+                        set _dueD to ""
+                        try
+                            set _due to due date of r
+                            set _dueY to year of _due as string
+                            set _dueM to month of _due as integer
+                            set _dueD to day of _due as string
+                        end try
+                        set _alarmY to ""
+                        set _alarmM to ""
+                        set _alarmD to ""
+                        set _alarmH to ""
+                        set _alarmMin to ""
+                        try
+                            set _alarm to remind me date of r
+                            set _alarmY to year of _alarm as string
+                            set _alarmM to month of _alarm as integer
+                            set _alarmD to day of _alarm as string
+                            set _alarmH to hours of _alarm as string
+                            set _alarmMin to minutes of _alarm as string
+                        end try
+                        set output to ¬
+                            (name of r) & "|SEP|" & ¬
+                            (body of r) & "|SEP|" & ¬
+                            (completed of r as string) & "|SEP|" & ¬
+                            _dueY & "|SEP|" & _dueM & "|SEP|" & _dueD & "|SEP|" & ¬
+                            (priority of r as string) & "|SEP|" & ¬
+                            _alarmY & "|SEP|" & _alarmM & "|SEP|" & _alarmD & "|SEP|" & _alarmH & "|SEP|" & _alarmMin
                         return output
                     on error
                         return "NOT_FOUND"
@@ -313,13 +377,41 @@ export class AppleRemindersAdapter {
 
             if (raw === "NOT_FOUND") return null;
 
-            const [title, notes, completedStr] = raw.split("|SEP|", 3);
-            return {
+            const parts = raw.split("|SEP|", 12);
+            const [title, notes, completedStr, dueY, dueM, dueD, priorityStr, alarmY, alarmM, alarmD, alarmH, alarmMin] = parts;
+            const result: ReminderData = {
                 title,
                 id,
                 notes: notes || undefined,
                 isCompleted: completedStr === "true",
             };
+
+            if (dueY && dueM && dueD) {
+                const y = parseInt(dueY, 10);
+                const m = parseInt(dueM, 10) - 1;
+                const d = parseInt(dueD, 10);
+                if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+                    result.dueDate = new Date(y, m, d);
+                }
+            }
+
+            const priorityVal = parseInt(priorityStr, 10);
+            if (!isNaN(priorityVal)) {
+                result.priority = priorityVal;
+            }
+
+            if (alarmY && alarmM && alarmD) {
+                const y = parseInt(alarmY, 10);
+                const m = parseInt(alarmM, 10) - 1;
+                const d = parseInt(alarmD, 10);
+                const h = alarmH ? parseInt(alarmH, 10) : 0;
+                const min = alarmMin ? parseInt(alarmMin, 10) : 0;
+                if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+                    result.alarmDate = new Date(y, m, d, h, min);
+                }
+            }
+
+            return result;
         } catch {
             return null;
         }
@@ -334,6 +426,56 @@ export class AppleRemindersAdapter {
                 end try
             end tell
         `);
+    }
+
+    // ──────────────────────────────────────
+    // 周期规则（通过 Swift/EventKit 二进制）
+    // ──────────────────────────────────────
+
+    /** 读取提醒的周期规则，返回 JSON 字符串或 "{}" */
+    async getRecurrence(id: string): Promise<string> {
+        try {
+            const json = await execFileAsync(EK_RECURRENCE_BIN, ["read", id], {
+                timeout: 10_000,
+                maxBuffer: 16 * 1024,
+            });
+            const out = json.stdout.trim();
+            return out === "{}" ? "" : out;
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            console.error(`  ⚠️ getRecurrence 失败: ${msg}`);
+            return "";
+        }
+    }
+
+    /** 设置提醒的周期规则（JSON 字符串） */
+    async setRecurrence(id: string, recurrenceJson: string): Promise<boolean> {
+        try {
+            const result = await execFileAsync(EK_RECURRENCE_BIN, ["write", id, recurrenceJson], {
+                timeout: 10_000,
+                maxBuffer: 16 * 1024,
+            });
+            return result.stdout.trim() === "OK";
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            console.error(`  ⚠️ setRecurrence 失败: ${msg}`);
+            return false;
+        }
+    }
+
+    /** 移除提醒的周期规则 */
+    async removeRecurrence(id: string): Promise<boolean> {
+        try {
+            const result = await execFileAsync(EK_RECURRENCE_BIN, ["remove", id], {
+                timeout: 10_000,
+                maxBuffer: 16 * 1024,
+            });
+            return result.stdout.trim() === "OK";
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            console.error(`  ⚠️ removeRecurrence 失败: ${msg}`);
+            return false;
+        }
     }
 
     /** 获取所有列表及其提醒数 */

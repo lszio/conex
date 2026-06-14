@@ -7,6 +7,8 @@ export interface ReminderData {
   dueDate?: Date;
   isCompleted?: boolean;
   priority?: number;        // 0=none, 1=high, 5=medium, 9=low
+  alarmDate?: Date;         // remind me date
+  recurrence?: string;      // JSON string for EKRecurrenceRule
   list?: string;            // 列表名称，默认 "CONEX-Anytype"
   conexId?: string;         // CONEX 追踪 ID (在备注中存储)
 }

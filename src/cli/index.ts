@@ -5,6 +5,7 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { SyncEngine } from "../engine/sync-engine.ts";
 import { BidirectionalDaemon } from "../engine/daemon.ts";
+import { getCanonicalStore } from "../store/canonical-store.ts";
 import { getSyncStore } from "../store/db.ts";
 import { hasApiKey, saveCredentials } from "../adapters/anytype/auth.ts";
 
@@ -66,7 +67,7 @@ program
           appleChangeWindowSec: 300,
         });
         const bidiResult = await daemon.tick();
-        appleToAnytypeCount = bidiResult.appleToAnytype.updated;
+        appleToAnytypeCount = bidiResult.appleToCanonical.updated + bidiResult.pushToAnytype + bidiResult.pushToApple;
         if (appleToAnytypeCount > 0) {
           console.log(`  ✅ 写回 Anytype 完成: ${appleToAnytypeCount}`);
         } else {
@@ -92,7 +93,7 @@ program
   .description("查看 CONEX 各适配器状态和同步概览")
   .action(async () => {
     const engine = await SyncEngine.create();
-    const store = getSyncStore();
+    const store = getCanonicalStore();
 
     console.log("🔍 CONEX 状态\n");
 
@@ -110,27 +111,37 @@ program
       console.log(`   错误:   ${status.reminders.error}`);
     }
 
-    console.log("\n💾 本地存储:");
-    console.log(`   位置:   ${status.store.path}`);
-    console.log(`   映射数: ${status.store.objects} 个对象`);
-    console.log(`   上次同步: ${status.store.lastSync || "从未"}`);
+    console.log("\n💾 Canonical Store:");
+    const all = store.list({ limit: 1000 });
+    const completed = all.filter((t) => t.is_completed);
+    const pending = all.filter((t) => !t.is_completed);
+    const synced = all.filter((t) => t.last_synced);
+    const pendingSync = all.filter((t) => !t.last_synced && t.anytype_id);
+    console.log(`   总任务:  ${all.length}`);
+    console.log(`   已完成:  ${completed.length}`);
+    console.log(`   待办:    ${pending.length}`);
+    console.log(`   已同步:  ${synced.length}`);
+    console.log(`   待推送:  ${pendingSync.length}`);
 
-    const state = store.getSyncState();
-    console.log(`   累计同步: ${state.total_synced} 个对象`);
-    if (state.last_error) {
-      console.log(`   上次错误: ${state.last_error}`);
+    // 按来源统计
+    const bySource: Record<string, number> = {};
+    for (const t of all) {
+      bySource[t.source] = (bySource[t.source] || 0) + 1;
+    }
+    for (const [src, count] of Object.entries(bySource)) {
+      console.log(`   来源[${src}]: ${count}`);
     }
 
-    const conflicts = store.listConflicts(5);
-    if (conflicts.length > 0) {
-      console.log(`\n⚠️  未解决的冲突: ${conflicts.length}`);
-      for (const c of conflicts.slice(0, 3)) {
-        if (!c.resolution) {
-          console.log(`   • ${c.anytype_id} ↔ ${c.apple_id} (${c.conflict_type})`);
-        }
+    // 优先级分布
+    const priorityLabels = ["Q4(无)", "Q2(计划)", "Q3(委托)", "Q1(执行)"];
+    const byPriority: Record<number, number> = {};
+    for (const t of all) {
+      byPriority[t.priority] = (byPriority[t.priority] || 0) + 1;
+    }
+    for (let p = 0; p <= 3; p++) {
+      if (byPriority[p]) {
+        console.log(`   优先级[${priorityLabels[p]}]: ${byPriority[p]}`);
       }
-    } else {
-      console.log("\n⚠️  冲突日志: 无");
     }
 
     process.exit(0);
