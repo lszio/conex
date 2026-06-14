@@ -1,7 +1,7 @@
 // CONEX — 跨平台连接器主入口
 // Cross-Platform Nexus: Anytype ↔ Apple 生态同步桥接
 
-export { AnytypeAdapter, getAnytypeAdapter, AnytypeAdapterError } from "./adapters/anytype/adapter.js";
+export { AnytypeAdapter, AnytypeAdapterError } from "./adapters/anytype/adapter.js";
 export type { AnytypeObject, AnytypeSpace } from "./adapters/anytype/types.js";
 export { loadCredentials, saveCredentials, hasApiKey } from "./adapters/anytype/auth.js";
 
@@ -12,9 +12,19 @@ export type { SyncMapper, SyncDirection, Conflict, AdapterStatus, SyncResult, Ch
 
 export { SyncEngine } from "./engine/sync-engine.js";
 export type { SyncConfig } from "./engine/sync-engine.js";
+export { BidirectionalDaemon } from "./engine/daemon.js";
 
-export { mapperRegistry } from "./mappers/registry.js";
-export { TaskToReminderMapper, computeContentHash, extractConexIdFromNotes, ANYTYPE_DEEP_LINK_PREFIX } from "./mappers/task-to-reminder.js";
+export {
+  mapperRegistry,
+} from "./mappers/registry.js";
+export { anytypeToCanonical, canonicalToAnytypePatch, computeAnytypeContentHash } from "./mappers/anytype-mapper.js";
+export { reminderToCanonical, canonicalToReminder, extractConexIdFromNotes } from "./mappers/reminder-mapper.js";
 
-export { SyncStore, getSyncStore } from "./store/db.js";
-export type { IdMapRow, SyncStateRow, ConflictLogRow, ConfigRow } from "./store/db.js";
+export { getCanonicalStore, CanonicalStore } from "./store/canonical-store.js";
+export type { CanonicalTask } from "./store/schema.js";
+export {
+  createTask,
+  canonicalToApplePriority,
+  appleToCanonicalPriority,
+  priorityToQuadrantLabel,
+} from "./store/schema.js";

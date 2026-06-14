@@ -1,5 +1,4 @@
 // Anytype API 类型定义 — 基于实际 API v2025-11-08 响应格式
-//
 // 属性以数组形式返回，每个元素包含 format/值字段。
 
 export interface AnytypeProperty {
@@ -76,19 +75,13 @@ export function getProperty(obj: AnytypeObject, key: string): AnytypeProperty | 
   return obj.properties.find(p => p.key === key);
 }
 
-/** 获取 done 状态 */
+// ──────────────────────────────────────────
+// 完成状态
+// ──────────────────────────────────────────
+
+/** 获取 done checkbox 值 */
 export function isDone(obj: AnytypeObject): boolean {
   return getProperty(obj, "done")?.checkbox || false;
-}
-
-/** 获取截止日期 */
-export function getDeadline(obj: AnytypeObject): string | undefined {
-  return getProperty(obj, "due_date")?.date || undefined;
-}
-
-/** 获取优先级的 tag name */
-export function getPriorityName(obj: AnytypeObject): string | undefined {
-  return getProperty(obj, "priority")?.select?.name || undefined;
 }
 
 /** 获取状态 tag name */
@@ -101,7 +94,7 @@ export function getStatusTagKey(obj: AnytypeObject): string | undefined {
   return getProperty(obj, "status")?.select?.key || undefined;
 }
 
-/** Status tag key 常量 */
+/** Status tag key 常量 (labry 空间) */
 export const STATUS_TAGS = {
   TODO: "63454ad0c493f68e301890db",
   DONE: "63454af7c493f68e301890dd",
@@ -111,14 +104,83 @@ export const STATUS_TAGS = {
 } as const;
 
 /**
- * 根据 status select 属性判断任务是否完成。
- * 只有 status == DONE 才算完成。
- * 如果没有 status 属性，视为 TODO（未完成）。
+ * 判断任务是否完成。
+ *
+ * 逻辑: status == "DONE" 优先级最高；
+ * 如果没有 status 字段或 status 未设置，fallback 到 done checkbox。
  */
 export function isCompletedByStatus(obj: AnytypeObject): boolean {
   const status = getStatusName(obj);
-  return status === "DONE";
+  if (status) return status === "DONE";
+  // fallback: done checkbox
+  return isDone(obj);
 }
+
+// ──────────────────────────────────────────
+// 优先级 (四象限)
+// ──────────────────────────────────────────
+
+/** 优先级的四象限 select option name（Anytype 中对应值） */
+export const PRIORITY_OPTIONS = ["0", "1", "2", "3"] as const;
+
+/**
+ * 从 Anytype priority select 获取原始值 → canonical 0-3
+ * Anytype select option name 直接存 "0","1","2","3"
+ */
+export function getCanonicalPriority(obj: AnytypeObject): number {
+  const name = getProperty(obj, "priority")?.select?.name;
+  if (name === "3") return 3;
+  if (name === "2") return 2;
+  if (name === "1") return 1;
+  return 0;
+}
+
+/**
+ * Canonical priority (0-3) → Anytype priority select value (string)
+ */
+export function canonicalToAnytypePriority(p: number): string {
+  if (p >= 3) return "3";
+  if (p >= 2) return "2";
+  if (p >= 1) return "1";
+  return "0";
+}
+
+// ──────────────────────────────────────────
+// 日期
+// ──────────────────────────────────────────
+
+/** 获取截止日期 */
+export function getDeadline(obj: AnytypeObject): string | undefined {
+  return getProperty(obj, "due_date")?.date || undefined;
+}
+
+/** 获取 schedule 日期 */
+export function getScheduleDate(obj: AnytypeObject): string | undefined {
+  return getProperty(obj, "schedule")?.date || undefined;
+}
+
+/** 获取 completion_date (由 CONEX 写入的新字段) */
+export function getCompletionDate(obj: AnytypeObject): string | undefined {
+  return getProperty(obj, "completion_date")?.date || undefined;
+}
+
+// ──────────────────────────────────────────
+// 描述内容
+// ──────────────────────────────────────────
+
+/**
+ * 获取任务描述。
+ * 优先级: description text 属性 > snippet
+ */
+export function getDescription(obj: AnytypeObject): string | undefined {
+  const descProp = getProperty(obj, "description");
+  if (descProp?.text) return descProp.text;
+  return obj.snippet || undefined;
+}
+
+// ──────────────────────────────────────────
+// 标签、类型等
+// ──────────────────────────────────────────
 
 /** 获取标签列表 */
 export function getTags(obj: AnytypeObject): string[] {
@@ -131,10 +193,29 @@ export function getTypeKey(obj: AnytypeObject): string {
   return obj.type?.key || "unknown";
 }
 
-/** 获取描述内容 (优先 snippet，其次 body) */
-export function getDescription(obj: AnytypeObject): string | undefined {
-  return obj.snippet || undefined;
+/** 获取 archive checkbox */
+export function isArchived(obj: AnytypeObject): boolean {
+  return getProperty(obj, "archive")?.checkbox || obj.archived;
 }
+
+/** 获取周期规则（JSON 文本字段） */
+export function getRecurrence(obj: AnytypeObject): string | undefined {
+  return getProperty(obj, "recurrence")?.text || undefined;
+}
+
+/** 获取优先级的 tag name (原始 Anytype select name) */
+export function getPriorityName(obj: AnytypeObject): string | undefined {
+  return getProperty(obj, "priority")?.select?.name || undefined;
+}
+
+/** 获取优先级的 tag key */
+export function getPriorityTagKey(obj: AnytypeObject): string | undefined {
+  return getProperty(obj, "priority")?.select?.key || undefined;
+}
+
+// ──────────────────────────────────────────
+// API 类型
+// ──────────────────────────────────────────
 
 export interface AnytypeSpace {
   object: string;
