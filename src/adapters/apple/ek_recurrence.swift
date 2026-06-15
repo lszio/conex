@@ -220,6 +220,85 @@ func cmdRemove(reminderID: String) {
     }
 }
 
+// MARK: - Tag Commands
+
+/// Find all reminders whose notes (body) contain a specific hashtag.
+/// Returns JSON: [{id, title, notes, completed}]
+func cmdFindByTag(tag: String) {
+    let store = getEKStore()
+    let calendars = store.calendars(for: .reminder)
+    let predicate = store.predicateForReminders(in: calendars)
+    var all: [EKReminder] = []
+    let group = DispatchGroup()
+    group.enter()
+    store.fetchReminders(matching: predicate) { reminders in
+        all = reminders ?? []
+        group.leave()
+    }
+    group.wait()
+    
+    let tagPattern1 = "#\(tag)"
+    let tagPattern2 = "[conex:"  // backward compat: old format
+    var results: [[String: Any]] = []
+    
+    for r in all {
+        guard let notes = r.notes else { continue }
+        let hasTag = notes.contains(tagPattern1) || (tag == "conex" && notes.contains(tagPattern2))
+        guard hasTag else { continue }
+        results.append([
+            "id": "x-apple-reminder://\(r.calendarItemIdentifier)",
+            "title": r.title ?? "",
+            "notes": notes,
+            "completed": r.isCompleted,
+        ])
+    }
+    
+    if let data = try? JSONSerialization.data(withJSONObject: results, options: .init(rawValue: 0)),
+       let str = String(data: data, encoding: .utf8) {
+        print(str)
+    } else {
+        print("[]")
+    }
+}
+
+/// Get/set hashtag-style tags on a reminder by manipulating its notes body.
+/// Tags are stored as #tag in the notes. We read them back from notes.
+/// We only manage tags within the CONEX metadata section to avoid conflicts.
+func cmdReadTags(reminderID: String) {
+    let store = getEKStore()
+    guard let reminder = findReminder(by: reminderID, in: store) else {
+        print("ERROR:reminder_not_found")
+        exit(1)
+    }
+    
+    let notes = reminder.notes ?? ""
+    // Extract all #tags from the notes
+    // A tag is: "#" followed by alphanumeric/hyphen (not "://" which indicates a URL)
+    let words = notes.split { $0.isWhitespace || $0.isNewline }
+    let tags = words.compactMap { word -> String? in
+        let s = String(word)
+        guard s.hasPrefix("#") else { return nil }
+        let tag = String(s.dropFirst())
+        // Skip things that look like URLs (#scheme://...)
+        guard !tag.contains("://") else { return nil }
+        // Skip things that look like paths or encoded data
+        guard !tag.contains("/") else { return nil }
+        guard !tag.contains("%") else { return nil }
+        // Skip the separator line
+        guard !tag.contains("CONEX") else { return nil }
+        // Reasonable tag length
+        guard tag.count >= 1 && tag.count <= 40 else { return nil }
+        return tag
+    }
+    
+    if let data = try? JSONSerialization.data(withJSONObject: tags, options: .init(rawValue: 0)),
+       let str = String(data: data, encoding: .utf8) {
+        print(str)
+    } else {
+        print("[]")
+    }
+}
+
 // MARK: - Main
 
 // macOS 14+: requestFullAccessToReminders is async
@@ -237,25 +316,29 @@ func runAsync() async {
     }
     
     let args = CommandLine.arguments
-    guard args.count >= 3 else {
-        print("USAGE: ek_recurrence <read|write|remove> <reminder_id> [json]")
+    guard args.count >= 2 else {
+        print("USAGE: ek_recurrence <read|write|remove|find-tagged|read-tags> [...]")
         exit(1)
     }
     
     let command = args[1]
-    let reminderID = args[2]
     
     switch command {
     case "read":
-        cmdRead(reminderID: reminderID)
+        guard args.count >= 3 else { print("ERROR:missing_id"); exit(1) }
+        cmdRead(reminderID: args[2])
     case "write":
-        guard args.count >= 4 else {
-            print("ERROR:missing_json")
-            exit(1)
-        }
-        cmdWrite(reminderID: reminderID, jsonStr: args[3])
+        guard args.count >= 4 else { print("ERROR:missing_json"); exit(1) }
+        cmdWrite(reminderID: args[2], jsonStr: args[3])
     case "remove":
-        cmdRemove(reminderID: reminderID)
+        guard args.count >= 3 else { print("ERROR:missing_id"); exit(1) }
+        cmdRemove(reminderID: args[2])
+    case "find-tagged":
+        guard args.count >= 3 else { print("ERROR:missing_tag"); exit(1) }
+        cmdFindByTag(tag: args[2])
+    case "read-tags":
+        guard args.count >= 3 else { print("ERROR:missing_id"); exit(1) }
+        cmdReadTags(reminderID: args[2])
     default:
         print("ERROR:unknown_command")
         exit(1)

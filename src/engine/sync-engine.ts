@@ -29,7 +29,6 @@ import { getSyncStore } from "../store/db.js";
 export interface SyncConfig {
   spaceId?: string;
   batchSize: number;
-  ensureRemindersList: boolean;
   /** 两个方向的变更检测窗口（秒） */
   anytypeWindowSec: number;
   appleWindowSec: number;
@@ -37,7 +36,6 @@ export interface SyncConfig {
 
 const DEFAULT_CONFIG: SyncConfig = {
   batchSize: 50,
-  ensureRemindersList: true,
   anytypeWindowSec: 120,   // Anytype 往前看 2 分钟
   appleWindowSec: 300,     // Apple 往前看 5 分钟
 };
@@ -108,12 +106,10 @@ export class SyncEngine {
     };
 
     try {
-      // 1. Ensure reminders list
-      if (this.config.ensureRemindersList) {
-        const ready = await this.reminders.ensureReady();
-        if (!ready.available) {
-          throw new Error(`Reminders 不可用: ${ready.error}`);
-        }
+      // 1. Ensure Reminders is accessible
+      const ready = await this.reminders.ensureReady();
+      if (!ready.available) {
+        throw new Error(`Reminders 不可用: ${ready.error}`);
       }
 
       // 2. Anytype → Canonical Store
