@@ -114,10 +114,6 @@ export function buildNotes(task: CanonicalTask): string {
     if (task.priority && task.priority > 0) {
       lines.push(`Priority: ${priorityToQuadrantLabel(task.priority)}`);
     }
-    const formattedTags = formatTags(task.tags);
-    if (formattedTags) {
-      lines.push(`Tags: ${formattedTags}`);
-    }
     if (task.schedule_date) {
       lines.push(`Schedule: ${task.schedule_date.slice(0, 10)}`);
     }
@@ -127,6 +123,21 @@ export function buildNotes(task: CanonicalTask): string {
     }
     if (task.space_id) {
       lines.push(`Space: ${task.space_id.slice(0, 16)}…`);
+    }
+
+    // ── 标签行（Apple 原生 tag 系统识别 #tagname ──
+    const tagWords: string[] = [];
+    tagWords.push("conex"); // 标记为 CONEX 管理
+    const parsedTags = formatTags(task.tags);
+    if (parsedTags) {
+      for (const t of parsedTags.split(", ")) {
+        const clean = t.trim().replace(/\s+/g, "-").toLowerCase();
+        if (clean) tagWords.push(clean);
+      }
+    }
+    if (tagWords.length > 0) {
+      lines.push(""); // 空行
+      lines.push(tagWords.map(t => `#${t}`).join(" "));
     }
   }
 

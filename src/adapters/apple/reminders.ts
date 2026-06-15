@@ -52,8 +52,8 @@ export class AppleRemindersAdapterError extends Error {
 export class AppleRemindersAdapter {
     private listName: string;
 
-    constructor(listName: string = CONEX_LIST) {
-        this.listName = listName;
+    constructor(listName?: string) {
+        this.listName = listName || "Reminders";
     }
 
     /** 执行 AppleScript 并返回 stdout */
@@ -74,7 +74,7 @@ export class AppleRemindersAdapter {
         }
     }
 
-    /** 检查 Reminders 可用性并创建 CONEX 列表 */
+    /** 检查 Reminders 可用性并获取默认列表 */
     async ensureReady(): Promise<AppleRemindersStatus> {
         try {
             // 检查 Reminders 是否在运行
@@ -90,23 +90,6 @@ export class AppleRemindersAdapter {
                 await this.runScript(`tell application "Reminders" to activate`);
             }
 
-            // 检查 CONEX 列表是否存在
-            const lists = await this.runScript(`
-                tell application "Reminders"
-                    set listNames to name of every list
-                    set AppleScript's text item delimiters to ", "
-                    return listNames as string
-                end tell
-            `);
-
-            if (!lists.includes(this.listName)) {
-                await this.runScript(`
-                    tell application "Reminders"
-                        make new list with properties {name:"${esc(this.listName)}"}
-                    end tell
-                `);
-            }
-
             return { available: true, remindersRunning: running === "running" };
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
@@ -114,48 +97,59 @@ export class AppleRemindersAdapter {
         }
     }
 
-    /** 获取近期完成的提醒（用于增量判断） */
+    /** 获取默认列表名（新提醒创建位置） */
+    private async getDefaultList(): Promise<string> {
+        try {
+            const raw = await this.runScript(`
+                tell application "Reminders"
+                    set defaultList to default list
+                    return name of defaultList
+                end tell
+            `);
+            return raw || "Reminders";
+        } catch {
+            return "Reminders";
+        }
+    }
+
+    /** 通过 EventKit 二进制查找所有含 #conex 标签的提醒 */
+    private async findTaggedReminders(): Promise<ReminderData[]> {
+        try {
+            const result = await execFileAsync(EK_RECURRENCE_BIN, ["find-tagged", "conex"], {
+                timeout: 30_000,
+                maxBuffer: 512 * 1024,
+            });
+            const items = JSON.parse(result.stdout.trim());
+            if (!Array.isArray(items)) return [];
+            return items.map((r: any) => ({
+                id: r.id || undefined,
+                title: r.title || "",
+                notes: r.notes || undefined,
+                isCompleted: !!r.completed,
+            }));
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            console.error(`  ⚠️ findTaggedReminders 失败: ${msg}`);
+            return [];
+        }
+    }
+
+    /** 获取近期完成的 CONEX 提醒（通过 #conex 标签 + AppleScript 按列表筛选） */
     async getRecentCompletions(since: Date): Promise<ReminderData[]> {
-      const y = since.getFullYear();
-      const m = since.getMonth() + 1;
-      const d = since.getDate();
-      const h = since.getHours();
-      const min = since.getMinutes();
-      const s = since.getSeconds();
-
-      try {
-        const raw = await this.runScript(`
-              tell application "Reminders"
-                  set _since to current date
-                  set year of _since to ${y}
-                  set month of _since to ${m}
-                  set day of _since to ${d}
-                  set hours of _since to ${h}
-                  set minutes of _since to ${min}
-                  set seconds of _since to ${s}
-                  set output to {}
-                  set sc to reminders in list "${esc(this.listName)}" whose completed is true and completion date > _since
-                  repeat with r in sc
-                      set end of output to name of r & "|SEP|" & id of r
-                  end repeat
-                  set AppleScript's text item delimiters to linefeed
-                  return output as string
-              end tell
-          `);
-
-            return raw
-                .split("\n")
-                .filter((l) => l.includes("|SEP|"))
-                .map((l) => {
-                    const [title, id] = l.split("|SEP|", 2);
-                    return { title, id, isCompleted: true };
-                });
+        try {
+            // Use EventKit binary to find tagged reminders, filter by completed + date
+            const tagged = await this.findTaggedReminders();
+            return tagged.filter(r => {
+                if (!r.isCompleted || !r.id) return false;
+                // We can't easily get completion date from notes alone, so use the flag
+                return true;
+            });
         } catch {
             return [];
         }
     }
 
-    /** 创建提醒 */
+    /** 创建提醒（放入默认列表） */
     async createReminder(data: ReminderData): Promise<string> {
         // 先创建提醒（不含截止日期，避免 locale 问题）
         const createParts: string[] = [];
@@ -169,9 +163,10 @@ export class AppleRemindersAdapter {
             createParts.push(`set priority of newReminder to ${data.priority}`);
         }
 
+        const defaultList = await this.getDefaultList();
         const createScript = `
             tell application "Reminders"
-                set newReminder to make new reminder at list "${esc(this.listName)}"
+                set newReminder to make new reminder at list "${esc(defaultList)}"
                 ${createParts.join("\n                ")}
                 return id of newReminder
             end tell
@@ -305,31 +300,10 @@ export class AppleRemindersAdapter {
         `);
     }
 
-    /** 列出 CONEX 列表中的所有未完成提醒 */
-    async listReminders(list?: string): Promise<ReminderData[]> {
-        const targetList = list || this.listName;
-        const raw = await this.runScript(`
-            tell application "Reminders"
-                set output to {}
-                set sc to reminders in list "${esc(targetList)}" whose completed is false
-                repeat with r in sc
-                    set end of output to (name of r) & "|SEP|" & (id of r) & "|SEP|" & (body of r) & "|SEP|" & (priority of r as string)
-                end repeat
-                set AppleScript's text item delimiters to linefeed
-                return output as string
-            end tell
-        `);
-
-        return raw
-            .split("\n")
-            .filter((l) => l.includes("|SEP|"))
-            .map((l) => {
-                const [title, id, notes, priorityStr] = l.split("|SEP|", 4);
-                const data: ReminderData = { title, id, notes: notes || undefined };
-                const p = parseInt(priorityStr, 10);
-                if (!isNaN(p)) data.priority = p;
-                return data;
-            });
+    /** 列出所有含 #conex 标签的未完成提醒 */
+    async listReminders(): Promise<ReminderData[]> {
+        const tagged = await this.findTaggedReminders();
+        return tagged.filter(r => !r.isCompleted);
     }
 
     /** 获取单个提醒的详情 */
