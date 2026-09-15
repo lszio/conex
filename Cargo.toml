@@ -34,6 +34,8 @@ async-trait = "0.1"
 bytes = "1"
 http = "1"
 http-body-util = "0.1"
+axum = "0.8"
+toml = "0.8"
 hyper = { version = "1", features = ["client", "http1"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 secrecy = "0.10"
