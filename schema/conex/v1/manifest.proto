@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package conex.v1;
+
+import "conex/v1/common.proto";
+
+// 能力端点自描述。仅建模可公布的安装清单字段；
+// 源码路径、进程命令、凭据后端与允许地址属于管理员安装配置，不进入本消息。
+message Manifest {
+  uint32 manifest_version = 1;
+  string id = 2;
+  string endpoint_id = 3;
+  string kind = 4;
+  string display = 5;
+  Plane plane = 6;
+  string transport = 7;
+  repeated string provides = 8;
+  repeated string requires = 9;
+  repeated string profile_ids = 10;
+  Limits limits = 11;
+}

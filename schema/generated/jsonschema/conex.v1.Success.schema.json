@@ -670,7 +670,7 @@
       "type": "object"
     }
   },
-  "$id": "conex:conex.test.v1.Scalars",
-  "$ref": "#/$defs/conex.test.v1.Scalars",
+  "$id": "conex:conex.v1.Success",
+  "$ref": "#/$defs/conex.v1.Success",
   "$schema": "https://json-schema.org/draft/2020-12/schema"
 }

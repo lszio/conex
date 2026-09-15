@@ -36,6 +36,22 @@ fn repo_root() -> Result<PathBuf> {
     Ok(manifest.join("..").canonicalize()?)
 }
 
+fn include_roots(root: &Path) -> Vec<PathBuf> {
+    vec![root.join("schema"), root.join("conformance/schema")]
+}
+
+fn canonical_name(root: &Path, proto: &Path) -> PathBuf {
+    for include in include_roots(root) {
+        if let Ok(rel) = proto.strip_prefix(&include) {
+            return rel.to_path_buf();
+        }
+    }
+    proto
+        .strip_prefix(root)
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| proto.to_path_buf())
+}
+
 fn collect_protos(root: &Path) -> Result<Vec<PathBuf>> {
     let mut protos = Vec::new();
     for dir in ["conformance/schema", "schema/conex/v1"] {
@@ -60,13 +76,8 @@ fn generate(root: &Path, schema_dir: &Path, ts_dir: &Path, protos: &[PathBuf]) -
     let rust_dir = schema_dir.join("rust");
     fs::create_dir_all(&rust_dir)?;
     let descriptor = schema_dir.join("conex.bin");
+    let includes = include_roots(root);
 
-    let rel: Vec<PathBuf> = protos
-        .iter()
-        .map(|p| p.strip_prefix(root).unwrap().to_path_buf())
-        .collect();
-
-    let include = [root.to_path_buf()];
     let mut config = prost_build::Config::new();
     config
         .out_dir(&rust_dir)
@@ -74,7 +85,7 @@ fn generate(root: &Path, schema_dir: &Path, ts_dir: &Path, protos: &[PathBuf]) -
         .compile_well_known_types()
         .extern_path(".google.protobuf", "::pbjson_types")
         .bytes(["."]);
-    config.compile_protos(&rel, &include)?;
+    config.compile_protos(protos, &includes)?;
 
     let bytes = fs::read(&descriptor)?;
     let packages = packages_from_descriptor(&bytes)?;
@@ -85,7 +96,7 @@ fn generate(root: &Path, schema_dir: &Path, ts_dir: &Path, protos: &[PathBuf]) -
         .build(&pkg_refs)?;
 
     schema::build(&bytes, &schema_dir.join("jsonschema"))?;
-    generate_ts(root, ts_dir, &rel)?;
+    generate_ts(root, ts_dir, &includes, protos)?;
     Ok(())
 }
 
@@ -94,14 +105,19 @@ fn packages_from_descriptor(bytes: &[u8]) -> Result<Vec<String>> {
     let mut packages: Vec<String> = pool
         .files()
         .map(|f| format!(".{}", f.package_name()))
-        .filter(|p| p != ".")
+        .filter(|p| p != "." && !p.starts_with(".google.protobuf"))
         .collect();
     packages.sort();
     packages.dedup();
     Ok(packages)
 }
 
-fn generate_ts(root: &Path, out_dir: &Path, rel_protos: &[PathBuf]) -> Result<()> {
+fn generate_ts(
+    root: &Path,
+    out_dir: &Path,
+    includes: &[PathBuf],
+    protos: &[PathBuf],
+) -> Result<()> {
     let plugin = find_ts_proto_plugin(root)
         .context("locate protoc-gen-ts_proto; run bun install at the repo root")?;
     fs::create_dir_all(out_dir)?;
@@ -110,9 +126,11 @@ fn generate_ts(root: &Path, out_dir: &Path, rel_protos: &[PathBuf]) -> Result<()
     cmd.arg(format!("--plugin=protoc-gen-ts_proto={}", plugin.display()));
     cmd.arg(format!("--ts_proto_out={}", out_dir.display()));
     cmd.arg(format!("--ts_proto_opt={TS_PROTO_OPT}"));
-    cmd.arg(format!("-I{}", root.display()));
-    for p in rel_protos {
-        cmd.arg(p);
+    for include in includes {
+        cmd.arg(format!("-I{}", include.display()));
+    }
+    for p in protos {
+        cmd.arg(canonical_name(root, p));
     }
     let output = cmd.output().with_context(|| format!("spawn {protoc}"))?;
     if !output.status.success() {

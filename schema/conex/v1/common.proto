@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package conex.v1;
+
+import "google/protobuf/struct.proto";
+
+// 连接平面。P0 只允许 broker；relay 可识别但拒绝使用。
+enum Plane {
+  PLANE_UNSPECIFIED = 0;
+  PLANE_BROKER = 1;
+  PLANE_RELAY = 2;
+}
+
+// JSON-RPC 数值在 conex/1 冻结（设计 §5.2）。数值一旦发布不得改号或复用；
+// -32019..-32099 预留给后续业务码。
+enum ErrorCode {
+  ERROR_CODE_UNSPECIFIED = 0;
+  ERROR_CODE_PARSE_ERROR = -32700;
+  ERROR_CODE_BAD_REQUEST = -32602;
+  ERROR_CODE_UNKNOWN_METHOD = -32601;
+  ERROR_CODE_INTERNAL = -32603;
+  ERROR_CODE_UNAUTHORIZED = -32001;
+  ERROR_CODE_FORBIDDEN = -32002;
+  ERROR_CODE_UNKNOWN_PROVIDER = -32003;
+  ERROR_CODE_UNSUPPORTED_CAPABILITY = -32004;
+  ERROR_CODE_UNAVAILABLE = -32005;
+  ERROR_CODE_TIMEOUT = -32006;
+  ERROR_CODE_PAYLOAD_TOO_LARGE = -32007;
+  ERROR_CODE_QUOTA_EXCEEDED = -32008;
+  ERROR_CODE_PLANE_MISMATCH = -32009;
+  ERROR_CODE_PEER_UNTRUSTED = -32010;
+  ERROR_CODE_CANCELLED = -32011;
+  ERROR_CODE_OUTCOME_UNKNOWN = -32012;
+  ERROR_CODE_STALE_REVISION = -32013;
+  ERROR_CODE_CONFLICT = -32014;
+  ERROR_CODE_SLOW_CONSUMER = -32015;
+  ERROR_CODE_BAD_BLOB = -32016;
+  ERROR_CODE_SESSION_LOST = -32017;
+  ERROR_CODE_RESUME_UNAVAILABLE = -32018;
+}
+
+// execution/retry 只接受设计列举值，字符串便于前向兼容。
+message Error {
+  ErrorCode code = 1;
+  string message = 2;
+  string diagnostic_id = 3;
+  string execution = 4;
+  string retry = 5;
+  optional google.protobuf.Value details = 6;
+}
+
+message Limits {
+  uint32 max_frame_bytes = 1;
+  uint32 max_inflight = 2;
+  uint32 max_queued_bytes = 3;
+  uint32 timeout_ms = 4;
+}

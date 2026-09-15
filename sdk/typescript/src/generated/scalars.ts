@@ -2,7 +2,7 @@
 // versions:
 //   protoc-gen-ts_proto  v2.12.3
 //   protoc               v7.36.1
-// source: conformance/schema/scalars.proto
+// source: scalars.proto
 
 /* eslint-disable */
 

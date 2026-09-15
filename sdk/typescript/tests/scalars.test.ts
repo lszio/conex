@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import Ajv2020 from "ajv/dist/2020";
-import { Scalars } from "../src/generated/conformance/schema/scalars";
+import { Scalars } from "../src/generated/scalars";
 
 const schemaUrl = new URL(
   "../../../schema/generated/jsonschema/conex.test.v1.Scalars.schema.json",
