@@ -3,6 +3,6 @@
   "private": true,
   "workspaces": ["sdk/typescript"],
   "scripts": {
-    "typecheck": "tsc -p sdk/typescript --noEmit"
+    "typecheck": "cd sdk/typescript && bun x tsc --noEmit"
   }
 }

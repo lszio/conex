@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use sha2::{Digest, Sha256};
 
 pub fn run(suite: &str) -> Result<()> {
@@ -98,5 +98,7 @@ fn wait_ready(port: u16, timeout: Duration) -> bool {
 
 #[allow(dead_code)]
 fn repo_relative(root: &Path, path: &Path) -> PathBuf {
-    path.strip_prefix(root).map(PathBuf::from).unwrap_or_else(|_| path.to_path_buf())
+    path.strip_prefix(root)
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| path.to_path_buf())
 }
