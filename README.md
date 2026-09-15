@@ -5,36 +5,64 @@ conex（connect + nexus）是一个可嵌入的双向能力路由内核及可选
 - 设计：[docs/design/2026-09-14-conex-design.md](docs/design/2026-09-14-conex-design.md)
 - 路线图：[docs/superpowers/plans/2026-09-15-conex-roadmap.md](docs/superpowers/plans/2026-09-15-conex-roadmap.md)
 - P0 执行计划：[docs/superpowers/plans/2026-09-15-conex-p0.md](docs/superpowers/plans/2026-09-15-conex-p0.md)
+- P0 运行手册：[docs/runbooks/p0.md](docs/runbooks/p0.md)
 - 阶段验证记录：[docs/verification/](docs/verification/)
 
-当前处于 **P0**：broker 平面只读数据连接、JSON-RPC/HTTP 与 inproc、最小 CID、env/file 凭据。
-`dev` 分支保留上一代 TypeScript CONEX（Anytype ↔ Apple）；两者关系见设计 §0.1。
+## P0 已交付
 
-## 工具链
+broker 平面只读数据连接，经同一 Registry/授权/审计路径：
 
-Rust 与 protoc 不随仓库提供，安装在 gitignored 的 `.toolchain/`：
+- 协议：`.proto` 单一类型源 → Rust/TS/JSON Schema；冻结 ErrorCode 数值表；CIDv1 raw/SHA-256。
+- 核心：Registry + MethodContract、身份映射、资源策略、目标准入、统一执行与审计、限额与部分结果。
+- provider：受限 fs（cap-std）与 HTTP catalog（整分区授权、真实 TLS）。
+- 入口：静态 bearer + 60 秒 binding 的 JSON-RPC/HTTP；TLS 或显式 loopback 明文；env/file 凭据。
+- SDK：`@conex/sdk` typed consumer（list/read/search、searchMany 部分结果、错误映射）。
+- 验证：跨语言共享向量、additivity 检查、真实 Rust host + Bun 的 E2E。
+
+## 快速开始
 
 ```bash
 ./scripts/bootstrap-toolchain.sh
 source .toolchain/env.sh
 bun install
+cargo xtask generate
+cargo test --workspace
+bun test sdk/typescript/tests
+cargo xtask check          # 完整 P0 门禁
 ```
 
-精确版本记录在 [tools/codegen.lock.json](tools/codegen.lock.json)。
+## 三个例子
 
-## 常用命令
+成功读取（inproc 或 HTTP 语义一致）：
 
-```bash
-cargo xtask generate          # 生成 Rust / TS / JSON Schema 产物
-cargo xtask generate --check  # 校验产物与源码一致（CI 用）
-cargo test -p conex-proto     # Rust 契约测试
-bun test sdk/typescript/tests # TypeScript 契约测试
-bun run typecheck
+```ts
+const read = await client.read("notes-local", { resourceId: "hello.md" });
+// read.text === "hello conex\n"；read.cid 与共享 CID 向量一致
+```
+
+拒绝（未授权路径在业务目标拨号/凭据解析前返回 forbidden；catalog 单文件权限不触发上游 GET）：
+
+```ts
+try { await client.read("notes-local", { resourceId: "../escape.md" }); }
+catch (error) { /* error.code === -32002 */ }
+```
+
+部分失败（一个 provider 超时/不可用不影响其他结果）：
+
+```ts
+const results = await client.searchMany([
+  { endpointId: "notes-local", input: { root: "", query: "conex" } },
+  { endpointId: "catalog-work", input: { root: "", query: "conex" } },
+]);
+// 成功项带 result，失败项带 error，顺序与输入一致
 ```
 
 ## 单一类型源
 
-`schema/conex/v1/*.proto` 与 `conformance/schema/*.proto` 是唯一结构类型源。
-`cargo xtask generate` 从同一 descriptor 派生 Rust 类型（prost/pbjson）、JSON Schema 与
-TypeScript 类型（ts-proto）。生成产物入库但禁止手改；权威严格解码点是
-`MethodContract.prepare`/`validate_output`（设计 §5.2），JSON Schema 只作文档与 TS 边界输入。
+`schema/conex/v1/*.proto` 与 `conformance/schema/*.proto` 是唯一结构类型源；`cargo xtask generate`
+派生 Rust 类型（prost/pbjson）、JSON Schema 与 TypeScript 类型（ts-proto）。生成产物入库、禁止手改；
+权威严格解码点是 `MethodContract.prepare`/`validate_output`。版本 pin 见 `tools/codegen.lock.json`。
+
+## 工具链
+
+Rust 与 protoc 不随仓库提供，安装在 gitignored 的 `.toolchain/`（见 `scripts/bootstrap-toolchain.sh`）。

@@ -1,5 +1,7 @@
 //! conex build/verification tasks: `cargo xtask <command>`.
 mod additivity;
+mod check;
+mod conformance;
 mod e2e;
 mod generate;
 mod schema;
@@ -29,6 +31,16 @@ fn main() -> ExitCode {
                 .unwrap_or("p0-ts");
             e2e::run(suite)
         }
+        "conformance" => {
+            let vectors = args
+                .iter()
+                .position(|a| a == "--vectors")
+                .and_then(|index| args.get(index + 1))
+                .map(String::as_str)
+                .unwrap_or("conformance/vectors/p0");
+            conformance::run(vectors)
+        }
+        "check" => check::run(),
         "" | "help" | "--help" | "-h" => {
             eprintln!("usage: cargo xtask <generate [--check]>");
             return ExitCode::SUCCESS;
