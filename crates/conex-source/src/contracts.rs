@@ -97,7 +97,7 @@ fn optional_cursor(map: &Map<String, Value>) -> CallResult<Option<String>> {
     }
 }
 
-fn prepare_list(input: &Value) -> CallResult<PreparedInput> {
+pub fn prepare_list(input: &Value) -> CallResult<PreparedInput> {
     let map = object(input)?;
     known_keys(map, &["root", "limit", "cursor"])?;
     let root = required_string(map, "root")?;
@@ -108,7 +108,7 @@ fn prepare_list(input: &Value) -> CallResult<PreparedInput> {
     Ok(PreparedInput { canonical, claim })
 }
 
-fn prepare_read(input: &Value) -> CallResult<PreparedInput> {
+pub fn prepare_read(input: &Value) -> CallResult<PreparedInput> {
     let map = object(input)?;
     known_keys(map, &["resourceId"])?;
     let resource = required_string(map, "resourceId")?;
@@ -117,7 +117,7 @@ fn prepare_read(input: &Value) -> CallResult<PreparedInput> {
     Ok(PreparedInput { canonical, claim })
 }
 
-fn prepare_search(input: &Value) -> CallResult<PreparedInput> {
+pub fn prepare_search(input: &Value) -> CallResult<PreparedInput> {
     let map = object(input)?;
     known_keys(map, &["root", "query", "limit", "cursor"])?;
     let root = required_string(map, "root")?;
