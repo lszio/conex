@@ -73,6 +73,11 @@ impl Default for TargetPolicy {
     }
 }
 
+/// Extract the hostname from a target origin (no scheme, port or path).
+pub fn origin_hostname(origin: &str) -> CallResult<String> {
+    Ok(parse_origin(origin)?.1)
+}
+
 fn forbidden(message: &str) -> CallError {
     CallError::new(v1::ErrorCode::Forbidden, message)
 }
