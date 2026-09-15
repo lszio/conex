@@ -5,6 +5,8 @@
 //! derived artifact consumed by both the Rust and TypeScript boundaries.
 #![forbid(unsafe_code)]
 
+#[cfg(has_conex_v1)]
+pub mod cid;
 pub mod validation;
 #[cfg(has_conex_v1)]
 pub mod wire;
