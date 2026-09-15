@@ -1,0 +1,12 @@
+{
+  "cases": [
+    {"name": "subtree_allows_child", "root": "team", "resource": "team/design.md", "within": true},
+    {"name": "exact_root", "root": "team", "resource": "team", "within": true},
+    {"name": "sibling_prefix_denied", "root": "team", "resource": "team-private/secret.md", "within": false},
+    {"name": "parent_segment_denied", "root": "team", "resource": "team/../secret.md", "within": false},
+    {"name": "dot_segment_denied", "root": "team", "resource": "team/./x.md", "within": false},
+    {"name": "root_is_whole_tree", "root": "", "resource": "any/where.md", "within": true},
+    {"name": "absolute_resource_denied", "root": "team", "resource": "/team/x.md", "within": false},
+    {"name": "empty_root_denies_nothing", "root": "", "resource": "", "within": true}
+  ]
+}
