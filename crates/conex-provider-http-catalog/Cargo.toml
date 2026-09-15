@@ -1,0 +1,25 @@
+[package]
+name = "conex-provider-http-catalog"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+bytes.workspace = true
+conex-core = { path = "../conex-core" }
+conex-proto = { path = "../conex-proto" }
+conex-source = { path = "../conex-source" }
+http.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+conex-host = { path = "../conex-host" }
+conex-transport-http = { path = "../conex-transport-http" }
+rcgen.workspace = true
+rustls.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "time", "test-util"] }
+tokio-rustls.workspace = true

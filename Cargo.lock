@@ -216,6 +216,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "conex-assembly"
+version = "0.0.0"
+dependencies = [
+ "conex-core",
+ "conex-proto",
+ "conex-provider-fs",
+ "conex-provider-http-catalog",
+]
+
+[[package]]
 name = "conex-core"
 version = "0.0.0"
 dependencies = [
@@ -272,6 +282,27 @@ dependencies = [
  "conex-source",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "conex-provider-http-catalog"
+version = "0.0.0"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "conex-core",
+ "conex-host",
+ "conex-proto",
+ "conex-source",
+ "conex-transport-http",
+ "http",
+ "rcgen",
+ "rustls",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-rustls",
 ]
 
 [[package]]
