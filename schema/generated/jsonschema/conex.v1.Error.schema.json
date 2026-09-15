@@ -497,25 +497,6 @@
       ],
       "type": "object"
     },
-    "conex.v1.ResourceRead": {
-      "additionalProperties": false,
-      "properties": {
-        "cid": {
-          "type": "string"
-        },
-        "resource": {
-          "$ref": "#/$defs/conex.v1.ResourceSummary"
-        },
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text",
-        "cid"
-      ],
-      "type": "object"
-    },
     "conex.v1.ResourceSummary": {
       "additionalProperties": false,
       "properties": {
@@ -575,8 +556,7 @@
         }
       },
       "required": [
-        "root",
-        "limit"
+        "root"
       ],
       "type": "object"
     },
@@ -610,10 +590,20 @@
     "conex.v1.SourceReadResponse": {
       "additionalProperties": false,
       "properties": {
+        "cid": {
+          "type": "string"
+        },
         "resource": {
-          "$ref": "#/$defs/conex.v1.ResourceRead"
+          "$ref": "#/$defs/conex.v1.ResourceSummary"
+        },
+        "text": {
+          "type": "string"
         }
       },
+      "required": [
+        "text",
+        "cid"
+      ],
       "type": "object"
     },
     "conex.v1.SourceSearchRequest": {
@@ -636,8 +626,7 @@
       },
       "required": [
         "root",
-        "query",
-        "limit"
+        "query"
       ],
       "type": "object"
     },

@@ -2013,131 +2013,6 @@ impl<'de> serde::Deserialize<'de> for RequestContext {
         deserializer.deserialize_struct("conex.v1.RequestContext", FIELDS, GeneratedVisitor)
     }
 }
-impl serde::Serialize for ResourceRead {
-    #[allow(deprecated)]
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeStruct;
-        let mut len = 0;
-        if self.resource.is_some() {
-            len += 1;
-        }
-        if !self.text.is_empty() {
-            len += 1;
-        }
-        if !self.cid.is_empty() {
-            len += 1;
-        }
-        let mut struct_ser = serializer.serialize_struct("conex.v1.ResourceRead", len)?;
-        if let Some(v) = self.resource.as_ref() {
-            struct_ser.serialize_field("resource", v)?;
-        }
-        if !self.text.is_empty() {
-            struct_ser.serialize_field("text", &self.text)?;
-        }
-        if !self.cid.is_empty() {
-            struct_ser.serialize_field("cid", &self.cid)?;
-        }
-        struct_ser.end()
-    }
-}
-impl<'de> serde::Deserialize<'de> for ResourceRead {
-    #[allow(deprecated)]
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        const FIELDS: &[&str] = &[
-            "resource",
-            "text",
-            "cid",
-        ];
-
-        #[allow(clippy::enum_variant_names)]
-        enum GeneratedField {
-            Resource,
-            Text,
-            Cid,
-        }
-        impl<'de> serde::Deserialize<'de> for GeneratedField {
-            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
-            where
-                D: serde::Deserializer<'de>,
-            {
-                struct GeneratedVisitor;
-
-                impl serde::de::Visitor<'_> for GeneratedVisitor {
-                    type Value = GeneratedField;
-
-                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                        write!(formatter, "expected one of: {:?}", &FIELDS)
-                    }
-
-                    #[allow(unused_variables)]
-                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
-                    where
-                        E: serde::de::Error,
-                    {
-                        match value {
-                            "resource" => Ok(GeneratedField::Resource),
-                            "text" => Ok(GeneratedField::Text),
-                            "cid" => Ok(GeneratedField::Cid),
-                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
-                        }
-                    }
-                }
-                deserializer.deserialize_identifier(GeneratedVisitor)
-            }
-        }
-        struct GeneratedVisitor;
-        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
-            type Value = ResourceRead;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                formatter.write_str("struct conex.v1.ResourceRead")
-            }
-
-            fn visit_map<V>(self, mut map_: V) -> std::result::Result<ResourceRead, V::Error>
-                where
-                    V: serde::de::MapAccess<'de>,
-            {
-                let mut resource__ = None;
-                let mut text__ = None;
-                let mut cid__ = None;
-                while let Some(k) = map_.next_key()? {
-                    match k {
-                        GeneratedField::Resource => {
-                            if resource__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("resource"));
-                            }
-                            resource__ = map_.next_value()?;
-                        }
-                        GeneratedField::Text => {
-                            if text__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("text"));
-                            }
-                            text__ = Some(map_.next_value()?);
-                        }
-                        GeneratedField::Cid => {
-                            if cid__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("cid"));
-                            }
-                            cid__ = Some(map_.next_value()?);
-                        }
-                    }
-                }
-                Ok(ResourceRead {
-                    resource: resource__,
-                    text: text__.unwrap_or_default(),
-                    cid: cid__.unwrap_or_default(),
-                })
-            }
-        }
-        deserializer.deserialize_struct("conex.v1.ResourceRead", FIELDS, GeneratedVisitor)
-    }
-}
 impl serde::Serialize for ResourceSummary {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -2422,7 +2297,7 @@ impl serde::Serialize for SourceListRequest {
         if !self.root.is_empty() {
             len += 1;
         }
-        if self.limit != 0 {
+        if self.limit.is_some() {
             len += 1;
         }
         if self.cursor.is_some() {
@@ -2432,8 +2307,8 @@ impl serde::Serialize for SourceListRequest {
         if !self.root.is_empty() {
             struct_ser.serialize_field("root", &self.root)?;
         }
-        if self.limit != 0 {
-            struct_ser.serialize_field("limit", &self.limit)?;
+        if let Some(v) = self.limit.as_ref() {
+            struct_ser.serialize_field("limit", v)?;
         }
         if let Some(v) = self.cursor.as_ref() {
             struct_ser.serialize_field("cursor", v)?;
@@ -2517,7 +2392,7 @@ impl<'de> serde::Deserialize<'de> for SourceListRequest {
                                 return Err(serde::de::Error::duplicate_field("limit"));
                             }
                             limit__ = 
-                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
                             ;
                         }
                         GeneratedField::Cursor => {
@@ -2530,7 +2405,7 @@ impl<'de> serde::Deserialize<'de> for SourceListRequest {
                 }
                 Ok(SourceListRequest {
                     root: root__.unwrap_or_default(),
-                    limit: limit__.unwrap_or_default(),
+                    limit: limit__,
                     cursor: cursor__,
                 })
             }
@@ -2750,9 +2625,21 @@ impl serde::Serialize for SourceReadResponse {
         if self.resource.is_some() {
             len += 1;
         }
+        if !self.text.is_empty() {
+            len += 1;
+        }
+        if !self.cid.is_empty() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("conex.v1.SourceReadResponse", len)?;
         if let Some(v) = self.resource.as_ref() {
             struct_ser.serialize_field("resource", v)?;
+        }
+        if !self.text.is_empty() {
+            struct_ser.serialize_field("text", &self.text)?;
+        }
+        if !self.cid.is_empty() {
+            struct_ser.serialize_field("cid", &self.cid)?;
         }
         struct_ser.end()
     }
@@ -2765,11 +2652,15 @@ impl<'de> serde::Deserialize<'de> for SourceReadResponse {
     {
         const FIELDS: &[&str] = &[
             "resource",
+            "text",
+            "cid",
         ];
 
         #[allow(clippy::enum_variant_names)]
         enum GeneratedField {
             Resource,
+            Text,
+            Cid,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -2792,6 +2683,8 @@ impl<'de> serde::Deserialize<'de> for SourceReadResponse {
                     {
                         match value {
                             "resource" => Ok(GeneratedField::Resource),
+                            "text" => Ok(GeneratedField::Text),
+                            "cid" => Ok(GeneratedField::Cid),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -2812,6 +2705,8 @@ impl<'de> serde::Deserialize<'de> for SourceReadResponse {
                     V: serde::de::MapAccess<'de>,
             {
                 let mut resource__ = None;
+                let mut text__ = None;
+                let mut cid__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::Resource => {
@@ -2820,10 +2715,24 @@ impl<'de> serde::Deserialize<'de> for SourceReadResponse {
                             }
                             resource__ = map_.next_value()?;
                         }
+                        GeneratedField::Text => {
+                            if text__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("text"));
+                            }
+                            text__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Cid => {
+                            if cid__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("cid"));
+                            }
+                            cid__ = Some(map_.next_value()?);
+                        }
                     }
                 }
                 Ok(SourceReadResponse {
                     resource: resource__,
+                    text: text__.unwrap_or_default(),
+                    cid: cid__.unwrap_or_default(),
                 })
             }
         }
@@ -2844,7 +2753,7 @@ impl serde::Serialize for SourceSearchRequest {
         if !self.query.is_empty() {
             len += 1;
         }
-        if self.limit != 0 {
+        if self.limit.is_some() {
             len += 1;
         }
         if self.cursor.is_some() {
@@ -2857,8 +2766,8 @@ impl serde::Serialize for SourceSearchRequest {
         if !self.query.is_empty() {
             struct_ser.serialize_field("query", &self.query)?;
         }
-        if self.limit != 0 {
-            struct_ser.serialize_field("limit", &self.limit)?;
+        if let Some(v) = self.limit.as_ref() {
+            struct_ser.serialize_field("limit", v)?;
         }
         if let Some(v) = self.cursor.as_ref() {
             struct_ser.serialize_field("cursor", v)?;
@@ -2952,7 +2861,7 @@ impl<'de> serde::Deserialize<'de> for SourceSearchRequest {
                                 return Err(serde::de::Error::duplicate_field("limit"));
                             }
                             limit__ = 
-                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
                             ;
                         }
                         GeneratedField::Cursor => {
@@ -2966,7 +2875,7 @@ impl<'de> serde::Deserialize<'de> for SourceSearchRequest {
                 Ok(SourceSearchRequest {
                     root: root__.unwrap_or_default(),
                     query: query__.unwrap_or_default(),
-                    limit: limit__.unwrap_or_default(),
+                    limit: limit__,
                     cursor: cursor__,
                 })
             }
