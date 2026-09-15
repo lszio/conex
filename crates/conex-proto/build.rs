@@ -18,17 +18,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let manifest = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?);
     let repo_root = manifest.join("..").join("..").canonicalize()?;
 
-    let mut absolute = Vec::new();
-    collect_protos(&repo_root.join("conformance/schema"), &mut absolute);
-    collect_protos(&repo_root.join("schema/conex/v1"), &mut absolute);
-    if absolute.is_empty() {
+    let mut protos = Vec::new();
+    collect_protos(&repo_root.join("conformance/schema"), &mut protos);
+    collect_protos(&repo_root.join("schema/conex/v1"), &mut protos);
+    if protos.is_empty() {
         panic!("no .proto files found under conformance/schema or schema/conex/v1");
     }
-    // Use repo-relative paths so generated descriptors are machine independent.
-    let protos: Vec<PathBuf> = absolute
-        .iter()
-        .map(|p| p.strip_prefix(&repo_root).unwrap().to_path_buf())
-        .collect();
 
     println!(
         "cargo:rerun-if-changed={}",
@@ -40,7 +35,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let v1_root = repo_root.join("schema/conex/v1");
-    let has_v1 = absolute.iter().any(|p| p.starts_with(&v1_root));
+    let has_v1 = protos.iter().any(|p| p.starts_with(&v1_root));
     println!("cargo:rustc-check-cfg=cfg(has_conex_v1)");
     if has_v1 {
         println!("cargo:rustc-cfg=has_conex_v1");
@@ -48,6 +43,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let out = PathBuf::from(env::var("OUT_DIR")?);
     let descriptor = out.join("conex.bin");
+    let includes = [
+        repo_root.join("schema"),
+        repo_root.join("conformance/schema"),
+    ];
 
     let mut config = prost_build::Config::new();
     config
@@ -55,7 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .compile_well_known_types()
         .extern_path(".google.protobuf", "::pbjson_types")
         .bytes(["."]);
-    config.compile_protos(&protos, std::slice::from_ref(&repo_root))?;
+    config.compile_protos(&protos, &includes)?;
 
     let bytes = fs::read(&descriptor)?;
     let mut packages = vec![".conex.test.v1"];

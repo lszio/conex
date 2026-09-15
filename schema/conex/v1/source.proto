@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package conex.v1;
+
+// P0 只读 source 方法。ResourceId 是 UTF-8、斜杠分段、无空段/./../NUL/反斜杠的
+// 相对资源名；根目录用空字符串，仅允许出现在 list/search 的 root。
+message ResourceSummary {
+  string resource_id = 1;
+  string title = 2;
+  string mime = 3;
+  optional uint64 size_bytes = 4;
+  optional string revision = 5;
+}
+
+message ResourceRead {
+  ResourceSummary resource = 1;
+  string text = 2;
+  string cid = 3;
+}
+
+message SourceListRequest {
+  string root = 1;
+  uint32 limit = 2;
+  optional string cursor = 3;
+}
+
+message SourceListResponse {
+  repeated ResourceSummary items = 1;
+  optional string next_cursor = 2;
+}
+
+message SourceReadRequest {
+  string resource_id = 1;
+}
+
+message SourceReadResponse {
+  ResourceRead resource = 1;
+}
+
+message SearchHit {
+  ResourceSummary resource = 1;
+  string excerpt = 2;
+}
+
+message SourceSearchRequest {
+  string root = 1;
+  string query = 2;
+  uint32 limit = 3;
+  optional string cursor = 4;
+}
+
+message SourceSearchResponse {
+  repeated SearchHit items = 1;
+  optional string next_cursor = 2;
+}

@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package conex.v1;
+
+import "google/protobuf/struct.proto";
+import "conex/v1/common.proto";
+
+// 逻辑消息变体（设计 §5.2）。信封用通用 Value 承载 params/result；
+// 具体方法与 typed input/output 由方法注册绑定并在 prepare 处严格解码。
+message Message {
+  oneof body {
+    Request request = 1;
+    Success success = 2;
+    Failure failure = 3;
+    Notification notification = 4;
+  }
+}
+
+message Request {
+  string request_id = 1;
+  string method = 2;
+  CallParams params = 3;
+}
+
+message CallParams {
+  RequestContext context = 1;
+  uint32 timeout_budget_ms = 2;
+  google.protobuf.Value input = 3;
+  // 4/5 为 operationId/meta 预留（设计 §5.2），P0 不使用也不得改号或复用。
+  reserved 4, 5;
+  reserved "operation_id", "meta";
+}
+
+message RequestContext {
+  string provider_endpoint_id = 1;
+  Plane plane = 2;
+  optional string binding_id = 3;
+}
+
+message Success {
+  string request_id = 1;
+  google.protobuf.Value result = 2;
+  reserved 3;
+  reserved "meta";
+}
+
+message Failure {
+  optional string request_id = 1;
+  Error error = 2;
+  reserved 3;
+  reserved "meta";
+}
+
+message Notification {
+  string method = 1;
+  CallParams params = 2;
+  reserved 3;
+  reserved "meta";
+}

@@ -12,7 +12,10 @@ use serde_json::{Map, Value, json};
 
 pub fn build(descriptor_bytes: &[u8], out_dir: &Path) -> Result<()> {
     let pool = DescriptorPool::decode(descriptor_bytes).context("decode FileDescriptorSet")?;
-    let messages: Vec<MessageDescriptor> = pool.all_messages().collect();
+    let messages: Vec<MessageDescriptor> = pool
+        .all_messages()
+        .filter(|m| !m.full_name().starts_with("google.protobuf."))
+        .collect();
     let mut defs = Map::new();
     for m in &messages {
         defs.insert(m.full_name().to_string(), message_schema(m));

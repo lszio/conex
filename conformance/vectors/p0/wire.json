@@ -1,0 +1,83 @@
+{
+  "errorCodes": [
+    {"name": "parse_error", "value": -32700},
+    {"name": "bad_request", "value": -32602},
+    {"name": "unknown_method", "value": -32601},
+    {"name": "internal", "value": -32603},
+    {"name": "unauthorized", "value": -32001},
+    {"name": "forbidden", "value": -32002},
+    {"name": "unknown_provider", "value": -32003},
+    {"name": "unsupported_capability", "value": -32004},
+    {"name": "unavailable", "value": -32005},
+    {"name": "timeout", "value": -32006},
+    {"name": "payload_too_large", "value": -32007},
+    {"name": "quota_exceeded", "value": -32008},
+    {"name": "plane_mismatch", "value": -32009},
+    {"name": "peer_untrusted", "value": -32010},
+    {"name": "cancelled", "value": -32011},
+    {"name": "outcome_unknown", "value": -32012},
+    {"name": "stale_revision", "value": -32013},
+    {"name": "conflict", "value": -32014},
+    {"name": "slow_consumer", "value": -32015},
+    {"name": "bad_blob", "value": -32016},
+    {"name": "session_lost", "value": -32017},
+    {"name": "resume_unavailable", "value": -32018}
+  ],
+  "cases": [
+    {
+      "name": "request_roundtrip",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"source/read\",\"params\":{\"context\":{\"providerEndpointId\":\"notes-local\",\"plane\":\"broker\"},\"timeoutBudgetMs\":8000,\"input\":{\"resourceId\":\"hello.md\"}}}",
+      "expect": {"kind": "request", "requestId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "method": "source/read", "valid": true}
+    },
+    {
+      "name": "notification_without_id",
+      "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"agent/session.cancel\",\"params\":{\"context\":{\"providerEndpointId\":\"agent\",\"plane\":\"broker\"},\"timeoutBudgetMs\":8000}}",
+      "expect": {"kind": "notification", "method": "agent/session.cancel", "valid": true}
+    },
+    {
+      "name": "success_is_success",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"result\":{\"items\":[]}}",
+      "expect": {"kind": "success", "requestId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "valid": true}
+    },
+    {
+      "name": "failure_preserves_error_code",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"error\":{\"code\":-32002,\"message\":\"denied\",\"data\":{\"code\":\"forbidden\",\"diagnosticId\":\"d1\",\"execution\":\"not_started\",\"retry\":\"never\"}}}",
+      "expect": {"kind": "failure", "requestId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "errorCode": -32002, "valid": true}
+    },
+    {
+      "name": "parse_error_id_null",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32700,\"message\":\"parse\"}}",
+      "expect": {"kind": "failure", "errorCode": -32700, "valid": true}
+    },
+    {
+      "name": "duplicate_key_rejected",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"source/read\",\"method\":\"source/list\",\"params\":{\"context\":{\"providerEndpointId\":\"x\",\"plane\":\"broker\"},\"timeoutBudgetMs\":1}}",
+      "expect": {"errorCode": -32700}
+    },
+    {
+      "name": "success_and_error_together",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"result\":{},\"error\":{\"code\":-32002,\"message\":\"x\"}}",
+      "expect": {"errorCode": -32602}
+    },
+    {
+      "name": "batch_rejected",
+      "wire": "[{\"jsonrpc\":\"2.0\",\"method\":\"a\",\"params\":{}}]",
+      "expect": {"errorCode": -32700}
+    },
+    {
+      "name": "invalid_ulid",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"not-a-ulid\",\"method\":\"source/read\",\"params\":{\"context\":{\"providerEndpointId\":\"x\",\"plane\":\"broker\"},\"timeoutBudgetMs\":1}}",
+      "expect": {"errorCode": -32602}
+    },
+    {
+      "name": "unknown_envelope_field",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"source/read\",\"params\":{\"context\":{\"providerEndpointId\":\"x\",\"plane\":\"broker\"},\"timeoutBudgetMs\":1},\"extra\":true}",
+      "expect": {"errorCode": -32700}
+    },
+    {
+      "name": "relay_plane_rejected_on_validate",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"source/read\",\"params\":{\"context\":{\"providerEndpointId\":\"x\",\"plane\":\"relay\"},\"timeoutBudgetMs\":1}}",
+      "expect": {"kind": "request", "valid": false, "errorCode": -32009}
+    }
+  ]
+}

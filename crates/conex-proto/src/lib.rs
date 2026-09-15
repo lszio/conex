@@ -6,6 +6,8 @@
 #![forbid(unsafe_code)]
 
 pub mod validation;
+#[cfg(has_conex_v1)]
+pub mod wire;
 
 #[allow(clippy::all)]
 pub mod test {
