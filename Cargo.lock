@@ -231,6 +231,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "conex-host"
+version = "0.0.0"
+dependencies = [
+ "async-trait",
+ "conex-core",
+ "conex-proto",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "conex-proto"
 version = "0.0.0"
 dependencies = [

@@ -6,6 +6,7 @@ members = [
     "crates/conex-source",
     "crates/conex-provider-fs",
     "crates/conex-transport-http",
+    "crates/conex-host",
     "xtask",
 ]
 
