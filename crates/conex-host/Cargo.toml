@@ -1,0 +1,13 @@
+[package]
+name = "conex-host"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+conex-core = { path = "../conex-core" }
+conex-proto = { path = "../conex-proto" }
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "time", "test-util"] }
