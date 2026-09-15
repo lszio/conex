@@ -35,11 +35,11 @@
 本仓库 `dev` 分支存在前一阶段的 **CONEX** 实现（TypeScript/Bun，Anytype ↔ Apple Reminders 双向同步，Phase 0–3 已跑通，见该分支 `ARCHITECTURE.md`、`AGENTS.md` 与 `src/adapters/**`）。本设计（`conex`，工作协议 `conex/1`）是**取代它的下一代内核**：把「Anytype↔Apple 专用桥」提升为「可嵌入的双向能力路由内核 + ACP/MCP 网关 + 可选 P2P」。
 
 - 既有实现不就地演化；其产物（Anytype API `v2025-11-08` 接入经验、状态映射、冲突日志、Apple 侧适配）只作为**领域参考**，通过 §9.1 的 provider/桥接契约重新实现，不复用其运行时与状态库。
-- 本设计从当前 docs-only 树开始，构建独立 Rust workspace；`dev` 分支历史仅作证据，不构成 `conex/1` 的既有实现，其 TypeScript 代码不进入 P0–P4 的交付物。
+- 本设计从当时的 docs-only 树开始构建独立 Rust workspace；P0 已在该 workspace 交付（`e649ded`，文档入口见 [docs/README](../README.md)）。`dev` 分支历史仅作证据，不构成 `conex/1` 的既有实现，其 TypeScript 代码不进入 P0–P4 的交付物。
 - §15 的 notez 记录是外部参考与反面教材，与上述既有 CONEX 实现相互独立。
 - 仓库继续使用 `conex` 名称；旧实现保留在 `dev` 分支，不发布新包、不迁移真实用户数据。
 
-> 仓库基线（2026-09-15 复核）：当前分支 `refactor/arch`，HEAD `0414896` 只包含本设计与此前两份计划文档；`dev` 分支保留旧实现与 `ARCHITECTURE.md`。此前计划中「master 是 unborn branch / 没有提交记录」的表述作废。
+> 仓库基线（2026-09-15 复核，P0 交付后更新）：分支 `refactor/arch` 已包含 P0 Rust workspace、`sdk/typescript` 与 P0 验收提交 `e649ded`；文档入口与地图见 [docs/README](../README.md)，阶段计划见 [plans/](../plans/2026-09-15-conex-roadmap.md)。`dev` 分支保留旧实现与 `ARCHITECTURE.md`。
 
 ## 1. 核心判断
 

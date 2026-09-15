@@ -1,14 +1,14 @@
 # conex 分阶段实现路线图
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to execute the approved stage plan task-by-task. Use superpowers:subagent-driven-development only when delegation has been authorized. Steps use checkbox (`- [ ]`) syntax for tracking.
+> 状态：P0 已交付（`e649ded`）；下一步是 [P1 执行计划](2026-09-15-conex-p1.md) 的首个工作包 P1-01 契约冻结。本文件只维护阶段、依赖与工作包，不重复执行级细节。
 
-**Goal:** 从空仓库交付可验证的 broker 路由内核，再按独立门槛增加反连、ACP/MCP 和可选 P2P。
+**Goal:** 在已交付的 broker 路由内核（P0）之上，按独立门槛增加反连、ACP/MCP 和可选 P2P。
 
 **Architecture:** 以协议类型、方法契约和统一授权执行路径为主干。两个真实 provider 验证扩展性；Session/Stream、内容存储、协议桥接、sync 与发现分别形成可验收切片。设计尚未冻结的加密和 HA 规则先完成专项契约，再进入对应实现。
 
 **Tech Stack:** Rust 2024、Tokio、prost/pbjson、TypeScript/Bun；HTTP 使用 Axum/Hyper 与 rustls；P0 不引入数据库、P2P 库或前端框架。后续数据库、加密与额外承载按阶段选择。
 
-**Spec:** [conex 设计 v6](../../design/2026-09-14-conex-design.md)，2026-09-15 快照 SHA-256：`1ffa0d73d858768c1802a2983c70234905a7cfea86edc6696b25982cb460eea6`。执行时若设计已变更，先核对受影响任务，不覆盖用户新修改。
+**Spec:** [conex 设计 v6](../design/2026-09-14-conex-design.md)，2026-09-15 快照 SHA-256：`1ffa0d73d858768c1802a2983c70234905a7cfea86edc6696b25982cb460eea6`。执行时若设计已变更，先核对受影响任务，不覆盖用户新修改。
 
 ## Global Constraints
 
@@ -22,19 +22,19 @@
 - “P1/P2 保证进程存活且窗口内的网络重连。”
 - “P3 首版不做多组织 ACL 共识：每个 Space 使用一个逻辑 ACL 权威；目录协调者不承担这一角色。”
 - 不把传输 ACK 当作副作用完成；不把 CID、Session ID 或目录签名当作授权凭据。
-- 本路线图列出所有阶段工作包；[P0 执行计划](2026-09-15-conex-p0.md)是首份已细化到文件、接口、测试与命令的计划。P1–P4 的正式执行计划由各阶段首项任务产出，不提前编造尚未冻结的 wire/加密实现。
+- 本路线图列出所有阶段工作包；已完成的 [P0 执行计划](archive/2026-09-15-conex-p0.md) 归档在 `archive/`，[P1 执行计划](2026-09-15-conex-p1.md) 已细化到首个工作包 P1-01。P2–P4 的正式执行计划由各阶段首项任务产出，不提前编造尚未冻结的 wire/加密实现。
 
 ---
 
 ## 1. 当前基线与交付物
 
-2026-09-15 仓库检查：当前分支 `refactor/arch`，HEAD `0414896` 只包含 `docs/design/` 与 `docs/superpowers/plans/` 三份文档，没有 Rust workspace 或测试；`dev` 分支保留前一阶段 TypeScript CONEX 实现（见设计 §0.1），不进入本路线图交付物。执行环境当前**未预装 Rust/protoc**，需按 P0 Task 01 自举；已存在 Bun 1.4.0、Node 26.8.1。这是执行环境记录，不代表设计规定最低版本。
+2026-09-15 仓库状态：分支 `refactor/arch`，P0 已在 `e649ded` 通过 `cargo xtask check` 交付；workspace 含 `conex-proto/core/source/provider-fs/transport-http/provider-http-catalog/assembly/host`、`sdk/typescript` 与 `xtask`，`conex-host` 是唯一装配根。实际操作环境记录与逐任务结果见 [P0 验证记录](../verification/p0.md)。`dev` 分支保留前一阶段 TypeScript CONEX 实现（见设计 §0.1），不进入本路线图交付物。
 
-本次只新增计划文档，不创建业务代码、不安装依赖、不建立分支/提交、不部署。后续执行从 P0 Task 01 开始；首次提交建立后，才可使用需要 HEAD 的 worktree 或基准 diff。所有任务必须保留设计文档及其他未跟踪文件。
+P0 的详细任务、文件与命令见归档计划；后续阶段只新增本路线图与对应阶段计划。所有任务必须保留设计文档及其他未跟踪文件；基准 diff 使用实际完成提交。
 
 | 交付切片 | 用户可见结果 | 完成判断 |
 |---|---|---|
-| P0 | Rust 嵌入 API 和 HTTPS JSON-RPC 读取/搜索 fs、HTTP catalog | TS 客户端访问两个 provider；拒绝、空结果、部分失败可区分 |
+| P0 ✅ | Rust 嵌入 API 和 HTTPS JSON-RPC 读取/搜索 fs、HTTP catalog | TS 客户端访问 fs（真实 E2E）；两个 provider 经同一 Registry/Host 路径（catalog 由集成与授权测试覆盖）；拒绝、空结果、部分失败可区分 |
 | P1 | 私有 agent 反连、独立二进制上传、网络恢复、受控写入 | 1 GiB 续传、慢消费者、断线与未知副作用向量通过 |
 | P2 | 真正可用的 ACP CLI 网关及 MCP 适配 | 双用户 workspace/权限/凭据隔离，原生协议保真 |
 | P3-a | 自有空间加密历史与可迁移存储 | 冲突收敛、ACL 撤销、节点丢失及并发 GC 验证 |
@@ -59,22 +59,22 @@ flowchart LR
 
 这表示依赖关系，不自动授权并行 agent。默认串行完成当前任务再推进。P3-b 为 broker 服务时不依赖 P3-a；涉及空间成员时必须消费 P3-a 的已验证 ACL 结果。
 
-每个工作包遵循：先写具体失败向量 → 最小实现 → 所声明能力的正反向测试 → 本任务评审和范围受控的提交。失败时修复该切片，不借下阶段功能掩盖。估时应在完成 P0 前两个任务后按实际生成链/构建反馈给出；不把未知集成成本写成确定日期。
+每个工作包遵循：先写具体失败向量 → 最小实现 → 所声明能力的正反向测试 → 本任务评审和范围受控的提交。失败时修复该切片，不借下阶段功能掩盖。估时应在对应阶段首个工作包完成后按实际构建/集成反馈给出；不把未知集成成本写成确定日期。
 
-## 3. P0：详细执行入口
+## 3. P0：已交付（归档）
 
-执行 [2026-09-15-conex-p0.md](2026-09-15-conex-p0.md) 的 Task 01–13。关键检查点：
+P0 执行计划与任务索引见 [archive/2026-09-15-conex-p0.md](archive/2026-09-15-conex-p0.md)，实际结果与缺口见 [P0 验证记录](../verification/p0.md)。关键检查点：
 
-- [ ] M0.1：单一类型源可生成 Rust、TS 和 JSON Schema，大整数/optional/消息变体向量一致。
-- [ ] M0.2：经过资源策略和审计的 inproc fs 调用可用；路径逃逸拒绝。
-- [ ] M0.3：HTTP catalog 增加后 core 无 provider 特判；TLS 验证先于业务秘密解析。
-- [ ] M0.4：HTTPS、HTTP binding 和 TS consumer 经同一路由路径调用两个 provider，故障隔离和全部 P0 验收通过。
+- [x] M0.1：单一类型源可生成 Rust、TS 和 JSON Schema，大整数/optional/消息变体向量一致。
+- [x] M0.2：经过资源策略和审计的 inproc fs 调用可用；路径逃逸拒绝。
+- [x] M0.3：HTTP catalog 增加后 core 无 provider 特判；TLS 验证先于业务秘密解析。
+- [x] M0.4：HTTPS、HTTP binding 和 TS consumer 经同一路由路径调用两个 provider，故障隔离和全部 P0 验收通过。
 
-P0 不创建空的 `conex-agent/node/coordinator` crate；接口仅随对应调用路径落地。P0 入站认证先实现管理员登记的静态 bearer 与可信嵌入身份；OIDC 来源键在模型层验证隔离，完整 JWT/OIDC 登录属于 P1 的浏览器入口工作，不伪装为已经支持。
+P0 未创建空的 `conex-agent/node/coordinator` crate；接口仅随对应调用路径落地。P0 入站认证为管理员登记的静态 bearer 与可信嵌入身份；完整 JWT/OIDC 登录属于 P1 的浏览器入口工作，不伪装为已经支持。
 
 ## 4. P1：反连、二进制与恢复
 
-**计划输出路径：** `docs/superpowers/plans/<执行日期>-conex-p1.md`。正式启动时用实际日期替换文件名中的描述；它是待产出的阶段计划，不是当前文件链接。
+**执行计划：** [2026-09-15-conex-p1.md](2026-09-15-conex-p1.md)。P1-01 契约冻结已细化到检查单；P1-02–P1-10 沿用下表，在 P1-01 退出后拆成可执行任务。
 
 | 工作包 | 输入 | 输出位置与实现动作 | 验收证据 |
 |---|---|---|---|
@@ -157,7 +157,7 @@ P0 不创建空的 `conex-agent/node/coordinator` crate；接口仅随对应调�
 
 - [ ] 每次实现结束更新对应执行计划任务框，只在测试真实通过后标记；本文件阶段框只在整个检查点完成后勾选。
 - [ ] `docs/verification/<阶段>.md` 记录 commit、环境、命令、结果和故障注入证据。生成文件不一致、未知能力被广告或安全路径绕过均阻止该阶段完成。
-- [ ] 每次提交仅包含当前任务文件；实现期间修改既有符号遵循适用 AGENTS.md 的影响分析要求。初始空仓库不得伪造已存在的 GitNexus 索引结果。
+- [ ] 每次提交仅包含当前任务文件；实现期间修改既有符号遵循适用 AGENTS.md 的影响分析要求。
 - [ ] 初版只交付本地可运行软件和文档；公开发布包、部署服务或迁移真实用户数据是单独动作。
 
-先执行 P0，不以启动全部阶段衡量进度。P0 完成后，优先选择能验证实际需求的反连/ACP 或内容切片，再进入对应阶段计划。
+P0 已完成，下一步执行 [P1 执行计划](2026-09-15-conex-p1.md)；不以启动全部阶段衡量进度。P0 完成后优先选择能验证实际需求的反连/ACP 或内容切片，再进入对应阶段计划。
