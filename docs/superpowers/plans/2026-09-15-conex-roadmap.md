@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024、Tokio、prost/pbjson、TypeScript/Bun；HTTP 使用 Axum/Hyper 与 rustls；P0 不引入数据库、P2P 库或前端框架。后续数据库、加密与额外承载按阶段选择。
 
-**Spec:** [conex 设计 v5](../../design/2026-09-14-conex-design.md)，2026-09-15 快照 SHA-256：`2cb7fc3a4555bb16bb7a0b6c9729c3c0da86d5b44ea254f2c8c8319933f1527f`。执行时若设计已变更，先核对受影响任务，不覆盖用户新修改。
+**Spec:** [conex 设计 v6](../../design/2026-09-14-conex-design.md)，2026-09-15 快照 SHA-256：`1ffa0d73d858768c1802a2983c70234905a7cfea86edc6696b25982cb460eea6`。执行时若设计已变更，先核对受影响任务，不覆盖用户新修改。
 
 ## Global Constraints
 
@@ -28,7 +28,7 @@
 
 ## 1. 当前基线与交付物
 
-2026-09-15 仓库检查：只有设计文档，没有 Cargo workspace、SDK、测试或提交记录；`master` 是 unborn branch。现有环境为 Rust/Cargo 1.94.0、Bun 1.4.0、Node 22.22.3、protoc 36.1；这是执行环境记录，不代表设计规定最低版本。
+2026-09-15 仓库检查：当前分支 `refactor/arch`，HEAD `0414896` 只包含 `docs/design/` 与 `docs/superpowers/plans/` 三份文档，没有 Rust workspace 或测试；`dev` 分支保留前一阶段 TypeScript CONEX 实现（见设计 §0.1），不进入本路线图交付物。执行环境当前**未预装 Rust/protoc**，需按 P0 Task 01 自举；已存在 Bun 1.4.0、Node 26.8.1。这是执行环境记录，不代表设计规定最低版本。
 
 本次只新增计划文档，不创建业务代码、不安装依赖、不建立分支/提交、不部署。后续执行从 P0 Task 01 开始；首次提交建立后，才可使用需要 HEAD 的 worktree 或基准 diff。所有任务必须保留设计文档及其他未跟踪文件。
 
