@@ -1,0 +1,21 @@
+{
+  "$defs": {
+    "conex.test.v1.Scalars": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$id": "conex:conex.test.v1.Scalars",
+  "$ref": "#/$defs/conex.test.v1.Scalars",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}
