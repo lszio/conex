@@ -1,0 +1,27 @@
+# Local P0 host: loopback plaintext, fs + HTTP catalog, static bearer.
+listen = "127.0.0.1:8787"
+allow_loopback_http = true
+audience = "host.local"
+
+[[tokens]]
+# sha256("dev-token-a") = 0x...; generate with: printf %s dev-token-a | sha256sum
+token_hash = "0000000000000000000000000000000000000000000000000000000000000000"
+principal_id = "alice"
+tenant_id = "tenant-a"
+audience = "host.local"
+
+[[policy]]
+principal_id = "alice"
+tenant_id = "tenant-a"
+endpoint_id = "notes-local"
+actions = ["list", "read", "search"]
+root = ""
+subtree = true
+
+[[endpoints]]
+id = "notes-local"
+tenant_id = "tenant-a"
+provider_id = "source"
+kind = "source-fs"
+provides = ["source/list", "source/read", "source/search"]
+root = "fixtures/p0/notes"

@@ -10,6 +10,7 @@ path = "src/main.rs"
 [dependencies]
 async-trait.workspace = true
 axum.workspace = true
+axum-server.workspace = true
 conex-assembly = { path = "../conex-assembly" }
 conex-core = { path = "../conex-core" }
 conex-proto = { path = "../conex-proto" }
@@ -29,6 +30,12 @@ toml.workspace = true
 [dev-dependencies]
 async-trait.workspace = true
 axum.workspace = true
+bytes.workspace = true
+conex-transport-http = { path = "../conex-transport-http" }
+hex.workspace = true
+http.workspace = true
+rcgen.workspace = true
+sha2.workspace = true
 conex-core = { path = "../conex-core" }
 conex-provider-fs = { path = "../conex-provider-fs" }
 conex-proto = { path = "../conex-proto" }
