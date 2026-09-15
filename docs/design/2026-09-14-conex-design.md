@@ -1,7 +1,8 @@
 # conex 设计
 
 > 项目名：**conex**（connect + nexus）；工作协议名 `conex/1`。
-> 状态：设计草案 v5（2026-09-15），在原 2026-09-14 文档上修订；尚未发布线协议。
+> 状态：设计草案 v6（2026-09-15），在原 2026-09-14 文档上修订；尚未发布线协议。
+> v6 变更：补「与既有实现的关系」；统一内容寻址函数与 source/blob CID 语义；冻结完整 ErrorCode 数值表与信封预留字段；统一聚合/ID/方法命名；拆分 ACP 与 MCP 原生映射；补 key epoch 分发、Change CID 与签名、流恢复信用锚定、blob 分块方法。
 > v5 变更：补齐调用授权上下文、消息变体、握手引导、会话恢复与副作用边界；明确 CID/加密/持久性、ACL 定序与冲突语义；修正 ACP 映射和 TOML；收敛阶段范围与验收。
 > 阅读顺序：§0 范围 → §2 模型与边界 → §4–8 核心契约 → §14 实施顺序。P2P 独立阅读 §10–11。
 > 证据口径：未标注来源的规范性要求均为 **conex 的设计决定**，不是上游协议的保证。外部事实就近链接；2026-09-15 核对的规范见附录 B。§15 的 notez 记录继承 v4 对 `588bfb3` 的审查，本轮未复核该仓库，不作为 conex 已实现或已验证的证据。
@@ -28,6 +29,17 @@
 4. 不实现 any-sync 线协议或充当 Anytype 网络节点；Anytype 通过其受支持 API 接入。
 5. 不提供跨任意上游的 exactly-once 执行保证，不承诺仅持密钥与 heads 即可恢复内容。
 6. P3 首版不做多组织 ACL 共识：每个 Space 使用一个逻辑 ACL 权威；目录协调者不承担这一角色。
+
+### 0.1 与既有实现的关系
+
+本仓库 `dev` 分支存在前一阶段的 **CONEX** 实现（TypeScript/Bun，Anytype ↔ Apple Reminders 双向同步，Phase 0–3 已跑通，见该分支 `ARCHITECTURE.md`、`AGENTS.md` 与 `src/adapters/**`）。本设计（`conex`，工作协议 `conex/1`）是**取代它的下一代内核**：把「Anytype↔Apple 专用桥」提升为「可嵌入的双向能力路由内核 + ACP/MCP 网关 + 可选 P2P」。
+
+- 既有实现不就地演化；其产物（Anytype API `v2025-11-08` 接入经验、状态映射、冲突日志、Apple 侧适配）只作为**领域参考**，通过 §9.1 的 provider/桥接契约重新实现，不复用其运行时与状态库。
+- 本设计从当前 docs-only 树开始，构建独立 Rust workspace；`dev` 分支历史仅作证据，不构成 `conex/1` 的既有实现，其 TypeScript 代码不进入 P0–P4 的交付物。
+- §15 的 notez 记录是外部参考与反面教材，与上述既有 CONEX 实现相互独立。
+- 仓库继续使用 `conex` 名称；旧实现保留在 `dev` 分支，不发布新包、不迁移真实用户数据。
+
+> 仓库基线（2026-09-15 复核）：当前分支 `refactor/arch`，HEAD `0414896` 只包含本设计与此前两份计划文档；`dev` 分支保留旧实现与 `ARCHITECTURE.md`。此前计划中「master 是 unborn branch / 没有提交记录」的表述作废。
 
 ## 1. 核心判断
 
@@ -197,7 +209,7 @@ maxQueuedBytes = 8388608
 - conex WSS 先使用固定引导格式：UTF-8 JSON-RPC 2.0、一个 JSON 消息占一个 WS text message、上限 64 KiB。引导格式本身不参与协商。
 - WSS 顺序为 `hello → hello result → conex/ready → ready result`，均使用引导格式。`ready` 必须回传服务端生成的一次性协商 ID；双方核对选定 Profile、版本、plane 和能力摘要。
 - 服务端写出 `ready result` 后切换选定格式；发起方收到该结果后才发送选定格式的第一条消息。此前禁止业务消息，重复 ready 或中途变更选择使握手失败。
-- `hello` 返回 `linkId`/协商信息，不隐式创建业务 Session。Session 由 `session/open` 或经授权的 `session/resume` 建立。
+- 承载为 WSS 时 `hello` 返回 `linkId`/协商信息；承载为 HTTP 时返回 `bindingId`（HTTP 无 Link 概念，每个请求独立认证并可用同一 binding 复用协商结果）。二者都不隐式创建业务 Session。Session 由 `session/open` 或经授权的 `session/resume` 建立。
 - 外部 ACP/MCP 端点使用其原生初始化，不接受 conex 引导帧。桥接器在两侧分别建立连接状态。
 
 无共同版本/Profile 返回明确支持列表，不做猜测式解码；握手超时默认 10 秒。T2 反连先经过已授权的 peer 注册路径，稍后的业务调用可以复用连接，但仍须独立授权。
@@ -241,6 +253,8 @@ Notification { kind: notification, method, context, params, meta? }
 - `Failure.requestId` 缺失仅用于无法识别请求的协议错误，映射 JSON-RPC `id:null`；通知的业务错误进入审计或明确的流状态通知，不对通知伪造响应。
 - 业务 `context` 是调用方提出的目标选择，不能直接当作可信 `CallContext`。授权上下文由接收侧生成/验证（§8.3）。
 - 调用方提交 `timeoutBudgetMs`；每跳按本地单调时钟扣除已经消耗的预算，重试沿用剩余预算，不能重新获得完整超时。CallContext 的 deadline 是本地执行截止点，跨机器不直接比较单调时钟值；长时间 agent 调用按方法配置自己的上限。
+- **信封与载荷分层**：消息信封（Request/Success/Failure/Notification）的 `params`/`result` 使用通用结构容器承载；每个方法的具体输入/输出是 `.proto` 生成的 typed message，由方法注册处的 `prepare`/`validate_output` 作为**唯一权威严格解码器**：拒绝未知字段、uint64 只接受规范十进制字符串、区分 optional 与缺省、oneof 至多一个。生成的 JSON Schema 只作为 SDK 文档与 TS 边界校验输入，不得成为第二套语义源；JSON 与 protobuf 两条路径对同一输入必须给出相同判定，不依赖 pbjson/prost 的宽松反序列化默认值。
+- v1 信封为 `operationId`、`meta` 预留字段 tag；P0 不使用时也不得改号或复用。
 
 这些映射遵循 [JSON-RPC 2.0 的请求、响应与通知规则](https://www.jsonrpc.org/specification)。默认不支持 JSON-RPC batch；收到 batch 明确拒绝，不能只执行其中一部分。
 
@@ -253,7 +267,21 @@ Error { code, message, diagnosticId,
 
 错误码基线：`unauthorized`、`forbidden`、`unknown_provider`、`unknown_method`、`unsupported_capability`、`unavailable`、`timeout`、`cancelled`、`outcome_unknown`、`stale_revision`、`conflict`、`bad_request`、`payload_too_large`、`slow_consumer`、`quota_exceeded`、`bad_blob`、`plane_mismatch`、`peer_untrusted`、`session_lost`、`resume_unavailable`、`internal`。
 
-`retryable` 不再作为独立错误类别。重试取决于方法契约及 execution，不以 HTTP 5xx 自动推断安全。外部错误保留原数值 code、message、data；JSON-RPC 标准协议错误保留其原码。conex 业务错误使用生成的固定数值映射，语义码保存在 `error.data.code`，不能全部改成 `internal`。
+`retryable` 不再作为独立错误类别。重试取决于方法契约及 execution，不以 HTTP 5xx 自动推断安全。外部错误保留原数值 code、message、data；JSON-RPC 标准协议错误保留其原码。conex 业务错误使用生成的固定数值映射，语义码保存在 `error.data.code`，不能全部改成 `internal`。**下列数值在 v1 冻结，任何阶段不得改号或复用；`-32019..-32099` 预留给后续业务码，`-32700/-32600/-32601/-32602/-32603` 保留 JSON-RPC 标准语义。**
+
+| 语义码 | 数值 | 语义码 | 数值 |
+|---|---|---|---|
+| `parse_error` | -32700 | `unauthorized` | -32001 |
+| `bad_request` | -32602 | `forbidden` | -32002 |
+| `unknown_method` | -32601 | `unknown_provider` | -32003 |
+| `internal` | -32603 | `unsupported_capability` | -32004 |
+| `unavailable` | -32005 | `timeout` | -32006 |
+| `payload_too_large` | -32007 | `quota_exceeded` | -32008 |
+| `plane_mismatch` | -32009 | `peer_untrusted` | -32010 |
+| `cancelled` | -32011 | `outcome_unknown` | -32012 |
+| `stale_revision` | -32013 | `conflict` | -32014 |
+| `slow_consumer` | -32015 | `bad_blob` | -32016 |
+| `session_lost` | -32017 | `resume_unavailable` | -32018 |
 
 控制方法按责任归属命名：`conex/hello|ready|ping|bye` 管 Link，`session/open|resume|renew|close` 管 Session，`stream/ack|flow|reset` 管流，`call/cancel` 与 `operation/get` 管调用状态；`blob/*`、`source/*`、`agent/*`、`workspace/*`、`human/*`、`sync/*`、`discover/*` 各自按方法契约注册。未进入当前交付阶段的方法不广告。
 
@@ -266,6 +294,8 @@ BlobRef { cid, size, mime, access: { providerId, plane, spaceId?, resourceId } }
 ```
 
 `cid` 证明字节完整性；`access` 只是授权定位信息，不是凭证。接收侧用资源元数据或授权句柄证明资源与 CID 的关联。`blob/get`、`blob/have`、`blob/pin` 都经过资源级策略；跨空间相同 CID 不继承权限。
+
+**统一内容寻址函数（P0 固定）**：`contentCid(bytes, chunkSize=256KiB)` 定义为 `len(bytes) <= chunkSize` 时返回 raw/SHA-256 CID，否则返回按 §5.4 分块树规则得到的 manifest 根 CID。`source/read` 返回的 `cid` 与 `blob/*` 的根 CID 必须使用同一函数：同一份内容在 P0 与 P1 得到相同地址，不得对同一内容同时声明「整文件 raw CID」与「分块根 CID」两种可比较地址。
 
 内容 codec 与传输 codec 分离：原始块使用 raw；结构化 manifest 使用确定性内容格式。签名、CID 的输入必须是明确的原始字节或协议规定的规范化字节，禁止解码后用任意序列化结果重新计算。protobuf 的 deterministic serialization 不保证跨版本规范化，见 [官方说明](https://protobuf.dev/programming-guides/serialization-not-canonical/)。
 
@@ -289,7 +319,7 @@ blob/put(open) → uploading → verified → blob/commit → committed
 ```
 
 1. `blob/put` 创建绑定主体、资源、内容格式和大小上限的 uploadId，返回已持有块及续传信息；默认 staging 租约 1 小时，可在配额内续期。
-2. 收到块后先校验大小与 CID，再存入 staging；坏块返回 `bad_blob` 并结束当前传输，可保留此前已验证块供重新打开上传续传。
+2. 数据块通过 `blob/chunk{uploadId, chunkIndex, cid, bytes}`（或经 Stream 传送的等价帧）提交，`blob/put` 只创建/续开上传而不承载数据；收到块后先校验大小与 CID，再存入 staging；坏块返回 `bad_blob` 并结束当前传输，可保留此前已验证块供重新打开上传续传。
 3. `blob/commit` 检查根 CID、全部可达块、长度和授权，并原子建立根与资源的持久引用；后台 GC 不能删除 commit 正在引用的块。
 4. `committed` 只在约定持久性达成后返回；失败返回实际状态及缺块列表。上传 ACK、CID 校验成功、加入内存队列都不等于 committed。
 5. `blob/pin` 返回绑定 principal/space/root 的 pinId 和到期时间；`blob/unpin` 只释放调用者有权管理的 pin。对象引用、显式 pin、上传租约和迁移保留共同决定 GC 可达集。
@@ -334,6 +364,8 @@ SSE+POST 作为可选 conex Profile 后续实现时，必须补齐双向请求�
 
 `maxInflight` 是并发 Call 上限，不能替代字节信用。所有数值上限由握手取兼容的更严格值。重放缓存默认最长 120 秒，实际可恢复范围由时间与字节预算共同决定并向对端报告。
 
+**恢复时的信用锚定**：`session/resume` 成功后，接收端必须按断线前的 `consumedBytes` 重新广告信用，且新窗口不得小于断线时该流尚未确认的已发送字节；否则发送端会越过 `consumed + window`。若新 Link 协商出更小窗口，接收端必须先确认足够字节或显式进入 `stream/reset` 并把未确认部分标为需重放，不能直接用更小窗口把流判为 `slow_consumer`。
+
 ### 6.3 保活与认证材料
 
 默认每 20 秒 ping，40 秒无响应判 Link 失联；Session 另有资源租约。来自未认证或被撤销 peer 的流量不能续租。
@@ -363,7 +395,7 @@ Session 绑定至少包含 `principalId, tenantId, providerEndpointId, plane, wo
 1. host 校验主体、租户、peer 角色与 Session 绑定；重新检查当前授权、撤销和租约。ID 可被猜到也不能取得会话。
 2. 成功恢复时按 expectedEpoch 原子递增该 attachment 的 epoch，旧 Link 在该 attachment 上的帧被 fencing 拒绝；并发恢复只接受一个胜者，不影响其他参与者的有效连接。双方确认可恢复的每流范围与固定编码格式，再按原 seq 重放；首版恢复要求原 Profile，改变编码导致的字节信用差异不做隐式换算。
 3. 接收端按 `(sessionId, attachmentId, sender, streamId, seq)` 识别重复，并先检查本次 epoch 是否有效。epoch 是连接所有权代次，不属于逻辑去重键；恢复不能清空去重记录。对端提交的 ACK/消费位置不能越过实际发送范围，也不能让已丢失缓存重新被宣称可恢复。
-4. 窗口不足返回 `streamsReset` 和可用的业务恢复方式，不能把最后一帧之后的数据当作完整历史继续显示。
+4. 窗口不足返回 `stream/reset` 结果（携带 `streamsReset` 字段）和可用的业务恢复方式，不能把最后一帧之后的数据当作完整历史继续显示。
 5. P1/P2 保证进程存活且窗口内的网络重连。host 重启或 ACP 进程退出时返回 `session_lost`；只有实现并声明持久恢复的部署才可承诺跨进程恢复。
 
 恢复方式按业务区分：watch 重新读取快照与游标；blob 用 uploadId 与缺块集合续传；agent 输出若有持久 transcript 则补读，否则标记输出不完整。**禁止用重发 prompt 来代替 agent 输出恢复。**
@@ -379,7 +411,7 @@ Session 绑定至少包含 `principalId, tenantId, providerEndpointId, plane, wo
 | `deduplicated` | 上游支持幂等键的写入 | 同一个 operationId；有效期内可取回原结果 |
 | `non_replayable` | 普通 shell 执行、无幂等保证的 prompt/外部写入 | 发送后结果不明时不自动重试 |
 
-operationId 与 requestId 分离，采用稳定 ULID；去重键为 `(tenant, principal, providerEndpoint, method, operationId)`，同时存参数摘要。相同键但不同参数返回冲突。新的传输请求不能生成新的 operationId 来绕开未知结果。
+operationId 与 requestId 分离，采用稳定 ULID；去重键为 `(tenant, principal, providerEndpoint, spaceId?, resourceId, method, operationId)`，同时存参数摘要。相同键但不同参数返回冲突。新的传输请求不能生成新的 operationId 来绕开未知结果。`execution` 类别到 `retry` 的推导固定为：`read_only`→`safe`；`idempotent`→`safe`（仍重查策略）；`deduplicated`→`with_operation_id`；`non_replayable` 且已发送→`never` 且 `execution=unknown`。
 
 ```text
 operation: accepted → running → succeeded | failed | cancelled | unknown
@@ -490,23 +522,24 @@ WS URL 可以携带短期 ticket，但接入代理、访问日志和诊断必须
 
 P0 统一 `source/list`、`source/read`、`source/search`，每个方法定义资源范围、分页、deadline、大小上限及 revision 语义。搜索结果返回来源、资源标识与可获得的版本；上游不提供可靠版本时显式声明，不能伪造 fresh 或条件写能力。
 
-聚合返回 `items` 和 `providerResults[{providerId,status,error?,nextCursor?}]`，区分真正空结果与部分失败。每个 provider 有独立并发、超时和队列预算；一个失败不得中止所有已成功结果。查询 scope 必须在各 provider 执行前约束，不能先读取全量敏感数据再过滤。
+聚合返回 `items` 与 `providerResults[{endpointId,providerId,status,error?,nextCursor?}]`，区分真正空结果与部分失败；`endpointId` 是路由与审计键，`providerId` 只是展示用归属，两者不得混用。聚合语义只属于 core（`Host::invoke_many`）与显式声明的聚合端点；SDK 的 `searchMany` 只是对多个单目标调用的逐项封装，不是第二种聚合语义。每个 provider 有独立并发、超时和队列预算；一个失败不得中止所有已成功结果。查询 scope 必须在各 provider 执行前约束，不能先读取全量敏感数据再过滤。
 
 P1 增加 `source/write` 与可选 `expectedRevision`；后者只有在上游能原子检查时可用。Anytype 通过已安装的 API 桥接器接入，凭据默认放私有侧；其可用端点与具体版本在接入时锁定，不实现 any-sync 线协议。
 
 ### 9.2 ACP 网关
 
-| ACP 方法 | conex 方法 | 固定方向/归属 |
-|---|---|---|
-| `initialize` / `authenticate` / `logout` | `agent/initialize` / `agent/authenticate` / `agent/logout` | 桥接器管理的 ACP 连接与登录状态 |
-| `session/new` / `session/load` / `session/prompt` / `session/set_mode` | `agent/session.new` / `.load` / `.prompt` / `.set_mode` | consumer → 指定 agent provider |
-| `session/cancel` | `agent/session.cancel` | consumer → agent，通知 |
-| `session/update` | `stream/update` | agent → Session 绑定的 consumer |
-| `session/request_permission` / `elicitation/create` | `human/request_permission` / `human/elicit` | agent → Session 绑定的界面 peer |
-| `elicitation/complete` | `stream/elicitation_complete` | agent → 同一界面 peer，通知 |
-| `fs/*` / `terminal/*` | `workspace/fs.*` / `workspace/terminal.*` | agent → Session 绑定的私有侧 peer |
+| 来源 | 外部方法 | conex 方法 | 固定方向/归属 |
+|---|---|---|---|
+| ACP | `initialize` / `authenticate` / `logout` | `agent/initialize` / `agent/authenticate` / `agent/logout` | 桥接器管理的 ACP 连接与登录状态 |
+| ACP | `session/new` / `session/load` / `session/prompt` / `session/set_mode` | `agent/session.new` / `.load` / `.prompt` / `.set_mode` | consumer → 指定 agent provider |
+| ACP | `session/cancel` | `agent/session.cancel` | consumer → agent，通知 |
+| ACP | `session/update` | `stream/update` | agent → Session 绑定的 consumer |
+| ACP | `session/request_permission` | `human/request_permission` | agent → Session 绑定的界面 peer |
+| MCP | `elicitation/create` | `human/elicit` | 上游 server → Session 绑定的界面 peer |
+| MCP | `elicitation/*`（具体方法名待 P2-01 按锁定 schema 核实） | `stream/elicitation_complete` | 同一界面 peer，通知 |
+| ACP | `fs/*` / `terminal/*` | `workspace/fs.*` / `workspace/terminal.*` | agent → Session 绑定的私有侧 peer |
 
-表中简写 `.load` 等共享 `agent/session` 前缀。具体可用方法、参数和扩展按冻结的 ACP schema 定义，未知必需能力拒绝。桥接器是 ACP Client；UI 请求由桥接器的生命周期状态机校验，不能任意重置一条已有 ACP 连接的 initialize/auth 状态。
+表中简写 `.load` 等共享 `agent/session` 前缀；`来源` 列区分 ACP 原生与 MCP 原生方法，两者不得混排。P2-01 必须先按锁定的外部 schema 逐条核实方法名、方向与存在性（尤其 `elicitation/*`、`session/set_mode`、`logout`），核实前不得把上表当作已冻结契约。具体可用方法、参数和扩展按冻结的 ACP/MCP schema 定义，未知必需能力拒绝。桥接器是 ACP Client；UI 请求由桥接器的生命周期状态机校验，不能任意重置一条已有 ACP 连接的 initialize/auth 状态。
 
 - ACP client 能力由该 Session 实际绑定的 workspace/human 功能推导；不能广告整个 host 上其他用户可用的能力。ACP 的初始化区分 client 与 agent 能力，见 [Initialization](https://agentclientprotocol.com/protocol/v1/initialization)。
 - `logout` 是连接认证方法，不是 `session/logout`。默认 agent 类型认证由 agent 处理，协议调用提交 `methodId`；terminal 类型需要私有侧按已配置的 agent 程序启动独立交互进程，成功后重新连接和初始化，不能发送 terminal methodId 给 `authenticate`。见 [Authentication](https://agentclientprotocol.com/protocol/v1/authentication)。
@@ -546,7 +579,7 @@ Change       { header, signature }
 ObjectState  { objectId, heads[], properties, conflicts[], deletionState }
 ```
 
-objectId 在创建时生成并保持稳定；Change 的 CID 对完整签名变更记录计算。签名使用独立 domain 标识并覆盖 header 的规范化字节，包括 payloadCid 与 parents，防止跨空间、跨对象重放。业务属性操作在加密 payload 中，设备验证签名、权限、完整依赖和内容后投影；缺少父变更时暂存为不完整，不提前应用。
+objectId 在创建时生成并保持稳定；Change 的 CID 对完整签名变更记录计算。为使同一逻辑变更（同 header、同 actor）产生稳定 CID，P3-a 加密 Profile 必须选定确定性签名，或规定签名结果的确定性编码；否则 CID 只覆盖 header，签名作为并列字段参与校验，不得把随机化签名的字节计入去重键。签名使用独立 domain 标识并覆盖 header 的规范化字节，包括 payloadCid 与 parents，防止跨空间、跨对象重放。业务属性操作在加密 payload 中，设备验证签名、权限、完整依赖和内容后投影；缺少父变更时暂存为不完整，不提前应用。
 
 - 变更集合按 CID 去重，parents 定义因果顺序；不能用设备墙钟决定赢家。
 - 属性是多值寄存器：有因果关系的新值替代它已观察到的旧值；并发同属性写入保留多个值并返回 conflict。不同属性的无冲突写入可共同投影。
@@ -572,6 +605,7 @@ AclEntry { spaceId, version, prevAclCid, members, roles,
 - 在线节点的 ACL 新鲜度证明由权威签发，绑定 space、ACL head、签发与到期时间；默认最长 60 秒，允许时钟偏差最多 5 秒，超限或不能确认时间时 fail closed。节点保留已见最高 ACL 版本，拒绝回退。
 - 撤销生效以各遵循协议的节点获取新 ACL 或旧证明到期为界；最坏新授权窗口为 60 秒加容许偏差。过期节点拒绝新的下载、写入及续租，并暂停/终止受影响的在途流。已传输字节不能撤回。
 - 撤销读权限必须切换 key epoch，并仅向保留权限的成员封装新密钥；只更新 ACL 不足以阻止持有旧密钥的成员读取旧密文。
+- key epoch 的分发协议必须与 ACL 版本链一同定义：成员设备公钥的来源与签名绑定、新 epoch 内容密钥对哪些成员公钥封装、离线成员重新上线时如何以已验证 ACL 换取新密钥、以及撤销成员不能凭旧 proof 取得新封装。该协议与封装套件同为 P3-a 发布门槛，缺任一项不得广告 Space。
 - 每次缩减成员权限都记录认可旧历史的 `cutoffHeads`，包括只撤销写权限而不换内容密钥的情况。旧 ACL 版本下的已认可祖先仍可验证与读取；其余迟到离线写入不进入新的共享状态，保留为本地分支。有权限的成员可显式重新提交并引用新 ACL 版本及当前 key epoch，已撤销成员不能通过回填时间戳恢复写权。ACL 版本与内容 key epoch 是不同序列，不可混用。
 
 这是对离线写入与及时撤销的明确取舍。成员的旧明文/密钥不能远程擦除；恶意节点可以拒绝服务或继续分发已持有字节。内容机密性、历史完整性与存储可用性分别陈述和验收，不用“节点不能封禁用户”概括三者。
@@ -677,7 +711,7 @@ conex 自有规范类型源放 `schema/conex/v1/*.proto`；JSON Schema、Rust/TS
 
 ### 13.2 协议演化
 
-`conex/1` 主版本尚未冻结；发布前允许 v5 后续修订。冻结后，任何使既有合法报文变非法或改变可观察行为的变更都要兼容迁移或升主版本，包括授权范围、字段类型/必需性、ID、流、取消、错误、CID 和平面语义，不限于四个字段类别。
+`conex/1` 主版本尚未冻结；发布前允许 v6 后续修订。冻结后，任何使既有合法报文变非法或改变可观察行为的变更都要兼容迁移或升主版本，包括授权范围、字段类型/必需性、ID、流、取消、错误、CID 和平面语义，不限于四个字段类别。
 
 新增可选能力/方法通常可兼容，但必须明确旧客户端收到新错误/未知枚举的行为。内容格式版本、加密 Profile、外部协议版本与 conex 主版本分别标识。外部 ACP/MCP schema 必须保存来源版本或 commit、下载日期及内容摘要；不能用“站点最新”作为固定 conformance 输入。
 
