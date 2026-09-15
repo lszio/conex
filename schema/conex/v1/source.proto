@@ -12,15 +12,9 @@ message ResourceSummary {
   optional string revision = 5;
 }
 
-message ResourceRead {
-  ResourceSummary resource = 1;
-  string text = 2;
-  string cid = 3;
-}
-
 message SourceListRequest {
   string root = 1;
-  uint32 limit = 2;
+  optional uint32 limit = 2;
   optional string cursor = 3;
 }
 
@@ -34,7 +28,9 @@ message SourceReadRequest {
 }
 
 message SourceReadResponse {
-  ResourceRead resource = 1;
+  ResourceSummary resource = 1;
+  string text = 2;
+  string cid = 3;
 }
 
 message SearchHit {
@@ -45,7 +41,7 @@ message SearchHit {
 message SourceSearchRequest {
   string root = 1;
   string query = 2;
-  uint32 limit = 3;
+  optional uint32 limit = 3;
   optional string cursor = 4;
 }
 

@@ -1,0 +1,20 @@
+[package]
+name = "conex-provider-fs"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+bytes.workspace = true
+cap-std.workspace = true
+conex-core = { path = "../conex-core" }
+conex-proto = { path = "../conex-proto" }
+conex-source = { path = "../conex-source" }
+serde_json.workspace = true
+
+[dev-dependencies]
+conex-core = { path = "../conex-core" }
+conex-proto = { path = "../conex-proto" }
+conex-source = { path = "../conex-source" }
+serde_json.workspace = true
+tempfile.workspace = true

@@ -296,20 +296,11 @@ pub struct ResourceSummary {
     pub revision: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct ResourceRead {
-    #[prost(message, optional, tag = "1")]
-    pub resource: ::core::option::Option<ResourceSummary>,
-    #[prost(string, tag = "2")]
-    pub text: ::prost::alloc::string::String,
-    #[prost(string, tag = "3")]
-    pub cid: ::prost::alloc::string::String,
-}
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct SourceListRequest {
     #[prost(string, tag = "1")]
     pub root: ::prost::alloc::string::String,
-    #[prost(uint32, tag = "2")]
-    pub limit: u32,
+    #[prost(uint32, optional, tag = "2")]
+    pub limit: ::core::option::Option<u32>,
     #[prost(string, optional, tag = "3")]
     pub cursor: ::core::option::Option<::prost::alloc::string::String>,
 }
@@ -328,7 +319,11 @@ pub struct SourceReadRequest {
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct SourceReadResponse {
     #[prost(message, optional, tag = "1")]
-    pub resource: ::core::option::Option<ResourceRead>,
+    pub resource: ::core::option::Option<ResourceSummary>,
+    #[prost(string, tag = "2")]
+    pub text: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub cid: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct SearchHit {
@@ -343,8 +338,8 @@ pub struct SourceSearchRequest {
     pub root: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
     pub query: ::prost::alloc::string::String,
-    #[prost(uint32, tag = "3")]
-    pub limit: u32,
+    #[prost(uint32, optional, tag = "3")]
+    pub limit: ::core::option::Option<u32>,
     #[prost(string, optional, tag = "4")]
     pub cursor: ::core::option::Option<::prost::alloc::string::String>,
 }

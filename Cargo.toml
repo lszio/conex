@@ -1,6 +1,12 @@
 [workspace]
 resolver = "3"
-members = ["crates/conex-proto", "crates/conex-core", "xtask"]
+members = [
+    "crates/conex-proto",
+    "crates/conex-core",
+    "crates/conex-source",
+    "crates/conex-provider-fs",
+    "xtask",
+]
 
 [workspace.package]
 edition = "2024"
@@ -24,4 +30,6 @@ async-trait = "0.1"
 bytes = "1"
 http = "1"
 secrecy = "0.10"
+cap-std = "3"
+tempfile = "3"
 tokio = { version = "1", default-features = false, features = ["time", "macros", "rt", "sync"] }

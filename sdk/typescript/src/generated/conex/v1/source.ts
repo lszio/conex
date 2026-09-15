@@ -20,12 +20,6 @@ export interface ResourceSummary {
   revision?: string | undefined;
 }
 
-export interface ResourceRead {
-  resource?: ResourceSummary | undefined;
-  text?: string | undefined;
-  cid?: string | undefined;
-}
-
 export interface SourceListRequest {
   root?: string | undefined;
   limit?: number | undefined;
@@ -42,7 +36,9 @@ export interface SourceReadRequest {
 }
 
 export interface SourceReadResponse {
-  resource?: ResourceRead | undefined;
+  resource?: ResourceSummary | undefined;
+  text?: string | undefined;
+  cid?: string | undefined;
 }
 
 export interface SearchHit {
@@ -119,56 +115,15 @@ export const ResourceSummary: MessageFns<ResourceSummary> = {
   },
 };
 
-function createBaseResourceRead(): ResourceRead {
-  return { resource: undefined, text: "", cid: "" };
-}
-
-export const ResourceRead: MessageFns<ResourceRead> = {
-  fromJSON(object: any): ResourceRead {
-    return {
-      resource: isSet(object.resource) ? ResourceSummary.fromJSON(object.resource) : undefined,
-      text: isSet(object.text) ? globalThis.String(object.text) : "",
-      cid: isSet(object.cid) ? globalThis.String(object.cid) : "",
-    };
-  },
-
-  toJSON(message: ResourceRead): unknown {
-    const obj: any = {};
-    if (message.resource !== undefined) {
-      obj.resource = ResourceSummary.toJSON(message.resource);
-    }
-    if (message.text !== undefined && message.text !== "") {
-      obj.text = message.text;
-    }
-    if (message.cid !== undefined && message.cid !== "") {
-      obj.cid = message.cid;
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<ResourceRead>, I>>(base?: I): ResourceRead {
-    return ResourceRead.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<ResourceRead>, I>>(object: I): ResourceRead {
-    const message = createBaseResourceRead();
-    message.resource = (object.resource !== undefined && object.resource !== null)
-      ? ResourceSummary.fromPartial(object.resource)
-      : undefined;
-    message.text = object.text ?? "";
-    message.cid = object.cid ?? "";
-    return message;
-  },
-};
-
 function createBaseSourceListRequest(): SourceListRequest {
-  return { root: "", limit: 0, cursor: undefined };
+  return { root: "", limit: undefined, cursor: undefined };
 }
 
 export const SourceListRequest: MessageFns<SourceListRequest> = {
   fromJSON(object: any): SourceListRequest {
     return {
       root: isSet(object.root) ? globalThis.String(object.root) : "",
-      limit: isSet(object.limit) ? globalThis.Number(object.limit) : 0,
+      limit: isSet(object.limit) ? globalThis.Number(object.limit) : undefined,
       cursor: isSet(object.cursor) ? globalThis.String(object.cursor) : undefined,
     };
   },
@@ -178,7 +133,7 @@ export const SourceListRequest: MessageFns<SourceListRequest> = {
     if (message.root !== undefined && message.root !== "") {
       obj.root = message.root;
     }
-    if (message.limit !== undefined && message.limit !== 0) {
+    if (message.limit !== undefined) {
       obj.limit = Math.round(message.limit);
     }
     if (message.cursor !== undefined) {
@@ -193,7 +148,7 @@ export const SourceListRequest: MessageFns<SourceListRequest> = {
   fromPartial<I extends Exact<DeepPartial<SourceListRequest>, I>>(object: I): SourceListRequest {
     const message = createBaseSourceListRequest();
     message.root = object.root ?? "";
-    message.limit = object.limit ?? 0;
+    message.limit = object.limit ?? undefined;
     message.cursor = object.cursor ?? undefined;
     return message;
   },
@@ -271,18 +226,28 @@ export const SourceReadRequest: MessageFns<SourceReadRequest> = {
 };
 
 function createBaseSourceReadResponse(): SourceReadResponse {
-  return { resource: undefined };
+  return { resource: undefined, text: "", cid: "" };
 }
 
 export const SourceReadResponse: MessageFns<SourceReadResponse> = {
   fromJSON(object: any): SourceReadResponse {
-    return { resource: isSet(object.resource) ? ResourceRead.fromJSON(object.resource) : undefined };
+    return {
+      resource: isSet(object.resource) ? ResourceSummary.fromJSON(object.resource) : undefined,
+      text: isSet(object.text) ? globalThis.String(object.text) : "",
+      cid: isSet(object.cid) ? globalThis.String(object.cid) : "",
+    };
   },
 
   toJSON(message: SourceReadResponse): unknown {
     const obj: any = {};
     if (message.resource !== undefined) {
-      obj.resource = ResourceRead.toJSON(message.resource);
+      obj.resource = ResourceSummary.toJSON(message.resource);
+    }
+    if (message.text !== undefined && message.text !== "") {
+      obj.text = message.text;
+    }
+    if (message.cid !== undefined && message.cid !== "") {
+      obj.cid = message.cid;
     }
     return obj;
   },
@@ -293,8 +258,10 @@ export const SourceReadResponse: MessageFns<SourceReadResponse> = {
   fromPartial<I extends Exact<DeepPartial<SourceReadResponse>, I>>(object: I): SourceReadResponse {
     const message = createBaseSourceReadResponse();
     message.resource = (object.resource !== undefined && object.resource !== null)
-      ? ResourceRead.fromPartial(object.resource)
+      ? ResourceSummary.fromPartial(object.resource)
       : undefined;
+    message.text = object.text ?? "";
+    message.cid = object.cid ?? "";
     return message;
   },
 };
@@ -336,7 +303,7 @@ export const SearchHit: MessageFns<SearchHit> = {
 };
 
 function createBaseSourceSearchRequest(): SourceSearchRequest {
-  return { root: "", query: "", limit: 0, cursor: undefined };
+  return { root: "", query: "", limit: undefined, cursor: undefined };
 }
 
 export const SourceSearchRequest: MessageFns<SourceSearchRequest> = {
@@ -344,7 +311,7 @@ export const SourceSearchRequest: MessageFns<SourceSearchRequest> = {
     return {
       root: isSet(object.root) ? globalThis.String(object.root) : "",
       query: isSet(object.query) ? globalThis.String(object.query) : "",
-      limit: isSet(object.limit) ? globalThis.Number(object.limit) : 0,
+      limit: isSet(object.limit) ? globalThis.Number(object.limit) : undefined,
       cursor: isSet(object.cursor) ? globalThis.String(object.cursor) : undefined,
     };
   },
@@ -357,7 +324,7 @@ export const SourceSearchRequest: MessageFns<SourceSearchRequest> = {
     if (message.query !== undefined && message.query !== "") {
       obj.query = message.query;
     }
-    if (message.limit !== undefined && message.limit !== 0) {
+    if (message.limit !== undefined) {
       obj.limit = Math.round(message.limit);
     }
     if (message.cursor !== undefined) {
@@ -373,7 +340,7 @@ export const SourceSearchRequest: MessageFns<SourceSearchRequest> = {
     const message = createBaseSourceSearchRequest();
     message.root = object.root ?? "";
     message.query = object.query ?? "";
-    message.limit = object.limit ?? 0;
+    message.limit = object.limit ?? undefined;
     message.cursor = object.cursor ?? undefined;
     return message;
   },
