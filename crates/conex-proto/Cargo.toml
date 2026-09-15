@@ -1,0 +1,17 @@
+[package]
+name = "conex-proto"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+prost.workspace = true
+prost-types.workspace = true
+pbjson.workspace = true
+pbjson-types.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[build-dependencies]
+prost-build.workspace = true
+pbjson-build.workspace = true

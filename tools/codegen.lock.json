@@ -1,0 +1,25 @@
+{
+  "generatedBy": "cargo xtask generate",
+  "tools": {
+    "rustc": "1.98.1",
+    "cargo": "1.98.1",
+    "protoc": "36.1",
+    "bun": "1.4.0",
+    "node": "26.8.1",
+    "protoc-gen-ts_proto": "2.12.3",
+    "typescript": "5.9.3",
+    "ajv": "8.20.0"
+  },
+  "tsProtoOpt": "forceLong=string,outputEncodeMethods=false,outputJsonMethods=true,useOptionals=all,outputServices=none,esModuleInterop=true",
+  "jsonSchema": {
+    "producer": "xtask/src/schema.rs (prost-reflect over the compiled FileDescriptorSet)",
+    "note": "No Go/protoschema plugin is used; the schema is derived deliberately and is not the authoritative runtime validator (MethodContract.prepare is, design S5.2)."
+  },
+  "artifacts": {
+    "descriptor": "schema/generated/conex.bin",
+    "rust": "schema/generated/rust/",
+    "jsonSchema": "schema/generated/jsonschema/",
+    "typescript": "sdk/typescript/src/generated/"
+  },
+  "toolchainRoot": ".toolchain/ (gitignored; see scripts/bootstrap-toolchain.sh)"
+}

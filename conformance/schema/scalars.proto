@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+// 测试专用 schema：仅用于验证生成链的标量/optional 语义，不发布为 conex 能力。
+package conex.test.v1;
+
+message Scalars {
+  optional uint64 count = 1;
+  optional bool enabled = 2;
+}
