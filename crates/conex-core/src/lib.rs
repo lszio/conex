@@ -10,10 +10,13 @@ pub mod execution;
 pub mod host;
 pub mod identity;
 pub mod limits;
+pub mod operation;
 pub mod policy;
 pub mod ports;
 pub mod registry;
+pub mod session;
 pub mod target_policy;
+pub mod transport_ws;
 pub mod types;
 
 pub use aggregate::*;

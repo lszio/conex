@@ -9,6 +9,67 @@ pub fn run(vectors: &str) -> Result<()> {
         bail!("vectors directory not found: {vectors}");
     }
     let root = repo_root()?;
+    // P1-01 contract freeze: shared chunking golden CIDs.
+    run_step(
+        &root,
+        "rust p1 chunking",
+        "cargo",
+        &["test", "-p", "conex-proto", "--test", "chunking"],
+    )?;
+    run_step(
+        &root,
+        "ts p1 chunking",
+        "bun",
+        &["test", "sdk/typescript/tests/chunking.test.ts"],
+    )?;
+    run_step(
+        &root,
+        "rust p1 contracts",
+        "cargo",
+        &["test", "-p", "conex-proto", "--test", "p1_contracts"],
+    )?;
+    run_step(
+        &root,
+        "ts p1 contracts",
+        "bun",
+        &["test", "sdk/typescript/tests/p1_contracts.test.ts"],
+    )?;
+    // P1-06 blob storage: lifecycle + crash matrix + GC against blob.json.
+    run_step(
+        &root,
+        "rust conex-content blob",
+        "cargo",
+        &["test", "-p", "conex-content", "--test", "blob"],
+    )?;
+    // P1-08 operations: dedup / execution / state machine against
+    // conformance/vectors/p1/operation.json.
+    run_step(
+        &root,
+        "rust conex-core operation",
+        "cargo",
+        &["test", "-p", "conex-core", "--test", "operation"],
+    )?;
+    // P1-07 blob transfer: inline eligibility + 1 GiB roundtrip.
+    run_step(
+        &root,
+        "rust conex-core session",
+        "cargo",
+        &["test", "-p", "conex-core", "--test", "session"],
+    )?;
+    run_step(
+        &root,
+        "rust conex-content transfer",
+        "cargo",
+        &[
+            "test",
+            "-p",
+            "conex-content",
+            "--test",
+            "transfer",
+            "--",
+            "--test-threads=1",
+        ],
+    )?;
     run_step(
         &root,
         "rust vectors",

@@ -343,6 +343,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "conex-content"
+version = "0.0.0"
+dependencies = [
+ "bytes",
+ "cap-std",
+ "cid",
+ "conex-core",
+ "conex-proto",
+ "hex",
+ "multihash",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "conex-core"
 version = "0.0.0"
 dependencies = [
@@ -353,6 +372,7 @@ dependencies = [
  "secrecy",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror",
  "tokio",
 ]

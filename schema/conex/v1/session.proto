@@ -1,0 +1,128 @@
+// conex 会话状态、attachment 与恢复契约（设计 §7.1、§7.2）。
+//
+// 一个 Session 是固定主体/租户/provider/平面/workspace/human 绑定的一次协作；
+// attachment 表示同一 Session 内特定 peer+角色的参与绑定；epoch 是 attachment
+// 的连接代次，恢复时递增以 fencing 旧 Link。
+
+syntax = "proto3";
+
+package conex.v1;
+
+import "conex/v1/common.proto";
+
+// Session 绑定基线（设计 §7.1）。
+message SessionBinding {
+  string principal_id = 1;
+  string tenant_id = 2;
+  string provider_endpoint_id = 3;
+  Plane plane = 4;
+  optional string workspace_peer_id = 5;
+  optional string human_peer_id = 6;
+}
+
+// session/open 输入：客户端只声明目标，接收方最终决定 binding。
+message SessionOpenRequest {
+  SessionBinding requested = 1;
+  // 客户端可接受的恢复等级；"none" 表示不可恢复，"in_process" 表示窗口内
+  // 网络重连，"persistent" 须显式声明才能接受。
+  string recovery = 2;
+  // 客户端声明的 capability snapshot；最终由握手 hello/ready 共同决定。
+  repeated string provides = 3;
+  repeated string requires = 4;
+}
+
+message SessionOpenResponse {
+  string session_id = 1;
+  SessionBinding binding = 2;
+  // 实际授予的恢复等级与 epoch 起始值。
+  string recovery = 3;
+  uint64 attachment_epoch = 4;
+  // 参与绑定的租约与失联后的最迟恢复期限（毫秒）。
+  uint64 lease_ms = 5;
+  // 能力快照（设计 §4.3）；rejected 给出被丢弃的能力与原因。
+  repeated string provides = 6;
+  repeated string rejected_capabilities = 7;
+}
+
+// session/resume 必须在新的已认证 Link 上调用；expected_epoch fencing 旧连接。
+message SessionResumeRequest {
+  string session_id = 1;
+  string attachment_id = 2;
+  uint64 expected_epoch = 3;
+  // 每流的恢复游标；按 seq 已确认的最大值回填。
+  repeated StreamCursor streams = 4;
+}
+
+message StreamCursor {
+  string stream_id = 1;
+  // 接收端已连续确认的最大 seq；发送端从 seq+1 起重放未确认部分。
+  uint64 last_received_seq = 2;
+  // 接收端累计已消费字节；用于恢复期信用锚定（设计 §6.2）。
+  uint64 consumed_bytes = 3;
+}
+
+message SessionResumeResponse {
+  string session_id = 1;
+  string attachment_id = 2;
+  // 新 epoch（总是 expected_epoch+1）；旧 Link 在该 attachment 上被 fencing。
+  uint64 new_epoch = 3;
+  // 若窗口不足返回 stream_reset，附可用业务恢复方式（如 blob/uploadId）。
+  repeated StreamReset streams_reset = 4;
+  // 接收端按上次 advertised 信用重置；新窗口不能小于尚未确认的已发送字节。
+  uint64 restored_window_bytes = 5;
+}
+
+message StreamReset {
+  string stream_id = 1;
+  // 提示接收方为什么不接受；不允许悄悄丢弃未确认字节。
+  string reason = 2;
+  // 对应业务的续传入口（如 blob uploadId）。
+  optional string resume_handle = 3;
+}
+
+// session/renew：在原 attachment 上延长租约（不能延长其他 attachment 或无
+// 关 Session）。
+message SessionRenewRequest {
+  string session_id = 1;
+  string attachment_id = 2;
+  uint64 expected_epoch = 3;
+  uint64 extend_ms = 4;
+}
+
+message SessionRenewResponse {
+  uint64 new_epoch = 1;
+  uint64 lease_ms = 2;
+}
+
+// session/close：显式终止；终态不可复用旧 ID 复活。
+message SessionCloseRequest {
+  string session_id = 1;
+  string attachment_id = 2;
+  uint64 expected_epoch = 3;
+  optional string reason = 4;
+}
+
+message SessionCloseResponse {
+  string session_id = 1;
+  uint64 final_epoch = 2;
+}
+
+// 一次性 /tickets（设计 §8.5）：30 秒、原子消费、绑定主体/会话/角色/上限。
+message WebTicket {
+  // ticket 值本身；服务端原子消费后立即失效。
+  string ticket = 1;
+  // 绑定主体与租户。
+  string principal_id = 2;
+  string tenant_id = 3;
+  // WS 握手校验 Origin 时使用；其他 Origin 拒绝。
+  string origin = 4;
+  // 目标 host 与 peer 角色（agent/ui）。
+  string target_host = 5;
+  string peer_role = 6;
+  // 能力上限与（可选）目标 sessionId。
+  repeated string capability_caps = 7;
+  optional string session_id = 8;
+  // 颁发 Unix 毫秒与到期 Unix 毫秒；server 拒绝过期 ticket。
+  uint64 issued_at_ms = 9;
+  uint64 expires_at_ms = 10;
+}

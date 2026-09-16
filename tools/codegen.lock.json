@@ -21,5 +21,34 @@
     "jsonSchema": "schema/generated/jsonschema/",
     "typescript": "sdk/typescript/src/generated/"
   },
-  "toolchainRoot": ".toolchain/ (gitignored; see scripts/bootstrap-toolchain.sh)"
+  "toolchainRoot": ".toolchain/ (gitignored; see scripts/bootstrap-toolchain.sh)",
+  "phases": {
+    "p0": {
+      "schemas": [
+        "schema/conex/v1/common.proto",
+        "schema/conex/v1/control.proto",
+        "schema/conex/v1/manifest.proto",
+        "schema/conex/v1/rpc.proto",
+        "schema/conex/v1/source.proto"
+      ],
+      "vectors": "conformance/vectors/p0/"
+    },
+    "p1": {
+      "schemas": [
+        "schema/conex/v1/chunking.proto",
+        "schema/conex/v1/session.proto",
+        "schema/conex/v1/stream.proto",
+        "schema/conex/v1/blob.proto",
+        "schema/conex/v1/operation.proto"
+      ],
+      "vectors": "conformance/vectors/p1/",
+      "contracts": [
+        "docs/contracts/p1-chunking.md",
+        "docs/contracts/p1-blob.md",
+        "docs/contracts/p1-stream.md",
+        "docs/contracts/p1-operation.md"
+      ],
+      "frozen": "2026-09-15 P1-01"
+    }
+  }
 }

@@ -1,0 +1,96 @@
+// conex 副作用执行类别与 operation 状态（设计 §7.3）。
+//
+// operationId 与 requestId 分离；去重键 = (tenant, principal,
+// providerEndpoint, spaceId?, resourceId, method, operationId)；相同键不同
+// 参数返回 conflict。execution 类别 → retry 推导固定。
+
+syntax = "proto3";
+
+package conex.v1;
+
+import "conex/v1/common.proto";
+import "google/protobuf/struct.proto";
+
+// 四个 execution 类别。
+// "read_only" → retry=safe
+// "idempotent" → retry=safe (重查策略)
+// "deduplicated" → retry=with_operation_id
+// "non_replayable" 已发送 → retry=never & execution=unknown
+enum ExecutionClass {
+  EXECUTION_CLASS_UNSPECIFIED = 0;
+  EXECUTION_CLASS_READ_ONLY = 1;
+  EXECUTION_CLASS_IDEMPOTENT = 2;
+  EXECUTION_CLASS_DEDUPLICATED = 3;
+  EXECUTION_CLASS_NON_REPLAYABLE = 4;
+}
+
+// operation 状态机：accepted → running → succeeded | failed | cancelled | unknown
+enum OperationState {
+  OPERATION_STATE_UNSPECIFIED = 0;
+  OPERATION_STATE_ACCEPTED = 1;
+  OPERATION_STATE_RUNNING = 2;
+  OPERATION_STATE_SUCCEEDED = 3;
+  OPERATION_STATE_FAILED = 4;
+  OPERATION_STATE_CANCELLED = 5;
+  OPERATION_STATE_UNKNOWN = 6;
+}
+
+// 去重键（与 requestId 分开；与上游幂等键一致时才有意义）。
+message DedupKey {
+  string tenant_id = 1;
+  string principal_id = 2;
+  string provider_endpoint_id = 3;
+  optional string space_id = 4;
+  string resource_id = 5;
+  string method = 6;
+  // operationId；ULID；client 不能再造 operationId 来绕开 unknown。
+  string operation_id = 7;
+}
+
+// operation/get 与 cancel 的输入。
+message OperationGetRequest {
+  DedupKey key = 1;
+}
+
+message OperationGetResponse {
+  DedupKey key = 1;
+  OperationState state = 2;
+  // 保留期限 Unix 毫秒；过期之后状态不再可信。
+  uint64 expires_at_ms = 3;
+  // 已确定的成功结果（deduplicated 类别；上游幂等支持时才能取回）。
+  optional google.protobuf.Struct success = 4;
+  // 已确定的错误（failed/cancelled）；不可与 success 同时存在。
+  optional Error failure = 5;
+  // execution 表示当前已知的副作用状态；unknown 时不能自动重试。
+  string execution = 6;
+  // 启动时间与最近一次状态变化时间。
+  uint64 accepted_at_ms = 7;
+  optional uint64 settled_at_ms = 8;
+}
+
+message OperationCancelRequest {
+  DedupKey key = 1;
+  // 取消仅影响未开始或已停止的执行器；与已落定的结果并发时，结果优先保留。
+  string reason = 2;
+}
+
+message OperationCancelResponse {
+  OperationState state = 1;
+  // 若执行器无法确认是否产生副作用，返回 unknown。
+  bool outcome_unknown = 2;
+}
+
+// 持久记录条目（写入持久后端；设计 §7.3）。schemaVersion 用于崩溃恢复时
+// 校验格式演进。
+message OperationRecord {
+  uint32 schema_version = 1;
+  DedupKey key = 2;
+  OperationState state = 3;
+  ExecutionClass execution_class = 4;
+  // 参数摘要（与原文摘要比对，防止同键异参被错误合并）；默认 SHA-256 文本 CID。
+  string param_digest = 5;
+  // 接受时间 / 最后一次状态变化 / 过期时间。
+  uint64 accepted_at_ms = 6;
+  optional uint64 settled_at_ms = 7;
+  uint64 expires_at_ms = 8;
+}

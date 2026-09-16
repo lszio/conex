@@ -8,7 +8,7 @@ members = [
     "crates/conex-transport-http",
     "crates/conex-host",
     "crates/conex-provider-http-catalog",
-    "crates/conex-assembly",
+    "crates/conex-content",
     "xtask",
 ]
 
