@@ -21,6 +21,18 @@ pub enum ContentError {
     ChunkOutOfRange { index: u32, max: u32 },
     #[error("duplicate chunk index {0}")]
     DuplicateChunk(u32),
+    #[error("chunk index {0} missing from the upload")]
+    MissingChunkIndex(u32),
+    #[error("block {index} length {actual} != expected {expected}")]
+    BlockLengthMismatch {
+        index: u32,
+        expected: u64,
+        actual: u64,
+    },
+    #[error("declared root kind {0} is not supported by the local backend")]
+    UnsupportedRootKind(String),
+    #[error("canonical manifest rejected: {0}")]
+    Manifest(String),
     #[error("declared root mismatch: declared {declared}, recomputed {recomputed}")]
     DeclaredRootMismatch {
         declared: String,
@@ -48,7 +60,11 @@ impl ContentError {
             | ContentError::ChunkOutOfRange { .. }
             | ContentError::DuplicateChunk(_)
             | ContentError::DeclaredRootMismatch { .. }
-            | ContentError::MissingChunks(_) => ErrorCode::BadBlob as i32,
+            | ContentError::MissingChunks(_)
+            | ContentError::MissingChunkIndex(_)
+            | ContentError::BlockLengthMismatch { .. }
+            | ContentError::UnsupportedRootKind(_)
+            | ContentError::Manifest(_) => ErrorCode::BadBlob as i32,
             ContentError::UnknownUpload(_)
             | ContentError::UnknownBlock(_)
             | ContentError::UnknownPin(_) => ErrorCode::UnknownProvider as i32,

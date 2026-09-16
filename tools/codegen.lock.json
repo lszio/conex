@@ -10,7 +10,8 @@
     "typescript": "5.9.3",
     "ajv": "8.20.0"
   },
-  "tsProtoOpt": "forceLong=string,outputEncodeMethods=false,outputJsonMethods=true,useOptionals=all,outputServices=none,esModuleInterop=true",
+  "tsProtoOpt": "forceLong=string,outputEncodeMethods=true,outputJsonMethods=true,useOptionals=all,outputServices=none,esModuleInterop=true",
+  "tsProtoRuntime": "@bufbuild/protobuf (dependency of @conex/sdk; generated encoders are used by the canonical manifest rule in sdk/typescript/src/content.ts)",
   "jsonSchema": {
     "producer": "xtask/src/schema.rs (prost-reflect over the compiled FileDescriptorSet)",
     "note": "No Go/protoschema plugin is used; the schema is derived deliberately and is not the authoritative runtime validator (MethodContract.prepare is, design S5.2)."
@@ -42,6 +43,9 @@
         "schema/conex/v1/operation.proto"
       ],
       "vectors": "conformance/vectors/p1/",
+      "goldenGenerators": {
+        "conformance/vectors/p1/chunking.json": "conformance/tools/gen_manifest_goldens.py (protoc --encode + python stdlib; checked by `cargo xtask conformance`)"
+      },
       "contracts": [
         "docs/contracts/p1-chunking.md",
         "docs/contracts/p1-blob.md",

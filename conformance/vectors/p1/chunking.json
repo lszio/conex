@@ -1,83 +1,187 @@
 {
-  "$schema": "conex P1 chunking & manifest golden CIDs",
-  "chunkSize": 262144,
+  "$schema": "conex P1 canonical chunked-content addressing (ChunkManifest)",
+  "contract": "docs/contracts/p1-chunking.md",
+  "structure": "schema/conex/v1/chunking.proto (ChunkManifest)",
+  "generator": "conformance/tools/gen_manifest_goldens.py (protoc --encode + python stdlib)",
   "formatVersion": 1,
-  "canonicalManifestBytesPrefix": "manifest/v1/",
-  "notes": [
-    "Single-block content (<= chunkSize) returns a raw/SHA-256 CID via cid_for_raw.",
-    "Multi-block content (> chunkSize) returns contentCid(manifestBytesFor(...)) = cid_for_raw(manifest/v1/<root>).",
-    "Expected CIDs were computed by an independent Rust helper (scripts/dev/p1-vectors.rs) and must match the values produced by both the Rust cid module and the TypeScript @conex/sdk chunking helper."
-  ],
+  "manifestFanout": 1024,
+  "defaultChunkSize": 262144,
   "cases": [
     {
       "name": "empty",
-      "input": "",
-      "expected": "raw",
-      "cid": "bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku"
-    },
-    {
-      "name": "single_byte",
-      "input": "x",
-      "expected": "raw",
-      "cid": "bafkreibnoelefnzgwbcacyt4vh52ymxvzbjq7mmqhtcnwarfq4lzegsiqe"
-    },
-    {
-      "name": "hello",
-      "input": "hello",
-      "expected": "raw",
-      "cid": "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44yegnrjhc4yeq"
+      "payload": {
+        "kind": "literal",
+        "value": ""
+      },
+      "chunkSize": 262144,
+      "sizeBytes": 0,
+      "expectedRootKind": "raw",
+      "rootCid": "bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku"
     },
     {
       "name": "hello_conex_newline",
-      "input": "hello conex\n",
-      "expected": "raw",
-      "cid": "bafkreicnbk2gkwoowxiq3loyrlyfdd42wwhcyvv67ny33drroaybh4qvxy"
+      "payload": {
+        "kind": "literal",
+        "value": "hello conex\n"
+      },
+      "chunkSize": 262144,
+      "sizeBytes": 12,
+      "expectedRootKind": "raw",
+      "rootCid": "bafkreicnbk2gkwoowxiq3loyrlyfdd42wwhcyvv67ny33drroaybh4qvxy"
     },
     {
-      "name": "exactly_256kib_raw_fits_in_one_chunk",
-      "input": "256kib-of-0xAB",
+      "name": "exactly_one_chunk_262kib",
+      "payload": {
+        "kind": "fill",
+        "byte": 171,
+        "sizeBytes": 262144
+      },
+      "chunkSize": 262144,
       "sizeBytes": 262144,
-      "expected": "raw",
-      "cid": "bafkreiggu2datz7jx5myu7qsvatdg66qr4usac6iyn7qytv6e2357sgexy"
+      "expectedRootKind": "raw",
+      "rootCid": "bafkreiggu2datz7jx5myu7qsvatdg66qr4usac6iyn7qytv6e2357sgexy"
     },
     {
-      "name": "exactly_256kib_plus_one_forces_manifest",
-      "input": "256kib-of-0xAB + 0xCD",
+      "name": "one_byte_over_one_chunk",
+      "payload": {
+        "kind": "fill",
+        "byte": 171,
+        "sizeBytes": 262145
+      },
+      "chunkSize": 262144,
       "sizeBytes": 262145,
-      "expected": "manifest",
-      "cid": "bafkreibwcxbxmxnbalvi2borwiz2wxnlp4oql2ol4xdo76w23svwbbjliy"
+      "expectedRootKind": "manifest",
+      "rootCid": "bafkreiagegkq535yar3aj3yupda6a4ygro6pkrxewmtf5kjys5n5lvxdae",
+      "rootManifestBytesLength": 154,
+      "rootManifestBytesHex": "0801108080101a063236323134352289010a450a3b6261666b726569676775326461747a376a78356d797537717376617464673636717234757361633669796e3771797476366532333537736765787912063236323134340a400a3b6261666b72656961697077617070346d63337663706462666b71336664697365696b707634796268717979677666666572746a6467777272796765120131",
+      "leafManifestCids": [
+        "bafkreiagegkq535yar3aj3yupda6a4ygro6pkrxewmtf5kjys5n5lvxdae"
+      ],
+      "leafCids": [
+        "bafkreiggu2datz7jx5myu7qsvatdg66qr4usac6iyn7qytv6e2357sgexy",
+        "bafkreiaipwapp4mc3vcpdbfkq3fdiseikpv4ybhqyygvffertjdgwrryge"
+      ]
     },
     {
-      "name": "two_chunks_deterministic_root",
-      "input": "512kib-of-0x01",
+      "name": "two_full_chunks",
+      "payload": {
+        "kind": "fill",
+        "byte": 1,
+        "sizeBytes": 524288
+      },
+      "chunkSize": 262144,
       "sizeBytes": 524288,
-      "expected": "manifest",
-      "cid": "bafkreiha7xatdgk3b3vbttawrjbslxdgz5t2e3laqtxhywbdercr4nvkgy"
+      "expectedRootKind": "manifest",
+      "rootCid": "bafkreicib7rzn2qv2xfn25bl2hpj5v53k677jqdssoz4hx757w6lojjrvy",
+      "rootManifestBytesLength": 159,
+      "rootManifestBytesHex": "0801108080101a06353234323838228e010a450a3b6261666b726569687463376f7a32323561647264663361786579746b7632616f736f646f326e686e7575616e676a726d6875766d74767271696a7512063236323134340a450a3b6261666b726569687463376f7a32323561647264663361786579746b7632616f736f646f326e686e7575616e676a726d6875766d74767271696a751206323632313434",
+      "leafManifestCids": [
+        "bafkreicib7rzn2qv2xfn25bl2hpj5v53k677jqdssoz4hx757w6lojjrvy"
+      ],
+      "leafCids": [
+        "bafkreihtc7oz225adrdf3axeytkv2aosodo2nhnuuangjrmhuvmtvrqiju",
+        "bafkreihtc7oz225adrdf3axeytkv2aosodo2nhnuuangjrmhuvmtvrqiju"
+      ]
     },
     {
-      "name": "five_chunks_deterministic_root",
-      "input": "1.25MiB-pattern-byte[i%256]",
-      "sizeBytes": 1310720,
-      "expected": "manifest",
-      "cid": "bafkreibh5epyzffry7i7u2doyha6emaiyquvorbckp4bd2yov7vvx4krhe"
+      "name": "three_chunks_short_last",
+      "payload": {
+        "kind": "pattern",
+        "sizeBytes": 524301
+      },
+      "chunkSize": 262144,
+      "sizeBytes": 524301,
+      "expectedRootKind": "manifest",
+      "rootCid": "bafkreidvohapl2g7ma3no5ro6zsi533cp54obk3iz2rbfqojd7mp4fozie",
+      "rootManifestBytesLength": 226,
+      "rootManifestBytesHex": "0801108080101a0635323433303122d1010a450a3b6261666b72656962646369347578776d7669786d353465793465747833706170686d777762763362656834786e736e64767336747a686a6176356512063236323134340a450a3b6261666b72656962646369347578776d7669786d353465793465747833706170686d777762763362656834786e736e64767336747a686a6176356512063236323134340a410a3b6261666b7265696567356f75757076696d667161766f643762786e6f6b6b75757672777633336f327a7762737836647a673469703761657066793412023133",
+      "leafManifestCids": [
+        "bafkreidvohapl2g7ma3no5ro6zsi533cp54obk3iz2rbfqojd7mp4fozie"
+      ],
+      "leafCids": [
+        "bafkreibdci4uxwmvixm54ey4etx3paphmwwbv3beh4xnsndvs6tzhjav5e",
+        "bafkreibdci4uxwmvixm54ey4etx3paphmwwbv3beh4xnsndvs6tzhjav5e",
+        "bafkreieg5ouupvimfqavod7bxnokkuuvrwv33o2zwbsx6dzg4ip7aepfy4"
+      ]
+    },
+    {
+      "name": "single_level_full_fanout",
+      "payload": {
+        "kind": "pattern",
+        "sizeBytes": 16384
+      },
+      "chunkSize": 16,
+      "sizeBytes": 16384,
+      "expectedRootKind": "manifest",
+      "rootCid": "bafkreid6kifx4nt6ohiofpeoadjo3qgsvd54adidr7rwmwmklegsn3p37a",
+      "rootManifestBytesLength": 68623,
+      "leafManifestCids": [
+        "bafkreid6kifx4nt6ohiofpeoadjo3qgsvd54adidr7rwmwmklegsn3p37a"
+      ]
+    },
+    {
+      "name": "layered_above_fanout",
+      "payload": {
+        "kind": "pattern",
+        "sizeBytes": 16400
+      },
+      "chunkSize": 16,
+      "sizeBytes": 16400,
+      "expectedRootKind": "manifest",
+      "rootCid": "bafkreiffpwuverjomccpzeymdfkm6ezed3uq25tis6qj26xa5ynm2haftq",
+      "rootManifestBytesLength": 135,
+      "rootManifestBytesHex": "080110101a053136343030227a123b6261666b726569616179796d786c70776a7635367035773535686f683561686264657470746873757a7a74746b6e797969356e783263646c647165123b6261666b7265696465366a6f69766b69776f67726636737733376767706d75656132773271736476747a377a346c6967657a746234646168617265",
+      "leafManifestCids": [
+        "bafkreiaayymxlpwjv56p5w55hoh5ahbdetpthsuzzttknyyi5nx2cdldqe",
+        "bafkreide6joivkiwogrf6sw37ggpmuea2w2qsdvtz7z4ligeztb4dahare"
+      ]
     }
   ],
   "rejects": [
     {
       "name": "non_raw_cid_rejected",
-      "input": "bafybeigdyrzt5sfp7udm7hu76uh7yganzbm4p7p7z3l3e3q",
+      "cid": "bafybeigdyrzt5sfp7udm7hu76uh7yganzbm4p7p7z3l3e3q",
+      "chunkSize": 16,
+      "contentLength": 48,
+      "leafCount": 3,
       "reason": "non-raw codec"
     },
     {
       "name": "non_sha256_multihash_rejected",
-      "input": "QmYwAPJzv5CZsnAzt8auVZRnAn7p9HRw1L1TqQ6T6t9K9Q",
+      "cid": "QmYwAPJzv5CZsnAzt8auVZRnAn7p9HRw1L1TqQ6T6t9K9Q",
+      "chunkSize": 16,
+      "contentLength": 48,
+      "leafCount": 3,
       "reason": "non-sha2-256 multihash"
     },
     {
-      "name": "non_decimal_size_string_rejected",
-      "input": "0x10000",
-      "field": "content_length",
-      "reason": "decimal-only"
+      "name": "malformed_cid_rejected",
+      "cid": "not-a-cid",
+      "chunkSize": 16,
+      "contentLength": 48,
+      "leafCount": 3,
+      "reason": "unparsable text form"
+    },
+    {
+      "name": "single_block_content_has_no_manifest",
+      "chunkSize": 262144,
+      "contentLength": 262144,
+      "leafCount": 1,
+      "reason": "content_length <= chunk_size is addressed by the raw CID"
+    },
+    {
+      "name": "wrong_leaf_count_rejected",
+      "chunkSize": 16,
+      "contentLength": 48,
+      "leafCount": 2,
+      "reason": "leaf count must be ceil(content_length / chunk_size)"
+    },
+    {
+      "name": "zero_chunk_size_rejected",
+      "chunkSize": 0,
+      "contentLength": 48,
+      "leafCount": 1,
+      "reason": "chunk_size must be > 0"
     }
   ]
 }

@@ -16,9 +16,9 @@ use std::io::Write;
 use std::path::Path;
 
 use crate::error::ContentError;
-use crate::store::{ContentRoot, LocalBlockStore, cid_for_bytes};
+use crate::store::{ContentRoot, LocalBlockStore};
 use bytes::Bytes;
-use conex_proto::cid::cid_for_raw;
+use conex_proto::cid::{cid_for_raw, content_cid_for_parts, leaf_cids_for};
 use conex_proto::v1;
 
 /// Default inline threshold (设计 §5.6).
@@ -35,10 +35,10 @@ pub struct DecodedBlob {
 
 /// Reconstruct a blob's content by walking leaves in chunk-index order.
 ///
-/// `leaves` MUST be ordered by ascending chunk index; the manifest CID is
-/// the canonical hash `cid_for_raw(b"manifest/v1" || leaf0 || leaf1 || ...)`
-/// over that exact order. Any deviation returns `DeclaredRootMismatch` and
-/// the caller MUST treat the upload as aborted.
+/// `leaves` MUST be ordered by ascending chunk index; the root is recomputed
+/// from them with the canonical rule (`conex_proto::cid::content_cid_for_parts`,
+/// which also binds `chunk_size` and the total length). Any deviation returns
+/// `DeclaredRootMismatch` and the caller MUST treat the upload as aborted.
 pub fn decode_content(
     store: &LocalBlockStore,
     declared_root_cid: &str,
@@ -58,9 +58,6 @@ pub fn decode_content(
             format!("blob size {total_bytes} exceeds MAX_BLOB_BYTES {MAX_BLOB_BYTES}"),
         )));
     }
-    let mut manifest_bytes =
-        Vec::with_capacity("manifest/v1".len() + leaves.iter().map(|s| s.len()).sum::<usize>());
-    manifest_bytes.extend_from_slice(b"manifest/v1");
     let mut written = 0u64;
     for leaf in leaves {
         let block = store.read_block(leaf)?;
@@ -70,18 +67,18 @@ pub fn decode_content(
                 max: chunk_size,
             });
         }
-        let computed = cid_for_bytes(&block);
+        let computed = cid_for_raw(&block);
         if &computed != leaf {
             return Err(ContentError::BadChunk {
                 declared: leaf.clone(),
                 computed,
             });
         }
-        manifest_bytes.extend_from_slice(leaf.as_bytes());
         out.write_all(&block).map_err(ContentError::Io)?;
         written = written.saturating_add(block.len() as u64);
     }
-    let recomputed = cid_for_raw(&manifest_bytes);
+    let recomputed = content_cid_for_parts(chunk_size, total_bytes, leaves)
+        .map_err(|error| ContentError::Manifest(error.message))?;
     if recomputed != declared_root_cid {
         return Err(ContentError::DeclaredRootMismatch {
             declared: declared_root_cid.to_string(),
@@ -101,34 +98,14 @@ pub fn decode_content(
 }
 
 /// Compute the leaves for a payload using P1 broker chunking. Returns
-/// `(leaf_cids, total_bytes)` with leaves in chunk-index order. Empty
-/// payload maps to a single empty-block leaf.
+/// `(leaf_cids, total_bytes)` with leaves in chunk-index order; a payload that
+/// fits in one chunk has exactly one leaf (empty content is the empty block).
+/// The canonical rule lives in `conex_proto::cid`; this is a convenience view.
 pub fn chunk_payload(bytes: &[u8], chunk_size: u32) -> (Vec<String>, u64) {
-    let mut leaves = Vec::new();
-    if chunk_size == 0 {
-        leaves.push(cid_for_raw(bytes));
-        return (leaves, bytes.len() as u64);
+    if chunk_size == 0 || bytes.len() <= chunk_size as usize {
+        return (vec![cid_for_raw(bytes)], bytes.len() as u64);
     }
-    for chunk in bytes.chunks(chunk_size as usize) {
-        leaves.push(cid_for_raw(chunk));
-    }
-    if leaves.is_empty() {
-        leaves.push(cid_for_raw(b""));
-    }
-    (leaves, bytes.len() as u64)
-}
-
-/// Compute the manifest root CID for a sequence of leaves using the
-/// canonical-bytes rule `cid_for_raw("manifest/v1" + leaf0 + leaf1 + ...)`.
-/// `leaves` must be in chunk-index order.
-pub fn manifest_cid_for(leaves: &[String]) -> String {
-    let mut manifest_bytes =
-        Vec::with_capacity("manifest/v1".len() + leaves.iter().map(|s| s.len()).sum::<usize>());
-    manifest_bytes.extend_from_slice(b"manifest/v1");
-    for leaf in leaves {
-        manifest_bytes.extend_from_slice(leaf.as_bytes());
-    }
-    cid_for_raw(&manifest_bytes)
+    leaf_cids_for(bytes, chunk_size as usize)
 }
 
 /// Return `true` if a payload with the given `total_bytes` may be carried

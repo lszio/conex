@@ -15,6 +15,13 @@ pub fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
+/// One received chunk: its index and the CID the server recomputed from the bytes.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ReceivedChunk {
+    pub index: u32,
+    pub cid: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct UploadState {
     pub upload_id: String,
@@ -23,7 +30,7 @@ pub struct UploadState {
     pub declared_size_bytes: u64,
     pub declared_root_kind: String, // "raw" | "manifest"
     pub declared_root_cid: String,
-    pub received_chunks: Vec<u32>,
+    pub received_chunks: Vec<ReceivedChunk>,
     pub started_at_ms: u64,
     pub lease_until_ms: u64,
 }
@@ -57,15 +64,35 @@ impl UploadState {
     }
 
     pub fn last_chunk_index(&self) -> Option<u32> {
-        self.received_chunks.iter().copied().max()
+        self.received_chunks.iter().map(|chunk| chunk.index).max()
     }
 
-    pub fn insert_chunk(&mut self, index: u32) -> Result<(), ContentError> {
-        if self.received_chunks.contains(&index) {
+    pub fn insert_chunk(&mut self, index: u32, cid: &str) -> Result<(), ContentError> {
+        if self
+            .received_chunks
+            .iter()
+            .any(|chunk| chunk.index == index)
+        {
             return Err(ContentError::DuplicateChunk(index));
         }
-        self.received_chunks.push(index);
+        self.received_chunks.push(ReceivedChunk {
+            index,
+            cid: cid.to_string(),
+        });
         Ok(())
+    }
+
+    /// Leaf CIDs in ascending chunk order. Requires a contiguous `0..n` index
+    /// range: commit must reference the blocks this upload actually received.
+    pub fn leaves_in_order(&self) -> Result<Vec<String>, ContentError> {
+        let mut chunks = self.received_chunks.clone();
+        chunks.sort_by_key(|chunk| chunk.index);
+        for (position, chunk) in chunks.iter().enumerate() {
+            if chunk.index != position as u32 {
+                return Err(ContentError::MissingChunkIndex(position as u32));
+            }
+        }
+        Ok(chunks.into_iter().map(|chunk| chunk.cid).collect())
     }
 }
 

@@ -5,6 +5,7 @@
 // source: conex/v1/stream.proto
 
 /* eslint-disable */
+import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 
 export const protobufPackage = "conex.v1";
 
@@ -116,6 +117,79 @@ function createBaseStreamSpec(): StreamSpec {
 }
 
 export const StreamSpec: MessageFns<StreamSpec> = {
+  encode(message: StreamSpec, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.streamId !== undefined && message.streamId !== "") {
+      writer.uint32(10).string(message.streamId);
+    }
+    if (message.kind !== undefined && message.kind !== "") {
+      writer.uint32(18).string(message.kind);
+    }
+    if (message.windowBytes !== undefined && message.windowBytes !== "0") {
+      writer.uint32(24).uint64(message.windowBytes);
+    }
+    if (message.maxFrameBytes !== undefined && message.maxFrameBytes !== 0) {
+      writer.uint32(32).uint32(message.maxFrameBytes);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): StreamSpec {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseStreamSpec();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.streamId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.kind = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.windowBytes = reader.uint64().toString();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.maxFrameBytes = reader.uint32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): StreamSpec {
     return {
       streamId: isSet(object.streamId)
@@ -172,6 +246,101 @@ function createBaseStreamFrame(): StreamFrame {
 }
 
 export const StreamFrame: MessageFns<StreamFrame> = {
+  encode(message: StreamFrame, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.sessionId !== undefined && message.sessionId !== "") {
+      writer.uint32(10).string(message.sessionId);
+    }
+    if (message.attachmentId !== undefined && message.attachmentId !== "") {
+      writer.uint32(18).string(message.attachmentId);
+    }
+    if (message.epoch !== undefined && message.epoch !== "0") {
+      writer.uint32(24).uint64(message.epoch);
+    }
+    if (message.streamId !== undefined && message.streamId !== "") {
+      writer.uint32(34).string(message.streamId);
+    }
+    if (message.seq !== undefined && message.seq !== "0") {
+      writer.uint32(40).uint64(message.seq);
+    }
+    if (message.message !== undefined && message.message.length !== 0) {
+      writer.uint32(50).bytes(message.message);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): StreamFrame {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseStreamFrame();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.sessionId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.attachmentId = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.epoch = reader.uint64().toString();
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.streamId = reader.string();
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.seq = reader.uint64().toString();
+            continue;
+          }
+          case 6: {
+            if (tag !== 50) {
+              break;
+            }
+
+            message.message = reader.bytes();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): StreamFrame {
     return {
       sessionId: isSet(object.sessionId)
@@ -238,6 +407,90 @@ function createBaseStreamAckRequest(): StreamAckRequest {
 }
 
 export const StreamAckRequest: MessageFns<StreamAckRequest> = {
+  encode(message: StreamAckRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.sessionId !== undefined && message.sessionId !== "") {
+      writer.uint32(10).string(message.sessionId);
+    }
+    if (message.attachmentId !== undefined && message.attachmentId !== "") {
+      writer.uint32(18).string(message.attachmentId);
+    }
+    if (message.epoch !== undefined && message.epoch !== "0") {
+      writer.uint32(24).uint64(message.epoch);
+    }
+    if (message.streamId !== undefined && message.streamId !== "") {
+      writer.uint32(34).string(message.streamId);
+    }
+    if (message.lastReceivedSeq !== undefined && message.lastReceivedSeq !== "0") {
+      writer.uint32(40).uint64(message.lastReceivedSeq);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): StreamAckRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseStreamAckRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.sessionId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.attachmentId = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.epoch = reader.uint64().toString();
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.streamId = reader.string();
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.lastReceivedSeq = reader.uint64().toString();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): StreamAckRequest {
     return {
       sessionId: isSet(object.sessionId)
@@ -303,6 +556,57 @@ function createBaseStreamAckResponse(): StreamAckResponse {
 }
 
 export const StreamAckResponse: MessageFns<StreamAckResponse> = {
+  encode(message: StreamAckResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.streamId !== undefined && message.streamId !== "") {
+      writer.uint32(10).string(message.streamId);
+    }
+    if (message.availableWindowBytes !== undefined && message.availableWindowBytes !== "0") {
+      writer.uint32(16).uint64(message.availableWindowBytes);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): StreamAckResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseStreamAckResponse();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.streamId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.availableWindowBytes = reader.uint64().toString();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): StreamAckResponse {
     return {
       streamId: isSet(object.streamId)
@@ -345,6 +649,101 @@ function createBaseStreamFlowRequest(): StreamFlowRequest {
 }
 
 export const StreamFlowRequest: MessageFns<StreamFlowRequest> = {
+  encode(message: StreamFlowRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.sessionId !== undefined && message.sessionId !== "") {
+      writer.uint32(10).string(message.sessionId);
+    }
+    if (message.attachmentId !== undefined && message.attachmentId !== "") {
+      writer.uint32(18).string(message.attachmentId);
+    }
+    if (message.epoch !== undefined && message.epoch !== "0") {
+      writer.uint32(24).uint64(message.epoch);
+    }
+    if (message.streamId !== undefined && message.streamId !== "") {
+      writer.uint32(34).string(message.streamId);
+    }
+    if (message.consumedBytes !== undefined && message.consumedBytes !== "0") {
+      writer.uint32(40).uint64(message.consumedBytes);
+    }
+    if (message.requestedWindowBytes !== undefined && message.requestedWindowBytes !== "0") {
+      writer.uint32(48).uint64(message.requestedWindowBytes);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): StreamFlowRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseStreamFlowRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.sessionId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.attachmentId = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.epoch = reader.uint64().toString();
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.streamId = reader.string();
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.consumedBytes = reader.uint64().toString();
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.requestedWindowBytes = reader.uint64().toString();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): StreamFlowRequest {
     return {
       sessionId: isSet(object.sessionId)
@@ -419,6 +818,57 @@ function createBaseStreamFlowResponse(): StreamFlowResponse {
 }
 
 export const StreamFlowResponse: MessageFns<StreamFlowResponse> = {
+  encode(message: StreamFlowResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.newWindowBytes !== undefined && message.newWindowBytes !== "0") {
+      writer.uint32(8).uint64(message.newWindowBytes);
+    }
+    if (message.zeroWindow !== undefined && message.zeroWindow !== false) {
+      writer.uint32(16).bool(message.zeroWindow);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): StreamFlowResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseStreamFlowResponse();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.newWindowBytes = reader.uint64().toString();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.zeroWindow = reader.bool();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): StreamFlowResponse {
     return {
       newWindowBytes: isSet(object.newWindowBytes)
@@ -469,6 +919,112 @@ function createBaseStreamResetRequest(): StreamResetRequest {
 }
 
 export const StreamResetRequest: MessageFns<StreamResetRequest> = {
+  encode(message: StreamResetRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.sessionId !== undefined && message.sessionId !== "") {
+      writer.uint32(10).string(message.sessionId);
+    }
+    if (message.attachmentId !== undefined && message.attachmentId !== "") {
+      writer.uint32(18).string(message.attachmentId);
+    }
+    if (message.epoch !== undefined && message.epoch !== "0") {
+      writer.uint32(24).uint64(message.epoch);
+    }
+    if (message.streamId !== undefined && message.streamId !== "") {
+      writer.uint32(34).string(message.streamId);
+    }
+    if (message.afterSeq !== undefined && message.afterSeq !== "0") {
+      writer.uint32(40).uint64(message.afterSeq);
+    }
+    if (message.reason !== undefined && message.reason !== "") {
+      writer.uint32(50).string(message.reason);
+    }
+    if (message.resumeHandle !== undefined) {
+      writer.uint32(58).string(message.resumeHandle);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): StreamResetRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseStreamResetRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.sessionId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.attachmentId = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.epoch = reader.uint64().toString();
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.streamId = reader.string();
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.afterSeq = reader.uint64().toString();
+            continue;
+          }
+          case 6: {
+            if (tag !== 50) {
+              break;
+            }
+
+            message.reason = reader.string();
+            continue;
+          }
+          case 7: {
+            if (tag !== 58) {
+              break;
+            }
+
+            message.resumeHandle = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): StreamResetRequest {
     return {
       sessionId: isSet(object.sessionId)
@@ -548,6 +1104,57 @@ function createBaseStreamResetResponse(): StreamResetResponse {
 }
 
 export const StreamResetResponse: MessageFns<StreamResetResponse> = {
+  encode(message: StreamResetResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.streamId !== undefined && message.streamId !== "") {
+      writer.uint32(10).string(message.streamId);
+    }
+    if (message.acceptedAfterSeq !== undefined && message.acceptedAfterSeq !== "0") {
+      writer.uint32(16).uint64(message.acceptedAfterSeq);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): StreamResetResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseStreamResetResponse();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.streamId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.acceptedAfterSeq = reader.uint64().toString();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): StreamResetResponse {
     return {
       streamId: isSet(object.streamId)
@@ -590,6 +1197,68 @@ function createBaseSlowConsumerSignal(): SlowConsumerSignal {
 }
 
 export const SlowConsumerSignal: MessageFns<SlowConsumerSignal> = {
+  encode(message: SlowConsumerSignal, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.streamId !== undefined && message.streamId !== "") {
+      writer.uint32(10).string(message.streamId);
+    }
+    if (message.reason !== undefined && message.reason !== "") {
+      writer.uint32(18).string(message.reason);
+    }
+    if (message.sinceMs !== undefined && message.sinceMs !== "0") {
+      writer.uint32(24).uint64(message.sinceMs);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SlowConsumerSignal {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseSlowConsumerSignal();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.streamId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.reason = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.sinceMs = reader.uint64().toString();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): SlowConsumerSignal {
     return {
       streamId: isSet(object.streamId)
@@ -674,6 +1343,8 @@ function isSet(value: any): boolean {
 }
 
 export interface MessageFns<T> {
+  encode(message: T, writer?: BinaryWriter): BinaryWriter;
+  decode(input: BinaryReader | Uint8Array, length?: number): T;
   fromJSON(object: any): T;
   toJSON(message: T): unknown;
   create<I extends Exact<DeepPartial<T>, I>>(base?: I): T;

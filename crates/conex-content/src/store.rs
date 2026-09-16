@@ -24,17 +24,14 @@ use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use bytes::Bytes;
-use multihash::Multihash;
-use sha2::{Digest, Sha256};
 
 use cap_std::ambient_authority;
 use cap_std::fs::Dir;
 
+use conex_proto::cid::leaf_length;
+
 use crate::error::ContentError;
 use crate::receipt::{CommitRecord, PinRecord, UploadState, now_ms};
-
-const RAW_CODEC: u64 = 0x55;
-const SHA2_256: u64 = 0x12;
 
 /// Validated capability-scoped handle to a content directory.
 ///
@@ -98,46 +95,12 @@ pub(crate) struct Refs {
     pins: HashMap<String, PinRecord>,
     pub(crate) uploads: HashMap<String, UploadState>,
 }
-#[derive(Debug, Clone)]
-pub struct ParsedCid {
-    pub text: String,
-    pub parsed: cid::Cid,
-}
-
-pub fn parse_cid(text: &str) -> Result<ParsedCid, ContentError> {
-    if !text.starts_with("bafkrei") {
-        return Err(ContentError::InvalidCid(text.to_string()));
-    }
-    let parsed =
-        cid::Cid::try_from(text).map_err(|e| ContentError::InvalidCid(format!("{text}: {e}")))?;
-    if parsed.codec() != RAW_CODEC {
-        return Err(ContentError::InvalidCid(format!(
-            "non-raw codec: {parsed:?}"
-        )));
-    }
-    if parsed.hash().code() != SHA2_256 {
-        return Err(ContentError::InvalidCid(format!(
-            "non-sha2-256 multihash: {parsed:?}"
-        )));
-    }
-    Ok(ParsedCid {
-        text: text.to_string(),
-        parsed,
-    })
-}
-pub fn sha256_digest(bytes: &[u8]) -> [u8; 32] {
-    let mut h = Sha256::new();
-    h.update(bytes);
-    let out = h.finalize();
-    let mut arr = [0u8; 32];
-    arr.copy_from_slice(&out);
-    arr
-}
-
-pub fn cid_for_bytes(bytes: &[u8]) -> String {
-    let digest = Sha256::digest(bytes);
-    let hash = Multihash::<64>::wrap(SHA2_256, &digest).expect("sha2-256 fits in 64 bytes");
-    cid::Cid::new_v1(RAW_CODEC, hash).to_string()
+/// Validate a CID text form through the single protocol implementation
+/// (`conex_proto::cid::parse_cid`, design §5.3).
+fn verify_cid(text: &str) -> Result<(), ContentError> {
+    conex_proto::cid::parse_cid(text)
+        .map(|_| ())
+        .map_err(|error| ContentError::InvalidCid(format!("{text}: {}", error.message)))
 }
 /// Map a CID text to the relative path under `<root>/blocks/`. Fan-out uses
 /// the first two base32 chars as `aa/bb` directory parts and the rest as
@@ -221,22 +184,28 @@ impl LocalBlockStore {
                     let blocks_file = refs_dir.join(format!("{root_cid}.blocks"));
                     if blocks_file.exists() {
                         let text = fs::read_to_string(&blocks_file)?;
-                        if let Ok(leaves) = serde_json::from_str::<Vec<String>>(&text) {
-                            self.with_refs(|r| {
-                                for leaf in leaves {
-                                    *r.counts.entry(leaf).or_insert(0) += 1;
-                                }
-                                r.commits.insert(
-                                    root_cid.clone(),
-                                    CommitRecord {
-                                        commit_id: format!("commit-{}", root_cid),
-                                        root_cid: root_cid.clone(),
-                                        root_kind: "raw".into(),
-                                        committed_bytes: 0,
-                                        receipt_id: format!("rcpt-{}", root_cid),
-                                        committed_at_ms: now_ms(),
+                        if let Ok(objects) = serde_json::from_str::<Vec<String>>(&text) {
+                            let record_path = refs_dir.join(format!("{root_cid}.record.json"));
+                            let record = fs::read_to_string(&record_path)
+                                .ok()
+                                .and_then(|text| serde_json::from_str::<CommitRecord>(&text).ok())
+                                .unwrap_or_else(|| CommitRecord {
+                                    commit_id: format!("commit-{root_cid}"),
+                                    root_cid: root_cid.clone(),
+                                    root_kind: if objects.len() == 1 {
+                                        "raw".into()
+                                    } else {
+                                        "manifest".into()
                                     },
-                                );
+                                    committed_bytes: 0,
+                                    receipt_id: format!("rcpt-{root_cid}"),
+                                    committed_at_ms: now_ms(),
+                                });
+                            self.with_refs(|r| {
+                                for object in objects {
+                                    *r.counts.entry(object).or_insert(0) += 1;
+                                }
+                                r.commits.insert(root_cid.clone(), record);
                             });
                         }
                     }
@@ -273,8 +242,8 @@ impl LocalBlockStore {
 
     /// Persist a verified chunk; idempotent. Returns Ok(()) if already present.
     pub fn put_block(&self, cid_text: &str, bytes: &[u8]) -> Result<(), ContentError> {
-        let _parsed = parse_cid(cid_text)?;
-        let computed = cid_for_bytes(bytes);
+        verify_cid(cid_text)?;
+        let computed = conex_proto::cid::cid_for_raw(bytes);
         if computed != cid_text {
             return Err(ContentError::BadChunk {
                 declared: cid_text.to_string(),
@@ -289,12 +258,12 @@ impl LocalBlockStore {
     }
 
     pub fn has_block(&self, cid_text: &str) -> Result<bool, ContentError> {
-        let _parsed = parse_cid(cid_text)?;
+        verify_cid(cid_text)?;
         Ok(self.join(&cid_to_block_relpath(cid_text)).exists())
     }
 
     pub fn read_block(&self, cid_text: &str) -> Result<Bytes, ContentError> {
-        let _parsed = parse_cid(cid_text)?;
+        verify_cid(cid_text)?;
         let target = self.join(&cid_to_block_relpath(cid_text));
         let mut f = fs::File::open(&target).map_err(|e| {
             ContentError::Io(std::io::Error::new(
@@ -327,7 +296,8 @@ impl LocalBlockStore {
         })
     }
 
-    pub fn record_chunk(&self, upload_id: &str, index: u32) -> Result<(), ContentError> {
+    pub fn record_chunk(&self, upload_id: &str, index: u32, cid: &str) -> Result<(), ContentError> {
+        verify_cid(cid)?;
         self.with_refs(|r| {
             let upload = r
                 .uploads
@@ -336,7 +306,7 @@ impl LocalBlockStore {
             if upload.is_expired() {
                 return Err(ContentError::UploadExpired);
             }
-            upload.insert_chunk(index)?;
+            upload.insert_chunk(index, cid)?;
             Ok(())
         })?;
         // Persist the updated receipt so a crash recovers the same state.
@@ -344,48 +314,107 @@ impl LocalBlockStore {
         self.record_upload(upload)
     }
 
-    /// Atomic commit: validate leaves, write refs/<root>.{committed,blocks}
-    /// atomically, then update in-memory refcounts and remove the staging dir.
-    pub fn commit(
-        &self,
-        upload_id: &str,
-        declared_root_cid: &str,
-        declared_root_kind: &str,
-        leaves: &[String],
-        total_bytes: u64,
-    ) -> Result<CommitRecord, ContentError> {
-        if leaves.is_empty() {
-            return Err(ContentError::MissingChunks(vec![
-                declared_root_cid.to_string(),
-            ]));
+    /// Atomic commit (design §5.5, docs/contracts/p1-blob.md §5).
+    ///
+    /// The leaf list is **not** taken from the caller: it is rebuilt from the
+    /// upload's own received chunks, so a commit can only ever reference blocks
+    /// this upload actually delivered. The canonical root CID is recomputed from
+    /// `conex_proto::cid` and must equal the declared root, every leaf block
+    /// must exist with its expected logical length, and every manifest object of
+    /// the canonical tree is stored and referenced so the reachable set is
+    /// complete. Only then are `refs/<root>.{blocks,committed}` written.
+    pub fn commit(&self, upload_id: &str) -> Result<CommitRecord, ContentError> {
+        let upload = self.get_upload(upload_id)?;
+        if upload.is_expired() {
+            return Err(ContentError::UploadExpired);
         }
-        for leaf in leaves {
+        let total_bytes = upload.declared_size_bytes;
+        let leaves = upload.leaves_in_order()?;
+        let expected_leaves = if total_bytes == 0 {
+            1
+        } else {
+            total_bytes.div_ceil(upload.chunk_size as u64) as usize
+        };
+        if leaves.len() != expected_leaves {
+            // The receipt itself is short: report the first missing index rather
+            // than trusting anything the caller declared.
+            return Err(ContentError::MissingChunkIndex(leaves.len() as u32));
+        }
+        let expected_kind = if total_bytes <= upload.chunk_size as u64 {
+            "raw"
+        } else {
+            "manifest"
+        };
+        if upload.declared_root_kind != expected_kind {
+            return Err(ContentError::UnsupportedRootKind(format!(
+                "{} for {total_bytes} bytes at chunk_size {} (expected {expected_kind})",
+                upload.declared_root_kind, upload.chunk_size
+            )));
+        }
+        let addressing =
+            conex_proto::cid::addressing_for_parts(upload.chunk_size, total_bytes, &leaves)
+                .map_err(|error| ContentError::Manifest(error.message))?;
+        let root_cid = addressing.root_cid.clone();
+        let reachable: Vec<(String, Vec<u8>)> = addressing
+            .manifests
+            .iter()
+            .map(|node| (node.cid.clone(), node.bytes.clone()))
+            .collect();
+        if root_cid != upload.declared_root_cid {
+            return Err(ContentError::DeclaredRootMismatch {
+                declared: upload.declared_root_cid.clone(),
+                recomputed: root_cid,
+            });
+        }
+
+        // Every leaf must be present with its exact logical length.
+        for (index, leaf) in leaves.iter().enumerate() {
             if !self.has_block(leaf)? {
                 return Err(ContentError::MissingChunks(vec![leaf.clone()]));
             }
+            let expected = leaf_length(total_bytes, upload.chunk_size, index);
+            let actual = fs::metadata(self.join(&cid_to_block_relpath(leaf)))?.len();
+            if actual != expected {
+                return Err(ContentError::BlockLengthMismatch {
+                    index: index as u32,
+                    expected,
+                    actual,
+                });
+            }
         }
+        // Manifest objects are derived content; store them so `blob/get` and GC
+        // see the whole reachable set.
+        for (cid, bytes) in &reachable {
+            self.put_block(cid, bytes)?;
+        }
+
+        let mut objects: Vec<String> = leaves.clone();
+        objects.extend(reachable.iter().map(|(cid, _)| cid.clone()));
+
         let refs_dir = self.join(Path::new("refs"));
-        let committed_path = refs_dir.join(format!("{declared_root_cid}.committed"));
-        let blocks_path = refs_dir.join(format!("{declared_root_cid}.blocks"));
-        // Write `.blocks` first; only on success write `.committed`.
-        let blocks_json = serde_json::to_string(leaves)?;
-        Self::atomic_write(&blocks_path, blocks_json.as_bytes())?;
-        Self::atomic_write(&committed_path, b"committed\n")?;
-        let receipt_id = format!("rcpt-{declared_root_cid}");
+        let committed_path = refs_dir.join(format!("{root_cid}.committed"));
+        let blocks_path = refs_dir.join(format!("{root_cid}.blocks"));
         let record = CommitRecord {
-            commit_id: format!("commit-{declared_root_cid}"),
-            root_cid: declared_root_cid.to_string(),
-            root_kind: declared_root_kind.to_string(),
+            commit_id: format!("commit-{root_cid}"),
+            root_cid: root_cid.clone(),
+            root_kind: upload.declared_root_kind.clone(),
             committed_bytes: total_bytes,
-            receipt_id,
+            receipt_id: format!("rcpt-{root_cid}"),
             committed_at_ms: now_ms(),
         };
+        // Write `.blocks` and the record first; `.committed` is the commit point.
+        Self::atomic_write(&blocks_path, serde_json::to_string(&objects)?.as_bytes())?;
+        Self::atomic_write(
+            &refs_dir.join(format!("{root_cid}.record.json")),
+            serde_json::to_string(&record)?.as_bytes(),
+        )?;
+        Self::atomic_write(&committed_path, b"committed\n")?;
+
         self.with_refs(|r| {
-            for leaf in leaves {
-                *r.counts.entry(leaf.clone()).or_insert(0) += 1;
+            for object in &objects {
+                *r.counts.entry(object.clone()).or_insert(0) += 1;
             }
-            r.commits
-                .insert(declared_root_cid.to_string(), record.clone());
+            r.commits.insert(root_cid.clone(), record.clone());
             r.uploads.remove(upload_id);
         });
         let staging_path = self.join(Path::new("staging").join(upload_id).as_path());

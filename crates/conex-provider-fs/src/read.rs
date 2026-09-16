@@ -94,7 +94,9 @@ impl FsRoot {
                 "document exceeds the per-document limit",
             ));
         }
-        let cid = conex_proto::cid::cid_for_raw(&bytes);
+        // Same function as every `blob/*` root (design §5.3): a document that
+        // ever exceeds one chunk must address as its manifest root, not raw.
+        let cid = conex_proto::cid::content_cid(&bytes, conex_proto::cid::CHUNK_SIZE);
         Ok(ReadSnapshot {
             bytes: Bytes::from(bytes),
             cid,

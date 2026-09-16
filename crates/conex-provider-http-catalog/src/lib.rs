@@ -106,7 +106,9 @@ impl Handler for CatalogReadHandler {
         let entry = catalog
             .get(resource)
             .ok_or_else(|| bad("resource is not present in the catalog"))?;
-        let cid = conex_proto::cid::cid_for_raw(entry.text.as_bytes());
+        // Same function as every `blob/*` root (design §5.3).
+        let cid =
+            conex_proto::cid::content_cid(entry.text.as_bytes(), conex_proto::cid::CHUNK_SIZE);
         let summary = v1::ResourceSummary {
             resource_id: entry.resource_id.clone(),
             title: entry.title.clone(),

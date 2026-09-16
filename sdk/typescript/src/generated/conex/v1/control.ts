@@ -5,6 +5,7 @@
 // source: conex/v1/control.proto
 
 /* eslint-disable */
+import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 import { Limits, Plane, planeFromJSON, planeToJSON } from "./common";
 
 export const protobufPackage = "conex.v1";
@@ -37,6 +38,89 @@ function createBaseHelloRequest(): HelloRequest {
 }
 
 export const HelloRequest: MessageFns<HelloRequest> = {
+  encode(message: HelloRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.profileId !== undefined && message.profileId !== "") {
+      writer.uint32(10).string(message.profileId);
+    }
+    if (message.plane !== undefined && message.plane !== 0) {
+      writer.uint32(16).int32(message.plane);
+    }
+    if (message.provides !== undefined && message.provides.length !== 0) {
+      for (const v of message.provides) {
+        writer.uint32(26).string(v!);
+      }
+    }
+    if (message.requires !== undefined && message.requires.length !== 0) {
+      for (const v of message.requires) {
+        writer.uint32(34).string(v!);
+      }
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): HelloRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseHelloRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.profileId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.plane = reader.int32() as any;
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            const el = reader.string();
+            if (el !== undefined) {
+              message.provides!.push(el);
+            }
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            const el = reader.string();
+            if (el !== undefined) {
+              message.requires!.push(el);
+            }
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): HelloRequest {
     return {
       profileId: isSet(object.profileId)
@@ -45,9 +129,7 @@ export const HelloRequest: MessageFns<HelloRequest> = {
         ? globalThis.String(object.profile_id)
         : "",
       plane: isSet(object.plane) ? planeFromJSON(object.plane) : 0,
-      provides: globalThis.Array.isArray(object?.provides)
-        ? object.provides.map((e: any) => globalThis.String(e))
-        : [],
+      provides: globalThis.Array.isArray(object?.provides) ? object.provides.map((e: any) => globalThis.String(e)) : [],
       requires: globalThis.Array.isArray(object?.requires) ? object.requires.map((e: any) => globalThis.String(e)) : [],
     };
   },
@@ -87,6 +169,68 @@ function createBaseRejectedCapability(): RejectedCapability {
 }
 
 export const RejectedCapability: MessageFns<RejectedCapability> = {
+  encode(message: RejectedCapability, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.method !== undefined && message.method !== "") {
+      writer.uint32(10).string(message.method);
+    }
+    if (message.direction !== undefined && message.direction !== "") {
+      writer.uint32(18).string(message.direction);
+    }
+    if (message.reason !== undefined && message.reason !== "") {
+      writer.uint32(26).string(message.reason);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): RejectedCapability {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseRejectedCapability();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.method = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.direction = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.reason = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): RejectedCapability {
     return {
       method: isSet(object.method) ? globalThis.String(object.method) : "",
@@ -134,6 +278,122 @@ function createBaseHelloResponse(): HelloResponse {
 }
 
 export const HelloResponse: MessageFns<HelloResponse> = {
+  encode(message: HelloResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.bindingId !== undefined && message.bindingId !== "") {
+      writer.uint32(10).string(message.bindingId);
+    }
+    if (message.expiresInMs !== undefined && message.expiresInMs !== 0) {
+      writer.uint32(16).uint32(message.expiresInMs);
+    }
+    if (message.profileId !== undefined && message.profileId !== "") {
+      writer.uint32(26).string(message.profileId);
+    }
+    if (message.plane !== undefined && message.plane !== 0) {
+      writer.uint32(32).int32(message.plane);
+    }
+    if (message.provides !== undefined && message.provides.length !== 0) {
+      for (const v of message.provides) {
+        writer.uint32(42).string(v!);
+      }
+    }
+    if (message.rejectedCapabilities !== undefined && message.rejectedCapabilities.length !== 0) {
+      for (const v of message.rejectedCapabilities) {
+        RejectedCapability.encode(v!, writer.uint32(50).fork()).join();
+      }
+    }
+    if (message.limits !== undefined) {
+      Limits.encode(message.limits, writer.uint32(58).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): HelloResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseHelloResponse();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.bindingId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.expiresInMs = reader.uint32();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.profileId = reader.string();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.plane = reader.int32() as any;
+            continue;
+          }
+          case 5: {
+            if (tag !== 42) {
+              break;
+            }
+
+            const el = reader.string();
+            if (el !== undefined) {
+              message.provides!.push(el);
+            }
+            continue;
+          }
+          case 6: {
+            if (tag !== 50) {
+              break;
+            }
+
+            const el = RejectedCapability.decode(reader, reader.uint32());
+            if (el !== undefined) {
+              message.rejectedCapabilities!.push(el);
+            }
+            continue;
+          }
+          case 7: {
+            if (tag !== 58) {
+              break;
+            }
+
+            message.limits = Limits.decode(reader, reader.uint32());
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): HelloResponse {
     return {
       bindingId: isSet(object.bindingId)
@@ -152,9 +412,7 @@ export const HelloResponse: MessageFns<HelloResponse> = {
         ? globalThis.String(object.profile_id)
         : "",
       plane: isSet(object.plane) ? planeFromJSON(object.plane) : 0,
-      provides: globalThis.Array.isArray(object?.provides)
-        ? object.provides.map((e: any) => globalThis.String(e))
-        : [],
+      provides: globalThis.Array.isArray(object?.provides) ? object.provides.map((e: any) => globalThis.String(e)) : [],
       rejectedCapabilities: globalThis.Array.isArray(object?.rejectedCapabilities)
         ? object.rejectedCapabilities.map((e: any) => RejectedCapability.fromJSON(e))
         : globalThis.Array.isArray(object?.rejected_capabilities)
@@ -225,6 +483,8 @@ function isSet(value: any): boolean {
 }
 
 export interface MessageFns<T> {
+  encode(message: T, writer?: BinaryWriter): BinaryWriter;
+  decode(input: BinaryReader | Uint8Array, length?: number): T;
   fromJSON(object: any): T;
   toJSON(message: T): unknown;
   create<I extends Exact<DeepPartial<T>, I>>(base?: I): T;

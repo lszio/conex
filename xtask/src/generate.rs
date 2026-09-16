@@ -8,7 +8,7 @@ use walkdir::WalkDir;
 
 use crate::schema;
 
-const TS_PROTO_OPT: &str = "forceLong=string,outputEncodeMethods=false,outputJsonMethods=true,useOptionals=all,outputServices=none,esModuleInterop=true";
+const TS_PROTO_OPT: &str = "forceLong=string,outputEncodeMethods=true,outputJsonMethods=true,useOptionals=all,outputServices=none,esModuleInterop=true";
 
 pub fn run(check: bool) -> Result<()> {
     let root = repo_root()?;
