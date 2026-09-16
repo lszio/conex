@@ -5,6 +5,7 @@
 // source: conex/v1/source.proto
 
 /* eslint-disable */
+import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 
 export const protobufPackage = "conex.v1";
 
@@ -63,6 +64,90 @@ function createBaseResourceSummary(): ResourceSummary {
 }
 
 export const ResourceSummary: MessageFns<ResourceSummary> = {
+  encode(message: ResourceSummary, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.resourceId !== undefined && message.resourceId !== "") {
+      writer.uint32(10).string(message.resourceId);
+    }
+    if (message.title !== undefined && message.title !== "") {
+      writer.uint32(18).string(message.title);
+    }
+    if (message.mime !== undefined && message.mime !== "") {
+      writer.uint32(26).string(message.mime);
+    }
+    if (message.sizeBytes !== undefined) {
+      writer.uint32(32).uint64(message.sizeBytes);
+    }
+    if (message.revision !== undefined) {
+      writer.uint32(42).string(message.revision);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ResourceSummary {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseResourceSummary();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.resourceId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.title = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.mime = reader.string();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.sizeBytes = reader.uint64().toString();
+            continue;
+          }
+          case 5: {
+            if (tag !== 42) {
+              break;
+            }
+
+            message.revision = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): ResourceSummary {
     return {
       resourceId: isSet(object.resourceId)
@@ -120,6 +205,68 @@ function createBaseSourceListRequest(): SourceListRequest {
 }
 
 export const SourceListRequest: MessageFns<SourceListRequest> = {
+  encode(message: SourceListRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.root !== undefined && message.root !== "") {
+      writer.uint32(10).string(message.root);
+    }
+    if (message.limit !== undefined) {
+      writer.uint32(16).uint32(message.limit);
+    }
+    if (message.cursor !== undefined) {
+      writer.uint32(26).string(message.cursor);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SourceListRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseSourceListRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.root = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.limit = reader.uint32();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.cursor = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): SourceListRequest {
     return {
       root: isSet(object.root) ? globalThis.String(object.root) : "",
@@ -159,6 +306,62 @@ function createBaseSourceListResponse(): SourceListResponse {
 }
 
 export const SourceListResponse: MessageFns<SourceListResponse> = {
+  encode(message: SourceListResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.items !== undefined && message.items.length !== 0) {
+      for (const v of message.items) {
+        ResourceSummary.encode(v!, writer.uint32(10).fork()).join();
+      }
+    }
+    if (message.nextCursor !== undefined) {
+      writer.uint32(18).string(message.nextCursor);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SourceListResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseSourceListResponse();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            const el = ResourceSummary.decode(reader, reader.uint32());
+            if (el !== undefined) {
+              message.items!.push(el);
+            }
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.nextCursor = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): SourceListResponse {
     return {
       items: globalThis.Array.isArray(object?.items) ? object.items.map((e: any) => ResourceSummary.fromJSON(e)) : [],
@@ -197,6 +400,46 @@ function createBaseSourceReadRequest(): SourceReadRequest {
 }
 
 export const SourceReadRequest: MessageFns<SourceReadRequest> = {
+  encode(message: SourceReadRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.resourceId !== undefined && message.resourceId !== "") {
+      writer.uint32(10).string(message.resourceId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SourceReadRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseSourceReadRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.resourceId = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): SourceReadRequest {
     return {
       resourceId: isSet(object.resourceId)
@@ -230,6 +473,68 @@ function createBaseSourceReadResponse(): SourceReadResponse {
 }
 
 export const SourceReadResponse: MessageFns<SourceReadResponse> = {
+  encode(message: SourceReadResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.resource !== undefined) {
+      ResourceSummary.encode(message.resource, writer.uint32(10).fork()).join();
+    }
+    if (message.text !== undefined && message.text !== "") {
+      writer.uint32(18).string(message.text);
+    }
+    if (message.cid !== undefined && message.cid !== "") {
+      writer.uint32(26).string(message.cid);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SourceReadResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseSourceReadResponse();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.resource = ResourceSummary.decode(reader, reader.uint32());
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.text = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.cid = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): SourceReadResponse {
     return {
       resource: isSet(object.resource) ? ResourceSummary.fromJSON(object.resource) : undefined,
@@ -271,6 +576,57 @@ function createBaseSearchHit(): SearchHit {
 }
 
 export const SearchHit: MessageFns<SearchHit> = {
+  encode(message: SearchHit, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.resource !== undefined) {
+      ResourceSummary.encode(message.resource, writer.uint32(10).fork()).join();
+    }
+    if (message.excerpt !== undefined && message.excerpt !== "") {
+      writer.uint32(18).string(message.excerpt);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SearchHit {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseSearchHit();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.resource = ResourceSummary.decode(reader, reader.uint32());
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.excerpt = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): SearchHit {
     return {
       resource: isSet(object.resource) ? ResourceSummary.fromJSON(object.resource) : undefined,
@@ -307,6 +663,79 @@ function createBaseSourceSearchRequest(): SourceSearchRequest {
 }
 
 export const SourceSearchRequest: MessageFns<SourceSearchRequest> = {
+  encode(message: SourceSearchRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.root !== undefined && message.root !== "") {
+      writer.uint32(10).string(message.root);
+    }
+    if (message.query !== undefined && message.query !== "") {
+      writer.uint32(18).string(message.query);
+    }
+    if (message.limit !== undefined) {
+      writer.uint32(24).uint32(message.limit);
+    }
+    if (message.cursor !== undefined) {
+      writer.uint32(34).string(message.cursor);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SourceSearchRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseSourceSearchRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.root = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.query = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.limit = reader.uint32();
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.cursor = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): SourceSearchRequest {
     return {
       root: isSet(object.root) ? globalThis.String(object.root) : "",
@@ -351,6 +780,62 @@ function createBaseSourceSearchResponse(): SourceSearchResponse {
 }
 
 export const SourceSearchResponse: MessageFns<SourceSearchResponse> = {
+  encode(message: SourceSearchResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.items !== undefined && message.items.length !== 0) {
+      for (const v of message.items) {
+        SearchHit.encode(v!, writer.uint32(10).fork()).join();
+      }
+    }
+    if (message.nextCursor !== undefined) {
+      writer.uint32(18).string(message.nextCursor);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SourceSearchResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseSourceSearchResponse();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            const el = SearchHit.decode(reader, reader.uint32());
+            if (el !== undefined) {
+              message.items!.push(el);
+            }
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.nextCursor = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): SourceSearchResponse {
     return {
       items: globalThis.Array.isArray(object?.items) ? object.items.map((e: any) => SearchHit.fromJSON(e)) : [],
@@ -401,6 +886,8 @@ function isSet(value: any): boolean {
 }
 
 export interface MessageFns<T> {
+  encode(message: T, writer?: BinaryWriter): BinaryWriter;
+  decode(input: BinaryReader | Uint8Array, length?: number): T;
   fromJSON(object: any): T;
   toJSON(message: T): unknown;
   create<I extends Exact<DeepPartial<T>, I>>(base?: I): T;

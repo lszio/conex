@@ -1,56 +1,70 @@
 # P1 分块与 manifest 契约（conex/1 broker 分块）
 
-状态：**P1-01 冻结**（2026-09-15）。
-类型源：`schema/conex/v1/chunking.proto`（参见 `chunking.proto::ChunkEntry / ManifestEntries / ChunkManifest / ContentAddress / BlobRef / BlobAccess`）。
-权威严格解码点：`MethodContract.prepare / validate_output` 与 `crates/conex-proto/src/cid.rs::cid_for_raw / parse_cid`。
-向量：`conformance/vectors/p1/chunking.json`，Rust（`crates/conex-proto/tests/chunking.rs`）与 TS（`sdk/typescript/tests/chunking.test.ts`）两侧分类一致。
+状态：**P1-01 冻结，§3/§4 于 2026-09-16 由 P1-01b 修正并重新冻结**（见 [P1 计划 §2.1](../plans/2026-09-15-conex-p1.md)）。
+类型源：`schema/conex/v1/chunking.proto`（`ChunkEntry / ManifestEntries / ChunkManifest / ContentAddress / BlobRef / BlobAccess`）。
+权威实现：`crates/conex-proto/src/cid.rs`（Rust）与 `sdk/typescript/src/content.ts`（TS）。二者是同一规则的两侧实现，**不得**在别处重建 manifest 字节。
+向量：`conformance/vectors/p1/chunking.json`，由 `conformance/tools/gen_manifest_goldens.py`（`protoc --encode` + Python 标准库，与 prost/ts-proto 无共享代码）生成；Rust（`crates/conex-proto/tests/chunking.rs`）与 TS（`sdk/typescript/tests/chunking.test.ts`）两侧必须逐字节复现。
 
 ## 1. 统一内容寻址函数（设计 §5.3，P0 固定，P1 沿用）
 
 ```text
 contentCid(bytes, chunkSize = 262144 /* 256 KiB */) =
     if len(bytes) <= chunkSize
-        then cid_for_raw(bytes)             # CIDv1 raw + SHA-256 文本
-        else contentCid(manifestBytesFor(contentCid, bytes, chunkSize))
+        then cid_for_raw(bytes)                    # CIDv1 raw + SHA-256 文本
+        else manifestTree(chunkSize, len(bytes), leafCids).rootCid
 ```
 
-- `len(bytes) <= chunkSize` 的输入返回 `CIDv1/raw/SHA-256` 文本，与 P0 `source/read` 的 `cid` 字段使用同一函数。
-- 多块内容返回 `ChunkManifest` 根 CID；同一份字节必须产生同一根 CID，与序列化路径无关（protobuf wire 与 canonical JSON 等价）。
+- `len(bytes) <= chunkSize` 的输入返回 `CIDv1/raw/SHA-256` 文本；`source/read` 的 `cid` 必须调用同一函数（`crates/conex-provider-fs`、`crates/conex-provider-http-catalog` 已改为 `conex_proto::cid::content_cid`）。
+- 多块内容返回 `ChunkManifest` 根 CID。同一份字节在任一实现、任一语言下必须产生同一根；同一份内容**不得**同时存在 `raw_cid` 与 `manifest_cid` 两种可比较地址（设计 §5.3）。
+- 根 CID **绑定** `formatVersion`、`chunkSize`、`contentLength` 与全部叶子 CID 序列：改变其中任何一项都必须得到不同的根。
 
 ## 2. 块大小与边界
 
 - 默认 `chunkSize = 262144`（256 KiB）；末块可更短但不得为零字节（空内容走 `cid_for_raw(b"")`）。
-- 单层 `ManifestEntries` 最多 1024 项；超过时分层（`child_manifest_cids`），再次超过继续分层直至叶子层。
-- 分层深度仅受实现栈限制，但同一份内容的根 CID 必须稳定：构造算法见 §3。
+- `len(bytes) == chunkSize` 属于单块内容，返回 raw CID；只有 `len(bytes) > chunkSize` 才产生 manifest，因此 manifest 的叶子数 ≥ 2。
+- 第 `i` 块的逻辑长度固定推导为 `min(chunkSize, contentLength - i * chunkSize)`；`chunk_length` 字段必须等于该值。
+- 单层 `ManifestEntries` 最多 **1024** 项（`MANIFEST_FANOUT`）；叶子数超过 1024 时按 §3.3 分层，直至根层只有一项。
 
 ## 3. 规范化 manifest 字节（canonical manifest）
 
-manifest 的字节输入 `manifestBytesFor` 必须满足以下三个不变式，否则同一份内容会产生不同根 CID：
+### 3.1 唯一形式
 
-1. **顺序**：同级 `leaves` 按 `chunkIndex` 升序拼接；同级 `child_manifest_cids` 按索引升序拼接。
-2. **字段顺序**：序列化时固定 `formatVersion → chunkSize → contentLength → root`（proto wire 字段编号天然有序；canonical JSON 走字段名字典序）。
-3. **数值编码**：`chunk_size` 为 uint32；`content_length` 与每个 `chunk_length` 为 base-10 字符串，**禁止** protobuf 普通序列化当规范化内容（设计 §5.3）。
+多块内容的规范化字节 = `ChunkManifest` 的 **protobuf wire 编码**，由类型源生成的两侧实现产出：
 
-具体做法：
+- Rust：`prost::Message::encode_to_vec`（`ChunkManifest`）。
+- TS：生成的 `ChunkManifest.encode(...).finish()`（ts-proto，`@bufbuild/protobuf/wire`）。
+- **不**经过 ProtoJSON，**不**使用 canonical JSON；JSON 路线在 P1 内不存在，若将来需要必须提升 `format_version` 并重新冻结向量。
 
-- **protobuf 路径**：使用 prost/pbjson 生成的 Rust/TS 类型；调用方在写入前必须按字段顺序构造 `ChunkManifest` 并直接调用 `prost::Message::encode_to_vec` / TS 端 `@bufbuild/protobuf` 同名方法，**不**经过 ProtoJSON。ProtoJSON 输出不视为规范字节。
-- **JSON 路径**：调用方先把所有 `*_length` 字段序列化为十进制字符串，整体经 JSON canonicalisation（RFC 8785 子集：字典序字段名、无空白、无转义差异、`number` 仅出现在显式声明的数字字段）后投到 `cid_for_raw`。当前 P1 范围 JSON 路径不返回 `manifest_cid`，只读 `raw_cid`；如未来需要 JSON manifest 等价，**必须**经评审冻结新版本。
+### 3.2 编码规则（必须有唯一的字节结果）
 
-> §3 的具体实现选择属于「**已冻结**」：本节明确「protobuf wire 才是 manifest 规范化字节」；JSON canonicalisation 路线属于「**占位待定**」，在 P1-02 之前的协议评审冻结。
+1. **字段**：`format_version`（=1）、`chunk_size`（uint32）、`content_length`（base-10 字符串）、`root`（必填且非空）。`root` 为 `ManifestEntries`，同一层内要么只有 `leaves`，要么只有 `child_manifest_cids`。
+2. **顺序**：`leaves` 按 `chunkIndex` 升序；`child_manifest_cids` 按其覆盖的叶子区间升序。二者都是 `repeated`，按字段编号升序写出，不做排序以外的重排。
+3. **数值**：`chunk_size` 为 uint32；`content_length` 与 `chunk_length` 为十进制字符串（避免 JS Number 丢精度），不得有空值或前导零。
+4. **默认值省略**：只有 proto3 的默认值字段被省略；本消息的全部字段在 v1 中都必须显式存在（`format_version=1`、`chunk_size>0`、`content_length` 非空、`root` 非空），因此不存在省略歧义。
+5. **禁止**：map、浮点、负数、未知字段、`packed` 之外的 repeated 编码；出现即视为格式错误。字段编号一旦发布不得改动，新增字段必须提升 `format_version`（见 `chunking.proto` 注释）。
+
+> 设计 §5.3 指出 protobuf 的「deterministic serialization」不保证跨版本规范化。本契约因此把编码规则限定在上表的窄结构（字符串 + uint32 + repeated message），并由 §4 的黄金字节向量在 Rust、TS 两侧逐字节验证；任何一侧序列化行为变化都会使门禁失败，而不是静默改变根 CID。
+
+### 3.3 分层规则
+
+- 叶子层：每 ≤1024 个叶子构成一个 manifest（叶层节点），`leaves` 按 `chunkIndex` 升序，`chunk_length` 按 §2 推导。
+- 上层：把下一层的 manifest CID 每 ≤1024 个分组构成一个父 manifest，只填 `child_manifest_cids`。
+- 直到某层只剩 1 个 manifest，它就是根。每一层的 `chunk_size` 与 `content_length` 都写同一份内容的总值。
+- 所有 manifest 节点都用 `cid_for_raw(nodeBytes)` 寻址（CIDv1 raw/SHA-256），因此 manifest 对象与数据块走同一条存储与检索路径。
 
 ## 4. 已知答案向量边界
 
-`conformance/vectors/p1/chunking.json` 覆盖：
+`conformance/vectors/p1/chunking.json` 由 `conformance/tools/gen_manifest_goldens.py` 生成（`python3 conformance/tools/gen_manifest_goldens.py [--check]`）。每个用例给出 `payload` 规格、`chunkSize`、`sizeBytes`、`expectedRootKind`、`rootCid`；manifest 用例另有 `rootManifestBytesLength`，根 manifest ≤ 4 KiB 时给出 `rootManifestBytesHex`，分层用例给出 `leafManifestCids`，叶子 ≤4 的用例给出 `leafCids`。
 
 | 用例 | 期望 |
 |---|---|
-| 单块（≤ 256 KiB） | `contentCid(bytes) == cid_for_raw(bytes)` |
-| 256 KiB 整块 + 1 字节 | 走 manifest；根 CID 与两个叶子块的拼接顺序无关 |
-| 多块（2、3、5 块） | 同一输入多次计算根 CID 必须相同；改变叶子顺序必须产生不同根 |
-| 末块恰好 256 KiB | 仍视为「多块」，但 manifest 仅含一项（等价规则不变） |
-| 分层（> 1024 叶子） | 根 CID 在 protobuf wire 与同一输入的独立 Rust/TS 实现一致 |
-| 空输入 | `contentCid(b"") == cid_for_raw(b"")`（P0 CID 向量已覆盖） |
-| 错误输入 | 非 raw/SHA-256 的子 CID 拒绝（bad_blob）；非十进制 `content_length` 拒绝 |
+| `empty` | `contentCid(b"") == cid_for_raw(b"")` |
+| `exactly_one_chunk_262kib` | 长度恰等于 `chunkSize` → raw CID（单块边界） |
+| `one_byte_over_one_chunk` | 多 1 字节即走 manifest；末块长度为 1 |
+| `two_full_chunks` / `three_chunks_short_last` | 根 CID 与黄金字节逐字节一致；`chunk_length` 分别等于 `chunkSize` 与末块实长 |
+| `single_level_full_fanout` | 恰好 1024 个叶子 → 单层 manifest（根 manifest 字节长度固定） |
+| `layered_above_fanout` | 1025 个叶子 → 两层：叶层 2 个 manifest + 根 manifest（根只含 `child_manifest_cids`） |
+| `rejects` | 非 raw codec、非 sha2-256、不可解析 CID 拒绝；`content_length <= chunk_size` 不允许 manifest；叶子数与 `ceil(content_length/chunk_size)` 不符拒绝；`chunk_size == 0` 拒绝 |
 
 ## 5. BlobRef 与访问授权
 
@@ -60,5 +74,6 @@ manifest 的字节输入 `manifestBytesFor` 必须满足以下三个不变式，
 
 ## 6. 与 source/read CID 的一致性
 
-- `source/read` 返回的 `cid` 与 `contentCid(bytes)` 在同一 chunkSize 下输出同一字符串。
+- `source/read` 返回的 `cid` 由 `content_cid(bytes, CHUNK_SIZE)` 计算，与 `blob/*` 的根使用同一函数。
+- 当前两个 provider 的单文档上限（`MAX_DOC_BYTES = 256 KiB`）等于一个 chunk，因此可读文档的地址恒为 raw CID；`crates/conex-provider-fs/tests/read.rs` 用上限边界用例锁定这一点，上限若超过一个 chunk，该用例会失败并强制重新评审地址语义。
 - `source/read` 不得为同一份内容同时声明 `raw_cid` 与 `manifest_cid` 两种可比较地址；必须是 §1 的 `ContentAddress` oneof。

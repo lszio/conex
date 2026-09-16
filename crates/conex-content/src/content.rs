@@ -7,7 +7,7 @@ use bytes::Bytes;
 
 use crate::error::ContentError;
 use crate::receipt::{CommitRecord, PinRecord, UploadState, now_ms};
-use crate::store::{LocalBlockStore, cid_for_bytes, deterministic_id};
+use crate::store::{LocalBlockStore, deterministic_id};
 
 /// Public façade returned by `ContentStore::open`.
 pub struct ContentStore {
@@ -86,28 +86,25 @@ impl ContentStore {
         })
     }
 
+    /// Commit an upload (`BlobCommitRequest`): the declared root and kind must
+    /// match the ones recorded at `blob/put`; the store then re-derives and
+    /// verifies everything from the upload's own received chunks.
     pub fn commit(
         &self,
         upload_id: &str,
         declared_root_cid: &str,
         declared_root_kind: &str,
-        leaves: &[String],
-        total_bytes: u64,
     ) -> Result<CommitRecord, ContentError> {
         let upload = self.inner.get_upload(upload_id)?;
-        if upload.declared_root_cid != declared_root_cid {
+        if upload.declared_root_cid != declared_root_cid
+            || upload.declared_root_kind != declared_root_kind
+        {
             return Err(ContentError::DeclaredRootMismatch {
                 declared: declared_root_cid.to_string(),
                 recomputed: upload.declared_root_cid,
             });
         }
-        self.inner.commit(
-            upload_id,
-            declared_root_cid,
-            declared_root_kind,
-            leaves,
-            total_bytes,
-        )
+        self.inner.commit(upload_id)
     }
 
     pub fn pin(
@@ -174,15 +171,15 @@ impl Upload {
                 max: self.state.chunk_size,
             });
         }
-        let computed = cid_for_bytes(bytes);
+        let computed = conex_proto::cid::cid_for_raw(bytes);
         self.store.put_block(&computed, bytes)?;
-        self.store.record_chunk(&self.state.upload_id, index)?;
+        self.store
+            .record_chunk(&self.state.upload_id, index, &computed)?;
         Ok(computed)
     }
 
-    /// Convenience: confirm the declared root CID by re-hashing the
-    /// reconstruction. For the demo slice we accept any caller's claimed
-    /// leaves; P1-04 will hook `contentCid` re-hashing here.
+    /// The root CID declared at `blob/put`; `commit` re-derives it from the
+    /// received chunks and must reproduce exactly this value.
     pub fn declared_root(&self) -> &str {
         &self.state.declared_root_cid
     }

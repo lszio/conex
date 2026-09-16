@@ -5,6 +5,7 @@
 // source: conex/v1/blob.proto
 
 /* eslint-disable */
+import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 import { BlobAccess, ContentAddress } from "./chunking";
 
 export const protobufPackage = "conex.v1";
@@ -202,6 +203,101 @@ function createBaseBlobPutRequest(): BlobPutRequest {
 }
 
 export const BlobPutRequest: MessageFns<BlobPutRequest> = {
+  encode(message: BlobPutRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.formatVersion !== undefined && message.formatVersion !== 0) {
+      writer.uint32(8).uint32(message.formatVersion);
+    }
+    if (message.declaredSizeBytes !== undefined && message.declaredSizeBytes !== "") {
+      writer.uint32(18).string(message.declaredSizeBytes);
+    }
+    if (message.declaredChunkSize !== undefined && message.declaredChunkSize !== "") {
+      writer.uint32(26).string(message.declaredChunkSize);
+    }
+    if (message.expectedRoot !== undefined) {
+      ContentAddress.encode(message.expectedRoot, writer.uint32(34).fork()).join();
+    }
+    if (message.access !== undefined) {
+      BlobAccess.encode(message.access, writer.uint32(42).fork()).join();
+    }
+    if (message.requestedLeaseMs !== undefined && message.requestedLeaseMs !== "0") {
+      writer.uint32(48).uint64(message.requestedLeaseMs);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BlobPutRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseBlobPutRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.formatVersion = reader.uint32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.declaredSizeBytes = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.declaredChunkSize = reader.string();
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.expectedRoot = ContentAddress.decode(reader, reader.uint32());
+            continue;
+          }
+          case 5: {
+            if (tag !== 42) {
+              break;
+            }
+
+            message.access = BlobAccess.decode(reader, reader.uint32());
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.requestedLeaseMs = reader.uint64().toString();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): BlobPutRequest {
     return {
       formatVersion: isSet(object.formatVersion)
@@ -287,6 +383,106 @@ function createBaseBlobPutResponse(): BlobPutResponse {
 }
 
 export const BlobPutResponse: MessageFns<BlobPutResponse> = {
+  encode(message: BlobPutResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.uploadId !== undefined && message.uploadId !== "") {
+      writer.uint32(10).string(message.uploadId);
+    }
+    if (message.chunkSize !== undefined && message.chunkSize !== 0) {
+      writer.uint32(16).uint32(message.chunkSize);
+    }
+    if (message.leaseMs !== undefined && message.leaseMs !== "0") {
+      writer.uint32(24).uint64(message.leaseMs);
+    }
+    if (message.maxBlobBytes !== undefined && message.maxBlobBytes !== "0") {
+      writer.uint32(32).uint64(message.maxBlobBytes);
+    }
+    if (message.inlineThresholdBytes !== undefined && message.inlineThresholdBytes !== 0) {
+      writer.uint32(40).uint32(message.inlineThresholdBytes);
+    }
+    if (message.alreadyHaveChunkCids !== undefined && message.alreadyHaveChunkCids.length !== 0) {
+      for (const v of message.alreadyHaveChunkCids) {
+        writer.uint32(50).string(v!);
+      }
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BlobPutResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseBlobPutResponse();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.uploadId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.chunkSize = reader.uint32();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.leaseMs = reader.uint64().toString();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.maxBlobBytes = reader.uint64().toString();
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.inlineThresholdBytes = reader.uint32();
+            continue;
+          }
+          case 6: {
+            if (tag !== 50) {
+              break;
+            }
+
+            const el = reader.string();
+            if (el !== undefined) {
+              message.alreadyHaveChunkCids!.push(el);
+            }
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): BlobPutResponse {
     return {
       uploadId: isSet(object.uploadId)
@@ -365,6 +561,79 @@ function createBaseBlobChunkRequest(): BlobChunkRequest {
 }
 
 export const BlobChunkRequest: MessageFns<BlobChunkRequest> = {
+  encode(message: BlobChunkRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.uploadId !== undefined && message.uploadId !== "") {
+      writer.uint32(10).string(message.uploadId);
+    }
+    if (message.chunkIndex !== undefined && message.chunkIndex !== 0) {
+      writer.uint32(16).uint32(message.chunkIndex);
+    }
+    if (message.chunkCid !== undefined && message.chunkCid !== "") {
+      writer.uint32(26).string(message.chunkCid);
+    }
+    if (message.chunkBytes !== undefined && message.chunkBytes.length !== 0) {
+      writer.uint32(34).bytes(message.chunkBytes);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BlobChunkRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseBlobChunkRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.uploadId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.chunkIndex = reader.uint32();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.chunkCid = reader.string();
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.chunkBytes = reader.bytes();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): BlobChunkRequest {
     return {
       uploadId: isSet(object.uploadId)
@@ -425,6 +694,68 @@ function createBaseBlobChunkResponse(): BlobChunkResponse {
 }
 
 export const BlobChunkResponse: MessageFns<BlobChunkResponse> = {
+  encode(message: BlobChunkResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.chunkIndex !== undefined && message.chunkIndex !== 0) {
+      writer.uint32(8).uint32(message.chunkIndex);
+    }
+    if (message.receivedBytes !== undefined && message.receivedBytes !== "0") {
+      writer.uint32(16).uint64(message.receivedBytes);
+    }
+    if (message.remainingBytes !== undefined && message.remainingBytes !== "0") {
+      writer.uint32(24).uint64(message.remainingBytes);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BlobChunkResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseBlobChunkResponse();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.chunkIndex = reader.uint32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.receivedBytes = reader.uint64().toString();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.remainingBytes = reader.uint64().toString();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): BlobChunkResponse {
     return {
       chunkIndex: isSet(object.chunkIndex)
@@ -476,6 +807,79 @@ function createBaseBlobCommitRequest(): BlobCommitRequest {
 }
 
 export const BlobCommitRequest: MessageFns<BlobCommitRequest> = {
+  encode(message: BlobCommitRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.uploadId !== undefined && message.uploadId !== "") {
+      writer.uint32(10).string(message.uploadId);
+    }
+    if (message.declaredRoot !== undefined) {
+      ContentAddress.encode(message.declaredRoot, writer.uint32(18).fork()).join();
+    }
+    if (message.pinUntilMs !== undefined) {
+      writer.uint32(24).uint64(message.pinUntilMs);
+    }
+    if (message.persistence !== undefined && message.persistence !== "") {
+      writer.uint32(34).string(message.persistence);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BlobCommitRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseBlobCommitRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.uploadId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.declaredRoot = ContentAddress.decode(reader, reader.uint32());
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.pinUntilMs = reader.uint64().toString();
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.persistence = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): BlobCommitRequest {
     return {
       uploadId: isSet(object.uploadId)
@@ -534,6 +938,79 @@ function createBaseBlobCommitResponse(): BlobCommitResponse {
 }
 
 export const BlobCommitResponse: MessageFns<BlobCommitResponse> = {
+  encode(message: BlobCommitResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.resourceRootCid !== undefined && message.resourceRootCid !== "") {
+      writer.uint32(10).string(message.resourceRootCid);
+    }
+    if (message.committedBytes !== undefined && message.committedBytes !== "0") {
+      writer.uint32(16).uint64(message.committedBytes);
+    }
+    if (message.persistence !== undefined && message.persistence !== "") {
+      writer.uint32(26).string(message.persistence);
+    }
+    if (message.receiptId !== undefined && message.receiptId !== "") {
+      writer.uint32(34).string(message.receiptId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BlobCommitResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseBlobCommitResponse();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.resourceRootCid = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.committedBytes = reader.uint64().toString();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.persistence = reader.string();
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.receiptId = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): BlobCommitResponse {
     return {
       resourceRootCid: isSet(object.resourceRootCid)
@@ -590,6 +1067,68 @@ function createBaseBlobPinRequest(): BlobPinRequest {
 }
 
 export const BlobPinRequest: MessageFns<BlobPinRequest> = {
+  encode(message: BlobPinRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.root !== undefined) {
+      ContentAddress.encode(message.root, writer.uint32(10).fork()).join();
+    }
+    if (message.pinUntilMs !== undefined) {
+      writer.uint32(16).uint64(message.pinUntilMs);
+    }
+    if (message.spaceId !== undefined) {
+      writer.uint32(26).string(message.spaceId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BlobPinRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseBlobPinRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.root = ContentAddress.decode(reader, reader.uint32());
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.pinUntilMs = reader.uint64().toString();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.spaceId = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): BlobPinRequest {
     return {
       root: isSet(object.root) ? ContentAddress.fromJSON(object.root) : undefined,
@@ -639,6 +1178,57 @@ function createBaseBlobPinResponse(): BlobPinResponse {
 }
 
 export const BlobPinResponse: MessageFns<BlobPinResponse> = {
+  encode(message: BlobPinResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.pinId !== undefined && message.pinId !== "") {
+      writer.uint32(10).string(message.pinId);
+    }
+    if (message.expiresAtMs !== undefined && message.expiresAtMs !== "0") {
+      writer.uint32(16).uint64(message.expiresAtMs);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BlobPinResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseBlobPinResponse();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.pinId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.expiresAtMs = reader.uint64().toString();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): BlobPinResponse {
     return {
       pinId: isSet(object.pinId)
@@ -681,6 +1271,46 @@ function createBaseBlobUnpinRequest(): BlobUnpinRequest {
 }
 
 export const BlobUnpinRequest: MessageFns<BlobUnpinRequest> = {
+  encode(message: BlobUnpinRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.pinId !== undefined && message.pinId !== "") {
+      writer.uint32(10).string(message.pinId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BlobUnpinRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseBlobUnpinRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.pinId = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): BlobUnpinRequest {
     return {
       pinId: isSet(object.pinId)
@@ -714,6 +1344,35 @@ function createBaseBlobUnpinResponse(): BlobUnpinResponse {
 }
 
 export const BlobUnpinResponse: MessageFns<BlobUnpinResponse> = {
+  encode(_: BlobUnpinResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BlobUnpinResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseBlobUnpinResponse();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(_: any): BlobUnpinResponse {
     return {};
   },
@@ -737,6 +1396,51 @@ function createBaseBlobHaveRequest(): BlobHaveRequest {
 }
 
 export const BlobHaveRequest: MessageFns<BlobHaveRequest> = {
+  encode(message: BlobHaveRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.chunkCids !== undefined && message.chunkCids.length !== 0) {
+      for (const v of message.chunkCids) {
+        writer.uint32(10).string(v!);
+      }
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BlobHaveRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseBlobHaveRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            const el = reader.string();
+            if (el !== undefined) {
+              message.chunkCids!.push(el);
+            }
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): BlobHaveRequest {
     return {
       chunkCids: globalThis.Array.isArray(object?.chunkCids)
@@ -770,6 +1474,60 @@ function createBaseBlobHaveResponse(): BlobHaveResponse {
 }
 
 export const BlobHaveResponse: MessageFns<BlobHaveResponse> = {
+  encode(message: BlobHaveResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.present !== undefined && message.present.length !== 0) {
+      writer.uint32(10).fork();
+      for (const v of message.present) {
+        writer.bool(v);
+      }
+      writer.join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BlobHaveResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseBlobHaveResponse();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag === 8) {
+              message.present!.push(reader.bool());
+
+              continue;
+            }
+
+            if (tag === 10) {
+              const end2 = reader.uint32() + reader.pos;
+              while (reader.pos < end2) {
+                message.present!.push(reader.bool());
+              }
+
+              continue;
+            }
+
+            break;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): BlobHaveResponse {
     return {
       present: globalThis.Array.isArray(object?.present) ? object.present.map((e: any) => globalThis.Boolean(e)) : [],
@@ -799,6 +1557,68 @@ function createBaseBlobGetRequest(): BlobGetRequest {
 }
 
 export const BlobGetRequest: MessageFns<BlobGetRequest> = {
+  encode(message: BlobGetRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.chunkCid !== undefined && message.chunkCid !== "") {
+      writer.uint32(10).string(message.chunkCid);
+    }
+    if (message.rangeOffset !== undefined) {
+      writer.uint32(16).uint64(message.rangeOffset);
+    }
+    if (message.rangeLength !== undefined) {
+      writer.uint32(24).uint64(message.rangeLength);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BlobGetRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseBlobGetRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.chunkCid = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.rangeOffset = reader.uint64().toString();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.rangeLength = reader.uint64().toString();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): BlobGetRequest {
     return {
       chunkCid: isSet(object.chunkCid)
@@ -850,6 +1670,57 @@ function createBaseBlobGetResponse(): BlobGetResponse {
 }
 
 export const BlobGetResponse: MessageFns<BlobGetResponse> = {
+  encode(message: BlobGetResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.chunkBytes !== undefined && message.chunkBytes.length !== 0) {
+      writer.uint32(10).bytes(message.chunkBytes);
+    }
+    if (message.chunkCid !== undefined && message.chunkCid !== "") {
+      writer.uint32(18).string(message.chunkCid);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BlobGetResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseBlobGetResponse();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.chunkBytes = reader.bytes();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.chunkCid = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): BlobGetResponse {
     return {
       chunkBytes: isSet(object.chunkBytes)
@@ -892,6 +1763,57 @@ function createBaseBlobCancelRequest(): BlobCancelRequest {
 }
 
 export const BlobCancelRequest: MessageFns<BlobCancelRequest> = {
+  encode(message: BlobCancelRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.uploadId !== undefined && message.uploadId !== "") {
+      writer.uint32(10).string(message.uploadId);
+    }
+    if (message.reason !== undefined) {
+      writer.uint32(18).string(message.reason);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BlobCancelRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseBlobCancelRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.uploadId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.reason = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): BlobCancelRequest {
     return {
       uploadId: isSet(object.uploadId)
@@ -930,6 +1852,35 @@ function createBaseBlobCancelResponse(): BlobCancelResponse {
 }
 
 export const BlobCancelResponse: MessageFns<BlobCancelResponse> = {
+  encode(_: BlobCancelResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BlobCancelResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseBlobCancelResponse();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(_: any): BlobCancelResponse {
     return {};
   },
@@ -990,6 +1941,8 @@ function isSet(value: any): boolean {
 }
 
 export interface MessageFns<T> {
+  encode(message: T, writer?: BinaryWriter): BinaryWriter;
+  decode(input: BinaryReader | Uint8Array, length?: number): T;
   fromJSON(object: any): T;
   toJSON(message: T): unknown;
   create<I extends Exact<DeepPartial<T>, I>>(base?: I): T;

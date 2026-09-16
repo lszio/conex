@@ -9,7 +9,12 @@
       "name": "single_chunk_upload_commits_as_raw",
       "chunkSize": 262144,
       "totalBytes": 12,
-      "chunks": [{"index": 0, "sizeBytes": 12}],
+      "chunks": [
+        {
+          "index": 0,
+          "sizeBytes": 12
+        }
+      ],
       "expectedRootKind": "raw",
       "expect": "committed",
       "persistence": "local"
@@ -19,20 +24,40 @@
       "chunkSize": 262144,
       "totalBytes": 524288,
       "chunks": [
-        {"index": 0, "sizeBytes": 262144},
-        {"index": 1, "sizeBytes": 262144}
+        {
+          "index": 0,
+          "sizeBytes": 262144
+        },
+        {
+          "index": 1,
+          "sizeBytes": 262144
+        }
       ],
       "expectedRootKind": "manifest",
       "expect": "committed",
-      "persistence": "local"
+      "persistence": "local",
+      "payload": {
+        "kind": "fill",
+        "byte": 1,
+        "sizeBytes": 524288
+      },
+      "rootVector": "two_full_chunks",
+      "details": "commit 由服务端按 upload 自身收到的块重算 manifest 根；根对象（ChunkManifest 字节）随块一起持久并被引用"
     },
     {
       "name": "bad_chunk_rejects_upload_keeps_receivable_blocks",
       "chunkSize": 262144,
       "totalBytes": 524288,
       "chunks": [
-        {"index": 0, "sizeBytes": 262144},
-        {"index": 1, "sizeBytes": 262144, "spoofedCid": true}
+        {
+          "index": 0,
+          "sizeBytes": 262144
+        },
+        {
+          "index": 1,
+          "sizeBytes": 262144,
+          "spoofedCid": true
+        }
       ],
       "expect": "bad_blob",
       "details": "服务端回 bad_blob；先前已校验块保留，重新打开上传后仍可续传"
@@ -42,29 +67,49 @@
       "chunkSize": 262144,
       "totalBytes": 524288,
       "chunks": [
-        {"index": 0, "sizeBytes": 262144},
-        {"index": 1, "sizeBytes": 262144}
+        {
+          "index": 0,
+          "sizeBytes": 262144
+        },
+        {
+          "index": 1,
+          "sizeBytes": 262144
+        }
       ],
       "declaredRootMismatch": true,
-      "expect": "bad_blob"
+      "expect": "bad_blob",
+      "details": "declared_root 与按 upload 自身块重算的根不一致 → bad_blob；不产生 committed"
     },
     {
       "name": "missing_blocks_on_commit_rejected_with_cid_list",
       "chunkSize": 262144,
       "totalBytes": 786432,
       "chunks": [
-        {"index": 0, "sizeBytes": 262144},
-        {"index": 1, "sizeBytes": 262144}
+        {
+          "index": 0,
+          "sizeBytes": 262144
+        },
+        {
+          "index": 1,
+          "sizeBytes": 262144
+        }
       ],
-      "missingChunks": [2],
+      "missingChunks": [
+        2
+      ],
       "expect": "bad_blob",
-      "details": "返回实际状态 + 缺块 CID 列表"
+      "details": "receipt 声明的块字节缺失 → bad_blob + 缺块 CID 列表"
     },
     {
       "name": "persistence_level_unsupported_rejected",
       "chunkSize": 262144,
       "totalBytes": 12,
-      "chunks": [{"index": 0, "sizeBytes": 12}],
+      "chunks": [
+        {
+          "index": 0,
+          "sizeBytes": 12
+        }
+      ],
       "persistence": "replicated(2)",
       "expect": "unavailable",
       "details": "P1 broker 只支持 local；不可降级后返回成功"
@@ -73,7 +118,12 @@
       "name": "commit_after_chunk_crash_recovers_idempotent",
       "chunkSize": 262144,
       "totalBytes": 262144,
-      "chunks": [{"index": 0, "sizeBytes": 262144}],
+      "chunks": [
+        {
+          "index": 0,
+          "sizeBytes": 262144
+        }
+      ],
       "crashBeforeCommit": true,
       "expect": "committed",
       "details": "恢复后 commit 继续完成；不出现缺块却 committed"
@@ -82,9 +132,58 @@
       "name": "staging_lease_expires_without_commit",
       "chunkSize": 262144,
       "totalBytes": 12,
-      "chunks": [{"index": 0, "sizeBytes": 12}],
+      "chunks": [
+        {
+          "index": 0,
+          "sizeBytes": 12
+        }
+      ],
       "leaseExpired": true,
       "expect": "staging_recycled"
+    },
+    {
+      "name": "commit_rejects_root_kind_contradicting_size",
+      "chunkSize": 262144,
+      "totalBytes": 32,
+      "chunks": [
+        {
+          "index": 0,
+          "sizeBytes": 32
+        }
+      ],
+      "declaredRootKind": "manifest",
+      "expect": "bad_blob",
+      "details": "content_length <= chunk_size 只允许 raw 根，声明 manifest 直接拒绝"
+    },
+    {
+      "name": "commit_rejects_tampered_block_length",
+      "chunkSize": 262144,
+      "totalBytes": 262144,
+      "chunks": [
+        {
+          "index": 0,
+          "sizeBytes": 262144
+        }
+      ],
+      "tamperBlockLength": true,
+      "expect": "bad_blob",
+      "details": "块 CID 与长度共同校验；本地块被截断 → bad_blob，不出现少字节却 committed"
+    },
+    {
+      "name": "commit_without_all_chunks_reports_missing_index",
+      "chunkSize": 262144,
+      "totalBytes": 524288,
+      "chunks": [
+        {
+          "index": 0,
+          "sizeBytes": 262144
+        }
+      ],
+      "missingChunks": [
+        1
+      ],
+      "expect": "bad_blob",
+      "details": "receipt 本身缺块 → 报告首个缺失 index，不采信客户端声明的叶子列表"
     }
   ],
   "pin": [

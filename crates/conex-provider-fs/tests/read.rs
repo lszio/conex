@@ -1,7 +1,7 @@
-//! Reads return the exact bytes and the raw content CID.
+//! Reads return the exact bytes and the shared content CID.
 use std::path::PathBuf;
 
-use conex_provider_fs::FsRoot;
+use conex_provider_fs::{FsRoot, MAX_DOC_BYTES};
 
 fn fixture_root() -> FsRoot {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/p0/notes");
@@ -17,6 +17,24 @@ fn reads_fixture_and_matches_content_cid() {
         snapshot.cid,
         conex_proto::cid::cid_for_raw(b"hello conex\n")
     );
+}
+
+#[test]
+fn read_cid_uses_the_shared_content_function_at_the_size_cap() {
+    // The per-document cap equals one chunk, so the largest readable document
+    // must still address as a single-chunk (raw) CID of the same function that
+    // P1 `blob/*` uses. If the cap ever grows past one chunk this assertion
+    // fails, which is the point: addresses must not silently become manifests.
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(tmp.path().join("big.md"), vec![b'x'; MAX_DOC_BYTES]).unwrap();
+    let root = FsRoot::open(tmp.path()).unwrap();
+    let snapshot = root.read("big.md", MAX_DOC_BYTES).unwrap();
+    assert_eq!(snapshot.bytes.len(), MAX_DOC_BYTES);
+    assert_eq!(
+        snapshot.cid,
+        conex_proto::cid::content_cid(&snapshot.bytes, conex_proto::cid::CHUNK_SIZE)
+    );
+    assert_eq!(snapshot.cid, conex_proto::cid::cid_for_raw(&snapshot.bytes));
 }
 
 #[test]

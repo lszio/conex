@@ -2,7 +2,7 @@
 
 conex（connect + nexus）是一个可嵌入的双向能力路由内核及可选独立进程；工作协议名 `conex/1`。
 
-**当前状态（2026-09-15）：** P0 已交付并通过门禁（分支 `refactor/arch`，验收提交 `e649ded`）。下一步是 [P1 执行计划](docs/plans/2026-09-15-conex-p1.md) 的首个工作包 P1-01 契约冻结。
+**当前状态（2026-09-16）：** P0 已交付并通过门禁（提交 `e649ded`）；P1 执行中。`2c9a06e` 交付 P1-01 契约冻结与 P1-02/03/06/07/08 的离线切片；随后 **P1-01b** 修正了规范化字节分歧：多块内容的地址由唯一函数（`crates/conex-proto/src/cid.rs` / `sdk/typescript/src/content.ts`）按 `ChunkManifest` protobuf wire 计算，黄金字节由 `protoc --encode` 独立生成，`conex-content` 的 commit 改为按上传自身块重算根。P1 各包仍未接入 wire/Registry，设计 §14 P1 尚无端到端证据；下一步见 [P1 执行计划](docs/plans/2026-09-15-conex-p1.md) §3.0（P1-01c）与 §3.1（P1-02 WSS）。
 
 ## 文档
 

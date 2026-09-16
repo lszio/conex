@@ -18,10 +18,8 @@ pub mod transfer;
 
 pub use content::{ContentStore, Upload};
 pub use error::ContentError;
-pub use receipt::{CommitRecord, PinRecord, UploadState};
-pub use store::{
-    ContentRoot, LocalBlockStore, cid_for_bytes, deterministic_id, parse_cid, sha256_digest,
-};
+pub use receipt::{CommitRecord, PinRecord, ReceivedChunk, UploadState};
+pub use store::{ContentRoot, LocalBlockStore, deterministic_id};
 
 /// Default lease: 1 hour (设计 §5.5).
 pub const DEFAULT_LEASE_MS: u64 = 60 * 60 * 1000;

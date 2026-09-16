@@ -5,6 +5,8 @@
 // source: conex/v1/common.proto
 
 /* eslint-disable */
+import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
+import { Value } from "../../google/protobuf/struct";
 
 export const protobufPackage = "conex.v1";
 
@@ -233,6 +235,101 @@ function createBaseError(): Error {
 }
 
 export const Error: MessageFns<Error> = {
+  encode(message: Error, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.code !== undefined && message.code !== 0) {
+      writer.uint32(8).int32(message.code);
+    }
+    if (message.message !== undefined && message.message !== "") {
+      writer.uint32(18).string(message.message);
+    }
+    if (message.diagnosticId !== undefined && message.diagnosticId !== "") {
+      writer.uint32(26).string(message.diagnosticId);
+    }
+    if (message.execution !== undefined && message.execution !== "") {
+      writer.uint32(34).string(message.execution);
+    }
+    if (message.retry !== undefined && message.retry !== "") {
+      writer.uint32(42).string(message.retry);
+    }
+    if (message.details !== undefined) {
+      Value.encode(Value.wrap(message.details), writer.uint32(50).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): Error {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseError();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.code = reader.int32() as any;
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.message = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.diagnosticId = reader.string();
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.execution = reader.string();
+            continue;
+          }
+          case 5: {
+            if (tag !== 42) {
+              break;
+            }
+
+            message.retry = reader.string();
+            continue;
+          }
+          case 6: {
+            if (tag !== 50) {
+              break;
+            }
+
+            message.details = Value.unwrap(Value.decode(reader, reader.uint32()));
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): Error {
     return {
       code: isSet(object.code) ? errorCodeFromJSON(object.code) : 0,
@@ -291,6 +388,79 @@ function createBaseLimits(): Limits {
 }
 
 export const Limits: MessageFns<Limits> = {
+  encode(message: Limits, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.maxFrameBytes !== undefined && message.maxFrameBytes !== 0) {
+      writer.uint32(8).uint32(message.maxFrameBytes);
+    }
+    if (message.maxInflight !== undefined && message.maxInflight !== 0) {
+      writer.uint32(16).uint32(message.maxInflight);
+    }
+    if (message.maxQueuedBytes !== undefined && message.maxQueuedBytes !== 0) {
+      writer.uint32(24).uint32(message.maxQueuedBytes);
+    }
+    if (message.timeoutMs !== undefined && message.timeoutMs !== 0) {
+      writer.uint32(32).uint32(message.timeoutMs);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): Limits {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseLimits();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.maxFrameBytes = reader.uint32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.maxInflight = reader.uint32();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.maxQueuedBytes = reader.uint32();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.timeoutMs = reader.uint32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): Limits {
     return {
       maxFrameBytes: isSet(object.maxFrameBytes)
@@ -363,6 +533,8 @@ function isSet(value: any): boolean {
 }
 
 export interface MessageFns<T> {
+  encode(message: T, writer?: BinaryWriter): BinaryWriter;
+  decode(input: BinaryReader | Uint8Array, length?: number): T;
   fromJSON(object: any): T;
   toJSON(message: T): unknown;
   create<I extends Exact<DeepPartial<T>, I>>(base?: I): T;

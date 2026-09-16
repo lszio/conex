@@ -3,48 +3,67 @@ use std::io::Write;
 
 use conex_content::transfer::{
     DEFAULT_INLINE_THRESHOLD_BYTES, MAX_BLOB_BYTES, blob_ref_for, chunk_payload, decode_content,
-    is_inline_eligible, manifest_cid_for,
+    is_inline_eligible,
 };
 use conex_content::{ContentStore, DEFAULT_CHUNK_SIZE, DEFAULT_LEASE_MS};
-use conex_proto::cid::cid_for_raw;
+use conex_proto::cid::{cid_for_raw, content_cid};
+use serde_json::Value;
 use tempfile::TempDir;
+
+/// Root CID frozen in `conformance/vectors/p1/chunking.json` for a named case.
+fn golden_root(vector_name: &str) -> String {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../conformance/vectors/p1/chunking.json"
+    );
+    let text = std::fs::read_to_string(path).expect("read chunking vectors");
+    let doc: Value = serde_json::from_str(&text).expect("parse chunking vectors");
+    doc["cases"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|case| case["name"] == vector_name)
+        .unwrap_or_else(|| panic!("missing chunking vector {vector_name}"))["rootCid"]
+        .as_str()
+        .unwrap()
+        .to_string()
+}
 
 fn store(tmp: &TempDir) -> ContentStore {
     ContentStore::open(tmp.path(), DEFAULT_LEASE_MS).expect("open content store")
 }
 
 fn write_and_commit(store: &ContentStore, payload: &[u8]) -> String {
-    let (leaves, total) = chunk_payload(payload, DEFAULT_CHUNK_SIZE);
-    let declared = if leaves.len() == 1 {
-        leaves[0].clone()
+    let declared = content_cid(payload, DEFAULT_CHUNK_SIZE as usize);
+    let kind = if payload.len() <= DEFAULT_CHUNK_SIZE as usize {
+        "raw"
     } else {
-        manifest_cid_for(&leaves)
+        "manifest"
     };
     let upload = store
         .begin_upload(
             1,
             DEFAULT_CHUNK_SIZE,
-            total,
-            if leaves.len() == 1 { "raw" } else { "manifest" },
+            payload.len() as u64,
+            kind,
             &declared,
             Some(60_000),
         )
         .unwrap();
-    let mut actual_leaves = Vec::with_capacity(leaves.len());
-    for (i, chunk) in payload.chunks(DEFAULT_CHUNK_SIZE as usize).enumerate() {
-        let cid = upload.put_chunk(i as u32, chunk).unwrap();
-        actual_leaves.push(cid);
+    for (i, chunk) in chunk_payload(payload, DEFAULT_CHUNK_SIZE)
+        .0
+        .iter()
+        .enumerate()
+    {
+        let offset = i * DEFAULT_CHUNK_SIZE as usize;
+        let end = (offset + DEFAULT_CHUNK_SIZE as usize).min(payload.len());
+        let cid = upload.put_chunk(i as u32, &payload[offset..end]).unwrap();
+        assert_eq!(&cid, chunk, "chunk {i} cid");
     }
-    let commit = store
-        .commit(
-            upload.upload_id(),
-            &declared,
-            if leaves.len() == 1 { "raw" } else { "manifest" },
-            &actual_leaves,
-            total,
-        )
-        .unwrap();
-    commit.root_cid
+    store
+        .commit(upload.upload_id(), &declared, kind)
+        .unwrap()
+        .root_cid
 }
 
 #[test]
@@ -60,11 +79,15 @@ fn inline_payload_roundtrip_small() {
 fn manifest_payload_roundtrip_multi_chunk() {
     let tmp = tempfile::tempdir().unwrap();
     let s = store(&tmp);
-    let payload = vec![0x77u8; DEFAULT_CHUNK_SIZE as usize * 2 + 13];
+    let payload: Vec<u8> = (0..(DEFAULT_CHUNK_SIZE as usize * 2 + 13))
+        .map(|i| (i & 0xff) as u8)
+        .collect();
     let cid = write_and_commit(&s, &payload);
     let leaves = chunk_payload(&payload, DEFAULT_CHUNK_SIZE).0;
     assert_eq!(leaves.len(), 3);
-    assert_eq!(cid, manifest_cid_for(&leaves));
+    assert_eq!(cid, content_cid(&payload, DEFAULT_CHUNK_SIZE as usize));
+    // Same content as the frozen `three_chunks_short_last` vector.
+    assert_eq!(cid, golden_root("three_chunks_short_last"));
 }
 
 #[test]
@@ -181,7 +204,8 @@ fn one_gib_payload_roundtrips() {
         leaf_cids.push(cid_for_raw(&chunk));
     }
     let total_bytes = (leaves_expected * CHUNK) as u64;
-    let manifest_cid = manifest_cid_for(&leaf_cids);
+    let manifest_cid =
+        conex_proto::cid::content_cid_for_parts(CHUNK as u32, total_bytes, &leaf_cids).unwrap();
     let upload = s
         .begin_upload(
             1,
@@ -199,13 +223,7 @@ fn one_gib_payload_roundtrips() {
         assert_eq!(actual, *expected_cid);
     }
     let commit = s
-        .commit(
-            upload.upload_id(),
-            &manifest_cid,
-            "manifest",
-            &leaf_cids,
-            total_bytes,
-        )
+        .commit(upload.upload_id(), &manifest_cid, "manifest")
         .unwrap();
     assert_eq!(commit.root_cid, manifest_cid);
     assert_eq!(commit.committed_bytes, total_bytes);

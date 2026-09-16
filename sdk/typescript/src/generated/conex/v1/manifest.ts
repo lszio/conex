@@ -5,6 +5,7 @@
 // source: conex/v1/manifest.proto
 
 /* eslint-disable */
+import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 import { Limits, Plane, planeFromJSON, planeToJSON } from "./common";
 
 export const protobufPackage = "conex.v1";
@@ -44,6 +45,171 @@ function createBaseManifest(): Manifest {
 }
 
 export const Manifest: MessageFns<Manifest> = {
+  encode(message: Manifest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.manifestVersion !== undefined && message.manifestVersion !== 0) {
+      writer.uint32(8).uint32(message.manifestVersion);
+    }
+    if (message.id !== undefined && message.id !== "") {
+      writer.uint32(18).string(message.id);
+    }
+    if (message.endpointId !== undefined && message.endpointId !== "") {
+      writer.uint32(26).string(message.endpointId);
+    }
+    if (message.kind !== undefined && message.kind !== "") {
+      writer.uint32(34).string(message.kind);
+    }
+    if (message.display !== undefined && message.display !== "") {
+      writer.uint32(42).string(message.display);
+    }
+    if (message.plane !== undefined && message.plane !== 0) {
+      writer.uint32(48).int32(message.plane);
+    }
+    if (message.transport !== undefined && message.transport !== "") {
+      writer.uint32(58).string(message.transport);
+    }
+    if (message.provides !== undefined && message.provides.length !== 0) {
+      for (const v of message.provides) {
+        writer.uint32(66).string(v!);
+      }
+    }
+    if (message.requires !== undefined && message.requires.length !== 0) {
+      for (const v of message.requires) {
+        writer.uint32(74).string(v!);
+      }
+    }
+    if (message.profileIds !== undefined && message.profileIds.length !== 0) {
+      for (const v of message.profileIds) {
+        writer.uint32(82).string(v!);
+      }
+    }
+    if (message.limits !== undefined) {
+      Limits.encode(message.limits, writer.uint32(90).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): Manifest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseManifest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.manifestVersion = reader.uint32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.id = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.endpointId = reader.string();
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.kind = reader.string();
+            continue;
+          }
+          case 5: {
+            if (tag !== 42) {
+              break;
+            }
+
+            message.display = reader.string();
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.plane = reader.int32() as any;
+            continue;
+          }
+          case 7: {
+            if (tag !== 58) {
+              break;
+            }
+
+            message.transport = reader.string();
+            continue;
+          }
+          case 8: {
+            if (tag !== 66) {
+              break;
+            }
+
+            const el = reader.string();
+            if (el !== undefined) {
+              message.provides!.push(el);
+            }
+            continue;
+          }
+          case 9: {
+            if (tag !== 74) {
+              break;
+            }
+
+            const el = reader.string();
+            if (el !== undefined) {
+              message.requires!.push(el);
+            }
+            continue;
+          }
+          case 10: {
+            if (tag !== 82) {
+              break;
+            }
+
+            const el = reader.string();
+            if (el !== undefined) {
+              message.profileIds!.push(el);
+            }
+            continue;
+          }
+          case 11: {
+            if (tag !== 90) {
+              break;
+            }
+
+            message.limits = Limits.decode(reader, reader.uint32());
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
   fromJSON(object: any): Manifest {
     return {
       manifestVersion: isSet(object.manifestVersion)
@@ -61,12 +227,8 @@ export const Manifest: MessageFns<Manifest> = {
       display: isSet(object.display) ? globalThis.String(object.display) : "",
       plane: isSet(object.plane) ? planeFromJSON(object.plane) : 0,
       transport: isSet(object.transport) ? globalThis.String(object.transport) : "",
-      provides: globalThis.Array.isArray(object?.provides)
-        ? object.provides.map((e: any) => globalThis.String(e))
-        : [],
-      requires: globalThis.Array.isArray(object?.requires)
-        ? object.requires.map((e: any) => globalThis.String(e))
-        : [],
+      provides: globalThis.Array.isArray(object?.provides) ? object.provides.map((e: any) => globalThis.String(e)) : [],
+      requires: globalThis.Array.isArray(object?.requires) ? object.requires.map((e: any) => globalThis.String(e)) : [],
       profileIds: globalThis.Array.isArray(object?.profileIds)
         ? object.profileIds.map((e: any) => globalThis.String(e))
         : globalThis.Array.isArray(object?.profile_ids)
@@ -153,6 +315,8 @@ function isSet(value: any): boolean {
 }
 
 export interface MessageFns<T> {
+  encode(message: T, writer?: BinaryWriter): BinaryWriter;
+  decode(input: BinaryReader | Uint8Array, length?: number): T;
   fromJSON(object: any): T;
   toJSON(message: T): unknown;
   create<I extends Exact<DeepPartial<T>, I>>(base?: I): T;

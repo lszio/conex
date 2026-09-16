@@ -14,7 +14,7 @@ use conex_proto::v1;
 use conex_source::contracts::{SOURCE_LIST, SOURCE_READ, SOURCE_SEARCH};
 use conex_source::pagination::{Clock, SnapshotCache, SnapshotLimits, SystemClock};
 
-pub use read::{FsRoot, ReadSnapshot};
+pub use read::{FsRoot, MAX_DOC_BYTES, ReadSnapshot};
 
 pub fn factory(installation: &Installation) -> CallResult<Vec<Route>> {
     let root_path = installation

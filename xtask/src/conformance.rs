@@ -9,6 +9,15 @@ pub fn run(vectors: &str) -> Result<()> {
         bail!("vectors directory not found: {vectors}");
     }
     let root = repo_root()?;
+    // P1-01: the golden manifest bytes/CIDs are generated from `protoc --encode`
+    // (C++ protobuf) by an independent script; regenerate with
+    // `python3 conformance/tools/gen_manifest_goldens.py`.
+    run_step(
+        &root,
+        "manifest goldens",
+        "python3",
+        &["conformance/tools/gen_manifest_goldens.py", "--check"],
+    )?;
     // P1-01 contract freeze: shared chunking golden CIDs.
     run_step(
         &root,

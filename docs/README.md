@@ -2,11 +2,11 @@
 
 conex 的文档按「规范 / 契约 / 计划 / 证据 / 操作」分层，每类只有一个权威来源。本页是入口；根 [README](../README.md) 只保留项目简介、快速开始与三个调用例子。
 
-## 状态（2026-09-15）
+## 状态（2026-09-16 复核）
 
-- **P0 已交付**（分支 `refactor/arch`，验收提交 `e649ded`）：broker 只读数据连接，JSON-RPC/HTTP 与 inproc 共用同一授权执行路径；fs 与 HTTP catalog 两个 provider；TypeScript consumer；P0 门禁与 CI。
-- **P1 待启动**：下一步见 [P1 执行计划](plans/2026-09-15-conex-p1.md)，首个工作包为 P1-01 契约冻结。
-- 完成状态与证据以 [P0 验证记录](verification/p0.md) 为准；P0 执行计划已归档。
+- **P0 已交付**（提交 `e649ded`）：broker 只读数据连接，JSON-RPC/HTTP 与 inproc 共用同一授权执行路径；fs 与 HTTP catalog 两个 provider；TypeScript consumer；P0 门禁与 CI。
+- **P1 执行中**：`2c9a06e` 交付 P1-01 契约冻结与 P1-02/03/06/07/08 的离线切片；2026-09-16 **P1-01b** 修正规范化字节分歧（唯一内容寻址函数、`ChunkManifest` protobuf wire、`protoc` 独立黄金向量、commit 按上传自身块重算根）。各包**仍未接入 wire/Registry/MethodContract**；P1-01c（门禁诚实性）与 P1-04/05/09/10 未开始。顺序见 [P1 执行计划](plans/2026-09-15-conex-p1.md) §3/§4。
+- 完成状态与证据以 [P1 验证记录](verification/p1.md)、[P0 验证记录](verification/p0.md) 为准；P0 执行计划已归档。
 
 ## 文档地图
 
