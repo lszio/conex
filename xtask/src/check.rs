@@ -40,7 +40,16 @@ const STEPS: &[Step] = &[
             "conformance/vectors/p0",
         ],
     ),
-    ("e2e", "cargo", &["xtask", "e2e", "--suite", "p0-ts"]),
+    (
+        "conformance p1",
+        "cargo",
+        &[
+            "xtask",
+            "conformance",
+            "--vectors",
+            "conformance/vectors/p1",
+        ],
+    ),
 ];
 
 pub fn run() -> Result<()> {

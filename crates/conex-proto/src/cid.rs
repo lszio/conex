@@ -45,3 +45,44 @@ pub fn parse_cid(text: &str) -> Result<Cid, ProtocolError> {
     }
     Ok(cid)
 }
+/// Default broker chunk size: 256 KiB (design §5.4).
+pub const CHUNK_SIZE: usize = 262_144;
+
+/// Canonical manifest bytes prefix. See docs/contracts/p1-chunking.md §3.
+/// A manifest for N chunks is the prefix followed by each chunk's CID text in
+/// ascending chunk-index order, concatenated without separators.
+pub const MANIFEST_PREFIX: &str = "manifest/v1/";
+
+/// Split bytes into fixed-size chunks (last chunk may be shorter).
+pub fn chunk(bytes: &[u8], chunk_size: usize) -> impl Iterator<Item = &[u8]> {
+    assert!(chunk_size > 0, "chunk_size must be > 0");
+    bytes.chunks(chunk_size)
+}
+
+/// Build the canonical manifest bytes for chunked content.
+/// Format: `<MANIFEST_PREFIX>` followed by the leaf CIDs concatenated in order.
+pub fn manifest_bytes_for_leaves<I, S>(leaves: I) -> Vec<u8>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let mut out: Vec<u8> = MANIFEST_PREFIX.as_bytes().to_vec();
+    for cid in leaves {
+        out.extend_from_slice(cid.as_ref().as_bytes());
+    }
+    out
+}
+
+/// Unified content addressing function (设计 §5.3；P0 固定；P1 沿用).
+///
+/// - Single-block content (len <= chunk_size): CIDv1 raw/SHA-256 of the bytes.
+/// - Multi-block content (len > chunk_size): CIDv1 raw/SHA-256 of the canonical
+///   manifest bytes `manifest/v1||leaf0||leaf1||...` where leaf_i is the
+///   CIDv1 raw/SHA-256 of the i-th fixed-size chunk (last chunk may be shorter).
+pub fn content_cid(bytes: &[u8], chunk_size: usize) -> String {
+    if bytes.len() <= chunk_size {
+        return cid_for_raw(bytes);
+    }
+    let leaves = chunk(bytes, chunk_size).map(cid_for_raw);
+    cid_for_raw(&manifest_bytes_for_leaves(leaves))
+}

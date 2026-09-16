@@ -14,6 +14,366 @@
       },
       "type": "object"
     },
+    "conex.v1.BlobAccess": {
+      "additionalProperties": false,
+      "properties": {
+        "plane": {
+          "type": "string"
+        },
+        "providerId": {
+          "type": "string"
+        },
+        "resourceId": {
+          "type": "string"
+        },
+        "spaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "providerId",
+        "plane",
+        "resourceId"
+      ],
+      "type": "object"
+    },
+    "conex.v1.BlobCancelRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "type": "string"
+        },
+        "uploadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "uploadId"
+      ],
+      "type": "object"
+    },
+    "conex.v1.BlobCancelResponse": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    },
+    "conex.v1.BlobChunkRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "chunkBytes": {
+          "format": "byte",
+          "type": "string"
+        },
+        "chunkCid": {
+          "type": "string"
+        },
+        "chunkIndex": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "uploadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "uploadId",
+        "chunkIndex",
+        "chunkCid",
+        "chunkBytes"
+      ],
+      "type": "object"
+    },
+    "conex.v1.BlobChunkResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "chunkIndex": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "receivedBytes": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "remainingBytes": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "chunkIndex",
+        "receivedBytes",
+        "remainingBytes"
+      ],
+      "type": "object"
+    },
+    "conex.v1.BlobCommitRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "declaredRoot": {
+          "$ref": "#/$defs/conex.v1.ContentAddress"
+        },
+        "persistence": {
+          "type": "string"
+        },
+        "pinUntilMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "uploadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "uploadId",
+        "persistence"
+      ],
+      "type": "object"
+    },
+    "conex.v1.BlobCommitResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "committedBytes": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "persistence": {
+          "type": "string"
+        },
+        "receiptId": {
+          "type": "string"
+        },
+        "resourceRootCid": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "resourceRootCid",
+        "committedBytes",
+        "persistence",
+        "receiptId"
+      ],
+      "type": "object"
+    },
+    "conex.v1.BlobGetRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "chunkCid": {
+          "type": "string"
+        },
+        "rangeLength": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "rangeOffset": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "chunkCid"
+      ],
+      "type": "object"
+    },
+    "conex.v1.BlobGetResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "chunkBytes": {
+          "format": "byte",
+          "type": "string"
+        },
+        "chunkCid": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "chunkBytes",
+        "chunkCid"
+      ],
+      "type": "object"
+    },
+    "conex.v1.BlobHaveRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "chunkCids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "conex.v1.BlobHaveResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "present": {
+          "items": {
+            "type": "boolean"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "conex.v1.BlobPinRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "pinUntilMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "root": {
+          "$ref": "#/$defs/conex.v1.ContentAddress"
+        },
+        "spaceId": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "conex.v1.BlobPinResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "expiresAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "pinId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "pinId",
+        "expiresAtMs"
+      ],
+      "type": "object"
+    },
+    "conex.v1.BlobPutRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "access": {
+          "$ref": "#/$defs/conex.v1.BlobAccess"
+        },
+        "declaredChunkSize": {
+          "type": "string"
+        },
+        "declaredSizeBytes": {
+          "type": "string"
+        },
+        "expectedRoot": {
+          "$ref": "#/$defs/conex.v1.ContentAddress"
+        },
+        "formatVersion": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "requestedLeaseMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "formatVersion",
+        "declaredSizeBytes",
+        "declaredChunkSize",
+        "requestedLeaseMs"
+      ],
+      "type": "object"
+    },
+    "conex.v1.BlobPutResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "alreadyHaveChunkCids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "chunkSize": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "inlineThresholdBytes": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "leaseMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "maxBlobBytes": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "uploadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "uploadId",
+        "chunkSize",
+        "leaseMs",
+        "maxBlobBytes",
+        "inlineThresholdBytes"
+      ],
+      "type": "object"
+    },
+    "conex.v1.BlobRef": {
+      "additionalProperties": false,
+      "properties": {
+        "access": {
+          "$ref": "#/$defs/conex.v1.BlobAccess"
+        },
+        "cid": {
+          "type": "string"
+        },
+        "mime": {
+          "type": "string"
+        },
+        "sizeBytes": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "cid",
+        "sizeBytes",
+        "mime"
+      ],
+      "type": "object"
+    },
+    "conex.v1.BlobUnpinRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "pinId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "pinId"
+      ],
+      "type": "object"
+    },
+    "conex.v1.BlobUnpinResponse": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    },
     "conex.v1.CallParams": {
       "additionalProperties": false,
       "properties": {
@@ -29,6 +389,146 @@
       },
       "required": [
         "timeoutBudgetMs"
+      ],
+      "type": "object"
+    },
+    "conex.v1.ChunkEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "chunkCid": {
+          "type": "string"
+        },
+        "chunkLength": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "chunkCid",
+        "chunkLength"
+      ],
+      "type": "object"
+    },
+    "conex.v1.ChunkManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "chunkSize": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "contentLength": {
+          "type": "string"
+        },
+        "formatVersion": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "root": {
+          "$ref": "#/$defs/conex.v1.ManifestEntries"
+        }
+      },
+      "required": [
+        "formatVersion",
+        "chunkSize",
+        "contentLength"
+      ],
+      "type": "object"
+    },
+    "conex.v1.ContentAddress": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "anyOf": [
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "rawCid"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "manifestCid"
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "manifestCid"
+                    ]
+                  }
+                ]
+              },
+              "required": [
+                "rawCid"
+              ]
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "rawCid"
+                    ]
+                  }
+                ]
+              },
+              "required": [
+                "manifestCid"
+              ]
+            }
+          ]
+        }
+      ],
+      "properties": {
+        "manifestCid": {
+          "type": "string"
+        },
+        "rawCid": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "conex.v1.DedupKey": {
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "type": "string"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "principalId": {
+          "type": "string"
+        },
+        "providerEndpointId": {
+          "type": "string"
+        },
+        "resourceId": {
+          "type": "string"
+        },
+        "spaceId": {
+          "type": "string"
+        },
+        "tenantId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "tenantId",
+        "principalId",
+        "providerEndpointId",
+        "resourceId",
+        "method",
+        "operationId"
       ],
       "type": "object"
     },
@@ -273,6 +773,24 @@
       ],
       "type": "object"
     },
+    "conex.v1.ManifestEntries": {
+      "additionalProperties": false,
+      "properties": {
+        "childManifestCids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "leaves": {
+          "items": {
+            "$ref": "#/$defs/conex.v1.ChunkEntry"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
     "conex.v1.Message": {
       "additionalProperties": false,
       "allOf": [
@@ -434,6 +952,168 @@
       ],
       "type": "object"
     },
+    "conex.v1.OperationCancelRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/conex.v1.DedupKey"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "reason"
+      ],
+      "type": "object"
+    },
+    "conex.v1.OperationCancelResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "outcomeUnknown": {
+          "type": "boolean"
+        },
+        "state": {
+          "enum": [
+            "OPERATION_STATE_UNSPECIFIED",
+            "OPERATION_STATE_ACCEPTED",
+            "OPERATION_STATE_RUNNING",
+            "OPERATION_STATE_SUCCEEDED",
+            "OPERATION_STATE_FAILED",
+            "OPERATION_STATE_CANCELLED",
+            "OPERATION_STATE_UNKNOWN"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "state",
+        "outcomeUnknown"
+      ],
+      "type": "object"
+    },
+    "conex.v1.OperationGetRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/conex.v1.DedupKey"
+        }
+      },
+      "type": "object"
+    },
+    "conex.v1.OperationGetResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "acceptedAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "execution": {
+          "type": "string"
+        },
+        "expiresAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "failure": {
+          "$ref": "#/$defs/conex.v1.Error"
+        },
+        "key": {
+          "$ref": "#/$defs/conex.v1.DedupKey"
+        },
+        "settledAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "OPERATION_STATE_UNSPECIFIED",
+            "OPERATION_STATE_ACCEPTED",
+            "OPERATION_STATE_RUNNING",
+            "OPERATION_STATE_SUCCEEDED",
+            "OPERATION_STATE_FAILED",
+            "OPERATION_STATE_CANCELLED",
+            "OPERATION_STATE_UNKNOWN"
+          ],
+          "type": "string"
+        },
+        "success": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "state",
+        "expiresAtMs",
+        "execution",
+        "acceptedAtMs"
+      ],
+      "type": "object"
+    },
+    "conex.v1.OperationRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "acceptedAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "executionClass": {
+          "enum": [
+            "EXECUTION_CLASS_UNSPECIFIED",
+            "EXECUTION_CLASS_READ_ONLY",
+            "EXECUTION_CLASS_IDEMPOTENT",
+            "EXECUTION_CLASS_DEDUPLICATED",
+            "EXECUTION_CLASS_NON_REPLAYABLE"
+          ],
+          "type": "string"
+        },
+        "expiresAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "key": {
+          "$ref": "#/$defs/conex.v1.DedupKey"
+        },
+        "paramDigest": {
+          "type": "string"
+        },
+        "schemaVersion": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "settledAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "OPERATION_STATE_UNSPECIFIED",
+            "OPERATION_STATE_ACCEPTED",
+            "OPERATION_STATE_RUNNING",
+            "OPERATION_STATE_SUCCEEDED",
+            "OPERATION_STATE_FAILED",
+            "OPERATION_STATE_CANCELLED",
+            "OPERATION_STATE_UNKNOWN"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "state",
+        "executionClass",
+        "paramDigest",
+        "acceptedAtMs",
+        "expiresAtMs"
+      ],
+      "type": "object"
+    },
     "conex.v1.RejectedCapability": {
       "additionalProperties": false,
       "properties": {
@@ -537,6 +1217,286 @@
       },
       "required": [
         "excerpt"
+      ],
+      "type": "object"
+    },
+    "conex.v1.SessionBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "humanPeerId": {
+          "type": "string"
+        },
+        "plane": {
+          "enum": [
+            "PLANE_UNSPECIFIED",
+            "PLANE_BROKER",
+            "PLANE_RELAY"
+          ],
+          "type": "string"
+        },
+        "principalId": {
+          "type": "string"
+        },
+        "providerEndpointId": {
+          "type": "string"
+        },
+        "tenantId": {
+          "type": "string"
+        },
+        "workspacePeerId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "principalId",
+        "tenantId",
+        "providerEndpointId",
+        "plane"
+      ],
+      "type": "object"
+    },
+    "conex.v1.SessionCloseRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "attachmentId": {
+          "type": "string"
+        },
+        "expectedEpoch": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId",
+        "attachmentId",
+        "expectedEpoch"
+      ],
+      "type": "object"
+    },
+    "conex.v1.SessionCloseResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "finalEpoch": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId",
+        "finalEpoch"
+      ],
+      "type": "object"
+    },
+    "conex.v1.SessionOpenRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "provides": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "recovery": {
+          "type": "string"
+        },
+        "requested": {
+          "$ref": "#/$defs/conex.v1.SessionBinding"
+        },
+        "requires": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "recovery"
+      ],
+      "type": "object"
+    },
+    "conex.v1.SessionOpenResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "attachmentEpoch": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "binding": {
+          "$ref": "#/$defs/conex.v1.SessionBinding"
+        },
+        "leaseMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "provides": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "recovery": {
+          "type": "string"
+        },
+        "rejectedCapabilities": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "sessionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId",
+        "recovery",
+        "attachmentEpoch",
+        "leaseMs"
+      ],
+      "type": "object"
+    },
+    "conex.v1.SessionRenewRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "attachmentId": {
+          "type": "string"
+        },
+        "expectedEpoch": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "extendMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId",
+        "attachmentId",
+        "expectedEpoch",
+        "extendMs"
+      ],
+      "type": "object"
+    },
+    "conex.v1.SessionRenewResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "leaseMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "newEpoch": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "newEpoch",
+        "leaseMs"
+      ],
+      "type": "object"
+    },
+    "conex.v1.SessionResumeRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "attachmentId": {
+          "type": "string"
+        },
+        "expectedEpoch": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "streams": {
+          "items": {
+            "$ref": "#/$defs/conex.v1.StreamCursor"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "sessionId",
+        "attachmentId",
+        "expectedEpoch"
+      ],
+      "type": "object"
+    },
+    "conex.v1.SessionResumeResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "attachmentId": {
+          "type": "string"
+        },
+        "newEpoch": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "restoredWindowBytes": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "streamsReset": {
+          "items": {
+            "$ref": "#/$defs/conex.v1.StreamReset"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "sessionId",
+        "attachmentId",
+        "newEpoch",
+        "restoredWindowBytes"
+      ],
+      "type": "object"
+    },
+    "conex.v1.SlowConsumerSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "type": "string"
+        },
+        "sinceMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "streamId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "streamId",
+        "reason",
+        "sinceMs"
       ],
       "type": "object"
     },
@@ -645,6 +1605,277 @@
       },
       "type": "object"
     },
+    "conex.v1.StreamAckRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "attachmentId": {
+          "type": "string"
+        },
+        "epoch": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "lastReceivedSeq": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "streamId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId",
+        "attachmentId",
+        "epoch",
+        "streamId",
+        "lastReceivedSeq"
+      ],
+      "type": "object"
+    },
+    "conex.v1.StreamAckResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "availableWindowBytes": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "streamId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "streamId",
+        "availableWindowBytes"
+      ],
+      "type": "object"
+    },
+    "conex.v1.StreamCursor": {
+      "additionalProperties": false,
+      "properties": {
+        "consumedBytes": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "lastReceivedSeq": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "streamId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "streamId",
+        "lastReceivedSeq",
+        "consumedBytes"
+      ],
+      "type": "object"
+    },
+    "conex.v1.StreamFlowRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "attachmentId": {
+          "type": "string"
+        },
+        "consumedBytes": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "epoch": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "requestedWindowBytes": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "streamId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId",
+        "attachmentId",
+        "epoch",
+        "streamId",
+        "consumedBytes",
+        "requestedWindowBytes"
+      ],
+      "type": "object"
+    },
+    "conex.v1.StreamFlowResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "newWindowBytes": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "zeroWindow": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "newWindowBytes",
+        "zeroWindow"
+      ],
+      "type": "object"
+    },
+    "conex.v1.StreamFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "attachmentId": {
+          "type": "string"
+        },
+        "epoch": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "message": {
+          "format": "byte",
+          "type": "string"
+        },
+        "seq": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "streamId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId",
+        "attachmentId",
+        "epoch",
+        "streamId",
+        "seq",
+        "message"
+      ],
+      "type": "object"
+    },
+    "conex.v1.StreamReset": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "type": "string"
+        },
+        "resumeHandle": {
+          "type": "string"
+        },
+        "streamId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "streamId",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "conex.v1.StreamResetRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "afterSeq": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "attachmentId": {
+          "type": "string"
+        },
+        "epoch": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "resumeHandle": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "streamId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sessionId",
+        "attachmentId",
+        "epoch",
+        "streamId",
+        "afterSeq",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "conex.v1.StreamResetResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "acceptedAfterSeq": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "streamId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "streamId",
+        "acceptedAfterSeq"
+      ],
+      "type": "object"
+    },
+    "conex.v1.StreamSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "maxFrameBytes": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "streamId": {
+          "type": "string"
+        },
+        "windowBytes": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "streamId",
+        "kind",
+        "windowBytes",
+        "maxFrameBytes"
+      ],
+      "type": "object"
+    },
     "conex.v1.Success": {
       "additionalProperties": false,
       "properties": {
@@ -655,6 +1886,59 @@
       },
       "required": [
         "requestId"
+      ],
+      "type": "object"
+    },
+    "conex.v1.WebTicket": {
+      "additionalProperties": false,
+      "properties": {
+        "capabilityCaps": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "expiresAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "issuedAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "origin": {
+          "type": "string"
+        },
+        "peerRole": {
+          "type": "string"
+        },
+        "principalId": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "targetHost": {
+          "type": "string"
+        },
+        "tenantId": {
+          "type": "string"
+        },
+        "ticket": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ticket",
+        "principalId",
+        "tenantId",
+        "origin",
+        "targetHost",
+        "peerRole",
+        "issuedAtMs",
+        "expiresAtMs"
       ],
       "type": "object"
     }

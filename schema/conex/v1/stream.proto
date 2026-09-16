@@ -1,0 +1,90 @@
+// conex 流帧、ACK、信用与恢复（设计 §6.2、§7.2）。
+//
+// 流是 Session 内单方向的有序字节/逻辑帧；seq 从 1 单调递增；epoch 属于本
+// 帧经过的 attachment，恢复时由 session/resume 原子递增。两个方向各用独立
+// streamId；零字节数据帧禁止。
+
+syntax = "proto3";
+
+package conex.v1;
+
+// 单方向流的元数据；在 stream/open 响应中返回，session/resume 也回填一份。
+message StreamSpec {
+  string stream_id = 1;
+  // "data" 或 "control"；控制流（ack/flow/cancel/ping）独立有界。
+  string kind = 2;
+  // 接收窗口字节（设计 §6.2）；窗口在流建立时固定，不能用后续 flow 扩展。
+  uint64 window_bytes = 3;
+  // 初始 maxFrameBytes。
+  uint32 max_frame_bytes = 4;
+}
+
+// 数据帧（profile 决定字节形态，本消息是其语义字段）。注意：零字节 message
+// 禁止；ACK 必须是连续 seq 的最大已确认值；累计字节是 sender 实际发送字节。
+message StreamFrame {
+  string session_id = 1;
+  string attachment_id = 2;
+  uint64 epoch = 3;
+  string stream_id = 4;
+  uint64 seq = 5;
+  // 单帧字节；由 Profile 编码（JSON/protobuf）后投到 wire。
+  bytes message = 6;
+}
+
+// stream/ack：累计已连续接收的最大 seq；不是窗口外字节通知。
+message StreamAckRequest {
+  string session_id = 1;
+  string attachment_id = 2;
+  uint64 epoch = 3;
+  string stream_id = 4;
+  uint64 last_received_seq = 5;
+}
+
+message StreamAckResponse {
+  string stream_id = 1;
+  // 服务端按 (lastReceivedSeq+1) 起重新广告的窗口（<=协商窗口）；
+  // 接收端不能基于此把窗口扩展到协商上限之外。
+  uint64 available_window_bytes = 2;
+}
+
+// stream/flow：发送端报告累计已消费字节（receiver 视角），请求新窗口。
+// 重复或旧的 flow（consumedBytes <= 之前接受的最大值）忽略，不加信用。
+message StreamFlowRequest {
+  string session_id = 1;
+  string attachment_id = 2;
+  uint64 epoch = 3;
+  string stream_id = 4;
+  uint64 consumed_bytes = 5;
+  // 发送端请求新窗口字节数；不得超过协商上限且不得用于扩展。
+  uint64 requested_window_bytes = 6;
+}
+
+message StreamFlowResponse {
+  uint64 new_window_bytes = 1;
+  // 当 receiver 不能接受任何数据信用（控制仍然可发）。
+  bool zero_window = 2;
+}
+
+// stream/reset：清空一段范围；接收端必须把未确认字节明确标为需重放，不能
+// 静默当作完整历史。
+message StreamResetRequest {
+  string session_id = 1;
+  string attachment_id = 2;
+  uint64 epoch = 3;
+  string stream_id = 4;
+  uint64 after_seq = 5;
+  string reason = 6;
+  optional string resume_handle = 7;
+}
+
+message StreamResetResponse {
+  string stream_id = 1;
+  uint64 accepted_after_seq = 2;
+}
+
+// 慢消费者信号：control queue 满或 credit 耗尽 30 秒后由接收方发出。
+message SlowConsumerSignal {
+  string stream_id = 1;
+  string reason = 2;
+  uint64 since_ms = 3;
+}

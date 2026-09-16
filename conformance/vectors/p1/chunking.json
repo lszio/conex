@@ -1,0 +1,83 @@
+{
+  "$schema": "conex P1 chunking & manifest golden CIDs",
+  "chunkSize": 262144,
+  "formatVersion": 1,
+  "canonicalManifestBytesPrefix": "manifest/v1/",
+  "notes": [
+    "Single-block content (<= chunkSize) returns a raw/SHA-256 CID via cid_for_raw.",
+    "Multi-block content (> chunkSize) returns contentCid(manifestBytesFor(...)) = cid_for_raw(manifest/v1/<root>).",
+    "Expected CIDs were computed by an independent Rust helper (scripts/dev/p1-vectors.rs) and must match the values produced by both the Rust cid module and the TypeScript @conex/sdk chunking helper."
+  ],
+  "cases": [
+    {
+      "name": "empty",
+      "input": "",
+      "expected": "raw",
+      "cid": "bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku"
+    },
+    {
+      "name": "single_byte",
+      "input": "x",
+      "expected": "raw",
+      "cid": "bafkreibnoelefnzgwbcacyt4vh52ymxvzbjq7mmqhtcnwarfq4lzegsiqe"
+    },
+    {
+      "name": "hello",
+      "input": "hello",
+      "expected": "raw",
+      "cid": "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44yegnrjhc4yeq"
+    },
+    {
+      "name": "hello_conex_newline",
+      "input": "hello conex\n",
+      "expected": "raw",
+      "cid": "bafkreicnbk2gkwoowxiq3loyrlyfdd42wwhcyvv67ny33drroaybh4qvxy"
+    },
+    {
+      "name": "exactly_256kib_raw_fits_in_one_chunk",
+      "input": "256kib-of-0xAB",
+      "sizeBytes": 262144,
+      "expected": "raw",
+      "cid": "bafkreiggu2datz7jx5myu7qsvatdg66qr4usac6iyn7qytv6e2357sgexy"
+    },
+    {
+      "name": "exactly_256kib_plus_one_forces_manifest",
+      "input": "256kib-of-0xAB + 0xCD",
+      "sizeBytes": 262145,
+      "expected": "manifest",
+      "cid": "bafkreibwcxbxmxnbalvi2borwiz2wxnlp4oql2ol4xdo76w23svwbbjliy"
+    },
+    {
+      "name": "two_chunks_deterministic_root",
+      "input": "512kib-of-0x01",
+      "sizeBytes": 524288,
+      "expected": "manifest",
+      "cid": "bafkreiha7xatdgk3b3vbttawrjbslxdgz5t2e3laqtxhywbdercr4nvkgy"
+    },
+    {
+      "name": "five_chunks_deterministic_root",
+      "input": "1.25MiB-pattern-byte[i%256]",
+      "sizeBytes": 1310720,
+      "expected": "manifest",
+      "cid": "bafkreibh5epyzffry7i7u2doyha6emaiyquvorbckp4bd2yov7vvx4krhe"
+    }
+  ],
+  "rejects": [
+    {
+      "name": "non_raw_cid_rejected",
+      "input": "bafybeigdyrzt5sfp7udm7hu76uh7yganzbm4p7p7z3l3e3q",
+      "reason": "non-raw codec"
+    },
+    {
+      "name": "non_sha256_multihash_rejected",
+      "input": "QmYwAPJzv5CZsnAzt8auVZRnAn7p9HRw1L1TqQ6T6t9K9Q",
+      "reason": "non-sha2-256 multihash"
+    },
+    {
+      "name": "non_decimal_size_string_rejected",
+      "input": "0x10000",
+      "field": "content_length",
+      "reason": "decimal-only"
+    }
+  ]
+}

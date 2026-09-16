@@ -1,0 +1,100 @@
+{
+  "$schema": "conex P1 stream ACK / credit / reset / recovery cases",
+  "frameShape": {
+    "fields": ["session_id", "attachment_id", "epoch", "stream_id", "seq", "message"],
+    "seqStart": 1,
+    "zeroByteMessage": "rejected"
+  },
+  "ackCases": [
+    {"name": "ack_confirms_max_continuous_seq", "expect": "accepted"},
+    {"name": "ack_with_gap_does_not_advance_window", "expect": "no_advance"},
+    {"name": "ack_outside_window_ignored", "expect": "ignored"}
+  ],
+  "creditCases": [
+    {
+      "name": "send_byte_total_within_consumed_plus_window",
+      "consumedBytes": 1024,
+      "windowBytes": 4096,
+      "sendTotal": 5000,
+      "expect": "allowed"
+    },
+    {
+      "name": "send_byte_total_exactly_consumed_plus_window",
+      "consumedBytes": 1024,
+      "windowBytes": 4096,
+      "sendTotal": 5120,
+      "expect": "allowed_then_blocked_on_next"
+    },
+    {
+      "name": "send_byte_total_above_consumed_plus_window",
+      "consumedBytes": 1024,
+      "windowBytes": 4096,
+      "sendTotal": 5121,
+      "expect": "rejected"
+    },
+    {
+      "name": "stale_flow_with_smaller_consumed_ignored",
+      "flowConsumedBytes": 500,
+      "previousConsumedBytes": 1024,
+      "expect": "ignored_no_credit"
+    },
+    {
+      "name": "stale_flow_with_consumed_above_sent_fails_stream",
+      "flowConsumedBytes": 5000,
+      "previousSent": 1024,
+      "expect": "stream_failed"
+    },
+    {
+      "name": "flow_requesting_window_above_negotiated_cap_rejected",
+      "requestedWindowBytes": 8388608,
+      "negotiatedMax": 4194304,
+      "expect": "rejected"
+    },
+    {
+      "name": "zero_byte_data_frame_rejected",
+      "expect": "bad_request"
+    }
+  ],
+  "resetCases": [
+    {
+      "name": "reset_after_partial_unconfirmed_marks_replay_required",
+      "afterSeq": 17,
+      "expect": "reset_with_resume_handle"
+    },
+    {
+      "name": "resume_with_smaller_window_requires_reconfirm",
+      "previousWindowBytes": 4096,
+      "newWindowBytes": 2048,
+      "unconfirmedSentBytes": 3000,
+      "expect": "stream_reset_required"
+    },
+    {
+      "name": "cancel_allowed_with_zero_credit",
+      "consumedBytes": 1024,
+      "windowBytes": 0,
+      "expect": "cancelled"
+    }
+  ],
+  "slowConsumerCases": [
+    {
+      "name": "credit_exhausted_for_30s_emits_slow_consumer",
+      "creditExhaustedMs": 30000,
+      "expect": "slow_consumer"
+    },
+    {
+      "name": "control_queue_full_breaks_link",
+      "expect": "link_terminated"
+    }
+  ],
+  "epochCases": [
+    {
+      "name": "old_epoch_after_resume_rejected",
+      "expect": "epoch_fenced"
+    },
+    {
+      "name": "resumed_epoch_plus_one_is_required",
+      "expectedEpoch": 7,
+      "expect": "new_epoch_8"
+    }
+  ]
+}

@@ -1,0 +1,104 @@
+{
+  "$schema": "conex P1 blob lifecycle + commit atomicity cases",
+  "stateMachine": [
+    "open -> uploading -> verified -> committed",
+    "open -> uploading -> cancel/expire -> staging recycled"
+  ],
+  "cases": [
+    {
+      "name": "single_chunk_upload_commits_as_raw",
+      "chunkSize": 262144,
+      "totalBytes": 12,
+      "chunks": [{"index": 0, "sizeBytes": 12}],
+      "expectedRootKind": "raw",
+      "expect": "committed",
+      "persistence": "local"
+    },
+    {
+      "name": "two_chunk_upload_commits_as_manifest",
+      "chunkSize": 262144,
+      "totalBytes": 524288,
+      "chunks": [
+        {"index": 0, "sizeBytes": 262144},
+        {"index": 1, "sizeBytes": 262144}
+      ],
+      "expectedRootKind": "manifest",
+      "expect": "committed",
+      "persistence": "local"
+    },
+    {
+      "name": "bad_chunk_rejects_upload_keeps_receivable_blocks",
+      "chunkSize": 262144,
+      "totalBytes": 524288,
+      "chunks": [
+        {"index": 0, "sizeBytes": 262144},
+        {"index": 1, "sizeBytes": 262144, "spoofedCid": true}
+      ],
+      "expect": "bad_blob",
+      "details": "服务端回 bad_blob；先前已校验块保留，重新打开上传后仍可续传"
+    },
+    {
+      "name": "commit_declared_root_mismatch_rejected",
+      "chunkSize": 262144,
+      "totalBytes": 524288,
+      "chunks": [
+        {"index": 0, "sizeBytes": 262144},
+        {"index": 1, "sizeBytes": 262144}
+      ],
+      "declaredRootMismatch": true,
+      "expect": "bad_blob"
+    },
+    {
+      "name": "missing_blocks_on_commit_rejected_with_cid_list",
+      "chunkSize": 262144,
+      "totalBytes": 786432,
+      "chunks": [
+        {"index": 0, "sizeBytes": 262144},
+        {"index": 1, "sizeBytes": 262144}
+      ],
+      "missingChunks": [2],
+      "expect": "bad_blob",
+      "details": "返回实际状态 + 缺块 CID 列表"
+    },
+    {
+      "name": "persistence_level_unsupported_rejected",
+      "chunkSize": 262144,
+      "totalBytes": 12,
+      "chunks": [{"index": 0, "sizeBytes": 12}],
+      "persistence": "replicated(2)",
+      "expect": "unavailable",
+      "details": "P1 broker 只支持 local；不可降级后返回成功"
+    },
+    {
+      "name": "commit_after_chunk_crash_recovers_idempotent",
+      "chunkSize": 262144,
+      "totalBytes": 262144,
+      "chunks": [{"index": 0, "sizeBytes": 262144}],
+      "crashBeforeCommit": true,
+      "expect": "committed",
+      "details": "恢复后 commit 继续完成；不出现缺块却 committed"
+    },
+    {
+      "name": "staging_lease_expires_without_commit",
+      "chunkSize": 262144,
+      "totalBytes": 12,
+      "chunks": [{"index": 0, "sizeBytes": 12}],
+      "leaseExpired": true,
+      "expect": "staging_recycled"
+    }
+  ],
+  "pin": [
+    {
+      "name": "pin_returns_id_and_expiry",
+      "expect": "pin_id_returned"
+    },
+    {
+      "name": "unpin_only_releases_owned_pin",
+      "expect": "released"
+    },
+    {
+      "name": "gc_skips_committed_blocks",
+      "expect": "kept"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+[package]
+name = "conex-dev"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Standalone helper to compute P1 golden CIDs without joining the main workspace.
+[workspace]
+
+[dependencies]
+cid = "0.11"
+multihash = "0.19"
+sha2 = "0.11"
+
+[[bin]]
+name = "p1-vectors"
+path = "p1-vectors.rs"

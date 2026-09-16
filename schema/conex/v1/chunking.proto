@@ -1,0 +1,71 @@
+// conex 分块与 manifest 内容格式（设计 §5.3、§5.4；P1 broker 分块）。
+//
+// 全部条目使用规范字节：CIDv1 raw/SHA-256 文本作为子地址；总长度与叶子块
+// 长度都以十进制字符串放在 JSON / ProtoJSON / protobuf wire 上，避免 JS
+// Number 丢精度。块大小固定 256 KiB，最后一块可更短。
+
+syntax = "proto3";
+
+package conex.v1;
+
+// 单个分块条目；多块内容用 ManifestEntries 表示。
+message ChunkEntry {
+  // 子 CID，CIDv1 raw + SHA-256，文本默认小写 base32；见 cid.rs::parse_cid。
+  string chunk_cid = 1;
+  // 该块逻辑长度（十进制字符串）；所有叶子合计 = contentLength。
+  string chunk_length = 2;
+}
+
+// 叶子聚合（指向下一级 manifest 或直接指向 ChunkEntry 的混合列表）。
+message ManifestEntries {
+  // 单层最多 1024 个条目；超过时分层（设计 §5.4）。
+  repeated ChunkEntry leaves = 1;
+  // 中间层 manifest 的子 CID；同级 manifest 之间按条目索引升序拼接。
+  repeated string child_manifest_cids = 2;
+}
+
+// 分块 manifest。formatVersion 一旦发布不得改号；新增字段走 reserved
+// + 新消息，避免静默破坏 root CID。
+message ChunkManifest {
+  // 内容格式版本；P1 固定为 1。
+  uint32 format_version = 1;
+  // 叶子层默认 256 KiB；末块更短。除非 formatVersion 提升否则不得改值。
+  uint32 chunk_size = 2;
+  // 内容总字节数（十进制字符串）。
+  string content_length = 3;
+  // 根条目；可以是 leaves 或 child_manifest_cids 中的若干项，但同一份内容
+  // 必须产生同一 root CID：实现必须规范化顺序（按条目索引升序拼接后再
+  // 算 manifest CID），见 p1-chunking 契约 §3。
+  ManifestEntries root = 4;
+}
+
+// contentCid() 输入与输出：分块内容长度 ≤ chunk_size 时返回 raw CID，否则
+// 返回 ChunkManifest 序列化字节的 CID（manifest 序列化使用 deterministic
+// proto wire 或本文件附录 A 的 canonical JSON；二者必须同一根 CID）。
+message ContentAddress {
+  oneof address {
+    // 小文件：CIDv1 raw + SHA-256 文本。
+    string raw_cid = 1;
+    // 多块：manifest 根 CID；调用方通过 blob/get 拉取叶子。
+    string manifest_cid = 2;
+  }
+}
+
+// BlobRef：带授权定位的内容引用（设计 §5.3）。
+message BlobRef {
+  // 内容 CID；文本表示。
+  string cid = 1;
+  // 字节数（十进制字符串）。
+  string size_bytes = 2;
+  // MIME；缺省为 application/octet-stream。
+  string mime = 3;
+  // 资源定位信息（不是授权凭据）。
+  BlobAccess access = 4;
+}
+
+message BlobAccess {
+  string provider_id = 1;
+  string plane = 2;
+  optional string space_id = 3;
+  string resource_id = 4;
+}

@@ -1,0 +1,129 @@
+// conex blob 上传、提交、pin、GC 与持久性等级（设计 §5.4、§5.5）。
+//
+// 状态机：blob/put(open) → uploading → verified → blob/commit → committed；
+// 任何写入/commit 崩溃点恢复后不得产生 "缺块却 committed" 的根。
+
+syntax = "proto3";
+
+package conex.v1;
+
+import "conex/v1/chunking.proto";
+
+// 上传创建（不承载数据）。
+message BlobPutRequest {
+  // 绑定 principal/resourceId/format_version/上限；服务端回填 content_cid
+  // 校验用的格式版本。
+  uint32 format_version = 1;
+  // 客户端声明的总字节；服务端在 commit 时按 contentCid 重新计算。
+  string declared_size_bytes = 2;
+  string declared_chunk_size = 3;
+  // 客户端期望的内容 CID（manifest 根或 raw CID）；用于 commit 期一致性检查。
+  ContentAddress expected_root = 4;
+  // 资源定位；与 blob/get、blob/pin 的 access 字段一致。
+  BlobAccess access = 5;
+  // staging 租约请求；默认 1 小时，权限内可续期。
+  uint64 requested_lease_ms = 6;
+}
+
+message BlobPutResponse {
+  string upload_id = 1;
+  // 服务端按 formatVersion 选择实际 chunkSize，强制一致。
+  uint32 chunk_size = 2;
+  uint64 lease_ms = 3;
+  // 上传初始窗口字节；超过则服务端回 bad_blob 并关闭上传。
+  uint64 max_blob_bytes = 4;
+  // 服务端要求或允许 inline 化的最大块；大于此值只能走 chunk 通道。
+  uint32 inline_threshold_bytes = 5;
+  // 已持有块（如果资源已存在，列出 cid）；客户端可跳过这些块的提交。
+  repeated string already_have_chunk_cids = 6;
+}
+
+// blob/chunk：单块提交。顺序由 chunk_index 保证；服务端在收到所有块之前不
+// 持久化 manifest；坏块返回 bad_blob 并结束当前上传。
+message BlobChunkRequest {
+  string upload_id = 1;
+  uint32 chunk_index = 2;
+  string chunk_cid = 3;
+  // 实际块字节；服务端再算一次 SHA-256 并与 chunk_cid 校验。
+  bytes chunk_bytes = 4;
+}
+
+message BlobChunkResponse {
+  uint32 chunk_index = 1;
+  uint64 received_bytes = 2;
+  uint64 remaining_bytes = 3;
+}
+
+// blob/commit：原子校验（根 CID、所有可达块、长度、授权）后建立持久引用。
+// GC 不能删除 commit 正在引用的块；committed 仅在持久性达成后返回。
+message BlobCommitRequest {
+  string upload_id = 1;
+  // 客户端最终声明的根 CID（raw 或 manifest 根）。
+  ContentAddress declared_root = 2;
+  // 可选 blob/pin 期：pin 阻止 GC，直到到期或显式 unpin。
+  optional uint64 pin_until_ms = 3;
+  // 请求的持久性等级；后端不能降级后返回成功。
+  string persistence = 4;
+}
+
+message BlobCommitResponse {
+  string resource_root_cid = 1;
+  uint64 committed_bytes = 2;
+  string persistence = 3;
+  // 提交的接收凭证 ID；不是密码学承诺。
+  string receipt_id = 4;
+}
+
+// blob/pin：返回绑定 principal/space/root 的 pinId；只能释放有权管理的 pin。
+message BlobPinRequest {
+  ContentAddress root = 1;
+  optional uint64 pin_until_ms = 2;
+  optional string space_id = 3;
+}
+
+message BlobPinResponse {
+  string pin_id = 1;
+  uint64 expires_at_ms = 2;
+}
+
+message BlobUnpinRequest {
+  string pin_id = 1;
+}
+
+message BlobUnpinResponse {}
+
+// blob/have：询问某 CID 是否被持久引用；用于流式续传。
+message BlobHaveRequest {
+  repeated string chunk_cids = 1;
+}
+
+message BlobHaveResponse {
+  // 与请求同序；true 表示已持有，false 表示需要 (重新)上传。
+  repeated bool present = 1;
+}
+
+// blob/get：拉取单块字节。
+message BlobGetRequest {
+  string chunk_cid = 1;
+  optional uint64 range_offset = 2;
+  optional uint64 range_length = 3;
+}
+
+message BlobGetResponse {
+  bytes chunk_bytes = 1;
+  string chunk_cid = 2;
+}
+
+// blob/cancel：主动结束 staging；不会留下 committed 资源。
+message BlobCancelRequest {
+  string upload_id = 1;
+  optional string reason = 2;
+}
+
+message BlobCancelResponse {}
+
+// 持久性等级（设计 §5.5）；后端必须声明支持等级，不支持就拒绝，不能降级。
+enum PersistenceLevel {
+  PERSISTENCE_LEVEL_UNSPECIFIED = 0;
+  PERSISTENCE_LEVEL_LOCAL = 1;
+}
