@@ -5,7 +5,7 @@ conex 的文档按「规范 / 契约 / 计划 / 证据 / 操作」分层，每�
 ## 状态（2026-09-16 复核）
 
 - **P0 已交付**（提交 `e649ded`）：broker 只读数据连接，JSON-RPC/HTTP 与 inproc 共用同一授权执行路径；fs 与 HTTP catalog 两个 provider；TypeScript consumer；P0 门禁与 CI。
-- **P1 执行中**：`2c9a06e` 交付 P1-01 契约冻结与 P1-02/03/06/07/08 的离线切片；2026-09-16 **P1-01b** 修正规范化字节分歧（唯一内容寻址函数、`ChunkManifest` protobuf wire、`protoc` 独立黄金向量、commit 按上传自身块重算根）。各包**仍未接入 wire/Registry/MethodContract**；P1-01c（门禁诚实性）与 P1-04/05/09/10 未开始。顺序见 [P1 执行计划](plans/2026-09-15-conex-p1.md) §3/§4。
+- **P1 已交付**：broker dispatcher 统一 HTTP `/rpc` 与 WSS `/wss` 业务帧；`conex-host::agent` 提供 OIDC code+PKCE + 30s ticket；`conex-agent` CLI 与 in-memory 注册表覆盖反连；`conex-content` commit 按上传自身块重算根并持久化 manifest 对象；P1-01c（门禁诚实性）已落地（conformance runner 按目录选步骤 + `xtask check` 含 e2e）；`cargo test --test p1_e2e` 与 `cargo xtask check` 全绿。逐包证据见 [P1 验证记录](verification/p1.md)，运行手册见 [P1 运行手册](runbooks/p1.md)；下一步进入 P2（ACP/MCP，详见 [路线图](plans/2026-09-15-conex-roadmap.md)）。
 - 完成状态与证据以 [P1 验证记录](verification/p1.md)、[P0 验证记录](verification/p0.md) 为准；P0 执行计划已归档。
 
 ## 文档地图

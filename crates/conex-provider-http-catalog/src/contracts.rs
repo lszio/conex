@@ -19,6 +19,7 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
             (
                 method,
                 MethodContract {
+                    adapter_id: "conex-source-http-catalog",
                     input_schema: base.input_schema,
                     output_schema: base.output_schema,
                     prepare,

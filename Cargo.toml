@@ -10,6 +10,7 @@ members = [
     "crates/conex-provider-http-catalog",
     "crates/conex-content",
     "xtask",
+    "crates/conex-agent",
 ]
 
 [workspace.package]
@@ -27,6 +28,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 hex = "0.4"
+base64 = "0.22"
 cid = "0.11"
 multihash = "0.19"
 sha2 = "0.11"
@@ -34,7 +36,7 @@ async-trait = "0.1"
 bytes = "1"
 http = "1"
 http-body-util = "0.1"
-axum = "0.8"
+axum = { version = "0.8", features = ["ws", "ws-message"] }
 axum-server = { version = "0.8", features = ["tls-rustls"] }
 toml = "0.8"
 hyper = { version = "1", features = ["client", "http1"] }

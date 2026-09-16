@@ -86,6 +86,20 @@ pub enum SessionError {
 }
 
 impl SessionError {
+    pub fn code(&self) -> i32 {
+        use v1::ErrorCode as E;
+        match self {
+            SessionError::NotFound(_) => E::UnknownProvider as i32,
+            SessionError::AttachmentNotFound(_) => E::UnknownProvider as i32,
+            SessionError::EpochMismatch { .. } => E::ResumeUnavailable as i32,
+            SessionError::BindingMismatch => E::Unauthorized as i32,
+            SessionError::LeaseExpired => E::SessionLost as i32,
+            SessionError::UnsupportedRecovery { .. } => E::UnsupportedCapability as i32,
+            SessionError::PathTraversal(_) => E::BadRequest as i32,
+            _ => E::Internal as i32,
+        }
+    }
+
     pub fn to_call_error(&self) -> CallError {
         use conex_proto::v1::ErrorCode;
         match self {

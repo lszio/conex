@@ -1,0 +1,30 @@
+{
+  "$schema": "conex P1 WSS bootstrap vectors",
+  "cases": [
+    {
+      "name": "jsonrpc2_hello_ready_round_trip",
+      "profile": "conex-jsonrpc2-wss-v1",
+      "plane": "broker",
+      "expect": "ready"
+    },
+    {
+      "name": "profile_mismatch_rejected",
+      "profile": "conex-protobuf-wss-v1",
+      "plane": "broker",
+      "expect": "unsupported_profile"
+    },
+    {
+      "name": "early_business_frame_rejected",
+      "profile": "conex-jsonrpc2-wss-v1",
+      "plane": "broker",
+      "sendBusinessBeforeReady": true,
+      "expect": "early_business"
+    },
+    {
+      "name": "plane_mismatch_rejected",
+      "profile": "conex-jsonrpc2-wss-v1",
+      "plane": "relay",
+      "expect": "plane_mismatch"
+    }
+  ]
+}

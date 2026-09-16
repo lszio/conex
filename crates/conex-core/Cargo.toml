@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+base64 = "0.22"
 async-trait.workspace = true
 bytes.workspace = true
 conex-proto = { path = "../conex-proto" }

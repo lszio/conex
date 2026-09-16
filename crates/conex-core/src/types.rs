@@ -72,22 +72,34 @@ impl CallError {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ResourceClaim {
     pub resource_id: String,
     pub action: String,
     pub subtree: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct PrincipalTenant {
+    pub principal_id: String,
+    pub tenant_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct PreparedInput {
     pub canonical: serde_json::Value,
     pub claim: ResourceClaim,
+    /// Principal/tenant expected to be filled by the host's dispatcher from
+    /// the authenticated caller. Contracts that compute it themselves may set
+    /// it directly; the dispatcher will refuse to overwrite a non-empty
+    /// value with the caller's claim.
+    pub binding: PrincipalTenant,
 }
 
 /// A method's behavior contract. `prepare` is the authoritative strict decoder.
 #[derive(Clone)]
 pub struct MethodContract {
+    pub adapter_id: &'static str,
     pub input_schema: &'static str,
     pub output_schema: &'static str,
     pub prepare: fn(&serde_json::Value) -> CallResult<PreparedInput>,

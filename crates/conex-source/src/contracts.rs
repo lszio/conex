@@ -20,6 +20,7 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
         (
             SOURCE_LIST,
             MethodContract {
+                adapter_id: "conex-source",
                 input_schema: "conex.v1.SourceListRequest",
                 output_schema: "conex.v1.SourceListResponse",
                 prepare: prepare_list,
@@ -29,6 +30,7 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
         (
             SOURCE_READ,
             MethodContract {
+                adapter_id: "conex-source",
                 input_schema: "conex.v1.SourceReadRequest",
                 output_schema: "conex.v1.SourceReadResponse",
                 prepare: prepare_read,
@@ -38,6 +40,7 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
         (
             SOURCE_SEARCH,
             MethodContract {
+                adapter_id: "conex-source",
                 input_schema: "conex.v1.SourceSearchRequest",
                 output_schema: "conex.v1.SourceSearchResponse",
                 prepare: prepare_search,
@@ -105,7 +108,11 @@ pub fn prepare_list(input: &Value) -> CallResult<PreparedInput> {
     let cursor = optional_cursor(map)?;
     let claim = subtree_claim(&root, "list")?;
     let canonical = json!({"root": root, "limit": limit, "cursor": cursor});
-    Ok(PreparedInput { canonical, claim })
+    Ok(PreparedInput {
+        canonical,
+        claim,
+        ..Default::default()
+    })
 }
 
 pub fn prepare_read(input: &Value) -> CallResult<PreparedInput> {
@@ -114,7 +121,11 @@ pub fn prepare_read(input: &Value) -> CallResult<PreparedInput> {
     let resource = required_string(map, "resourceId")?;
     let claim = read_claim(&resource)?;
     let canonical = json!({"resourceId": resource});
-    Ok(PreparedInput { canonical, claim })
+    Ok(PreparedInput {
+        canonical,
+        claim,
+        ..Default::default()
+    })
 }
 
 pub fn prepare_search(input: &Value) -> CallResult<PreparedInput> {
@@ -130,7 +141,11 @@ pub fn prepare_search(input: &Value) -> CallResult<PreparedInput> {
     let cursor = optional_cursor(map)?;
     let claim = subtree_claim(&root, "search")?;
     let canonical = json!({"root": root, "query": query, "limit": limit, "cursor": cursor});
-    Ok(PreparedInput { canonical, claim })
+    Ok(PreparedInput {
+        canonical,
+        claim,
+        ..Default::default()
+    })
 }
 
 fn summary(value: &Value) -> CallResult<()> {

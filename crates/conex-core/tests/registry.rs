@@ -33,6 +33,7 @@ fn prepare_ok(value: &Value) -> CallResult<PreparedInput> {
             action: "read".into(),
             subtree: false,
         },
+        ..Default::default()
     })
 }
 
@@ -42,6 +43,7 @@ fn validate_ok(_: &Value) -> CallResult<()> {
 
 fn contract() -> MethodContract {
     MethodContract {
+        adapter_id: "test-source",
         input_schema: "conex.v1.SourceReadRequest",
         output_schema: "conex.v1.SourceReadResponse",
         prepare: prepare_ok,

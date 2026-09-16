@@ -1,0 +1,14 @@
+[package]
+name = "conex-agent"
+version.workspace = true
+edition.workspace = true
+[[bin]]
+name = "conex-agent"
+path = "src/main.rs"
+
+[dependencies]
+conex-core = { path = "../conex-core" }
+conex-proto = { path = "../conex-proto" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "time", "io-util"] }
+serde.workspace = true
+serde_json.workspace = true
