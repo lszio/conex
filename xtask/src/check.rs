@@ -50,6 +50,11 @@ const STEPS: &[Step] = &[
             "conformance/vectors/p1",
         ],
     ),
+    (
+        "end-to-end (real host + sdk)",
+        "cargo",
+        &["xtask", "e2e", "--suite", "p0-ts"],
+    ),
 ];
 
 pub fn run() -> Result<()> {

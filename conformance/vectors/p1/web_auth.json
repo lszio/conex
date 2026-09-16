@@ -1,0 +1,41 @@
+{
+  "$schema": "conex P1 browser entry (OIDC + ticket) vectors",
+  "cases": [
+    {
+      "name": "ticket_issued_and_consumed_atomically",
+      "method": "POST /tickets",
+      "input": {
+        "principalId": "alice",
+        "tenantId": "tenant-a",
+        "origin": "http://localhost:3000",
+        "targetHost": "conex://broker.local",
+        "peerRole": "ui",
+        "capabilityCaps": ["source/read"]
+      },
+      "expect": "ticket_issued"
+    },
+    {
+      "name": "ticket_cross_tenant_rejected",
+      "method": "POST /tickets",
+      "input": {
+        "principalId": "bob",
+        "tenantId": "tenant-b",
+        "origin": "http://localhost:3000",
+        "targetHost": "conex://broker.local",
+        "peerRole": "ui"
+      },
+      "expect": "issued_for_bob_only"
+    },
+    {
+      "name": "oidc_code_pkce_exchange",
+      "method": "POST /oidc/token",
+      "flow": "code+pkce",
+      "expect": "principal_returned"
+    },
+    {
+      "name": "oidc_origin_mismatch_rejected",
+      "method": "POST /oidc/token",
+      "expect": "unauthorized"
+    }
+  ]
+}

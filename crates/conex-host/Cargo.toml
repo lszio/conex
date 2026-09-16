@@ -9,33 +9,37 @@ path = "src/main.rs"
 
 [dependencies]
 async-trait.workspace = true
-axum.workspace = true
+axum = { version = "0.8", features = ["ws"] }
 axum-server.workspace = true
+base64 = "0.22"
+tempfile.workspace = true
+sha2.workspace = true
 conex-assembly = { path = "../conex-assembly" }
 conex-core = { path = "../conex-core" }
 conex-proto = { path = "../conex-proto" }
 conex-transport-http = { path = "../conex-transport-http" }
+conex-content = { path = "../conex-content" }
+futures = "0.3"
 hex.workspace = true
 pbjson-types.workspace = true
 rustls.workspace = true
 rustls-pemfile.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-sha2.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-rustls.workspace = true
+tokio-tungstenite = { version = "0.30.0", features = ["rustls-tls-native-roots"] }
 toml.workspace = true
+tracing = "0.1"
 
 [dev-dependencies]
 async-trait.workspace = true
-axum.workspace = true
 bytes.workspace = true
 conex-transport-http = { path = "../conex-transport-http" }
 hex.workspace = true
 http.workspace = true
 rcgen.workspace = true
-sha2.workspace = true
 conex-core = { path = "../conex-core" }
 conex-provider-fs = { path = "../conex-provider-fs" }
 conex-proto = { path = "../conex-proto" }

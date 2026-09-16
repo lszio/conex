@@ -433,6 +433,43 @@ impl OperationStore {
         Ok(updated)
     }
 
+    pub fn cancel(&self, key: &DedupKey) -> Result<OperationState, OperationError> {
+        let id = key.sanitize();
+        let mut guard = self.state.lock().expect("operation state poisoned");
+        let mut record = guard
+            .records
+            .get(&id)
+            .cloned()
+            .ok_or(OperationError::Unknown)?;
+        let now = now_ms();
+        if now > record.expires_at_ms {
+            return Err(OperationError::Expired);
+        }
+        let result = guard.results.get(&id).cloned();
+        match record.state {
+            OperationState::Accepted | OperationState::Running => {
+                record.state = OperationState::Cancelled;
+                record.settled_at_ms = Some(now);
+                let next = SettledResult {
+                    success: None,
+                    failure: None,
+                    execution: ExecutionState::Completed,
+                };
+                self.persist_record(&id, &record)?;
+                self.persist_result(&id, &next)?;
+                guard.results.insert(id.clone(), next);
+                guard.records.insert(id.clone(), record.clone());
+                Ok(record.state)
+            }
+            other => {
+                // Settled (succeeded/failed/cancelled/unknown): record is
+                // terminal; return its state so the caller sees the truth.
+                let _ = result;
+                Ok(other)
+            }
+        }
+    }
+
     pub fn get(
         &self,
         key: &DedupKey,

@@ -1,0 +1,59 @@
+{
+  "$schema": "conex P1 session lifecycle vectors",
+  "cases": [
+    {
+      "name": "open_in_process_session",
+      "method": "session/open",
+      "input": {
+        "requested": {"principalId":"alice","tenantId":"tenant-a","providerEndpointId":"notes-local","plane":1},
+        "recovery": "in_process",
+        "attachmentId": "attach-1",
+        "peerRole": "ui"
+      },
+      "expect": "opened"
+    },
+    {
+      "name": "open_unknown_recovery_rejected",
+      "method": "session/open",
+      "input": {
+        "requested": {"principalId":"alice","tenantId":"tenant-a","providerEndpointId":"notes-local","plane":1},
+        "recovery": "snapshot",
+        "attachmentId": "attach-1",
+        "peerRole": "ui"
+      },
+      "expect": "bad_request"
+    },
+    {
+      "name": "resume_binding_mismatch",
+      "method": "session/resume",
+      "input": {
+        "sessionId": "ses-tenant-a-alice-1",
+        "attachmentId": "attach-1",
+        "expectedEpoch": "1",
+        "binding": {"principalId":"eve","tenantId":"tenant-a","providerEndpointId":"notes-local","plane":1}
+      },
+      "expect": "unauthorized"
+    },
+    {
+      "name": "resume_wrong_epoch",
+      "method": "session/resume",
+      "input": {
+        "sessionId": "ses-tenant-a-alice-1",
+        "attachmentId": "attach-1",
+        "expectedEpoch": "9",
+        "binding": {"principalId":"alice","tenantId":"tenant-a","providerEndpointId":"notes-local","plane":1}
+      },
+      "expect": "resume_unavailable"
+    },
+    {
+      "name": "close_finalises_attachment",
+      "method": "session/close",
+      "input": {
+        "sessionId": "ses-tenant-a-alice-1",
+        "attachmentId": "attach-1",
+        "expectedEpoch": "1"
+      },
+      "expect": "closed"
+    }
+  ]
+}

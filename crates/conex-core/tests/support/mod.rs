@@ -236,6 +236,7 @@ fn prepare_test_read(value: &Value) -> CallResult<PreparedInput> {
             action: "read".into(),
             subtree: false,
         },
+        ..Default::default()
     })
 }
 
@@ -265,6 +266,7 @@ fn test_factory(installation: &Installation) -> CallResult<Vec<Route>> {
             endpoint: installation.endpoint.clone(),
             method: method.clone(),
             contract: MethodContract {
+                adapter_id: "test",
                 input_schema: "test.ReadRequest",
                 output_schema: "test.ReadResponse",
                 prepare: prepare_test_read,
