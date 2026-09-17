@@ -11,7 +11,10 @@ use conex_core::{
     HostLimits, Installation, Limits, Policy, PolicyRule, Registry, Resolver, Secret, StaticPolicy,
     TargetPolicy, VerifiedPeer,
 };
-use conex_host::{BindingStore, HttpState, PROFILE_ID, StaticBearerAuth, TokenRecord, router};
+use conex_host::{
+    BindingStore, HttpState, PROFILE_ID, StaticBearerAuth, TokenRecord, attach_state,
+    build_router as build_p0_router,
+};
 use conex_proto::v1;
 use serde_json::Value;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -160,11 +163,17 @@ impl HttpFixture {
             TokenRecord::from_plaintext("test-token", "alice", "tenant-a", "host.example"),
             TokenRecord::from_plaintext("bob-token", "bob", "tenant-a", "host.example"),
         ]));
-        let app = router(Arc::new(HttpState {
-            host: host.clone(),
-            bindings,
-            auth,
-        }));
+        let app = attach_state(
+            Arc::new(HttpState {
+                host: host.clone(),
+                bindings,
+                auth,
+                broker: None,
+                host_side: None,
+                p1_provides: Vec::new(),
+            }),
+            build_p0_router(),
+        );
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         tokio::spawn(async move {

@@ -1,7 +1,9 @@
-//! P1 joint e2e (broker-only): real Rust host, in-memory stores, broker
-//! round-trip for the design §14 P1 acceptance list (subset that fits in a
-//! synchronous broker test; the WSS over-the-wire path is exercised in
-//! `p1_wss_smoke.rs`).
+//! P1 joint e2e (broker-only): in-memory stores + `Broker::invoke` directly,
+//! no socket. Covers the subset of design §14 P1 acceptance that fits a
+//! synchronous broker test. The wire-level acceptance (HTTP `/rpc` + WSS
+//! `/wss` + ticket/OIDC) lives in the host integration test once the
+//! dispatcher is mounted in `serve::build`; do not reintroduce a
+//! `p1_wss_smoke.rs` reference until that test exists.
 #![forbid(unsafe_code)]
 
 use std::path::PathBuf;
@@ -72,6 +74,7 @@ async fn make_broker(
         session: Some(Arc::new(session)),
         operation: Some(Arc::new(operation)),
         agents: Some(side.agents.clone()),
+        host_origin: Some("conex://broker.local".into()),
     };
     Arc::new(Broker::new(host, deps))
 }
@@ -245,9 +248,11 @@ async fn session_lifecycle_and_binding_mismatch() {
         })
         .await
         .expect_err("binding mismatch must reject");
+    // The broker layer reports cross-principal binding mismatches as
+    // Forbidden. `Unauthorized` is reserved for missing/invalid bearer.
     assert_eq!(
         error.code_enum(),
-        Some(conex_proto::v1::ErrorCode::Unauthorized)
+        Some(conex_proto::v1::ErrorCode::Forbidden)
     );
 }
 
@@ -258,7 +263,7 @@ async fn operation_dedup_round_trip() {
     let (_t3, operation_root) = tmp("operation");
     let broker = make_broker(content_root, session_root, operation_root).await;
     let caller = caller("alice", "tenant-a");
-    let key = json!({
+    let key_json = json!({
         "tenantId": "tenant-a",
         "principalId": "alice",
         "providerEndpointId": "notes-local",
@@ -266,13 +271,28 @@ async fn operation_dedup_round_trip() {
         "method": "source/write",
         "operationId": "op-1"
     });
+    let key = decode_dedup_key(&key_json);
+
+    // Seed the operation record first via the store (the broker exposes
+    // /cancel and /get; accept is the upstream's responsibility).
+    broker
+        .deps()
+        .operation
+        .as_ref()
+        .expect("operation backend configured")
+        .accept(
+            key.clone(),
+            conex_core::operation::ExecutionClass::NonReplayable,
+            "test".into(),
+        )
+        .expect("accept seed");
 
     let cancel = invoke(
         &broker,
         caller.clone(),
         "operation-store",
         "operation/cancel",
-        json!({ "key": key }),
+        json!({ "key": key_json }),
     )
     .await;
     assert_eq!(
@@ -286,11 +306,28 @@ async fn operation_dedup_round_trip() {
         caller.clone(),
         "operation-store",
         "operation/get",
-        json!({ "key": key }),
+        json!({ "key": key_json }),
     )
     .await;
     let state = get.get("state").and_then(Value::as_i64).unwrap();
     assert_eq!(state, 4);
+}
+
+fn decode_dedup_key(value: &Value) -> conex_core::operation::DedupKey {
+    use conex_core::operation::DedupKey;
+    let map = value.as_object().expect("key object");
+    DedupKey {
+        tenant_id: map["tenantId"].as_str().unwrap().into(),
+        principal_id: map["principalId"].as_str().unwrap().into(),
+        provider_endpoint_id: map["providerEndpointId"].as_str().unwrap().into(),
+        space_id: map
+            .get("spaceId")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        resource_id: map["resourceId"].as_str().unwrap().into(),
+        method: map["method"].as_str().unwrap().into(),
+        operation_id: map["operationId"].as_str().unwrap().into(),
+    }
 }
 
 #[tokio::test]
@@ -335,4 +372,5 @@ async fn agent_registration_and_resolve() {
 #[allow(dead_code)]
 fn _unused() {
     let _ = Map::<String, Value>::new();
+    let _ = "ok";
 }

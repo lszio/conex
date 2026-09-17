@@ -10,6 +10,7 @@ pub mod config;
 pub mod credentials;
 pub mod http;
 pub mod serve;
+pub mod tickets;
 pub mod ws_transport;
 
 pub use agent::*;
@@ -20,5 +21,5 @@ pub use broker::*;
 pub use config::*;
 pub use credentials::*;
 pub use http::*;
-pub use serve::*;
+pub use tickets::*;
 pub use ws_transport::*;

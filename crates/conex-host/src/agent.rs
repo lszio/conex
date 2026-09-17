@@ -405,9 +405,9 @@ pub fn string_list(map: &Map<String, Value>, key: &str) -> Result<Vec<String>, C
 }
 
 /// Dispatch agent wire methods to the in-process registry. The handler runs
-/// inside the broker so audit/limits already wrapped it.
+/// inside the broker; audit/limits are wrapped in `BrokerDeps` once the
+/// unified P1 audit sink lands.
 pub async fn handle(broker: &Broker, call: BrokerCall) -> Result<Value, CallError> {
-    let _ = broker;
     let map = match call.input.as_object() {
         Some(map) => map,
         None => {
@@ -419,6 +419,20 @@ pub async fn handle(broker: &Broker, call: BrokerCall) -> Result<Value, CallErro
     };
     match call.method.as_str() {
         "agent/register" => {
+            let host_origin = require_string(map, "hostOrigin")?.to_string();
+            if let Some(expected) = broker.deps().host_origin.as_deref() {
+                if host_origin != expected {
+                    return Err(CallError::new(
+                        v1::ErrorCode::Forbidden,
+                        format!("agent hostOrigin {host_origin} does not match host {expected}"),
+                    ));
+                }
+            } else if !host_origin.starts_with("conex://") {
+                return Err(CallError::new(
+                    v1::ErrorCode::BadRequest,
+                    "agent hostOrigin must start with conex://",
+                ));
+            }
             let registration = AgentRegistration {
                 agent_id: require_string(map, "agentId")?.to_string(),
                 principal_id: call.caller.principal_id.clone(),
@@ -428,7 +442,7 @@ pub async fn handle(broker: &Broker, call: BrokerCall) -> Result<Value, CallErro
                 resources: string_list(map, "resources")?,
                 registered_at_ms: now_ms(),
                 last_heartbeat_at_ms: now_ms(),
-                host_origin: require_string(map, "hostOrigin")?.to_string(),
+                host_origin,
             };
             broker_agents(broker)
                 .register(registration)

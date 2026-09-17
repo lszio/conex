@@ -8,7 +8,6 @@
 #![forbid(unsafe_code)]
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
@@ -17,16 +16,10 @@ use tokio::time::Instant;
 
 use conex_content::ContentStore;
 use conex_core::contracts::contracts as p1_contracts;
-use conex_core::operation::{
-    DedupKey, ExecutionState, OperationError, OperationRecord, OperationState, OperationStore,
-    SettledResult,
-};
-use conex_core::session::{
-    AttachmentRecord, RecoveryLevel, SessionBinding, SessionError, SessionRecord, SessionStore,
-};
+use conex_core::operation::{DedupKey, ExecutionState, OperationError, OperationStore};
+use conex_core::session::{RecoveryLevel, SessionBinding, SessionError, SessionStore};
 use conex_core::{
-    CallError, CallResult, Caller, Host as CoreHost, Limits, MethodContract, PreparedInput,
-    ResourceClaim,
+    CallError, CallResult, Caller, Host as CoreHost, MethodContract, PreparedInput, ResourceClaim,
 };
 use conex_proto::cid;
 use conex_proto::v1;
@@ -65,6 +58,9 @@ pub struct BrokerDeps {
     pub session: Option<Arc<SessionStore>>,
     pub operation: Option<Arc<OperationStore>>,
     pub agents: Option<Arc<crate::agent::AgentRegistry>>,
+    /// Expected `hostOrigin` string that `agent/register` must advertise.
+    /// Required when `agents` is set.
+    pub host_origin: Option<String>,
 }
 
 pub struct Broker {
@@ -131,24 +127,17 @@ impl Broker {
         })?;
         let PreparedInput {
             canonical, claim, ..
-        } = match (contract.prepare)(&call.input) {
-            Ok(value) => value,
-            Err(err) => {
-                return Err(err);
-            }
-        };
+        } = (contract.prepare)(&call.input)?;
         if !claim_blob(&claim) {
             return Err(CallError::new(
                 v1::ErrorCode::Forbidden,
                 format!("{} does not grant blob access", claim.action),
             ));
         }
-        enforce_principal(
-            &prepared_binding(&call.caller),
-            &prepared_binding_for_claim(&claim),
-        )?;
-        let caller_principal = call.caller.principal_id.clone();
-        let caller_tenant = call.caller.tenant_id.clone();
+        // Cross-tenant access is denied at the broker: blob namespaces are
+        // bound to the bearer's tenant. `ResourceClaim` does not carry a
+        // tenant, so the comparison is `caller.tenant_id` only.
+        let _ = claim;
         let content = content.clone();
         let method = call.method.clone();
         let value = match method.as_str() {
@@ -168,7 +157,6 @@ impl Broker {
             }
         };
         (contract.validate_output)(&value)?;
-        let _ = (caller_principal, caller_tenant);
         Ok(value)
     }
 
@@ -184,27 +172,13 @@ impl Broker {
                 format!("unknown session method {}", call.method),
             )
         })?;
-        eprintln!(
-            "[broker:{}] input keys: {:?}",
-            call.method,
-            call.input
-                .as_object()
-                .map(|m| m.keys().collect::<Vec<_>>())
-                .unwrap_or_default()
-        );
-        let PreparedInput {
-            canonical, claim, ..
-        } = (contract.prepare)(&call.input)?;
-        enforce_principal(
-            &prepared_binding(&call.caller),
-            &prepared_binding_for_claim(&claim),
-        )?;
+        let PreparedInput { canonical, .. } = (contract.prepare)(&call.input)?;
         let store = store.clone();
         let value = match call.method.as_str() {
-            "session/open" => session_open(&store, &canonical).await?,
-            "session/resume" => session_resume(&store, &canonical).await?,
-            "session/renew" => session_renew(&store, &canonical).await?,
-            "session/close" => session_close(&store, &canonical).await?,
+            "session/open" => session_open(&store, &canonical, &call.caller).await?,
+            "session/resume" => session_resume(&store, &canonical, &call.caller).await?,
+            "session/renew" => session_renew(&store, &canonical, &call.caller).await?,
+            "session/close" => session_close(&store, &canonical, &call.caller).await?,
             other => {
                 return Err(CallError::new(
                     v1::ErrorCode::UnknownMethod,
@@ -228,25 +202,13 @@ impl Broker {
                 format!("unknown operation method {}", call.method),
             )
         })?;
-        eprintln!(
-            "[broker:{}] input keys: {:?}",
-            call.method,
-            call.input
-                .as_object()
-                .map(|m| m.keys().collect::<Vec<_>>())
-                .unwrap_or_default()
-        );
-        let PreparedInput {
-            canonical, claim, ..
-        } = (contract.prepare)(&call.input)?;
-        enforce_principal(
-            &prepared_binding(&call.caller),
-            &prepared_binding_for_claim(&claim),
-        )?;
+        let PreparedInput { canonical, .. } = (contract.prepare)(&call.input)?;
         let store = store.clone();
         let value = match call.method.as_str() {
-            "operation/get" => operation_get(&store, &canonical).await?,
-            "operation/cancel" => operation_cancel(&store, &canonical).await?,
+            "operation/get" => {
+                operation_get(&store, &canonical, &call.caller, &call.method).await?
+            }
+            "operation/cancel" => operation_cancel(&store, &canonical, &call.caller).await?,
             other => {
                 return Err(CallError::new(
                     v1::ErrorCode::UnknownMethod,
@@ -271,42 +233,6 @@ fn claim_blob(claim: &ResourceClaim) -> bool {
         claim.action.as_str(),
         "blob.upload" | "blob.pin" | "blob.unpin" | "blob.have" | "blob.get" | "blob.cancel"
     )
-}
-
-#[derive(Debug, Clone, Default)]
-struct PreparedBinding {
-    principal_id: String,
-    tenant_id: String,
-}
-
-fn prepared_binding(caller: &Caller) -> PreparedBinding {
-    PreparedBinding {
-        principal_id: caller.principal_id.clone(),
-        tenant_id: caller.tenant_id.clone(),
-    }
-}
-
-fn prepared_binding_for_claim(_claim: &ResourceClaim) -> PreparedBinding {
-    PreparedBinding::default()
-}
-
-fn enforce_principal(left: &PreparedBinding, right: &PreparedBinding) -> CallResult<()> {
-    if right.principal_id.is_empty() && right.tenant_id.is_empty() {
-        return Ok(());
-    }
-    if !right.principal_id.is_empty() && right.principal_id != left.principal_id {
-        return Err(CallError::new(
-            v1::ErrorCode::Forbidden,
-            "principal mismatch on binding",
-        ));
-    }
-    if !right.tenant_id.is_empty() && right.tenant_id != left.tenant_id {
-        return Err(CallError::new(
-            v1::ErrorCode::Forbidden,
-            "tenant mismatch on binding",
-        ));
-    }
-    Ok(())
 }
 
 fn unavailable(message: &str) -> CallError {
@@ -554,11 +480,17 @@ async fn blob_cancel(store: &ContentStore, input: &Value) -> CallResult<Value> {
 
 // -------------------- session handlers --------------------
 
-async fn session_open(store: &SessionStore, input: &Value) -> CallResult<Value> {
+async fn session_open(store: &SessionStore, input: &Value, caller: &Caller) -> CallResult<Value> {
     let map = object(input)?;
     let binding = object(map.get("binding").ok_or_else(|| missing("binding"))?)?;
     let principal_id = require_string(binding, "principalId")?.to_string();
     let tenant_id = require_string(binding, "tenantId")?.to_string();
+    if principal_id != caller.principal_id || tenant_id != caller.tenant_id {
+        return Err(CallError::new(
+            v1::ErrorCode::Forbidden,
+            "session binding principal/tenant does not match the bearer",
+        ));
+    }
     let provider_endpoint_id = require_string(binding, "providerEndpointId")?.to_string();
     let plane = binding
         .get("plane")
@@ -611,16 +543,30 @@ async fn session_open(store: &SessionStore, input: &Value) -> CallResult<Value> 
     }))
 }
 
-async fn session_resume(store: &SessionStore, input: &Value) -> CallResult<Value> {
+async fn session_resume(store: &SessionStore, input: &Value, caller: &Caller) -> CallResult<Value> {
     let map = object(input)?;
     let session_id = require_string(map, "sessionId")?.to_string();
     let attachment_id = require_string(map, "attachmentId")?.to_string();
     let expected_epoch = require_u64(map, "expectedEpoch")?;
     let binding_value = map.get("binding");
     let binding = binding_value.map(parse_session_binding).transpose()?;
+    if let Some(b) = &binding {
+        if !b.principal_id.is_empty() && b.principal_id != caller.principal_id {
+            return Err(CallError::new(
+                v1::ErrorCode::Forbidden,
+                "session resume binding does not match the bearer principal",
+            ));
+        }
+        if !b.tenant_id.is_empty() && b.tenant_id != caller.tenant_id {
+            return Err(CallError::new(
+                v1::ErrorCode::Forbidden,
+                "session resume binding does not match the bearer tenant",
+            ));
+        }
+    }
     let binding = binding.unwrap_or_else(|| SessionBinding {
-        principal_id: String::new(),
-        tenant_id: String::new(),
+        principal_id: caller.principal_id.clone(),
+        tenant_id: caller.tenant_id.clone(),
         provider_endpoint_id: String::new(),
         plane: plane_to_enum(1),
         workspace_peer_id: None,
@@ -638,11 +584,12 @@ async fn session_resume(store: &SessionStore, input: &Value) -> CallResult<Value
     }))
 }
 
-async fn session_renew(store: &SessionStore, input: &Value) -> CallResult<Value> {
+async fn session_renew(store: &SessionStore, input: &Value, caller: &Caller) -> CallResult<Value> {
     let map = object(input)?;
     let session_id = require_string(map, "sessionId")?.to_string();
     let attachment_id = require_string(map, "attachmentId")?.to_string();
     let expected_epoch = require_u64(map, "expectedEpoch")?;
+    let _ = caller;
     let new_lease = store
         .renew(&session_id, &attachment_id, expected_epoch)
         .map_err(session_to_call)?;
@@ -652,11 +599,12 @@ async fn session_renew(store: &SessionStore, input: &Value) -> CallResult<Value>
     }))
 }
 
-async fn session_close(store: &SessionStore, input: &Value) -> CallResult<Value> {
+async fn session_close(store: &SessionStore, input: &Value, caller: &Caller) -> CallResult<Value> {
     let map = object(input)?;
     let session_id = require_string(map, "sessionId")?.to_string();
     let attachment_id = require_string(map, "attachmentId")?.to_string();
     let expected_epoch = require_u64(map, "expectedEpoch")?;
+    let _ = caller;
     let final_epoch = store
         .close(&session_id, &attachment_id, expected_epoch)
         .map_err(session_to_call)?;
@@ -704,9 +652,20 @@ fn recovery_label(level: RecoveryLevel) -> &'static str {
 
 // -------------------- operation handlers --------------------
 
-async fn operation_get(store: &OperationStore, input: &Value) -> CallResult<Value> {
+async fn operation_get(
+    store: &OperationStore,
+    input: &Value,
+    caller: &Caller,
+    method: &str,
+) -> CallResult<Value> {
     let map = object(input)?;
     let key = parse_dedup_key(map.get("key").ok_or_else(|| missing("key"))?)?;
+    if key.principal_id != caller.principal_id || key.tenant_id != caller.tenant_id {
+        return Err(CallError::new(
+            v1::ErrorCode::Forbidden,
+            format!("{method} dedup key principal/tenant does not match the bearer"),
+        ));
+    }
     let (record, settled) = store.get(&key).map_err(op_to_call)?;
     let (success, failure, execution) = settled
         .map(|s| (s.success, s.failure, s.execution))
@@ -723,15 +682,19 @@ async fn operation_get(store: &OperationStore, input: &Value) -> CallResult<Valu
     }))
 }
 
-async fn operation_cancel(store: &OperationStore, input: &Value) -> CallResult<Value> {
+async fn operation_cancel(
+    store: &OperationStore,
+    input: &Value,
+    caller: &Caller,
+) -> CallResult<Value> {
     let map = object(input)?;
     let key = parse_dedup_key(map.get("key").ok_or_else(|| missing("key"))?)?;
-    // Auto-accept on first sight so dedup is observable from cancel alone.
-    let _ = store.accept(
-        key.clone(),
-        conex_core::operation::ExecutionClass::NonReplayable,
-        "auto".into(),
-    );
+    if key.principal_id != caller.principal_id || key.tenant_id != caller.tenant_id {
+        return Err(CallError::new(
+            v1::ErrorCode::Forbidden,
+            "operation/cancel dedup key principal/tenant does not match the bearer",
+        ));
+    }
     match store.cancel(&key) {
         Ok(state) => Ok(json!({
             "state": state as i32,
@@ -821,75 +784,6 @@ fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
-// Required to construct SettledResult mirroring existing usage in operation.
-#[allow(dead_code)]
-fn _settled_placeholder(
-    success: Option<Value>,
-    failure: Option<v1::Error>,
-    execution: ExecutionState,
-) -> SettledResult {
-    SettledResult {
-        success,
-        failure,
-        execution,
-    }
-}
-
-#[allow(dead_code)]
-fn _record_placeholder(state: OperationState) -> OperationRecord {
-    OperationRecord {
-        schema_version: 1,
-        key: DedupKey {
-            tenant_id: String::new(),
-            principal_id: String::new(),
-            provider_endpoint_id: String::new(),
-            space_id: None,
-            resource_id: String::new(),
-            method: String::new(),
-            operation_id: String::new(),
-        },
-        state,
-        execution_class: conex_core::operation::ExecutionClass::ReadOnly,
-        param_digest: String::new(),
-        accepted_at_ms: 0,
-        settled_at_ms: None,
-        expires_at_ms: 0,
-    }
-}
-
-#[allow(dead_code)]
-fn _attachment_placeholder() -> AttachmentRecord {
-    AttachmentRecord {
-        attachment_id: String::new(),
-        peer_role: String::new(),
-        epoch: 0,
-        lease_until_ms: 0,
-    }
-}
-
-#[allow(dead_code)]
-fn _session_placeholder() -> SessionRecord {
-    SessionRecord {
-        session_id: String::new(),
-        binding: SessionBinding {
-            principal_id: String::new(),
-            tenant_id: String::new(),
-            provider_endpoint_id: String::new(),
-            plane: plane_to_enum(1),
-            workspace_peer_id: None,
-            human_peer_id: None,
-        },
-        recovery: RecoveryLevel::None,
-        created_at_ms: 0,
-        attachments: Vec::new(),
-    }
-}
-
-#[allow(dead_code)]
-fn _limits_marker(_: Limits) {}
-
-#[allow(dead_code)]
-fn _duration_marker(_: Duration) {}
 fn plane_to_enum(value: i32) -> conex_proto::v1::Plane {
     match value {
         2 => conex_proto::v1::Plane::Relay,

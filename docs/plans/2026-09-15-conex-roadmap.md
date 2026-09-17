@@ -1,6 +1,6 @@
 # conex 分阶段实现路线图
 
-> 状态：P0 已交付（`e649ded`）；P1 执行中（`2c9a06e` 交付 P1-01 契约冻结与 P1-02/03/06/07/08 离线切片，未接入 wire/Registry）。当前阻塞项见 [P1 执行计划](2026-09-15-conex-p1.md) §2.1/§3.0。本文件只维护阶段、依赖与工作包，不重复执行级细节。
+> 状态：P0 已交付（`e649ded`）；P1 库级切片完成（`a2ee453`，含 `conex-host::broker/agent`、`conex-content` 持久化、P1-01b 规范化字节统一），但 **P1 仍未接入 host 装配根**——`serve::build` 不构造 P1 后端，`/wss` `/tickets` `/oidc/*` 不可达，broker/agent 不经资源策略与审计，P1-04 Stream、真 OIDC、protobuf WSS profile 仍为设计验收项。当前阻塞项见 [P1 执行计划](2026-09-15-conex-p1.md) §3.0；下一步先接线，再补齐 P1-04 Stream 与真 OIDC，最后进入 P2。本文件只维护阶段、依赖与工作包，不重复执行级细节。
 
 **Goal:** 在已交付的 broker 路由内核（P0）之上，按独立门槛增加反连、ACP/MCP 和可选 P2P。
 

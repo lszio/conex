@@ -30,6 +30,22 @@ pub struct HostConfig {
     pub policy: Vec<PolicyConfig>,
     #[serde(default)]
     pub endpoints: Vec<EndpointConfig>,
+    /// Local persistent root for the P1 blob backend
+    /// (`conex-content::ContentStore`). When `None` the `/rpc` host disables
+    /// `blob/*` and `p1_e2e` semantics still work via direct broker tests.
+    #[serde(default)]
+    pub content_root: Option<PathBuf>,
+    /// Local persistent root for `conex-core::session::SessionStore`.
+    #[serde(default)]
+    pub session_root: Option<PathBuf>,
+    /// Local persistent root for `conex-core::operation::OperationStore`.
+    #[serde(default)]
+    pub operation_root: Option<PathBuf>,
+    /// Public origin the host expects reverse-connection agents to advertise
+    /// in `agent/register.hostOrigin`. Defaults to `audience()` when unset.
+    /// Only the prefix is checked; full PKI pinning is a future item.
+    #[serde(default)]
+    pub host_origin: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -172,6 +188,35 @@ impl HostConfig {
         self.audience
             .clone()
             .unwrap_or_else(|| "conex-host".to_string())
+    }
+
+    pub fn host_origin(&self) -> String {
+        self.host_origin.clone().unwrap_or_else(|| {
+            // Reasonable default: treat the audience as the host origin in
+            // dev. Production deployments should set `host_origin`.
+            self.audience()
+        })
+    }
+
+    pub fn p1_backends(&self) -> P1Backends {
+        P1Backends {
+            content: self.content_root.clone(),
+            session: self.session_root.clone(),
+            operation: self.operation_root.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct P1Backends {
+    pub content: Option<PathBuf>,
+    pub session: Option<PathBuf>,
+    pub operation: Option<PathBuf>,
+}
+
+impl P1Backends {
+    pub fn is_complete(&self) -> bool {
+        self.content.is_some() && self.session.is_some() && self.operation.is_some()
     }
 }
 
