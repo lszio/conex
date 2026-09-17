@@ -204,9 +204,15 @@ pub async fn oidc_authorize(
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OidcTokenRequest {
+    #[serde(default)]
     pub code: String,
+    #[serde(default)]
     pub code_verifier: String,
+    #[serde(default)]
     pub origin: String,
+    /// Verified-mode: RS256 id_token from the pinned issuer.
+    #[serde(default)]
+    pub id_token: Option<String>,
 }
 
 pub async fn oidc_token(
@@ -222,6 +228,48 @@ pub async fn oidc_token(
             ));
         }
     };
+    // Real verification mode: `[oidc]` configured ⇒ the client presents an
+    // idToken signed by the pinned issuer; the dev code/PKCE path is off.
+    if let Some(verifier) = &side.verifier {
+        return match &request.id_token {
+            Some(id_token) => match verifier.verify(id_token) {
+                Ok(claims) => {
+                    let principal_id = claims.subject;
+                    let tenant_id = "oidc".to_string();
+                    let mut seed = Vec::new();
+                    seed.extend_from_slice(principal_id.as_bytes());
+                    seed.push(b':');
+                    seed.extend_from_slice(tenant_id.as_bytes());
+                    seed.push(b':');
+                    seed.extend_from_slice(claims.issuer.as_bytes());
+                    seed.push(b':');
+                    seed.extend_from_slice(b"web");
+                    seed.push(b':');
+                    seed.extend_from_slice(b"verified");
+                    let ticket_value = base64::engine::general_purpose::URL_SAFE_NO_PAD
+                        .encode(Sha256::digest(&seed));
+                    (
+                        StatusCode::OK,
+                        Json(json!({
+                            "principalId": principal_id,
+                            "tenantId": tenant_id,
+                            "issuer": claims.issuer,
+                            "ticket": ticket_value,
+                        })),
+                    )
+                        .into_response()
+                }
+                Err(error) => call_error_data_to_response(CallError::new(
+                    v1::ErrorCode::Unauthorized,
+                    format!("id_token verification failed: {error}"),
+                )),
+            },
+            None => call_error_data_to_response(CallError::new(
+                v1::ErrorCode::BadRequest,
+                "idToken is required when [oidc] is configured",
+            )),
+        };
+    }
     match side
         .oidc
         .exchange(&request.code, &request.code_verifier, &request.origin)

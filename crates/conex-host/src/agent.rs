@@ -484,6 +484,10 @@ pub struct HostSide {
     pub agents: Arc<AgentRegistry>,
     pub tickets: Arc<TicketRegistry>,
     pub oidc: Arc<OidcRegistry>,
+    /// Real RS256 id_token verifier. `Some` when `[oidc]` is configured;
+    /// `/oidc/token` then verifies presented id_tokens instead of the
+    /// dev-only code/PKCE pass-through.
+    pub verifier: Option<Arc<crate::oidc_jwt::OidcVerifier>>,
 }
 
 impl HostSide {
@@ -492,7 +496,13 @@ impl HostSide {
             agents: Arc::new(AgentRegistry::new()),
             tickets: Arc::new(TicketRegistry::new()),
             oidc: Arc::new(OidcRegistry::new()),
+            verifier: None,
         }
+    }
+
+    pub fn with_verifier(mut self, verifier: Arc<crate::oidc_jwt::OidcVerifier>) -> Self {
+        self.verifier = Some(verifier);
+        self
     }
 }
 
