@@ -20,7 +20,8 @@ use std::time::Duration as StdDuration;
 use tokio::time::Instant;
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::response::IntoResponse;
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
 use futures::{SinkExt, StreamExt};
 use serde_json::{Value, json};
 use tokio::sync::Mutex;
@@ -28,11 +29,15 @@ use tokio::sync::Mutex;
 use conex_core::transport_ws::{
     BootstrapError, BootstrapFrame, ClientHandshake, ProfileId, ServerHandshake, plane_name,
 };
+const WSS_PROFILE: ProfileId = ProfileId::JsonRpc2WssV1;
 use conex_core::{CallContext, CallError, CallResult, Limits, MethodContract};
 use conex_proto::cid;
 use conex_proto::v1;
 
 use crate::broker::{Broker, BrokerCall, BrokerFrame};
+use crate::http::HttpState;
+
+pub const WSS_NEGOTIATION_TIMEOUT: StdDuration = StdDuration::from_secs(10);
 
 /// State shared by every WS connection: business dispatcher + Limits.
 pub struct WssState {
@@ -56,6 +61,30 @@ pub async fn ws_handler(
     axum::extract::State(state): axum::extract::State<Arc<WssState>>,
 ) -> impl IntoResponse {
     ws.on_upgrade(move |socket| handle_connection(socket, state))
+}
+
+/// Axum handler bound to [`HttpState`] in the HTTP router.
+pub async fn ws_handler_with_state(
+    ws: WebSocketUpgrade,
+    axum::Extension(state): axum::Extension<Arc<HttpState>>,
+) -> Response {
+    let Some(broker) = state.broker.clone() else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            axum::Json(json!({
+                "code": v1::ErrorCode::Unavailable as i32,
+                "message": "p1 backend is not configured",
+            })),
+        )
+            .into_response();
+    };
+    let wss_state = Arc::new(WssState::new(
+        broker,
+        conex_core::Limits::default(),
+        WSS_PROFILE,
+    ));
+    ws.on_upgrade(move |socket| handle_connection(socket, wss_state))
+        .into_response()
 }
 
 async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {

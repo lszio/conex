@@ -4,36 +4,77 @@ use std::time::Duration;
 
 use axum::Router;
 use axum::body::Bytes;
-use axum::extract::{DefaultBodyLimit, State};
+use axum::extract::DefaultBodyLimit;
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::post;
+use axum::routing::{get, post};
 use conex_core::{CallError, Host, Limits};
 use conex_proto::v1;
 use conex_proto::wire::{ProtocolError, decode_wire, encode_wire};
 use serde_json::{Map, Value};
 
+use axum::Extension;
+
+use crate::agent::HostSide;
 use crate::auth::{InboundAuth, InboundCaller};
 use crate::binding::BindingStore;
+use crate::broker::{Broker, BrokerCall};
+use crate::tickets;
 
 pub const PROFILE_ID: &str = "conex-jsonrpc2-http-v1";
 pub const MAX_BODY_BYTES: usize = 1_048_576;
 pub const HELLO_METHOD: &str = "conex/hello";
 
+/// Everything the host wires per-process. Attached to every request via
+/// `Router::layer(Extension(state))`.
 pub struct HttpState {
     pub host: Arc<Host>,
     pub bindings: Arc<BindingStore>,
     pub auth: Arc<dyn InboundAuth>,
+    /// P1 dispatcher. When `Some`, methods prefixed with `blob/`/`session/`/
+    /// `operation/`/`agent/` are routed here; other methods still go to
+    /// the P0 host. The /wss, /tickets and /oidc/* routes only mount when
+    /// this is set (see [`attach_p1`]).
+    pub broker: Option<Arc<Broker>>,
+    /// P1 sidecar state (tickets, OIDC, agent registry). Only set when
+    /// `broker` is also set.
+    pub host_side: Option<HostSide>,
+    /// P1 capabilities to advertise through hello.
+    pub p1_provides: Vec<String>,
 }
 
-pub fn router(state: Arc<HttpState>) -> Router {
+/// Build the P0 `/rpc` router without any shared state attached. Callers
+/// must wrap it (typically with `Extension(state)`) before serving. This
+/// keeps the router state-agnostic so P1 routes can be added later without
+/// double-injecting extensions.
+pub fn build_router() -> Router {
     Router::new()
         .route("/rpc", post(rpc))
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
-        .with_state(state)
 }
 
-async fn rpc(State(state): State<Arc<HttpState>>, headers: HeaderMap, body: Bytes) -> Response {
+/// Wrap a router with the shared `HttpState` extension so every handler
+/// (P0 and P1) can pull it via `Extension<Arc<HttpState>>`.
+pub fn attach_state(state: Arc<HttpState>, inner: Router) -> Router {
+    inner.layer(Extension(state))
+}
+
+/// Mount P1 routes (`/wss`, `/tickets`, `/oidc/*`) onto a router built by
+/// [`router`]. All P1 routes pull state via `Extension<Arc<HttpState>>`;
+/// the caller must wrap the final router with [`with_state`] before
+/// serving.
+pub fn attach_p1(base: Router) -> Router {
+    base.route("/wss", get(crate::ws_transport::ws_handler_with_state))
+        .route("/tickets", post(tickets::issue_ticket))
+        .route("/oidc/authorize", post(tickets::oidc_authorize))
+        .route("/oidc/token", post(tickets::oidc_token))
+}
+
+async fn rpc(
+    Extension(state): Extension<Arc<HttpState>>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
     if !is_json(&headers) {
         return (
             StatusCode::UNSUPPORTED_MEDIA_TYPE,
@@ -136,6 +177,31 @@ async fn handle_request(
         return failure(&request_id, error);
     }
     let timeout = Duration::from_millis(u64::from(params.timeout_budget_ms.max(1)));
+    if is_p1_method(&request.method) {
+        let Some(broker) = state.broker.clone() else {
+            return failure(
+                &request_id,
+                CallError::new(
+                    v1::ErrorCode::Unavailable,
+                    format!(
+                        "{} is not wired into this host (configure content_root/session_root/operation_root)",
+                        request.method
+                    ),
+                ),
+            );
+        };
+        let call = BrokerCall {
+            caller: inbound.caller.clone(),
+            endpoint_id: context.provider_endpoint_id.clone(),
+            method: request.method.clone(),
+            input,
+            deadline: tokio::time::Instant::now() + timeout,
+        };
+        return match broker.invoke(call).await {
+            Ok(value) => success(&request_id, value),
+            Err(error) => failure(&request_id, error),
+        };
+    }
     match state
         .host
         .invoke(
@@ -150,6 +216,13 @@ async fn handle_request(
         Ok(value) => success(&request_id, value),
         Err(error) => failure(&request_id, error),
     }
+}
+
+fn is_p1_method(method: &str) -> bool {
+    method.starts_with("blob/")
+        || method.starts_with("session/")
+        || method.starts_with("operation/")
+        || method.starts_with("agent/")
 }
 
 async fn handle_notification(

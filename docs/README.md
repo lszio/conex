@@ -5,7 +5,7 @@ conex 的文档按「规范 / 契约 / 计划 / 证据 / 操作」分层，每�
 ## 状态（2026-09-16 复核）
 
 - **P0 已交付**（提交 `e649ded`）：broker 只读数据连接，JSON-RPC/HTTP 与 inproc 共用同一授权执行路径；fs 与 HTTP catalog 两个 provider；TypeScript consumer；P0 门禁与 CI。
-- **P1 已交付**：broker dispatcher 统一 HTTP `/rpc` 与 WSS `/wss` 业务帧；`conex-host::agent` 提供 OIDC code+PKCE + 30s ticket；`conex-agent` CLI 与 in-memory 注册表覆盖反连；`conex-content` commit 按上传自身块重算根并持久化 manifest 对象；P1-01c（门禁诚实性）已落地（conformance runner 按目录选步骤 + `xtask check` 含 e2e）；`cargo test --test p1_e2e` 与 `cargo xtask check` 全绿。逐包证据见 [P1 验证记录](verification/p1.md)，运行手册见 [P1 运行手册](runbooks/p1.md)；下一步进入 P2（ACP/MCP，详见 [路线图](plans/2026-09-15-conex-roadmap.md)）。
+- **P1 库级切片完成**（`a2ee453`）：`conex-proto::cid` 单一寻址 + `ChunkManifest` wire（`P1-01b`，`7daf172`）、`conex-content` 持久化与崩溃恢复、`conex-core::{session,operation}`、`conex-host::broker` 库、`conex-host::agent` OIDC+ticket、`conex-agent` CLI 桩、`p1_e2e` 进程内 4 用例、`xtask check` 全绿。**P1 尚未接入 host 装配根**——`serve::build` 不构造 P1 后端，`/wss` `/tickets` `/oidc/*` 在运行二进制 404，broker/agent 不经过资源策略与审计，P1-04 Stream 仍为设计验收项。逐包证据见 [P1 验证记录](verification/p1.md)；接线、授权/审计修复、P1-04 Stream、真 OIDC 完成后才进入 P2（ACP/MCP，详见 [路线图](plans/2026-09-15-conex-roadmap.md)）。
 - 完成状态与证据以 [P1 验证记录](verification/p1.md)、[P0 验证记录](verification/p0.md) 为准；P0 执行计划已归档。
 
 ## 文档地图

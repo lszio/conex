@@ -5,7 +5,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+use axum::Router;
 use axum_server::Handle;
+use conex_content::ContentStore;
+use conex_core::operation::OperationStore;
+use conex_core::session::SessionStore;
 use conex_core::{
     AuditSink, CallError, CredentialKey, Endpoint, FactoryKey, Host, HostLimits, Installation,
     Limits, Policy, PolicyRule, Registry, RegistryError, StaticPolicy, Target, TargetPolicy,
@@ -15,18 +19,45 @@ use conex_proto::v1;
 use conex_transport_http::{HttpConnector, TlsTrustConfig, TokioResolver};
 use serde_json::{Value, json};
 
+use crate::agent::HostSide;
 use crate::audit_file::{FileAuditSink, NullAudit};
 use crate::auth::{InboundAuth, StaticBearerAuth, TokenRecord};
 use crate::binding::BindingStore;
+use crate::broker::{Broker, BrokerDeps};
 use crate::config::{EndpointConfig, HostConfig};
 use crate::credentials::{CredentialBackend, CredentialBinding, EnvFileStore};
-use crate::http::{HttpState, PROFILE_ID, router};
+use crate::http::{
+    HttpState, PROFILE_ID, attach_p1, attach_state, build_router as build_p0_router,
+};
 
 pub struct BuiltHost {
     pub host: Arc<Host>,
     pub bindings: Arc<BindingStore>,
     pub auth: Arc<dyn InboundAuth>,
+    pub broker: Option<Arc<Broker>>,
+    pub host_side: Option<HostSide>,
+    pub p1_provides: Vec<String>,
 }
+
+pub const P1_PROVIDES: &[&str] = &[
+    "blob/put",
+    "blob/chunk",
+    "blob/commit",
+    "blob/pin",
+    "blob/unpin",
+    "blob/have",
+    "blob/get",
+    "blob/cancel",
+    "session/open",
+    "session/resume",
+    "session/renew",
+    "session/close",
+    "operation/get",
+    "operation/cancel",
+    "agent/register",
+    "agent/heartbeat",
+    "agent/resolve",
+];
 
 pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
     config.validate()?;
@@ -103,6 +134,64 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
         audit,
         HostLimits::default(),
     )?);
+
+    // P1 backends. The host runs as P0-only when `content_root/session_root/
+    // operation_root` are all `None`; any one configured is a contract
+    // error (operators must wire all three or none so cross-store references
+    // stay consistent).
+    let backends = config.p1_backends();
+    let p1_active = backends.is_complete();
+    let (content_store, session_store, operation_store) = if p1_active {
+        let content_root = backends.content.expect("p1_backends complete");
+        let session_root = backends.session.expect("p1_backends complete");
+        let operation_root = backends.operation.expect("p1_backends complete");
+        if !content_root.exists() {
+            std::fs::create_dir_all(&content_root).map_err(invalid)?;
+        }
+        if !session_root.exists() {
+            std::fs::create_dir_all(&session_root).map_err(invalid)?;
+        }
+        if !operation_root.exists() {
+            std::fs::create_dir_all(&operation_root).map_err(invalid)?;
+        }
+        let content = Arc::new(ContentStore::open(&content_root, 60_000).map_err(invalid)?);
+        let session = Arc::new(SessionStore::open(&session_root).map_err(invalid)?);
+        let operation = Arc::new(OperationStore::open(&operation_root).map_err(invalid)?);
+        (Some(content), Some(session), Some(operation))
+    } else {
+        (None, None, None)
+    };
+    let host_side = if p1_active {
+        Some(HostSide::new())
+    } else {
+        None
+    };
+    let broker = if p1_active {
+        let deps = BrokerDeps {
+            content: content_store.clone(),
+            session: session_store.clone(),
+            operation: operation_store.clone(),
+            agents: host_side.as_ref().map(|side| side.agents.clone()),
+            host_origin: Some(config.host_origin()),
+        };
+        Some(Arc::new(Broker::new(host.clone(), deps)))
+    } else {
+        None
+    };
+
+    let p1_provides: Vec<String> = if broker.is_some() {
+        P1_PROVIDES.iter().map(|s| s.to_string()).collect()
+    } else {
+        Vec::new()
+    };
+    if broker.is_some() {
+        for values in capabilities.values_mut() {
+            values.extend(p1_provides.iter().cloned());
+            values.sort();
+            values.dedup();
+        }
+    }
+
     let bindings = Arc::new(BindingStore::new(
         PROFILE_ID,
         config.audience(),
@@ -119,16 +208,34 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
         host,
         bindings,
         auth,
+        broker,
+        host_side,
+        p1_provides,
     })
 }
 
-pub fn build_router(config: &HostConfig) -> Result<axum::Router, CallError> {
+pub fn build_router(config: &HostConfig) -> Result<Router, CallError> {
     let built = build(config)?;
-    Ok(router(Arc::new(HttpState {
-        host: built.host,
-        bindings: built.bindings,
-        auth: built.auth,
-    })))
+    let http_state = Arc::new(HttpState {
+        host: built.host.clone(),
+        bindings: built.bindings.clone(),
+        auth: built.auth.clone(),
+        broker: built.broker.clone(),
+        host_side: built.host_side.clone(),
+        p1_provides: built.p1_provides.clone(),
+    });
+    let mut base = build_p0_router();
+    if built.broker.is_some() && built.host_side.is_some() {
+        base = attach_p1(base);
+    }
+    Ok(attach_state(http_state, base))
+}
+
+/// Wire P1 HTTP routes (`/wss`, `/tickets`, `/oidc/*`) onto the base router.
+/// Kept as a thin wrapper for backwards compatibility; the single-layer
+/// `with_state` wrap is applied by `build_router` once at the top.
+pub fn attach_p1_routes(base: Router) -> Router {
+    attach_p1(base)
 }
 
 pub async fn serve(config: HostConfig) -> Result<(), CallError> {
