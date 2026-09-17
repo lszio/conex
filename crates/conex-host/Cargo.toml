@@ -23,6 +23,7 @@ futures = "0.3"
 hex.workspace = true
 pbjson-types.workspace = true
 prost.workspace = true
+ring = "0.17"
 rustls.workspace = true
 rustls-pemfile.workspace = true
 serde.workspace = true

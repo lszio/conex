@@ -46,6 +46,30 @@ pub struct HostConfig {
     /// Only the prefix is checked; full PKI pinning is a future item.
     #[serde(default)]
     pub host_origin: Option<String>,
+    /// Real OIDC verification (RS256 + issuer/audience/nonce + JWKS).
+    /// When set, `/oidc/token` verifies a presented `idToken` signature
+    /// instead of the dev-only code/PKCE pass-through.
+    #[serde(default)]
+    pub oidc: Option<OidcConfig>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OidcConfig {
+    /// `iss` claim the host pins to (exact string).
+    pub id_token_issuer: String,
+    /// `aud` claim the host accepts (the host's OIDC client id).
+    pub client_id: String,
+    /// Optional `nonce` the browser flow must present.
+    #[serde(default)]
+    pub nonce: Option<String>,
+    /// Inline JWKS document (`{"keys":[...]}`); `jwks_json` and `jwks_path`
+    /// are alternatives, exactly one must be set.
+    #[serde(default)]
+    pub jwks_json: Option<String>,
+    /// Path to a JWKS JSON file.
+    #[serde(default)]
+    pub jwks_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

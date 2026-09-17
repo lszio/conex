@@ -442,6 +442,7 @@ dependencies = [
  "prost",
  "rcgen",
  "reqwest",
+ "ring",
  "rustls",
  "rustls-pemfile",
  "serde",

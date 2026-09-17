@@ -164,11 +164,34 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
     } else {
         (None, None, None)
     };
-    let host_side = if p1_active {
+    let mut host_side = if p1_active {
         Some(HostSide::new())
     } else {
         None
     };
+    if let Some(oidc_cfg) = &config.oidc {
+        let jwks_json = match (&oidc_cfg.jwks_json, &oidc_cfg.jwks_path) {
+            (Some(json), None) => json.clone(),
+            (None, Some(path)) => std::fs::read_to_string(path).map_err(invalid)?,
+            _ => {
+                return Err(invalid(
+                    "oidc requires exactly one of jwks_json or jwks_path",
+                ));
+            }
+        };
+        let jwks = crate::oidc_jwt::Jwks::parse(&jwks_json)
+            .map_err(|e| invalid(format!("invalid JWKS: {e}")))?;
+        let verifier = crate::oidc_jwt::OidcVerifier::new(
+            &oidc_cfg.id_token_issuer,
+            vec![oidc_cfg.client_id.clone()],
+            oidc_cfg.nonce.clone(),
+            jwks,
+        );
+        if let Some(side) = host_side.as_mut() {
+            *side = side.clone().with_verifier(Arc::new(verifier));
+        }
+    }
+    let host_side = host_side;
     let broker = if p1_active {
         let deps = BrokerDeps {
             content: content_store.clone(),
