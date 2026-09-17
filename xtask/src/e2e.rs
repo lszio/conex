@@ -10,8 +10,83 @@ use sha2::{Digest, Sha256};
 pub fn run(suite: &str) -> Result<()> {
     match suite {
         "p0-ts" => run_p0_ts(),
+        "p1-stream-1gib" => run_p1_stream_1gib(),
         other => bail!("unknown e2e suite: {other}"),
     }
+}
+
+/// Spawn the host with P1 backends and run the Bun 1 GiB-over-stream test
+/// (design §14 P1 #1: 1 GiB through the protobuf blob channel with bounded
+/// memory, bad chunk rejection, and staging surviving a dropped connection).
+fn run_p1_stream_1gib() -> Result<()> {
+    let root = repo_root()?;
+    let build = Command::new("cargo")
+        .args(["build", "-p", "conex-host", "--quiet"])
+        .current_dir(&root)
+        .status()
+        .context("build conex-host")?;
+    if !build.success() {
+        bail!("cargo build -p conex-host failed");
+    }
+
+    let port = free_port()?;
+    let token = "e2e-token";
+    let token_hash = hex::encode(Sha256::digest(token.as_bytes()));
+    let fixtures = root.join("fixtures/p0/notes");
+    let dir = tempfile::tempdir().context("create e2e temp dir")?;
+    let content = dir.path().join("content");
+    let session = dir.path().join("session");
+    let operation = dir.path().join("operation");
+    for p in [&content, &session, &operation] {
+        std::fs::create_dir_all(p).context("mkdir p1 root")?;
+    }
+    let config = format!(
+        "listen = \"127.0.0.1:{port}\"\nallow_loopback_http = true\naudience = \"host.local\"\n\
+host_origin = \"conex://broker.local\"\n\
+content_root = \"{}\"\nsession_root = \"{}\"\noperation_root = \"{}\"\n\
+[[tokens]]\ntoken_hash = \"{token_hash}\"\nprincipal_id = \"alice\"\ntenant_id = \"tenant-a\"\naudience = \"host.local\"\n\
+[[policy]]\nprincipal_id = \"alice\"\ntenant_id = \"tenant-a\"\nendpoint_id = \"notes-local\"\nactions = [\"list\", \"read\", \"search\"]\nroot = \"\"\nsubtree = true\n\
+[[endpoints]]\nid = \"notes-local\"\ntenant_id = \"tenant-a\"\nprovider_id = \"source\"\nkind = \"source-fs\"\nprovides = [\"source/list\", \"source/read\", \"source/search\"]\nroot = \"{}\"\n",
+        content.display(),
+        session.display(),
+        operation.display(),
+        fixtures.display()
+    );
+    let config_path = dir.path().join("host.toml");
+    std::fs::write(&config_path, config).context("write host config")?;
+
+    let binary = root.join("target/debug/conex-host");
+    let mut child = Command::new(&binary)
+        .arg(&config_path)
+        .current_dir(&root)
+        .stdout(Stdio::null())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .with_context(|| format!("spawn {}", binary.display()))?;
+
+    if !wait_ready(port, Duration::from_secs(10)) {
+        let _ = child.kill();
+        let _ = child.wait();
+        bail!("conex-host did not become ready on port {port}");
+    }
+
+    let bun = Command::new("bun")
+        .args(["test", "sdk/typescript/tests/p1_stream_1gib.test.ts"])
+        .current_dir(&root)
+        .env("CONEX_E2E_WS", format!("ws://127.0.0.1:{port}/wss"))
+        .env("CONEX_E2E_TOKEN", token)
+        .env("CONEX_E2E_1GIB", "1")
+        .status()
+        .context("run bun 1gib stream e2e")?;
+
+    let _ = child.kill();
+    let _ = child.wait();
+    let _ = std::fs::remove_file(&config_path);
+
+    if !bun.success() {
+        bail!("p1-stream-1gib e2e failed");
+    }
+    Ok(())
 }
 
 fn run_p0_ts() -> Result<()> {

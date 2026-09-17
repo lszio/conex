@@ -17,6 +17,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
+use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -43,8 +44,28 @@ pub struct StreamFrame {
     pub epoch: u64,
     pub stream_id: String,
     pub seq: u64,
-    /// Single-frame payload. Zero-length is rejected.
+    /// Single-frame payload. Zero-length is rejected. Wire form is either a
+    /// JSON byte array or a base64 string.
+    #[serde(deserialize_with = "deserialize_message")]
     pub message: Vec<u8>,
+}
+
+fn deserialize_message<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum WireBytes {
+        Array(Vec<u8>),
+        Base64(String),
+    }
+    match WireBytes::deserialize(deserializer)? {
+        WireBytes::Array(bytes) => Ok(bytes),
+        WireBytes::Base64(text) => base64::engine::general_purpose::STANDARD
+            .decode(text.as_bytes())
+            .map_err(serde::de::Error::custom),
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -296,6 +296,31 @@ impl LocalBlockStore {
         })
     }
 
+    /// Find an active (unexpired, uncommitted) staging upload whose content
+    /// identity matches — same geometry + declared root. Reconnecting
+    /// consumers resume the original upload instead of creating a fresh one
+    /// with zero progress (design §5.5 "distributed resume").
+    pub fn find_active_upload_by_root(
+        &self,
+        format_version: u32,
+        chunk_size: u32,
+        declared_size_bytes: u64,
+        declared_root_cid: &str,
+    ) -> Option<UploadState> {
+        self.with_refs(|r| {
+            r.uploads
+                .values()
+                .find(|u| {
+                    !u.is_expired()
+                        && u.format_version == format_version
+                        && u.chunk_size == chunk_size
+                        && u.declared_size_bytes == declared_size_bytes
+                        && u.declared_root_cid == declared_root_cid
+                })
+                .cloned()
+        })
+    }
+
     pub fn record_chunk(&self, upload_id: &str, index: u32, cid: &str) -> Result<(), ContentError> {
         verify_cid(cid)?;
         self.with_refs(|r| {
