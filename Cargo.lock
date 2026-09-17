@@ -439,6 +439,7 @@ dependencies = [
  "hex",
  "http",
  "pbjson-types",
+ "prost",
  "rcgen",
  "reqwest",
  "rustls",

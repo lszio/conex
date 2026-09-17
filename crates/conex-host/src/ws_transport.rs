@@ -26,32 +26,43 @@ use futures::{SinkExt, StreamExt};
 use serde_json::{Value, json};
 use tokio::sync::Mutex;
 
+use conex_core::stream::{AckRequest, FlowRequest, ResetRequest, StreamError, StreamFrame, StreamHub, StreamOutcome};
 use conex_core::transport_ws::{
-    BootstrapError, BootstrapFrame, ClientHandshake, ProfileId, ServerHandshake, plane_name,
+    BootstrapError, BootstrapFrame, BootstrapState, ClientHandshake, ProfileId, ServerHandshake,
+    plane_name,
 };
-const WSS_PROFILE: ProfileId = ProfileId::JsonRpc2WssV1;
 use conex_core::{CallContext, CallError, CallResult, Limits, MethodContract};
 use conex_proto::cid;
 use conex_proto::v1;
+use prost::Message as _; // v1::Message decode/encode for protobuf frames
 
 use crate::broker::{Broker, BrokerCall, BrokerFrame};
 use crate::http::HttpState;
 
-pub const WSS_NEGOTIATION_TIMEOUT: StdDuration = StdDuration::from_secs(10);
+const WSS_PROFILES: &[ProfileId] = &[ProfileId::JsonRpc2WssV1, ProfileId::ProtobufWssV1];
 
 /// State shared by every WS connection: business dispatcher + Limits.
 pub struct WssState {
     pub broker: Arc<Broker>,
     pub limits: Limits,
-    pub server_profile: ProfileId,
+    pub supported_profiles: Vec<ProfileId>,
+    /// Authenticated caller identity from the HTTP upgrade (static bearer /
+    /// future ticket/OIDC). The broker derives `Caller` from this, not from
+    /// client-supplied context — identity must not be attacker-controlled.
+    pub caller: conex_core::Caller,
+    /// P1-04 stream hub, created lazily on the first `stream/*` frame.
+    /// Keyed to the connection's (session_id, attachment_id, epoch).
+    pub stream: tokio::sync::Mutex<Option<StreamHub>>,
 }
 
 impl WssState {
-    pub fn new(broker: Arc<Broker>, limits: Limits, server_profile: ProfileId) -> Self {
+    pub fn new(broker: Arc<Broker>, limits: Limits, caller: conex_core::Caller) -> Self {
         Self {
             broker,
             limits,
-            server_profile,
+            supported_profiles: WSS_PROFILES.to_vec(),
+            caller,
+            stream: tokio::sync::Mutex::new(None),
         }
     }
 }
@@ -67,6 +78,7 @@ pub async fn ws_handler(
 pub async fn ws_handler_with_state(
     ws: WebSocketUpgrade,
     axum::Extension(state): axum::Extension<Arc<HttpState>>,
+    headers: axum::http::HeaderMap,
 ) -> Response {
     let Some(broker) = state.broker.clone() else {
         return (
@@ -78,10 +90,26 @@ pub async fn ws_handler_with_state(
         )
             .into_response();
     };
+    let authorization = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok());
+    let caller = match state.auth.authenticate(authorization) {
+        Ok(inbound) => inbound.caller,
+        Err(error) => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                axum::Json(json!({
+                    "code": error.code(),
+                    "message": error.message(),
+                })),
+            )
+                .into_response();
+        }
+    };
     let wss_state = Arc::new(WssState::new(
         broker,
         conex_core::Limits::default(),
-        WSS_PROFILE,
+        caller,
     ));
     ws.on_upgrade(move |socket| handle_connection(socket, wss_state))
         .into_response()
@@ -89,12 +117,17 @@ pub async fn ws_handler_with_state(
 
 async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
     let (mut sender, mut receiver) = socket.split();
-    let handshake = Arc::new(Mutex::new(ServerHandshake::new(
-        state.server_profile,
+    let handshake = Arc::new(Mutex::new(ServerHandshake::new_with_profiles(
+        &state.supported_profiles,
         v1::Plane::Broker,
     )));
     let mut open = false;
     let mut outbound = OutboundQueue::default();
+
+    // Handshake: UTF-8 JSON-RPC 2.0 bootstrap for every profile (design
+    // §4.4). Once ready the business encoding switches to the agreed
+    // profile — JSON text frames for `conex-jsonrpc2-wss-v1`, prost
+    // `v1::Message` binary frames for `conex-protobuf-wss-v1`.
     while let Some(message) = receiver.next().await {
         let message = match message {
             Ok(message) => message,
@@ -115,6 +148,14 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                 match response {
                     Ok(out) => {
                         outbound.push_text(out.json);
+                        // The client cannot proceed (send ready) until it has
+                        // read this handshake result, so flush per step rather
+                        // than deferring to the end of the handshake.
+                        while let Some(text) = outbound.pop_text() {
+                            if sender.send(Message::Text(text.into())).await.is_err() {
+                                return;
+                            }
+                        }
                         if matches!(
                             handshake.lock().await.state(),
                             conex_core::transport_ws::BootstrapState::Ready { .. }
@@ -130,47 +171,16 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                     }
                 }
             }
-            Message::Binary(bytes) => {
-                // Profile-2 bootstrap delivers the protobuf message as
-                // framed binary; map it back through the JSON handshake.
-                let parsed = match serde_json::from_slice::<Value>(&bytes) {
-                    Ok(value) => value,
-                    Err(_) => {
-                        send_error_frame(
-                            &mut outbound,
-                            BootstrapError::MalformedEnvelope(
-                                "binary handshake envelopes are not supported".into(),
-                            ),
-                        )
-                        .await;
-                        let _ = sender.close().await;
-                        return;
-                    }
-                };
-                let frame = BootstrapFrame {
-                    json: parsed.to_string(),
-                };
-                let response = {
-                    let mut guard = handshake.lock().await;
-                    guard.ingest(frame)
-                };
-                match response {
-                    Ok(out) => {
-                        outbound.push_text(out.json);
-                        if matches!(
-                            handshake.lock().await.state(),
-                            conex_core::transport_ws::BootstrapState::Ready { .. }
-                        ) {
-                            open = true;
-                            break;
-                        }
-                    }
-                    Err(error) => {
-                        send_error_frame(&mut outbound, error).await;
-                        let _ = sender.close().await;
-                        return;
-                    }
-                }
+            Message::Binary(_) => {
+                send_error_frame(
+                    &mut outbound,
+                    BootstrapError::MalformedEnvelope(
+                        "bootstrap is UTF-8 JSON-RPC text for every profile".into(),
+                    ),
+                )
+                .await;
+                let _ = sender.close().await;
+                return;
             }
             Message::Close(_) => {
                 let _ = sender.close().await;
@@ -183,6 +193,16 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
         let _ = sender.close().await;
         return;
     }
+    let business_profile = {
+        let guard = handshake.lock().await;
+        match guard.state() {
+            BootstrapState::Ready { profile, .. } => *profile,
+            _ => {
+                let _ = sender.close().await;
+                return;
+            }
+        }
+    };
     // Flush handshake output
     while let Some(text) = outbound.pop_text() {
         if sender.send(Message::Text(text.into())).await.is_err() {
@@ -197,14 +217,33 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
         };
         match message {
             Message::Text(text) => {
+                if business_profile != ProfileId::JsonRpc2WssV1 {
+                    let response = envelope_failure(
+                        "?",
+                        &CallError::new(
+                            v1::ErrorCode::BadRequest,
+                            "JSON business frames are not valid on the protobuf profile",
+                        ),
+                    );
+                    if sender
+                        .send(Message::Text(response.to_string().into()))
+                        .await
+                        .is_err()
+                    {
+                        return;
+                    }
+                    continue;
+                }
                 let frame = match serde_json::from_str::<BrokerFrame>(&text) {
                     Ok(frame) => frame,
                     Err(error) => {
-                        let error = CallError::new(
-                            v1::ErrorCode::BadRequest,
-                            format!("invalid envelope: {error}"),
+                        let response = envelope_failure(
+                            &text_request_id(&text),
+                            &CallError::new(
+                                v1::ErrorCode::BadRequest,
+                                format!("invalid envelope: {error}"),
+                            ),
                         );
-                        let response = envelope_failure(&text_request_id(&text), &error);
                         if sender
                             .send(Message::Text(response.to_string().into()))
                             .await
@@ -215,8 +254,8 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                         continue;
                     }
                 };
-                let response = dispatch_business(&state, frame).await;
-                let serialized = match response {
+                let result = dispatch_business(&state, frame).await;
+                let serialized = match result {
                     Ok(value) => envelope_success(&value),
                     Err(error) => envelope_failure("?", &error),
                 };
@@ -229,40 +268,88 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                 }
             }
             Message::Binary(bytes) => {
-                // Treat binary as JSON text for P1 (the protobuf business
-                // profile reuses the same wire envelope; we keep the JSON
-                // surface so all SDKs share encoding rules).
-                if let Ok(text) = std::str::from_utf8(&bytes) {
-                    let frame: BrokerFrame = match serde_json::from_str(text) {
-                        Ok(frame) => frame,
-                        Err(error) => {
-                            let error = CallError::new(
-                                v1::ErrorCode::BadRequest,
-                                format!("invalid envelope: {error}"),
-                            );
-                            let response = envelope_failure("?", &error);
-                            if sender
-                                .send(Message::Text(response.to_string().into()))
-                                .await
-                                .is_err()
-                            {
-                                return;
-                            }
-                            continue;
-                        }
-                    };
-                    let response = dispatch_business(&state, frame).await;
-                    let serialized = match response {
-                        Ok(value) => envelope_success(&value),
-                        Err(error) => envelope_failure("?", &error),
-                    };
+                if business_profile != ProfileId::ProtobufWssV1 {
+                    let response = envelope_failure(
+                        "?",
+                        &CallError::new(
+                            v1::ErrorCode::BadRequest,
+                            "binary business frames require the protobuf profile",
+                        ),
+                    );
                     if sender
-                        .send(Message::Text(serialized.to_string().into()))
+                        .send(Message::Text(response.to_string().into()))
                         .await
                         .is_err()
                     {
                         return;
                     }
+                    continue;
+                }
+                let message = match v1::Message::decode(bytes.as_ref()) {
+                    Ok(message) => message,
+                    Err(error) => {
+                        // Protocol-level decode failure: answer with a
+                        // Failure carrying parse_error semantics.
+                        let failure = v1::Message {
+                            body: Some(v1::message::Body::Failure(v1::Failure {
+                                request_id: Some("?".into()),
+                                error: Some(v1::Error {
+                                    code: v1::ErrorCode::ParseError as i32,
+                                    message: format!("cannot decode protobuf frame: {error}"),
+                                    ..Default::default()
+                                }),
+                            })),
+                        };
+                        let mut buf = Vec::new();
+                        let _ = failure.encode(&mut buf);
+                        if sender.send(Message::Binary(buf.into())).await.is_err() {
+                            return;
+                        }
+                        continue;
+                    }
+                };
+                let frame = match broker_frame_from_message(message) {
+                    Ok(Some(frame)) => frame,
+                    Ok(None) => continue, // notification: fire-and-forget
+                    Err(error) => {
+                        let failure = v1::Message {
+                            body: Some(v1::message::Body::Failure(v1::Failure {
+                                request_id: Some("?".into()),
+                                error: Some(to_wire_error(&error)),
+                            })),
+                        };
+                        let mut buf = Vec::new();
+                        let _ = failure.encode(&mut buf);
+                        if sender.send(Message::Binary(buf.into())).await.is_err() {
+                            return;
+                        }
+                        continue;
+                    }
+                };
+                let request_id = frame.request_id.clone();
+                let result = dispatch_business(&state, frame).await;
+                let response = v1::Message {
+                    body: Some(match result {
+                        Ok(value) => {
+                            // dispatch_business wraps the raw result in a
+                            // {id, result} envelope; unwrap so the protobuf
+                            // Success carries the business result directly.
+                            let inner = value.get("result").cloned().unwrap_or(value);
+                            v1::message::Body::Success(v1::Success {
+                                request_id,
+                                result: Some(crate::http::json_to_pbjson(inner)),
+                            })
+                        }
+                        Err(error) => v1::message::Body::Failure(v1::Failure {
+                            request_id: Some(request_id),
+                            error: Some(to_wire_error(&error)),
+                        }),
+                    }),
+                };
+                let mut buf = Vec::new();
+                let _ = response.encode(&mut buf);
+                if sender.send(Message::Binary(buf.into())).await.is_err() {
+                    return;
                 }
             }
             Message::Close(_) => break,
@@ -270,6 +357,66 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
         }
     }
     let _ = sender.close().await;
+}
+
+/// Convert a typed `v1::Message` request/notification into the broker's
+/// flat frame. Returns `None` for notifications (no response is expected).
+fn broker_frame_from_message(message: v1::Message) -> CallResult<Option<BrokerFrame>> {
+    let (request_id, method, call_params) = match message.body {
+        Some(v1::message::Body::Request(request)) => {
+            (Some(request.request_id), request.method, request.params)
+        }
+        Some(v1::message::Body::Notification(notification)) => {
+            (None, notification.method, notification.params)
+        }
+        Some(v1::message::Body::Success(_)) | Some(v1::message::Body::Failure(_)) => {
+            return Err(CallError::new(
+                v1::ErrorCode::BadRequest,
+                "clients must not send responses",
+            ));
+        }
+        None => {
+            return Err(CallError::new(v1::ErrorCode::BadRequest, "empty message"));
+        }
+    };
+    let context = call_params.as_ref().and_then(|p| p.context.clone());
+    let input = call_params
+        .as_ref()
+        .and_then(|p| p.input.as_ref())
+        .map(crate::http::pbjson_to_json)
+        .unwrap_or(Value::Null);
+    let (caller, plane) = match context.as_ref() {
+        Some(ctx) => (
+            ctx.provider_endpoint_id.clone(),
+            ctx.plane,
+        ),
+        None => (String::new(), v1::Plane::Broker as i32),
+    };
+    let frame = BrokerFrame {
+        request_id: request_id.clone().unwrap_or_else(|| "notif".to_string()),
+        method,
+        context: crate::broker::BrokerContext {
+            principal_id: String::new(),
+            tenant_id: String::new(),
+            provider_endpoint_id: caller,
+            plane,
+            binding_id: context.as_ref().and_then(|c| c.binding_id.clone()),
+            timeout_budget_ms: call_params
+                .as_ref()
+                .map(|p| p.timeout_budget_ms)
+                .unwrap_or(0),
+        },
+        params: Some(input),
+    };
+    Ok(if request_id.is_some() { Some(frame) } else { None })
+}
+
+fn to_wire_error(error: &CallError) -> v1::Error {
+    v1::Error {
+        code: error.code(),
+        message: error.message().to_string(),
+        ..Default::default()
+    }
 }
 
 fn text_request_id(text: &str) -> String {
@@ -342,11 +489,13 @@ async fn dispatch_business(state: &WssState, frame: BrokerFrame) -> CallResult<V
             "P1 only supports the broker plane",
         ));
     }
-    let caller = conex_core::Caller {
-        principal_id: frame.context.principal_id.clone(),
-        tenant_id: frame.context.tenant_id.clone(),
-        actor_peer_id: "wss".into(),
-    };
+    // P1-04 stream control/data frames are handled by the per-connection
+    // StreamHub, not the broker.
+    if frame.method.starts_with("stream/") {
+        return handle_stream(state, &frame).await;
+    }
+    // Identity comes from the authenticated upgrade, never from the frame.
+    let caller = state.caller.clone();
     let timeout = StdDuration::from_millis(u64::from(frame.context.timeout_budget_ms.max(1)));
     let deadline = Instant::now() + timeout;
     let input = frame
@@ -367,6 +516,142 @@ async fn dispatch_business(state: &WssState, frame: BrokerFrame) -> CallResult<V
             "result": value,
         })
     })
+}
+
+/// P1-04 stream frame dispatch. The hub is created lazily on the first
+/// `stream/*` frame for the connection's (session, attachment, epoch); old
+/// epochs are fenced (session/resume bumped the generation) and control
+/// queue overflow terminates the link.
+async fn handle_stream(state: &WssState, frame: &BrokerFrame) -> CallResult<Value> {
+    let input = frame
+        .params
+        .as_ref()
+        .cloned()
+        .unwrap_or(Value::Object(Default::default()));
+    let mut hub_guard = state.stream.lock().await;
+    let hub = hub_guard.get_or_insert_with(|| {
+        // The hub's epoch anchor is taken from the first frame; session/
+        // attachment ids scope the connection. If the peer sends a later
+        // (resumed) epoch, the hub fences forwards.
+        StreamHub::new(
+            "wss",
+            "wss",
+            frame
+                .params
+                .as_ref()
+                .and_then(|p| p.get("epoch").and_then(Value::as_u64))
+                .unwrap_or(1),
+            conex_core::stream::DEFAULT_WINDOW_BYTES,
+            conex_core::stream::DEFAULT_MAX_FRAME_BYTES,
+            0,
+        )
+    });
+    let value = match frame.method.as_str() {
+        "stream/ack" => {
+            let ack: AckRequest = serde_json::from_value(input).map_err(|e| {
+                CallError::new(v1::ErrorCode::BadRequest, format!("bad stream/ack: {e}"))
+            })?;
+            hub.check_epoch(ack.epoch).map_err(stream_error_to_call)?;
+            stream_outcome_to_json(
+                hub.receiver_ack(&ack.stream_id, ack.last_received_seq)
+                    .map_err(stream_error_to_call)?,
+            )
+        }
+        "stream/flow" => {
+            let flow: FlowRequest = serde_json::from_value(input).map_err(|e| {
+                CallError::new(v1::ErrorCode::BadRequest, format!("bad stream/flow: {e}"))
+            })?;
+            hub.check_epoch(flow.epoch).map_err(stream_error_to_call)?;
+            stream_outcome_to_json(
+                hub.apply_flow(&flow.stream_id, flow.consumed_bytes, flow.requested_window_bytes)
+                    .map_err(stream_error_to_call)?,
+            )
+        }
+        "stream/reset" => {
+            let reset: ResetRequest = serde_json::from_value(input).map_err(|e| {
+                CallError::new(v1::ErrorCode::BadRequest, format!("bad stream/reset: {e}"))
+            })?;
+            hub.check_epoch(reset.epoch).map_err(stream_error_to_call)?;
+            stream_outcome_to_json(
+                hub.apply_reset(&reset.stream_id, reset.after_seq, &reset.reason, reset.resume_handle)
+                    .map_err(stream_error_to_call)?,
+            )
+        }
+        "stream/frame" => {
+            let stream_frame: StreamFrame = serde_json::from_value(input).map_err(|e| {
+                CallError::new(v1::ErrorCode::BadRequest, format!("bad stream/frame: {e}"))
+            })?;
+            hub.check_epoch(stream_frame.epoch).map_err(stream_error_to_call)?;
+            let contiguous = hub
+                .receive_frame(&stream_frame)
+                .map_err(stream_error_to_call)?;
+            json!({
+                "streamId": stream_frame.stream_id,
+                "seq": stream_frame.seq.to_string(),
+                "contiguousBytes": contiguous.to_string(),
+            })
+        }
+        other => {
+            return Err(CallError::new(
+                v1::ErrorCode::UnknownMethod,
+                format!("unknown stream method {other}"),
+            ));
+        }
+    };
+    Ok(value)
+}
+
+fn stream_error_to_call(error: StreamError) -> CallError {
+    match error {
+        StreamError::EpochFenced { .. } => {
+            CallError::new(v1::ErrorCode::ResumeUnavailable, error.to_string())
+        }
+        StreamError::ZeroByteRejected => {
+            CallError::new(v1::ErrorCode::BadRequest, error.to_string())
+        }
+        StreamError::StreamFailed(reason) => {
+            CallError::new(v1::ErrorCode::BadRequest, reason)
+        }
+        StreamError::SlowConsumer { .. } => {
+            CallError::new(v1::ErrorCode::SlowConsumer, error.to_string())
+        }
+        StreamError::ControlQueueFull => CallError::new(
+            v1::ErrorCode::QuotaExceeded,
+            error.to_string(),
+        ),
+        StreamError::BadRequest(message) => CallError::new(v1::ErrorCode::BadRequest, message),
+    }
+}
+
+fn stream_outcome_to_json(outcome: StreamOutcome) -> Value {
+    use StreamOutcome::*;
+    match outcome {
+        Accepted { seq, .. } => json!({ "accepted": true, "seq": seq.to_string() }),
+        CreditBlocked { sent_bytes, allowed } => {
+            json!({ "accepted": false, "creditBlocked": true, "sentBytes": sent_bytes.to_string(), "allowedBytes": allowed.to_string() })
+        }
+        Acked { last_received_seq } => {
+            json!({ "accepted": true, "lastReceivedSeq": last_received_seq.to_string() })
+        }
+        GapDetected { last_received_seq } => {
+            json!({ "accepted": false, "gap": true, "lastReceivedSeq": last_received_seq.to_string() })
+        }
+        AckIgnored => json!({ "accepted": false, "ignored": true }),
+        StaleFlowIgnored { consumed_bytes } => {
+            json!({ "accepted": false, "staleFlow": true, "consumedBytes": consumed_bytes.to_string() })
+        }
+        StreamFailed { reason } => json!({ "accepted": false, "streamFailed": true, "reason": reason }),
+        WindowCapRejected { requested, cap } => json!({ "accepted": false, "windowCapRejected": true, "requestedBytes": requested.to_string(), "capBytes": cap.to_string() }),
+        ZeroByteRejected => json!({ "accepted": false, "zeroByteRejected": true }),
+        ResetAccepted { after_seq, resume_handle } => {
+            json!({ "accepted": true, "afterSeq": after_seq.to_string(), "resumeHandle": resume_handle })
+        }
+        ReconfirmRequired { unconfirmed_bytes, new_window } => json!({ "accepted": false, "reconfirmRequired": true, "unconfirmedBytes": unconfirmed_bytes.to_string(), "newWindowBytes": new_window.to_string() }),
+        EpochFenced { expected, got } => json!({ "accepted": false, "epochFenced": true, "expectedEpoch": expected.to_string(), "gotEpoch": got.to_string() }),
+        SlowConsumer { stream_id, since_ms } => json!({ "accepted": false, "slowConsumer": true, "streamId": stream_id, "sinceMs": since_ms.to_string() }),
+        ControlQueueFull => json!({ "accepted": false, "controlQueueFull": true }),
+        Cancelled => json!({ "accepted": true, "cancelled": true }),
+    }
 }
 
 /// Apply JSON-RPC 2.0 envelope and dispatch. Helpers keep the websocket loop
