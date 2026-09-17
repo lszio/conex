@@ -333,13 +333,21 @@ async fn blob_put(store: &ContentStore, input: &Value) -> CallResult<Value> {
             requested_lease_ms,
         )
         .map_err(content_to_call)?;
+    // On resume the upload carries the chunks already received; report them
+    // so the client skips re-upload (design §5.5).
+    let already_have: Vec<String> = upload
+        .state()
+        .received_chunks
+        .iter()
+        .map(|chunk| chunk.cid.clone())
+        .collect();
     Ok(json!({
         "uploadId": upload.upload_id(),
         "chunkSize": declared_chunk_size.to_string(),
         "leaseMs": requested_lease_ms.unwrap_or(60 * 60 * 1000).to_string(),
         "maxBlobBytes": "1073741824",
         "inlineThresholdBytes": "65536",
-        "alreadyHaveChunkCids": [],
+        "alreadyHaveChunkCids": already_have,
         "resourceId": resource_id,
     }))
 }
@@ -369,16 +377,18 @@ async fn blob_chunk(store: &ContentStore, input: &Value) -> CallResult<Value> {
             ));
         }
     };
-    let upload = store.resume_upload(&upload_id).map_err(content_to_call)?;
-    let cid = upload
-        .put_chunk(chunk_index, &bytes)
-        .map_err(content_to_call)?;
-    if cid != chunk_cid {
+    // Validate the bytes against the declared CID BEFORE touching the store:
+    // a bad chunk must be rejected without persisting the block or recording
+    // it in the upload receipt (design §5.4 "坏块...可保留此前已验证块").
+    let recomputed = conex_proto::cid::cid_for_raw(&bytes);
+    if recomputed != chunk_cid {
         return Err(CallError::new(
             v1::ErrorCode::BadBlob,
-            format!("chunk cid mismatch: declared {chunk_cid}, recomputed {cid}"),
+            format!("chunk cid mismatch: declared {chunk_cid}, recomputed {recomputed}"),
         ));
     }
+    let upload = store.resume_upload(&upload_id).map_err(content_to_call)?;
+    upload.put_chunk(chunk_index, &bytes).map_err(content_to_call)?;
     Ok(json!({
         "chunkIndex": chunk_index.to_string(),
         "receivedBytes": bytes.len().to_string(),

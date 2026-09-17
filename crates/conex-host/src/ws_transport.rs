@@ -254,10 +254,11 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                         continue;
                     }
                 };
-                let result = dispatch_business(&state, frame).await;
+                let request_id = frame.request_id.clone();
+                let result = dispatch_business(&state, frame, business_profile).await;
                 let serialized = match result {
-                    Ok(value) => envelope_success(&value),
-                    Err(error) => envelope_failure("?", &error),
+                    Ok(value) => envelope_success_id(&request_id, &value),
+                    Err(error) => envelope_failure(&request_id, &error),
                 };
                 if sender
                     .send(Message::Text(serialized.to_string().into()))
@@ -327,19 +328,13 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                     }
                 };
                 let request_id = frame.request_id.clone();
-                let result = dispatch_business(&state, frame).await;
+                let result = dispatch_business(&state, frame, business_profile).await;
                 let response = v1::Message {
                     body: Some(match result {
-                        Ok(value) => {
-                            // dispatch_business wraps the raw result in a
-                            // {id, result} envelope; unwrap so the protobuf
-                            // Success carries the business result directly.
-                            let inner = value.get("result").cloned().unwrap_or(value);
-                            v1::message::Body::Success(v1::Success {
-                                request_id,
-                                result: Some(crate::http::json_to_pbjson(inner)),
-                            })
-                        }
+                        Ok(value) => v1::message::Body::Success(v1::Success {
+                            request_id,
+                            result: Some(crate::http::json_to_pbjson(value)),
+                        }),
                         Err(error) => v1::message::Body::Failure(v1::Failure {
                             request_id: Some(request_id),
                             error: Some(to_wire_error(&error)),
@@ -431,16 +426,14 @@ fn text_request_id(text: &str) -> String {
         .unwrap_or_else(|| "?".to_string())
 }
 
-fn envelope_success(value: &Value) -> Value {
-    let id = value.get("id").cloned().unwrap_or(Value::Null);
-    let mut response = serde_json::Map::new();
-    response.insert("jsonrpc".into(), Value::String("2.0".into()));
-    response.insert("id".into(), id);
-    response.insert(
-        "result".into(),
-        value.get("result").cloned().unwrap_or(Value::Null),
-    );
-    Value::Object(response)
+/// JSON response built from the frame's own request id (works for both
+/// broker results and stream-frame results, which are raw values).
+fn envelope_success_id(request_id: &str, value: &Value) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": request_id,
+        "result": value,
+    })
 }
 
 fn envelope_failure(request_id: &str, error: &CallError) -> Value {
@@ -481,7 +474,11 @@ impl OutboundQueue {
     }
 }
 
-async fn dispatch_business(state: &WssState, frame: BrokerFrame) -> CallResult<Value> {
+async fn dispatch_business(
+    state: &WssState,
+    frame: BrokerFrame,
+    business_profile: ProfileId,
+) -> CallResult<Value> {
     let plane = frame.context.plane;
     if plane != v1::Plane::Broker as i32 {
         return Err(CallError::new(
@@ -492,9 +489,14 @@ async fn dispatch_business(state: &WssState, frame: BrokerFrame) -> CallResult<V
     // P1-04 stream control/data frames are handled by the per-connection
     // StreamHub, not the broker.
     if frame.method.starts_with("stream/") {
-        return handle_stream(state, &frame).await;
+        return handle_stream(state, &frame, business_profile).await;
     }
-    // Identity comes from the authenticated upgrade, never from the frame.
+    dispatch_rpc(state, frame).await
+}
+
+/// Broker RPC dispatch for a non-stream business frame. Identity comes from
+/// the authenticated upgrade, never from the frame.
+async fn dispatch_rpc(state: &WssState, frame: BrokerFrame) -> CallResult<Value> {
     let caller = state.caller.clone();
     let timeout = StdDuration::from_millis(u64::from(frame.context.timeout_budget_ms.max(1)));
     let deadline = Instant::now() + timeout;
@@ -510,19 +512,18 @@ async fn dispatch_business(state: &WssState, frame: BrokerFrame) -> CallResult<V
         input,
         deadline,
     };
-    state.broker.invoke(call.clone()).await.map(|value| {
-        json!({
-            "id": frame.request_id,
-            "result": value,
-        })
-    })
+    state.broker.invoke(call.clone()).await
 }
 
 /// P1-04 stream frame dispatch. The hub is created lazily on the first
 /// `stream/*` frame for the connection's (session, attachment, epoch); old
 /// epochs are fenced (session/resume bumped the generation) and control
 /// queue overflow terminates the link.
-async fn handle_stream(state: &WssState, frame: &BrokerFrame) -> CallResult<Value> {
+async fn handle_stream(
+    state: &WssState,
+    frame: &BrokerFrame,
+    business_profile: ProfileId,
+) -> CallResult<Value> {
     let input = frame
         .params
         .as_ref()
@@ -585,10 +586,51 @@ async fn handle_stream(state: &WssState, frame: &BrokerFrame) -> CallResult<Valu
             let contiguous = hub
                 .receive_frame(&stream_frame)
                 .map_err(stream_error_to_call)?;
+            // A stream data frame carries one business message (design §1:
+            // "业务消息先经 conex-proto 解析为 v1::Message，再用 StreamFrame
+            // 承载"). Decode per the agreed profile and dispatch through the
+            // same broker path — credit/seq/epoch are enforced above.
+            if stream_frame.message.is_empty() {
+                return Err(stream_error_to_call(StreamError::ZeroByteRejected));
+            }
+            let inner = match business_profile {
+                ProfileId::JsonRpc2WssV1 => {
+                    let text = std::str::from_utf8(&stream_frame.message).map_err(|_| {
+                        CallError::new(
+                            v1::ErrorCode::BadRequest,
+                            "stream frame message must be UTF-8 JSON on the JSON profile",
+                        )
+                    })?;
+                    serde_json::from_str::<BrokerFrame>(text).map_err(|e| {
+                        CallError::new(
+                            v1::ErrorCode::BadRequest,
+                            format!("invalid business message in stream frame: {e}"),
+                        )
+                    })?
+                }
+                ProfileId::ProtobufWssV1 => {
+                    let message = v1::Message::decode(stream_frame.message.as_slice()).map_err(
+                        |e| {
+                            CallError::new(
+                                v1::ErrorCode::BadRequest,
+                                format!("cannot decode stream frame message: {e}"),
+                            )
+                        },
+                    )?;
+                    broker_frame_from_message(message)?.ok_or_else(|| {
+                        CallError::new(
+                            v1::ErrorCode::BadRequest,
+                            "stream frame message must be a request (not a notification)",
+                        )
+                    })?
+                }
+            };
+            let result = dispatch_rpc(state, inner).await?;
             json!({
                 "streamId": stream_frame.stream_id,
                 "seq": stream_frame.seq.to_string(),
                 "contiguousBytes": contiguous.to_string(),
+                "result": result,
             })
         }
         other => {

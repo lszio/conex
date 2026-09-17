@@ -47,6 +47,20 @@ impl ContentStore {
         lease_ms: Option<u64>,
     ) -> Result<Upload, ContentError> {
         let lease_ms = lease_ms.unwrap_or(self.default_lease_ms);
+        // Resume an active staging upload with the same content identity so a
+        // reconnecting consumer continues from its received chunks instead of
+        // restarting (design §5.5; wire: blob/put returns alreadyHaveChunkCids).
+        if let Some(existing) = self.inner.find_active_upload_by_root(
+            format_version,
+            chunk_size,
+            declared_size_bytes,
+            declared_root_cid,
+        ) {
+            return Ok(Upload {
+                store: self.inner.clone(),
+                state: existing,
+            });
+        }
         let upload_id = deterministic_id("upl", now_ms(), 0);
         let state = UploadState::new(
             upload_id.clone(),
