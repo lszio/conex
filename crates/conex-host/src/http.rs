@@ -354,11 +354,11 @@ fn encode_response(message: &v1::Message) -> Response {
     }
 }
 
-fn pbjson_to_json(value: &pbjson_types::Value) -> Value {
+pub fn pbjson_to_json(value: &pbjson_types::Value) -> Value {
     serde_json::to_value(value).unwrap_or(Value::Null)
 }
 
-fn json_to_pbjson(value: Value) -> pbjson_types::Value {
+pub fn json_to_pbjson(value: Value) -> pbjson_types::Value {
     serde_json::from_value(value).unwrap_or_default()
 }
 

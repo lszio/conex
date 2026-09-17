@@ -172,16 +172,25 @@ fn default_limits_json() -> serde_json::Value {
 pub struct ServerHandshake {
     state: BootstrapState,
     negotiation_id: String,
-    server_profile: ProfileId,
+    server_profiles: Vec<ProfileId>,
+    /// Profile the client negotiated in `conex/hello`; echoed in ready.
+    agreed_profile: Option<ProfileId>,
     server_plane: v1::Plane,
 }
 
 impl ServerHandshake {
     pub fn new(server_profile: ProfileId, server_plane: v1::Plane) -> Self {
+        Self::new_with_profiles(&[server_profile], server_plane)
+    }
+
+    /// The server may accept more than one profile (design §4.4). The first
+    /// entry is the default advertised when the client does not pin one.
+    pub fn new_with_profiles(server_profiles: &[ProfileId], server_plane: v1::Plane) -> Self {
         Self {
             state: BootstrapState::AwaitingHello,
             negotiation_id: generate_negotiation_id(),
-            server_profile,
+            server_profiles: server_profiles.to_vec(),
+            agreed_profile: None,
             server_plane,
         }
     }
@@ -223,16 +232,19 @@ impl ServerHandshake {
             .ok_or_else(|| BootstrapError::MalformedEnvelope("missing params".into()))?;
         let req: HelloRequest = serde_json::from_value(params.clone())
             .map_err(|e| BootstrapError::MalformedEnvelope(e.to_string()))?;
-        let server_profile_str = self.server_profile.as_str();
-        if req.profile_id != server_profile_str {
-            return Err(BootstrapError::UnsupportedProfile(req.profile_id));
-        }
+        let negotiated = self
+            .server_profiles
+            .iter()
+            .find(|p| p.as_str() == req.profile_id)
+            .copied()
+            .ok_or_else(|| BootstrapError::UnsupportedProfile(req.profile_id.clone()))?;
         if req.plane != self.server_plane {
             return Err(BootstrapError::PlaneMismatch {
                 client: plane_name(req.plane).to_string(),
                 server: plane_name(self.server_plane).to_string(),
             });
         }
+        let server_profile_str = negotiated.as_str();
         let response = serde_json::json!({
             "jsonrpc": "2.0",
             "id": value.get("id").cloned().unwrap_or(serde_json::Value::Null),
@@ -247,6 +259,7 @@ impl ServerHandshake {
         });
         let json = serde_json::to_string(&response)
             .map_err(|e| BootstrapError::MalformedEnvelope(e.to_string()))?;
+        self.agreed_profile = Some(negotiated);
         self.state = BootstrapState::AwaitingReady;
         Ok(BootstrapFrame { json })
     }
@@ -284,7 +297,8 @@ impl ServerHandshake {
             .ok_or_else(|| BootstrapError::MalformedEnvelope("missing params".into()))?;
         let req: ReadyRequest = serde_json::from_value(params.clone())
             .map_err(|e| BootstrapError::MalformedEnvelope(e.to_string()))?;
-        if req.profile_id != self.server_profile.as_str() {
+        let agreed = self.agreed_profile.unwrap_or(ProfileId::JsonRpc2WssV1);
+        if req.profile_id != agreed.as_str() {
             return Err(BootstrapError::UnsupportedProfile(req.profile_id));
         }
         if req.negotiation_id != self.negotiation_id {
@@ -296,19 +310,25 @@ impl ServerHandshake {
                 server: plane_name(self.server_plane).to_string(),
             });
         }
+        let agreed = self.agreed_profile.unwrap_or_else(|| {
+            self.server_profiles
+                .first()
+                .copied()
+                .unwrap_or(ProfileId::JsonRpc2WssV1)
+        });
         let response = serde_json::json!({
             "jsonrpc": "2.0",
             "id": value.get("id").cloned().unwrap_or(serde_json::Value::Null),
             "result": {
                 "negotiationId": self.negotiation_id,
-                "profileId": self.server_profile.as_str(),
+                "profileId": agreed.as_str(),
                 "plane": plane_name(self.server_plane),
             }
         });
         let json = serde_json::to_string(&response)
             .map_err(|e| BootstrapError::MalformedEnvelope(e.to_string()))?;
         self.state = BootstrapState::Ready {
-            profile: self.server_profile,
+            profile: agreed,
             negotiation_id: self.negotiation_id.clone(),
         };
         Ok(BootstrapFrame { json })

@@ -34,6 +34,7 @@ pub struct BrokerCall {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct BrokerContext {
     pub principal_id: String,
     pub tenant_id: String,
