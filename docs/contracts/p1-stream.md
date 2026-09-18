@@ -2,7 +2,7 @@
 
 状态：**P1-01 冻结**（2026-09-15）。
 类型源：`schema/conex/v1/stream.proto`。
-向量：`conformance/vectors/p1/stream.json`，Rust（`crates/conex-proto/tests/stream.rs`）与 TS（`sdk/typescript/tests/stream.test.ts`）两侧分类一致。
+向量：`conformance/vectors/p1/stream.json`，Rust 侧由 `crates/conex-core/tests/stream.rs` 逐条驱动真实 `StreamHub` 并断言分类（TS 侧无流实现：流状态机是服务端职责，分类向量不再由 TS 复述）。
 
 ## 1. 帧逻辑形态
 

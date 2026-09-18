@@ -8,7 +8,7 @@
 mod support;
 
 use base64::Engine as _;
-use conex_host::oidc_jwt::{JwtError, Jwks, OidcVerifier, b64u_encode, claims_json, now_unix};
+use conex_host::oidc_jwt::{Jwks, JwtError, OidcVerifier, b64u_encode, claims_json, now_unix};
 use support::{TEST_JWKS_JSON, TEST_KID, sign_id_token};
 
 fn fixture_jwks() -> Jwks {
@@ -32,7 +32,13 @@ fn sign(payload: &str, kid: &str, alg: &str) -> String {
 fn valid_rs256_token_passes() {
     let verifier = verifier();
     let token = sign(
-        &claims_json("alice", "https://issuer.example", "conex-host", 3600, Some("nohunter2")),
+        &claims_json(
+            "alice",
+            "https://issuer.example",
+            "conex-host",
+            3600,
+            Some("nohunter2"),
+        ),
         TEST_KID,
         "RS256",
     );
@@ -46,7 +52,13 @@ fn valid_rs256_token_passes() {
 fn wrong_issuer_rejected() {
     let verifier = verifier();
     let token = sign(
-        &claims_json("alice", "https://evil.example", "conex-host", 3600, Some("nohunter2")),
+        &claims_json(
+            "alice",
+            "https://evil.example",
+            "conex-host",
+            3600,
+            Some("nohunter2"),
+        ),
         TEST_KID,
         "RS256",
     );
@@ -63,7 +75,13 @@ fn wrong_issuer_rejected() {
 fn wrong_audience_rejected() {
     let verifier = verifier();
     let token = sign(
-        &claims_json("alice", "https://issuer.example", "other-client", 3600, Some("nohunter2")),
+        &claims_json(
+            "alice",
+            "https://issuer.example",
+            "other-client",
+            3600,
+            Some("nohunter2"),
+        ),
         TEST_KID,
         "RS256",
     );
@@ -77,7 +95,13 @@ fn wrong_audience_rejected() {
 fn expired_token_rejected() {
     let verifier = verifier();
     let token = sign(
-        &claims_json("alice", "https://issuer.example", "conex-host", -7200, Some("nohunter2")),
+        &claims_json(
+            "alice",
+            "https://issuer.example",
+            "conex-host",
+            -7200,
+            Some("nohunter2"),
+        ),
         TEST_KID,
         "RS256",
     );
@@ -101,7 +125,13 @@ fn not_yet_valid_token_rejected() {
 fn non_rs256_rejected() {
     let verifier = verifier();
     let token = sign(
-        &claims_json("alice", "https://issuer.example", "conex-host", 3600, Some("nohunter2")),
+        &claims_json(
+            "alice",
+            "https://issuer.example",
+            "conex-host",
+            3600,
+            Some("nohunter2"),
+        ),
         TEST_KID,
         "HS256",
     );
@@ -115,7 +145,13 @@ fn non_rs256_rejected() {
 fn unknown_kid_rejected() {
     let verifier = verifier();
     let token = sign(
-        &claims_json("alice", "https://issuer.example", "conex-host", 3600, Some("nohunter2")),
+        &claims_json(
+            "alice",
+            "https://issuer.example",
+            "conex-host",
+            3600,
+            Some("nohunter2"),
+        ),
         "nope",
         "RS256",
     );
@@ -127,7 +163,13 @@ fn tampered_signature_rejected() {
     let verifier = verifier();
     // Flip one byte inside the decoded signature so base64url stays valid.
     let mut token = sign(
-        &claims_json("alice", "https://issuer.example", "conex-host", 3600, Some("nohunter2")),
+        &claims_json(
+            "alice",
+            "https://issuer.example",
+            "conex-host",
+            3600,
+            Some("nohunter2"),
+        ),
         TEST_KID,
         "RS256",
     );
@@ -145,7 +187,13 @@ fn tampered_signature_rejected() {
 fn wrong_nonce_rejected() {
     let verifier = verifier();
     let token = sign(
-        &claims_json("alice", "https://issuer.example", "conex-host", 3600, Some("wrong")),
+        &claims_json(
+            "alice",
+            "https://issuer.example",
+            "conex-host",
+            3600,
+            Some("wrong"),
+        ),
         TEST_KID,
         "RS256",
     );

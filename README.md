@@ -2,7 +2,7 @@
 
 conex（connect + nexus）是一个可嵌入的双向能力路由内核及可选独立进程；工作协议名 `conex/1`。
 
-**当前状态（2026-09-16）：** P0 已交付（`e649ded`）并通过 `cargo xtask check`。P1 库级切片完成（`a2ee453`）：`conex-proto::cid` 单一寻址 + `ChunkManifest` wire（`P1-01b`，`7daf172`）、`conex-content` 持久化/崩溃恢复、`conex-core::{session,operation}`、`conex-host::broker` 库、`conex-host::agent` OIDC+ticket 注册表、`conex-agent` CLI 桩、`p1_e2e` 进程内 4 用例、原始 `xtask check` 仍绿。但 **broker/agent/OIDC/ticket 尚未挂入 host 装配根**（`serve::build` 不构造 P1 后端，`/wss` `/tickets` `/oidc/*` 在运行二进制中 404，P1-04 Stream 仍为设计验收项）。运行手册与示例配置将在「接线」完成后恢复。逐包证据见 [docs/verification/p1.md](docs/verification/p1.md)；下一步是把 P1 接到 host + 授权/审计修复 + P1-04 Stream + 真 OIDC，再进入 [P2](docs/plans/2026-09-15-conex-roadmap.md)（ACP/MCP）。
+**当前状态（2026-09-18）：** P0 已交付（`e649ded`）；**P1 已交付**（`f6f8edc`/`4d5ff73`）：两条 WSS Profile（JSON text 与 protobuf 二进制）经真实握手可达；`/wss`、`/tickets`、`/oidc/authorize`、`/oidc/token` 挂入 host，hello 广告 P1 方法；`blob/*`、`session/*`、`operation/*`、`agent/*` 经 broker 派发并强制 bearer 主体/租户绑定；P1-04 Stream（ACK/逐字节信用/重放/reset/slow_consumer）有真实实现与行为向量测试；1 GiB 经 Stream 的弱网续传（含坏块拒绝与断线续传）通过 `cargo xtask e2e --suite p1-stream-1gib`；配置 `[oidc]` 后 `/oidc/token` 做真实 RS256 id_token 验签（issuer pin + aud + nonce + JWKS）。逐包证据与已知缺口：[P1 验证记录](docs/verification/p1.md)；运行手册 [docs/runbooks/p1.md](docs/runbooks/p1.md)；下一步 [P2](docs/plans/2026-09-15-conex-roadmap.md)（ACP/MCP）。
 
 ## 文档
 

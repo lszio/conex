@@ -1,6 +1,6 @@
 # conex 分阶段实现路线图
 
-> 状态：P0 已交付（`e649ded`）；P1 库级切片完成（`a2ee453`，含 `conex-host::broker/agent`、`conex-content` 持久化、P1-01b 规范化字节统一），但 **P1 仍未接入 host 装配根**——`serve::build` 不构造 P1 后端，`/wss` `/tickets` `/oidc/*` 不可达，broker/agent 不经资源策略与审计，P1-04 Stream、真 OIDC、protobuf WSS profile 仍为设计验收项。当前阻塞项见 [P1 执行计划](2026-09-15-conex-p1.md) §3.0；下一步先接线，再补齐 P1-04 Stream 与真 OIDC，最后进入 P2。本文件只维护阶段、依赖与工作包，不重复执行级细节。
+> 状态：P0 已交付（`e649ded`）；**P1 已交付**（`d10c9a0`→`4d5ff73`）：host 接线、授权修复、P1-04 Stream、两条 WSS Profile、1 GiB 经 Stream 续传、真 OIDC 验签、conformance 步骤拆分。已知缺口（不阻塞 P2 启动）：TLS 叶证书 pin 与 SIGTERM 排空向量、catalog 的 SDK E2E、OIDC 浏览器重定向流（`/oidc/token` 已验收 id_token）、跨进程会话恢复（P4）。证据见 [P1 验证记录](../verification/p1.md) §「完成 P1 库面与接线」。本文件只维护阶段、依赖与工作包，不重复执行级细节。
 
 **Goal:** 在已交付的 broker 路由内核（P0）之上，按独立门槛增加反连、ACP/MCP 和可选 P2P。
 

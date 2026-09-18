@@ -388,7 +388,9 @@ async fn blob_chunk(store: &ContentStore, input: &Value) -> CallResult<Value> {
         ));
     }
     let upload = store.resume_upload(&upload_id).map_err(content_to_call)?;
-    upload.put_chunk(chunk_index, &bytes).map_err(content_to_call)?;
+    upload
+        .put_chunk(chunk_index, &bytes)
+        .map_err(content_to_call)?;
     Ok(json!({
         "chunkIndex": chunk_index.to_string(),
         "receivedBytes": bytes.len().to_string(),

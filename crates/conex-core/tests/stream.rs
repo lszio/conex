@@ -10,12 +10,12 @@ use std::path::PathBuf;
 use serde_json::Value;
 
 use conex_core::stream::{
-    StreamError, StreamHub, StreamKind, StreamOutcome, SLOW_CONSUMER_AFTER_MS, StreamFrame,
+    SLOW_CONSUMER_AFTER_MS, StreamError, StreamFrame, StreamHub, StreamKind, StreamOutcome,
 };
 
 fn vector(name: &str) -> Vec<Value> {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../conformance/vectors/p1/stream.json");
+    let path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../conformance/vectors/p1/stream.json");
     let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {name} vector: {e}"));
     let doc: Value = serde_json::from_str(&text).unwrap_or_else(|e| panic!("parse {name}: {e}"));
     doc[name]
@@ -81,7 +81,9 @@ fn ack_cases() {
     }
     assert_eq!(
         hub2.receiver_ack("up", 3).expect("gap ack"),
-        StreamOutcome::GapDetected { last_received_seq: 3 }
+        StreamOutcome::GapDetected {
+            last_received_seq: 3
+        }
     );
     // The receiver may only ack its contiguous max (1).
     assert_eq!(
@@ -110,7 +112,10 @@ fn credit_cases() {
         hub.recover_flow("up", 1024);
         assert_eq!(
             send(&mut hub, "up", &[0u8; 5000]),
-            StreamOutcome::Accepted { seq: 1, replay_slot: 0 }
+            StreamOutcome::Accepted {
+                seq: 1,
+                replay_slot: 0
+            }
         );
         let _ = case(&cases, "send_byte_total_within_consumed_plus_window");
     }
@@ -122,7 +127,10 @@ fn credit_cases() {
         hub.recover_flow("up", 1024);
         assert_eq!(
             send(&mut hub, "up", &[0u8; 5120]),
-            StreamOutcome::Accepted { seq: 1, replay_slot: 0 }
+            StreamOutcome::Accepted {
+                seq: 1,
+                replay_slot: 0
+            }
         );
         assert!(matches!(
             send(&mut hub, "up", b"x"),
@@ -148,7 +156,9 @@ fn credit_cases() {
         hub.recover_flow("up", 1024);
         assert_eq!(
             hub.apply_flow("up", 500, 4096).expect("stale flow"),
-            StreamOutcome::StaleFlowIgnored { consumed_bytes: 500 }
+            StreamOutcome::StaleFlowIgnored {
+                consumed_bytes: 500
+            }
         );
         let _ = case(&cases, "stale_flow_with_smaller_consumed_ignored");
     }
@@ -174,16 +184,16 @@ fn credit_cases() {
                 cap: 4 << 20
             }
         );
-        let _ = case(&cases, "flow_requesting_window_above_negotiated_cap_rejected");
+        let _ = case(
+            &cases,
+            "flow_requesting_window_above_negotiated_cap_rejected",
+        );
     }
 
     // zero_byte_data_frame_rejected
     {
         let mut hub = StreamHub::new("s", "a", 1, 4096, 1 << 20, 0);
-        assert_eq!(
-            send(&mut hub, "up", b""),
-            StreamOutcome::ZeroByteRejected
-        );
+        assert_eq!(send(&mut hub, "up", b""), StreamOutcome::ZeroByteRejected);
         let _ = case(&cases, "zero_byte_data_frame_rejected");
     }
 }
@@ -206,7 +216,10 @@ fn reset_cases() {
                 resume_handle: Some("rs:up:17".into())
             }
         );
-        let _ = case(&cases, "reset_after_partial_unconfirmed_marks_replay_required");
+        let _ = case(
+            &cases,
+            "reset_after_partial_unconfirmed_marks_replay_required",
+        );
     }
 
     // resume_with_smaller_window_requires_reconfirm
@@ -261,8 +274,13 @@ fn slow_consumer_cases() {
     // control_queue_full_breaks_link
     {
         let mut hub = StreamHub::new("s", "a", 1, 4096, 1 << 20, 0);
-        let result = (0..=conex_core::stream::CONTROL_QUEUE_CAPACITY) .map(|i| hub.push_control(format!("m{i}"))).collect::<Vec<_>>();
-        assert!(matches!(result.last(), Some(Err(StreamError::ControlQueueFull))));
+        let result = (0..=conex_core::stream::CONTROL_QUEUE_CAPACITY)
+            .map(|i| hub.push_control(format!("m{i}")))
+            .collect::<Vec<_>>();
+        assert!(matches!(
+            result.last(),
+            Some(Err(StreamError::ControlQueueFull))
+        ));
         let _ = case(&cases, "control_queue_full_breaks_link");
     }
 }
