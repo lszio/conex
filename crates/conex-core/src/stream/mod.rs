@@ -126,9 +126,15 @@ pub enum StreamOutcome {
     /// Zero-byte data frame rejected.
     ZeroByteRejected,
     /// Reset accepted; bytes after `after_seq` must be replayed.
-    ResetAccepted { after_seq: u64, resume_handle: Option<String> },
+    ResetAccepted {
+        after_seq: u64,
+        resume_handle: Option<String>,
+    },
     /// Recovery required a smaller window but unconfirmed bytes exceed it.
-    ReconfirmRequired { unconfirmed_bytes: u64, new_window: u64 },
+    ReconfirmRequired {
+        unconfirmed_bytes: u64,
+        new_window: u64,
+    },
     /// Old epoch after resume — connection is fenced.
     EpochFenced { expected: u64, got: u64 },
     /// Slow consumer: credit exhausted for `SLOW_CONSUMER_AFTER_MS`.
@@ -247,17 +253,19 @@ impl StreamHub {
     }
 
     fn ensure_send(&mut self, stream_id: &str, kind: StreamKind) -> &mut SendState {
-        self.send.entry(stream_id.to_string()).or_insert_with(|| SendState {
-            stream_id: stream_id.to_string(),
-            kind,
-            window_bytes: self.window_bytes,
-            next_seq: 1,
-            sent_bytes: 0,
-            last_acked_seq: 0,
-            consumed_bytes: 0,
-            unconfirmed_bytes: 0,
-            credit_blocked_since_ms: None,
-        })
+        self.send
+            .entry(stream_id.to_string())
+            .or_insert_with(|| SendState {
+                stream_id: stream_id.to_string(),
+                kind,
+                window_bytes: self.window_bytes,
+                next_seq: 1,
+                sent_bytes: 0,
+                last_acked_seq: 0,
+                consumed_bytes: 0,
+                unconfirmed_bytes: 0,
+                credit_blocked_since_ms: None,
+            })
     }
 
     fn ensure_recv(&mut self, stream_id: &str) -> &mut RecvState {
@@ -316,7 +324,10 @@ impl StreamHub {
                 },
             );
             self.prune_replay();
-            Ok(StreamOutcome::Accepted { seq, replay_slot: 0 })
+            Ok(StreamOutcome::Accepted {
+                seq,
+                replay_slot: 0,
+            })
         }
     }
 
@@ -399,7 +410,9 @@ impl StreamHub {
         if state.unconfirmed_bytes == 0 {
             state.credit_blocked_since_ms = None;
         }
-        Ok(StreamOutcome::Acked { last_received_seq: 0 })
+        Ok(StreamOutcome::Acked {
+            last_received_seq: 0,
+        })
     }
 
     /// Recovery anchor (design §6): after `session/resume` the receiver
@@ -422,11 +435,7 @@ impl StreamHub {
     /// Negotiate a (possibly smaller) window after `session/resume`.
     /// If unconfirmed bytes exceed the new window the receiver must either
     /// reconfirm or reset the stream before sending resumes (design §6.3).
-    pub fn renegotiate_window(
-        &mut self,
-        stream_id: &str,
-        new_window_bytes: u64,
-    ) -> StreamOutcome {
+    pub fn renegotiate_window(&mut self, stream_id: &str, new_window_bytes: u64) -> StreamOutcome {
         let _ = stream_id;
         self.window_bytes = new_window_bytes;
         let max_unconfirmed = self
@@ -441,7 +450,9 @@ impl StreamHub {
                 new_window: new_window_bytes,
             };
         }
-        StreamOutcome::Acked { last_received_seq: 0 }
+        StreamOutcome::Acked {
+            last_received_seq: 0,
+        }
     }
 
     /// Receiver-side ACK path: an ACK is only valid when it covers the
@@ -577,10 +588,7 @@ impl StreamHub {
     /// Receiver side: validate a received frame for the current epoch and
     /// report contiguity. Returns how many bytes become part of the
     /// contiguous prefix (0 if there's a gap or duplicate).
-    pub fn receive_frame(
-        &mut self,
-        frame: &StreamFrame,
-    ) -> Result<u64, StreamError> {
+    pub fn receive_frame(&mut self, frame: &StreamFrame) -> Result<u64, StreamError> {
         self.check_epoch(frame.epoch)?;
         if frame.message.is_empty() {
             return Err(StreamError::ZeroByteRejected);

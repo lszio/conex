@@ -97,9 +97,7 @@ impl Jwks {
             })
             .collect::<Result<Vec<_>, JwtError>>()?;
         if keys.is_empty() {
-            return Err(JwtError::Malformed(
-                "JWKS contains no RSA keys".to_string(),
-            ));
+            return Err(JwtError::Malformed("JWKS contains no RSA keys".to_string()));
         }
         Ok(Self { keys })
     }
@@ -143,9 +141,15 @@ impl OidcVerifier {
     pub fn verify(&self, token: &str) -> Result<IdTokenClaims, JwtError> {
         // JWT = base64url(header).base64url(payload).base64url(signature)
         let mut parts = token.splitn(3, '.');
-        let header = parts.next().ok_or_else(|| JwtError::Malformed("no header".into()))?;
-        let payload = parts.next().ok_or_else(|| JwtError::Malformed("no payload".into()))?;
-        let signature = parts.next().ok_or_else(|| JwtError::Malformed("no signature".into()))?;
+        let header = parts
+            .next()
+            .ok_or_else(|| JwtError::Malformed("no header".into()))?;
+        let payload = parts
+            .next()
+            .ok_or_else(|| JwtError::Malformed("no payload".into()))?;
+        let signature = parts
+            .next()
+            .ok_or_else(|| JwtError::Malformed("no signature".into()))?;
 
         let header_bytes = b64u_decode(header)?;
         let payload_bytes = b64u_decode(payload)?;
@@ -214,7 +218,10 @@ impl OidcVerifier {
 
         // Verify RS256 via ring against the JWKS key for `kid`.
         let jwk = self.jwks.key(&kid).ok_or(JwtError::UnknownKeyId)?;
-        let public_key = RsaPublicKeyComponents { n: &jwk.n, e: &jwk.e };
+        let public_key = RsaPublicKeyComponents {
+            n: &jwk.n,
+            e: &jwk.e,
+        };
         public_key
             .verify(
                 &RSA_PKCS1_2048_8192_SHA256,
@@ -268,7 +275,13 @@ pub fn now_unix() -> u64 {
 
 /// Sign an RS256 JWT with a PKCS#8 private key (test/IdP fixture).
 #[allow(deprecated)] // RSA_PKCS1_SHA256 is the standardized PKCS#1 v1.5 padding
-pub fn sign_rs256(pkcs8_der: &[u8], header_kid: &str, alg: &str, payload: &str, rng: &ring::rand::SystemRandom) -> Result<String, String> {
+pub fn sign_rs256(
+    pkcs8_der: &[u8],
+    header_kid: &str,
+    alg: &str,
+    payload: &str,
+    rng: &ring::rand::SystemRandom,
+) -> Result<String, String> {
     let key_pair = RsaKeyPair::from_pkcs8(pkcs8_der).map_err(|e| format!("bad pkcs8: {e}"))?;
     let header = format!(r#"{{"typ":"JWT","alg":"{alg}","kid":"{header_kid}"}}"#);
     let b64_header = b64u_encode(header.as_bytes());

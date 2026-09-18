@@ -1,4 +1,10 @@
 //! Drive Rust and TypeScript over the same shared vectors.
+//!
+//! `--vectors <dir>` selects the *step set* for that directory: the P0
+//! vectors drive the cross-language codec tests, the P1 vectors drive the
+//! chunking/blob/stream/operation/session/transfer behaviour suites. The
+//! runner no longer executes one fixed list regardless of the directory
+//! (which ran the same steps twice and re-ran the 1 GiB transfer test).
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -9,105 +15,108 @@ pub fn run(vectors: &str) -> Result<()> {
         bail!("vectors directory not found: {vectors}");
     }
     let root = repo_root()?;
-    // P1-01: the golden manifest bytes/CIDs are generated from `protoc --encode`
-    // (C++ protobuf) by an independent script; regenerate with
-    // `python3 conformance/tools/gen_manifest_goldens.py`.
-    run_step(
-        &root,
-        "manifest goldens",
-        "python3",
-        &["conformance/tools/gen_manifest_goldens.py", "--check"],
-    )?;
-    // P1-01 contract freeze: shared chunking golden CIDs.
-    run_step(
-        &root,
-        "rust p1 chunking",
-        "cargo",
-        &["test", "-p", "conex-proto", "--test", "chunking"],
-    )?;
-    run_step(
-        &root,
-        "ts p1 chunking",
-        "bun",
-        &["test", "sdk/typescript/tests/chunking.test.ts"],
-    )?;
-    run_step(
-        &root,
-        "rust p1 contracts",
-        "cargo",
-        &["test", "-p", "conex-proto", "--test", "p1_contracts"],
-    )?;
-    run_step(
-        &root,
-        "ts p1 contracts",
-        "bun",
-        &["test", "sdk/typescript/tests/p1_contracts.test.ts"],
-    )?;
-    // P1-06 blob storage: lifecycle + crash matrix + GC against blob.json.
-    run_step(
-        &root,
-        "rust conex-content blob",
-        "cargo",
-        &["test", "-p", "conex-content", "--test", "blob"],
-    )?;
-    // P1-08 operations: dedup / execution / state machine against
-    // conformance/vectors/p1/operation.json.
-    run_step(
-        &root,
-        "rust conex-core operation",
-        "cargo",
-        &["test", "-p", "conex-core", "--test", "operation"],
-    )?;
-    // P1-07 blob transfer: inline eligibility + 1 GiB roundtrip.
-    run_step(
-        &root,
-        "rust conex-core session",
-        "cargo",
-        &["test", "-p", "conex-core", "--test", "session"],
-    )?;
-    run_step(
-        &root,
-        "rust conex-content transfer",
-        "cargo",
-        &[
-            "test",
-            "-p",
-            "conex-content",
-            "--test",
-            "transfer",
-            "--",
-            "--test-threads=1",
-        ],
-    )?;
-    run_step(
-        &root,
-        "rust vectors",
-        "cargo",
-        &[
-            "test",
-            "-p",
-            "conex-proto",
-            "--test",
-            "scalars",
-            "--test",
-            "wire",
-            "--test",
-            "cid",
-        ],
-    )?;
-    run_step(
-        &root,
-        "ts vectors",
-        "bun",
-        &[
-            "test",
-            "sdk/typescript/tests/scalars.test.ts",
-            "sdk/typescript/tests/wire.test.ts",
-            "sdk/typescript/tests/cid.test.ts",
-        ],
-    )?;
+    let steps: Vec<(&str, &str, Vec<&str>)> = match vectors {
+        "conformance/vectors/p0" => p0_steps(),
+        "conformance/vectors/p1" => p1_steps(),
+        other => bail!("no conformance step set for {other}"),
+    };
+    for (name, program, args) in steps {
+        run_step(&root, name, program, &args)?;
+    }
     println!("conformance: Rust and TS agree on {vectors}");
     Ok(())
+}
+
+/// P0: cross-language codec vectors (scalars/wire/cid) + policy vectors.
+fn p0_steps() -> Vec<(&'static str, &'static str, Vec<&'static str>)> {
+    vec![
+        (
+            "rust p0 vectors",
+            "cargo",
+            vec![
+                "test",
+                "-p",
+                "conex-proto",
+                "--test",
+                "scalars",
+                "--test",
+                "wire",
+                "--test",
+                "cid",
+            ],
+        ),
+        (
+            "ts p0 vectors",
+            "bun",
+            vec![
+                "test",
+                "sdk/typescript/tests/scalars.test.ts",
+                "sdk/typescript/tests/wire.test.ts",
+                "sdk/typescript/tests/cid.test.ts",
+            ],
+        ),
+        (
+            "rust p0 policy",
+            "cargo",
+            vec!["test", "-p", "conex-core", "--test", "policy"],
+        ),
+    ]
+}
+
+/// P1: canonical content addressing, blob storage/transfer, stream, session
+/// and operation slices. Every step drives a real implementation against the
+/// shared vectors or its own behavioural matrix.
+fn p1_steps() -> Vec<(&'static str, &'static str, Vec<&'static str>)> {
+    vec![
+        (
+            "manifest goldens",
+            "python3",
+            vec!["conformance/tools/gen_manifest_goldens.py", "--check"],
+        ),
+        (
+            "rust p1 chunking",
+            "cargo",
+            vec!["test", "-p", "conex-proto", "--test", "chunking"],
+        ),
+        (
+            "ts p1 chunking",
+            "bun",
+            vec!["test", "sdk/typescript/tests/chunking.test.ts"],
+        ),
+        (
+            "rust conex-content blob",
+            "cargo",
+            vec!["test", "-p", "conex-content", "--test", "blob"],
+        ),
+        (
+            "rust conex-content transfer",
+            "cargo",
+            vec![
+                "test",
+                "-p",
+                "conex-content",
+                "--test",
+                "transfer",
+                "--",
+                "--test-threads=1",
+            ],
+        ),
+        (
+            "rust conex-core stream",
+            "cargo",
+            vec!["test", "-p", "conex-core", "--test", "stream"],
+        ),
+        (
+            "rust conex-core operation",
+            "cargo",
+            vec!["test", "-p", "conex-core", "--test", "operation"],
+        ),
+        (
+            "rust conex-core session",
+            "cargo",
+            vec!["test", "-p", "conex-core", "--test", "session"],
+        ),
+    ]
 }
 
 pub(crate) fn run_step(root: &Path, name: &str, program: &str, args: &[&str]) -> Result<()> {

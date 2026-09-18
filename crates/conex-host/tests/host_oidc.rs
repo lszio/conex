@@ -117,7 +117,13 @@ root = \"{notes_root}\"\n",
     // Valid idToken → 200 + ticket.
     let valid = sign_id_token(
         support::TEST_KID,
-        &claims_json("alice", "https://issuer.example", "conex-host", 3600, Some("nohunter2")),
+        &claims_json(
+            "alice",
+            "https://issuer.example",
+            "conex-host",
+            3600,
+            Some("nohunter2"),
+        ),
         "RS256",
     );
     let ok = client
@@ -135,7 +141,13 @@ root = \"{notes_root}\"\n",
     // Wrong issuer → 401.
     let evil = sign_id_token(
         support::TEST_KID,
-        &claims_json("alice", "https://evil.example", "conex-host", 3600, Some("nohunter2")),
+        &claims_json(
+            "alice",
+            "https://evil.example",
+            "conex-host",
+            3600,
+            Some("nohunter2"),
+        ),
         "RS256",
     );
     let bad = client

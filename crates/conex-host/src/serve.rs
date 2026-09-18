@@ -155,8 +155,7 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
             std::fs::create_dir_all(&operation_root).map_err(invalid)?;
         }
         let content = Arc::new(
-            ContentStore::open(&content_root, conex_content::DEFAULT_LEASE_MS)
-                .map_err(invalid)?,
+            ContentStore::open(&content_root, conex_content::DEFAULT_LEASE_MS).map_err(invalid)?,
         );
         let session = Arc::new(SessionStore::open(&session_root).map_err(invalid)?);
         let operation = Arc::new(OperationStore::open(&operation_root).map_err(invalid)?);

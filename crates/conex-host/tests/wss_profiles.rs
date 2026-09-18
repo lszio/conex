@@ -104,17 +104,14 @@ async fn connect_with_bearer(
     url: &str,
     token: &str,
 ) -> Result<
-    tokio_tungstenite::WebSocketStream<
-        tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
-    >,
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
     Box<dyn std::error::Error + Send + Sync>,
 > {
     use tokio_tungstenite::tungstenite::client::IntoClientRequest;
     let mut request = url.into_client_request()?;
-    request.headers_mut().insert(
-        "Authorization",
-        format!("Bearer {token}").parse().unwrap(),
-    );
+    request
+        .headers_mut()
+        .insert("Authorization", format!("Bearer {token}").parse().unwrap());
     let (ws, _) = tokio_tungstenite::connect_async(request).await?;
     Ok(ws)
 }
@@ -157,7 +154,10 @@ async fn bootstrap_json(
         .as_str()
         .expect("profileId")
         .to_string();
-    assert_eq!(echoed_profile, profile, "hello must echo the requested profile");
+    assert_eq!(
+        echoed_profile, profile,
+        "hello must echo the requested profile"
+    );
 
     // ready
     ws.send(Message::Text(
@@ -181,9 +181,7 @@ async fn bootstrap_json(
         other => panic!("expected text ready result, got {other:?}"),
     };
     assert!(
-        ready["result"]["negotiationId"]
-            .as_str()
-            .is_some(),
+        ready["result"]["negotiationId"].as_str().is_some(),
         "ready result must carry negotiationId: {ready}"
     );
     negotiation_id
@@ -243,7 +241,12 @@ async fn wss_json_profile_round_trip() {
     ))
     .await
     .expect("send business frame");
-    let reply: Value = match ws.next().await.expect("business reply").expect("business msg") {
+    let reply: Value = match ws
+        .next()
+        .await
+        .expect("business reply")
+        .expect("business msg")
+    {
         Message::Text(text) => serde_json::from_str(&text).expect("business json"),
         other => panic!("expected text business result, got {other:?}"),
     };
@@ -316,7 +319,9 @@ async fn wss_protobuf_profile_round_trip() {
     };
     let mut buf = Vec::new();
     prost::Message::encode(&request, &mut buf).expect("encode request");
-    ws.send(Message::Binary(buf.into())).await.expect("send protobuf frame");
+    ws.send(Message::Binary(buf.into()))
+        .await
+        .expect("send protobuf frame");
 
     let reply = ws
         .next()

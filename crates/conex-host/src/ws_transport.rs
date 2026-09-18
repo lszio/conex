@@ -26,7 +26,9 @@ use futures::{SinkExt, StreamExt};
 use serde_json::{Value, json};
 use tokio::sync::Mutex;
 
-use conex_core::stream::{AckRequest, FlowRequest, ResetRequest, StreamError, StreamFrame, StreamHub, StreamOutcome};
+use conex_core::stream::{
+    AckRequest, FlowRequest, ResetRequest, StreamError, StreamFrame, StreamHub, StreamOutcome,
+};
 use conex_core::transport_ws::{
     BootstrapError, BootstrapFrame, BootstrapState, ClientHandshake, ProfileId, ServerHandshake,
     plane_name,
@@ -106,11 +108,7 @@ pub async fn ws_handler_with_state(
                 .into_response();
         }
     };
-    let wss_state = Arc::new(WssState::new(
-        broker,
-        conex_core::Limits::default(),
-        caller,
-    ));
+    let wss_state = Arc::new(WssState::new(broker, conex_core::Limits::default(), caller));
     ws.on_upgrade(move |socket| handle_connection(socket, wss_state))
         .into_response()
 }
@@ -381,10 +379,7 @@ fn broker_frame_from_message(message: v1::Message) -> CallResult<Option<BrokerFr
         .map(crate::http::pbjson_to_json)
         .unwrap_or(Value::Null);
     let (caller, plane) = match context.as_ref() {
-        Some(ctx) => (
-            ctx.provider_endpoint_id.clone(),
-            ctx.plane,
-        ),
+        Some(ctx) => (ctx.provider_endpoint_id.clone(), ctx.plane),
         None => (String::new(), v1::Plane::Broker as i32),
     };
     let frame = BrokerFrame {
@@ -403,7 +398,11 @@ fn broker_frame_from_message(message: v1::Message) -> CallResult<Option<BrokerFr
         },
         params: Some(input),
     };
-    Ok(if request_id.is_some() { Some(frame) } else { None })
+    Ok(if request_id.is_some() {
+        Some(frame)
+    } else {
+        None
+    })
 }
 
 fn to_wire_error(error: &CallError) -> v1::Error {
@@ -564,8 +563,12 @@ async fn handle_stream(
             })?;
             hub.check_epoch(flow.epoch).map_err(stream_error_to_call)?;
             stream_outcome_to_json(
-                hub.apply_flow(&flow.stream_id, flow.consumed_bytes, flow.requested_window_bytes)
-                    .map_err(stream_error_to_call)?,
+                hub.apply_flow(
+                    &flow.stream_id,
+                    flow.consumed_bytes,
+                    flow.requested_window_bytes,
+                )
+                .map_err(stream_error_to_call)?,
             )
         }
         "stream/reset" => {
@@ -574,15 +577,21 @@ async fn handle_stream(
             })?;
             hub.check_epoch(reset.epoch).map_err(stream_error_to_call)?;
             stream_outcome_to_json(
-                hub.apply_reset(&reset.stream_id, reset.after_seq, &reset.reason, reset.resume_handle)
-                    .map_err(stream_error_to_call)?,
+                hub.apply_reset(
+                    &reset.stream_id,
+                    reset.after_seq,
+                    &reset.reason,
+                    reset.resume_handle,
+                )
+                .map_err(stream_error_to_call)?,
             )
         }
         "stream/frame" => {
             let stream_frame: StreamFrame = serde_json::from_value(input).map_err(|e| {
                 CallError::new(v1::ErrorCode::BadRequest, format!("bad stream/frame: {e}"))
             })?;
-            hub.check_epoch(stream_frame.epoch).map_err(stream_error_to_call)?;
+            hub.check_epoch(stream_frame.epoch)
+                .map_err(stream_error_to_call)?;
             let contiguous = hub
                 .receive_frame(&stream_frame)
                 .map_err(stream_error_to_call)?;
@@ -609,14 +618,13 @@ async fn handle_stream(
                     })?
                 }
                 ProfileId::ProtobufWssV1 => {
-                    let message = v1::Message::decode(stream_frame.message.as_slice()).map_err(
-                        |e| {
+                    let message =
+                        v1::Message::decode(stream_frame.message.as_slice()).map_err(|e| {
                             CallError::new(
                                 v1::ErrorCode::BadRequest,
                                 format!("cannot decode stream frame message: {e}"),
                             )
-                        },
-                    )?;
+                        })?;
                     broker_frame_from_message(message)?.ok_or_else(|| {
                         CallError::new(
                             v1::ErrorCode::BadRequest,
@@ -651,16 +659,13 @@ fn stream_error_to_call(error: StreamError) -> CallError {
         StreamError::ZeroByteRejected => {
             CallError::new(v1::ErrorCode::BadRequest, error.to_string())
         }
-        StreamError::StreamFailed(reason) => {
-            CallError::new(v1::ErrorCode::BadRequest, reason)
-        }
+        StreamError::StreamFailed(reason) => CallError::new(v1::ErrorCode::BadRequest, reason),
         StreamError::SlowConsumer { .. } => {
             CallError::new(v1::ErrorCode::SlowConsumer, error.to_string())
         }
-        StreamError::ControlQueueFull => CallError::new(
-            v1::ErrorCode::QuotaExceeded,
-            error.to_string(),
-        ),
+        StreamError::ControlQueueFull => {
+            CallError::new(v1::ErrorCode::QuotaExceeded, error.to_string())
+        }
         StreamError::BadRequest(message) => CallError::new(v1::ErrorCode::BadRequest, message),
     }
 }
@@ -669,7 +674,10 @@ fn stream_outcome_to_json(outcome: StreamOutcome) -> Value {
     use StreamOutcome::*;
     match outcome {
         Accepted { seq, .. } => json!({ "accepted": true, "seq": seq.to_string() }),
-        CreditBlocked { sent_bytes, allowed } => {
+        CreditBlocked {
+            sent_bytes,
+            allowed,
+        } => {
             json!({ "accepted": false, "creditBlocked": true, "sentBytes": sent_bytes.to_string(), "allowedBytes": allowed.to_string() })
         }
         Acked { last_received_seq } => {
@@ -682,15 +690,34 @@ fn stream_outcome_to_json(outcome: StreamOutcome) -> Value {
         StaleFlowIgnored { consumed_bytes } => {
             json!({ "accepted": false, "staleFlow": true, "consumedBytes": consumed_bytes.to_string() })
         }
-        StreamFailed { reason } => json!({ "accepted": false, "streamFailed": true, "reason": reason }),
-        WindowCapRejected { requested, cap } => json!({ "accepted": false, "windowCapRejected": true, "requestedBytes": requested.to_string(), "capBytes": cap.to_string() }),
+        StreamFailed { reason } => {
+            json!({ "accepted": false, "streamFailed": true, "reason": reason })
+        }
+        WindowCapRejected { requested, cap } => {
+            json!({ "accepted": false, "windowCapRejected": true, "requestedBytes": requested.to_string(), "capBytes": cap.to_string() })
+        }
         ZeroByteRejected => json!({ "accepted": false, "zeroByteRejected": true }),
-        ResetAccepted { after_seq, resume_handle } => {
+        ResetAccepted {
+            after_seq,
+            resume_handle,
+        } => {
             json!({ "accepted": true, "afterSeq": after_seq.to_string(), "resumeHandle": resume_handle })
         }
-        ReconfirmRequired { unconfirmed_bytes, new_window } => json!({ "accepted": false, "reconfirmRequired": true, "unconfirmedBytes": unconfirmed_bytes.to_string(), "newWindowBytes": new_window.to_string() }),
-        EpochFenced { expected, got } => json!({ "accepted": false, "epochFenced": true, "expectedEpoch": expected.to_string(), "gotEpoch": got.to_string() }),
-        SlowConsumer { stream_id, since_ms } => json!({ "accepted": false, "slowConsumer": true, "streamId": stream_id, "sinceMs": since_ms.to_string() }),
+        ReconfirmRequired {
+            unconfirmed_bytes,
+            new_window,
+        } => {
+            json!({ "accepted": false, "reconfirmRequired": true, "unconfirmedBytes": unconfirmed_bytes.to_string(), "newWindowBytes": new_window.to_string() })
+        }
+        EpochFenced { expected, got } => {
+            json!({ "accepted": false, "epochFenced": true, "expectedEpoch": expected.to_string(), "gotEpoch": got.to_string() })
+        }
+        SlowConsumer {
+            stream_id,
+            since_ms,
+        } => {
+            json!({ "accepted": false, "slowConsumer": true, "streamId": stream_id, "sinceMs": since_ms.to_string() })
+        }
         ControlQueueFull => json!({ "accepted": false, "controlQueueFull": true }),
         Cancelled => json!({ "accepted": true, "cancelled": true }),
     }
