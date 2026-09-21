@@ -2246,7 +2246,7 @@
       "type": "object"
     }
   },
-  "$id": "conex:conex.v1.ManifestEntries",
-  "$ref": "#/$defs/conex.v1.ManifestEntries",
+  "$id": "conex:conex.v1.EndpointListRequest",
+  "$ref": "#/$defs/conex.v1.EndpointListRequest",
   "$schema": "https://json-schema.org/draft/2020-12/schema"
 }

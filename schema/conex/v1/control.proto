@@ -26,3 +26,35 @@ message HelloResponse {
   repeated RejectedCapability rejected_capabilities = 6;
   Limits limits = 7;
 }
+
+// Identity and capability summary for a negotiated WS link. These fields are
+// deliberately separate from HTTP binding state.
+message LinkIdentity {
+  string link_id = 1;
+  string peer_id = 2;
+  string tenant_id = 3;
+}
+
+message NegotiatedCapabilities {
+  repeated string provides = 1;
+  repeated string requires = 2;
+  repeated RejectedCapability rejected_capabilities = 3;
+}
+
+// WSS ready exchange uses the same generated control types as hello.
+message ReadyRequest {
+  string negotiation_id = 1;
+  string profile_id = 2;
+  Plane plane = 3;
+  repeated string provides = 4;
+  Limits limits = 5;
+}
+
+message ReadyResponse {
+  string negotiation_id = 1;
+  string profile_id = 2;
+  Plane plane = 3;
+  repeated string provides = 4;
+  Limits limits = 5;
+  LinkIdentity link_identity = 6;
+}
