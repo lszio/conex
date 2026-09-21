@@ -17,8 +17,9 @@ sha2.workspace = true
 conex-assembly = { path = "../conex-assembly" }
 conex-core = { path = "../conex-core" }
 conex-proto = { path = "../conex-proto" }
-conex-transport-http = { path = "../conex-transport-http" }
 conex-content = { path = "../conex-content" }
+conex-source = { path = "../conex-source" }
+conex-transport-http = { path = "../conex-transport-http" }
 futures = "0.3"
 hex.workspace = true
 pbjson-types.workspace = true

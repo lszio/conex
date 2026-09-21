@@ -44,6 +44,8 @@ fn call_error_to_response(error: CallError) -> Response {
         StatusCode::BAD_REQUEST
     } else if code == v1::ErrorCode::Forbidden as i32 {
         StatusCode::FORBIDDEN
+    } else if code == v1::ErrorCode::QuotaExceeded as i32 {
+        StatusCode::TOO_MANY_REQUESTS
     } else {
         StatusCode::INTERNAL_SERVER_ERROR
     };
@@ -75,13 +77,18 @@ fn principal_from_auth(
         .map_err(Box::new)
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TicketRequest {
+    #[serde(default)]
     pub principal_id: String,
+    #[serde(default)]
     pub tenant_id: String,
+    #[serde(default)]
     pub origin: String,
+    #[serde(default)]
     pub target_host: String,
+    #[serde(default)]
     pub peer_role: String,
     #[serde(default)]
     pub capability_caps: Vec<String>,
@@ -96,17 +103,44 @@ pub async fn issue_ticket(
 ) -> Response {
     let side = match state.host_side.as_ref() {
         Some(side) => side,
-        None => {
-            return call_error_data_to_response(CallError::new(
-                v1::ErrorCode::Unavailable,
-                "ticket backend is not configured",
-            ));
-        }
+        None => return call_error_data_to_response(CallError::new(v1::ErrorCode::Unavailable, "ticket backend is not configured")),
     };
+    if let Some(web) = state.web_auth.as_ref() {
+        if headers.get(axum::http::header::COOKIE).is_some() {
+            let session = match web.check_mutation(&headers) {
+                Ok(session) => session,
+                Err(error) => return call_error_to_response(error),
+            };
+            let target_host = headers
+                .get(axum::http::header::HOST)
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or_default();
+            let ticket = match side.tickets.issue(
+                &session.caller.principal_id,
+                &session.caller.tenant_id,
+                web.origin(),
+                target_host,
+                "ui",
+                vec![
+                    "endpoint/list".into(),
+                    "source/list".into(),
+                    "source/read".into(),
+                    "source/search".into(),
+                ],
+                Some(session.id.clone()),
+            ) {
+                Ok(ticket) => ticket,
+                Err(error) => return call_error_data_to_response(error),
+            };
+            return ticket_response(ticket);
+        }
+    }
     let caller = match principal_from_auth(&state, &headers) {
         Ok(caller) => caller,
         Err(error) => return call_error_to_response(*error),
     };
+    // Legacy bearer `/tickets` remains identity-bound for non-browser P1
+    // callers; browser UI issuance always takes the session branch above.
     if caller.principal_id != request.principal_id || caller.tenant_id != request.tenant_id {
         return call_error_data_to_response(CallError::new(
             v1::ErrorCode::Forbidden,
@@ -122,24 +156,26 @@ pub async fn issue_ticket(
         request.capability_caps,
         request.session_id,
     ) {
-        Ok(ticket) => (
-            StatusCode::CREATED,
-            Json(json!({
-                "ticket": ticket.ticket,
-                "principalId": ticket.principal_id,
-                "tenantId": ticket.tenant_id,
-                "origin": ticket.origin,
-                "targetHost": ticket.target_host,
-                "peerRole": ticket.peer_role,
-                "capabilityCaps": ticket.capability_caps,
-                "sessionId": ticket.session_id,
-                "issuedAtMs": ticket.issued_at_ms.to_string(),
-                "expiresAtMs": ticket.expires_at_ms.to_string(),
-            })),
-        )
-            .into_response(),
+        Ok(ticket) => ticket_response(ticket),
         Err(error) => call_error_data_to_response(error),
     }
+}
+
+fn ticket_response(ticket: crate::agent::WebTicket) -> Response {
+    (
+        StatusCode::CREATED,
+        Json(json!({
+            "ticket": ticket.ticket,
+            "principalId": ticket.principal_id,
+            "tenantId": ticket.tenant_id,
+            "origin": ticket.origin,
+            "targetHost": ticket.target_host,
+            "peerRole": ticket.peer_role,
+            "capabilityCaps": ticket.capability_caps,
+            "issuedAtMs": ticket.issued_at_ms.to_string(),
+            "expiresAtMs": ticket.expires_at_ms.to_string(),
+        })),
+    ).into_response()
 }
 
 #[derive(Debug, Deserialize)]

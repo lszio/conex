@@ -8,7 +8,10 @@ use conex_core::CallError;
 use conex_proto::v1;
 use serde::Deserialize;
 
-pub const SUPPORTED_KINDS: [&str; 2] = ["source-fs", "source-http-catalog"];
+pub const SUPPORTED_KINDS: [&str; 3] = ["source-fs", "source-http-catalog", "source-remote"];
+pub const SUPPORTED_TOKEN_ROLES: [&str; 3] = ["ui", "agent", "service"];
+pub const SUPPORTED_REMOTE_METHODS: [&str; 3] =
+    ["source/list", "source/read", "source/search"];
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -30,6 +33,15 @@ pub struct HostConfig {
     pub policy: Vec<PolicyConfig>,
     #[serde(default)]
     pub endpoints: Vec<EndpointConfig>,
+    /// Same-origin browser origin for the connected landing page.
+    #[serde(default)]
+    pub web_origin: Option<String>,
+    /// Static UI root for the connected landing page.
+    #[serde(default)]
+    pub web_root: Option<PathBuf>,
+    /// Pre-authorized reverse-connect agents.
+    #[serde(default)]
+    pub agents: Vec<AgentConfig>,
     /// Local persistent root for the P1 blob backend
     /// (`conex-content::ContentStore`). When `None` the `/rpc` host disables
     /// `blob/*` and `p1_e2e` semantics still work via direct broker tests.
@@ -86,6 +98,20 @@ pub struct TokenConfig {
     pub principal_id: String,
     pub tenant_id: String,
     pub audience: String,
+    #[serde(default = "default_token_role")]
+    pub role: String,
+}
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AgentConfig {
+    pub id: String,
+    pub tenant_id: String,
+    #[serde(default)]
+    pub display_name: Option<String>,
+    #[serde(default)]
+    pub credential_name: Option<String>,
+    #[serde(default)]
+    pub credential_backend: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -127,6 +153,9 @@ pub struct EndpointConfig {
     pub credential_name: Option<String>,
     #[serde(default)]
     pub credential_backend: Option<String>,
+    /// For `source-remote`, the pre-authorized reverse-connect agent.
+    #[serde(default)]
+    pub agent_id: Option<String>,
 }
 
 impl HostConfig {
@@ -142,6 +171,58 @@ impl HostConfig {
             .listen
             .parse()
             .map_err(|_| invalid(format!("listen must be a socket address: {}", self.listen)))?;
+        if let Some(origin) = &self.web_origin {
+            if !valid_web_origin(origin) {
+                return Err(invalid(
+                    "web_origin must be a bare http:// or https:// origin without path, query, userinfo, or trailing slash",
+                ));
+            }
+        }
+        let mut agent_ids = HashSet::new();
+        for agent in &self.agents {
+            if agent.id.trim().is_empty() {
+                return Err(invalid("agent id must not be empty"));
+            }
+            if !agent_ids.insert(agent.id.clone()) {
+                return Err(invalid(format!("duplicate agent {}", agent.id)));
+            }
+            let credential_name = agent
+                .credential_name
+                .as_deref()
+                .filter(|name| !name.trim().is_empty())
+                .ok_or_else(|| invalid(format!("agent {} requires credential_name", agent.id)))?;
+            let credential_backend = agent
+                .credential_backend
+                .as_deref()
+                .filter(|backend| valid_credential_source(backend))
+                .ok_or_else(|| {
+                    invalid(format!(
+                        "agent {} requires credential_backend env:NAME or file:PATH",
+                        agent.id
+                    ))
+                })?;
+            let has_agent_identity = self
+                .tokens
+                .iter()
+                .any(|token| token.role == "agent" && token.principal_id == agent.id);
+            let has_matching_agent_token = self.tokens.iter().any(|token| {
+                token.role == "agent"
+                    && token.principal_id == agent.id
+                    && token.tenant_id == agent.tenant_id
+            });
+            if !has_matching_agent_token {
+                let reason = if has_agent_identity {
+                    "tenant mismatch"
+                } else {
+                    "matching role=agent token"
+                };
+                return Err(invalid(format!(
+                    "agent {} requires {}",
+                    agent.id, reason
+                )));
+            }
+            let _ = (credential_name, credential_backend);
+        }
         let mut seen = HashSet::new();
         for endpoint in &self.endpoints {
             if !seen.insert(endpoint.id.clone()) {
@@ -169,7 +250,43 @@ impl HostConfig {
                         endpoint.id
                     )));
                 }
+                "source-remote" => {
+                    let agent_id = endpoint.agent_id.as_ref().ok_or_else(|| {
+                        invalid(format!("source-remote endpoint {} requires agent_id", endpoint.id))
+                    })?;
+                    let agent = self.agents.iter().find(|agent| agent.id == *agent_id).ok_or_else(
+                        || invalid(format!("endpoint {} references unknown agent {}", endpoint.id, agent_id)),
+                    )?;
+                    if agent.tenant_id != endpoint.tenant_id {
+                        return Err(invalid(format!(
+                            "endpoint {} and agent {} must use the same tenant",
+                            endpoint.id, agent_id
+                        )));
+                    }
+                    if endpoint.root.is_none() {
+                        return Err(invalid(format!(
+                            "source-remote endpoint {} requires root",
+                            endpoint.id
+                        )));
+                    }
+                    if endpoint
+                        .provides
+                        .iter()
+                        .any(|method| !SUPPORTED_REMOTE_METHODS.contains(&method.as_str()))
+                    {
+                        return Err(invalid(format!(
+                            "unsupported remote method on endpoint {}",
+                            endpoint.id
+                        )));
+                    }
+                }
                 _ => {}
+            }
+            if endpoint.kind != "source-remote" && endpoint.agent_id.is_some() {
+                return Err(invalid(format!(
+                    "endpoint {} agent_id is only valid for source-remote",
+                    endpoint.id
+                )));
             }
             if let Some(backend) = &endpoint.credential_backend {
                 if !backend.starts_with("env:") && !backend.starts_with("file:") {
@@ -180,7 +297,23 @@ impl HostConfig {
                 }
             }
         }
+        for policy in &self.policy {
+            let endpoint = self
+                .endpoints
+                .iter()
+                .find(|endpoint| endpoint.id == policy.endpoint_id)
+                .ok_or_else(|| invalid(format!("unknown endpoint {}", policy.endpoint_id)))?;
+            if endpoint.tenant_id != policy.tenant_id {
+                return Err(invalid(format!(
+                    "policy {} and endpoint {} must use the same tenant",
+                    policy.principal_id, policy.endpoint_id
+                )));
+            }
+        }
         for token in &self.tokens {
+            if !SUPPORTED_TOKEN_ROLES.contains(&token.role.as_str()) {
+                return Err(invalid(format!("unknown token role {}", token.role)));
+            }
             let hash = token.token_hash.trim();
             if hash.len() != 64 || !hash.bytes().all(|byte| byte.is_ascii_hexdigit()) {
                 return Err(invalid("token_hash must be 64 hex characters"));
@@ -244,6 +377,52 @@ impl P1Backends {
     }
 }
 
+fn default_token_role() -> String {
+    "service".to_string()
+}
+
 fn invalid(message: impl std::fmt::Display) -> CallError {
     CallError::new(v1::ErrorCode::Internal, message.to_string())
+}
+fn valid_web_origin(origin: &str) -> bool {
+    let authority = origin
+        .strip_prefix("http://")
+        .or_else(|| origin.strip_prefix("https://"));
+    let Some(authority) = authority else {
+        return false;
+    };
+    if authority.is_empty()
+        || authority.contains(['/', '?', '#', '@'])
+        || authority.chars().any(char::is_whitespace)
+    {
+        return false;
+    }
+    if authority.starts_with('[') {
+        let Some(end) = authority.find(']') else {
+            return false;
+        };
+        if end == 1 {
+            return false;
+        }
+        return authority[end + 1..]
+            .strip_prefix(':')
+            .map_or(authority.len() == end + 1, |port| {
+                !port.is_empty() && port.parse::<u16>().is_ok()
+            });
+    }
+    if authority.matches(':').count() > 1 {
+        return false;
+    }
+    let (host, port) = authority
+        .split_once(':')
+        .map_or((authority, None), |(host, port)| (host, Some(port)));
+    !host.is_empty()
+        && port.map_or(true, |port| !port.is_empty() && port.parse::<u16>().is_ok())
+}
+
+fn valid_credential_source(source: &str) -> bool {
+    source
+        .strip_prefix("env:")
+        .or_else(|| source.strip_prefix("file:"))
+        .is_some_and(|value| !value.trim().is_empty())
 }

@@ -41,6 +41,7 @@ pub struct HttpState {
     pub host_side: Option<HostSide>,
     /// P1 capabilities to advertise through hello.
     pub p1_provides: Vec<String>,
+    pub web_auth: Option<Arc<crate::web_auth::WebAuth>>,
 }
 
 /// Build the P0 `/rpc` router without any shared state attached. Callers
@@ -66,6 +67,9 @@ pub fn attach_state(state: Arc<HttpState>, inner: Router) -> Router {
 pub fn attach_p1(base: Router) -> Router {
     base.route("/wss", get(crate::ws_transport::ws_handler_with_state))
         .route("/tickets", post(tickets::issue_ticket))
+        .route("/web/login", post(crate::web_auth::login))
+        .route("/web/session", get(crate::web_auth::session))
+        .route("/web/logout", post(crate::web_auth::logout))
         .route("/oidc/authorize", post(tickets::oidc_authorize))
         .route("/oidc/token", post(tickets::oidc_token))
 }
@@ -86,7 +90,8 @@ async fn rpc(
         .get(header::AUTHORIZATION)
         .and_then(|value| value.to_str().ok());
     let inbound = match state.auth.authenticate(authorization) {
-        Ok(inbound) => inbound,
+        Ok(inbound) if inbound.role != "ui" => inbound,
+        Ok(_) => return (StatusCode::UNAUTHORIZED, "UI credentials require a web session").into_response(),
         Err(_) => return (StatusCode::UNAUTHORIZED, "unauthorized").into_response(),
     };
     let message = match decode_wire(&body) {
@@ -177,6 +182,15 @@ async fn handle_request(
         return failure(&request_id, error);
     }
     let timeout = Duration::from_millis(u64::from(params.timeout_budget_ms.max(1)));
+    if request.method.starts_with("agent/") {
+        return failure(
+            &request_id,
+            CallError::new(
+                v1::ErrorCode::Forbidden,
+                "agent methods are only available on authenticated agent WSS links",
+            ),
+        );
+    }
     if is_p1_method(&request.method) {
         let Some(broker) = state.broker.clone() else {
             return failure(
@@ -219,7 +233,8 @@ async fn handle_request(
 }
 
 fn is_p1_method(method: &str) -> bool {
-    method.starts_with("blob/")
+    method == "endpoint/list"
+        || method.starts_with("blob/")
         || method.starts_with("session/")
         || method.starts_with("operation/")
         || method.starts_with("agent/")
