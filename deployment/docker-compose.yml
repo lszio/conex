@@ -1,0 +1,72 @@
+services:
+  host:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: conex:local
+    command: ["/etc/conex/host.toml"]
+    ports:
+      - "${CONEX_HOST_PORT:-8787}:8787"
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - ${CONEX_HOST_CONFIG:-./host.toml}:/etc/conex/host.toml:ro
+      - conex-content:/var/lib/conex/content
+      - conex-session:/var/lib/conex/session
+      - conex-operation:/var/lib/conex/operation
+    secrets:
+      - agent_a_token
+      - agent_b_token
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://127.0.0.1:8787/ >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  agent-a:
+    image: conex:local
+    entrypoint: ["/usr/local/bin/conex-agent"]
+    command: ["--config", "/etc/conex/agent.toml"]
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - ${CONEX_AGENT_A_CONFIG:-./agent-a.toml}:/etc/conex/agent.toml:ro
+      - ${CONEX_AGENT_A_DATA:-./agent-a-data}:/srv/agent-a:ro
+    secrets:
+      - agent_a_token
+    restart: unless-stopped
+    depends_on:
+      host:
+        condition: service_healthy
+
+  agent-b:
+    image: conex:local
+    entrypoint: ["/usr/local/bin/conex-agent"]
+    command: ["--config", "/etc/conex/agent.toml"]
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - ${CONEX_AGENT_B_CONFIG:-./agent-b.toml}:/etc/conex/agent.toml:ro
+      - ${CONEX_AGENT_B_DATA:-./agent-b-data}:/srv/agent-b:ro
+    secrets:
+      - agent_b_token
+    restart: unless-stopped
+    depends_on:
+      host:
+        condition: service_healthy
+
+volumes:
+  conex-content:
+  conex-session:
+  conex-operation:
+
+secrets:
+  agent_a_token:
+    file: ${CONEX_AGENT_A_TOKEN_FILE:?set CONEX_AGENT_A_TOKEN_FILE to a 0600 token file}
+  agent_b_token:
+    file: ${CONEX_AGENT_B_TOKEN_FILE:?set CONEX_AGENT_B_TOKEN_FILE to a 0600 token file}

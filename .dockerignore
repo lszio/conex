@@ -1,0 +1,9 @@
+target
+.git
+.gitnexus
+.toolchain
+node_modules
+web/dist
+*.log
+.env
+.env.*
