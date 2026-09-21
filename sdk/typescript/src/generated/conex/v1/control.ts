@@ -33,6 +33,40 @@ export interface HelloResponse {
   limits?: Limits | undefined;
 }
 
+/**
+ * Identity and capability summary for a negotiated WS link. These fields are
+ * deliberately separate from HTTP binding state.
+ */
+export interface LinkIdentity {
+  linkId?: string | undefined;
+  peerId?: string | undefined;
+  tenantId?: string | undefined;
+}
+
+export interface NegotiatedCapabilities {
+  provides?: string[] | undefined;
+  requires?: string[] | undefined;
+  rejectedCapabilities?: RejectedCapability[] | undefined;
+}
+
+/** WSS ready exchange uses the same generated control types as hello. */
+export interface ReadyRequest {
+  negotiationId?: string | undefined;
+  profileId?: string | undefined;
+  plane?: Plane | undefined;
+  provides?: string[] | undefined;
+  limits?: Limits | undefined;
+}
+
+export interface ReadyResponse {
+  negotiationId?: string | undefined;
+  profileId?: string | undefined;
+  plane?: Plane | undefined;
+  provides?: string[] | undefined;
+  limits?: Limits | undefined;
+  linkIdentity?: LinkIdentity | undefined;
+}
+
 function createBaseHelloRequest(): HelloRequest {
   return { profileId: "", plane: 0, provides: [], requires: [] };
 }
@@ -461,6 +495,557 @@ export const HelloResponse: MessageFns<HelloResponse> = {
     message.rejectedCapabilities = object.rejectedCapabilities?.map((e) => RejectedCapability.fromPartial(e)) || [];
     message.limits = (object.limits !== undefined && object.limits !== null)
       ? Limits.fromPartial(object.limits)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseLinkIdentity(): LinkIdentity {
+  return { linkId: "", peerId: "", tenantId: "" };
+}
+
+export const LinkIdentity: MessageFns<LinkIdentity> = {
+  encode(message: LinkIdentity, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.linkId !== undefined && message.linkId !== "") {
+      writer.uint32(10).string(message.linkId);
+    }
+    if (message.peerId !== undefined && message.peerId !== "") {
+      writer.uint32(18).string(message.peerId);
+    }
+    if (message.tenantId !== undefined && message.tenantId !== "") {
+      writer.uint32(26).string(message.tenantId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): LinkIdentity {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseLinkIdentity();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.linkId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.peerId = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.tenantId = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): LinkIdentity {
+    return {
+      linkId: isSet(object.linkId)
+        ? globalThis.String(object.linkId)
+        : isSet(object.link_id)
+        ? globalThis.String(object.link_id)
+        : "",
+      peerId: isSet(object.peerId)
+        ? globalThis.String(object.peerId)
+        : isSet(object.peer_id)
+        ? globalThis.String(object.peer_id)
+        : "",
+      tenantId: isSet(object.tenantId)
+        ? globalThis.String(object.tenantId)
+        : isSet(object.tenant_id)
+        ? globalThis.String(object.tenant_id)
+        : "",
+    };
+  },
+
+  toJSON(message: LinkIdentity): unknown {
+    const obj: any = {};
+    if (message.linkId !== undefined && message.linkId !== "") {
+      obj.linkId = message.linkId;
+    }
+    if (message.peerId !== undefined && message.peerId !== "") {
+      obj.peerId = message.peerId;
+    }
+    if (message.tenantId !== undefined && message.tenantId !== "") {
+      obj.tenantId = message.tenantId;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<LinkIdentity>, I>>(base?: I): LinkIdentity {
+    return LinkIdentity.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<LinkIdentity>, I>>(object: I): LinkIdentity {
+    const message = createBaseLinkIdentity();
+    message.linkId = object.linkId ?? "";
+    message.peerId = object.peerId ?? "";
+    message.tenantId = object.tenantId ?? "";
+    return message;
+  },
+};
+
+function createBaseNegotiatedCapabilities(): NegotiatedCapabilities {
+  return { provides: [], requires: [], rejectedCapabilities: [] };
+}
+
+export const NegotiatedCapabilities: MessageFns<NegotiatedCapabilities> = {
+  encode(message: NegotiatedCapabilities, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.provides !== undefined && message.provides.length !== 0) {
+      for (const v of message.provides) {
+        writer.uint32(10).string(v!);
+      }
+    }
+    if (message.requires !== undefined && message.requires.length !== 0) {
+      for (const v of message.requires) {
+        writer.uint32(18).string(v!);
+      }
+    }
+    if (message.rejectedCapabilities !== undefined && message.rejectedCapabilities.length !== 0) {
+      for (const v of message.rejectedCapabilities) {
+        RejectedCapability.encode(v!, writer.uint32(26).fork()).join();
+      }
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): NegotiatedCapabilities {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseNegotiatedCapabilities();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            const el = reader.string();
+            if (el !== undefined) {
+              message.provides!.push(el);
+            }
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            const el = reader.string();
+            if (el !== undefined) {
+              message.requires!.push(el);
+            }
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            const el = RejectedCapability.decode(reader, reader.uint32());
+            if (el !== undefined) {
+              message.rejectedCapabilities!.push(el);
+            }
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): NegotiatedCapabilities {
+    return {
+      provides: globalThis.Array.isArray(object?.provides) ? object.provides.map((e: any) => globalThis.String(e)) : [],
+      requires: globalThis.Array.isArray(object?.requires) ? object.requires.map((e: any) => globalThis.String(e)) : [],
+      rejectedCapabilities: globalThis.Array.isArray(object?.rejectedCapabilities)
+        ? object.rejectedCapabilities.map((e: any) => RejectedCapability.fromJSON(e))
+        : globalThis.Array.isArray(object?.rejected_capabilities)
+        ? object.rejected_capabilities.map((e: any) => RejectedCapability.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: NegotiatedCapabilities): unknown {
+    const obj: any = {};
+    if (message.provides?.length) {
+      obj.provides = message.provides;
+    }
+    if (message.requires?.length) {
+      obj.requires = message.requires;
+    }
+    if (message.rejectedCapabilities?.length) {
+      obj.rejectedCapabilities = message.rejectedCapabilities.map((e) => RejectedCapability.toJSON(e));
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<NegotiatedCapabilities>, I>>(base?: I): NegotiatedCapabilities {
+    return NegotiatedCapabilities.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<NegotiatedCapabilities>, I>>(object: I): NegotiatedCapabilities {
+    const message = createBaseNegotiatedCapabilities();
+    message.provides = object.provides?.map((e) => e) || [];
+    message.requires = object.requires?.map((e) => e) || [];
+    message.rejectedCapabilities = object.rejectedCapabilities?.map((e) => RejectedCapability.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseReadyRequest(): ReadyRequest {
+  return { negotiationId: "", profileId: "", plane: 0, provides: [], limits: undefined };
+}
+
+export const ReadyRequest: MessageFns<ReadyRequest> = {
+  encode(message: ReadyRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.negotiationId !== undefined && message.negotiationId !== "") {
+      writer.uint32(10).string(message.negotiationId);
+    }
+    if (message.profileId !== undefined && message.profileId !== "") {
+      writer.uint32(18).string(message.profileId);
+    }
+    if (message.plane !== undefined && message.plane !== 0) {
+      writer.uint32(24).int32(message.plane);
+    }
+    if (message.provides !== undefined && message.provides.length !== 0) {
+      for (const v of message.provides) {
+        writer.uint32(34).string(v!);
+      }
+    }
+    if (message.limits !== undefined) {
+      Limits.encode(message.limits, writer.uint32(42).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ReadyRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseReadyRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.negotiationId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.profileId = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.plane = reader.int32() as any;
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            const el = reader.string();
+            if (el !== undefined) {
+              message.provides!.push(el);
+            }
+            continue;
+          }
+          case 5: {
+            if (tag !== 42) {
+              break;
+            }
+
+            message.limits = Limits.decode(reader, reader.uint32());
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): ReadyRequest {
+    return {
+      negotiationId: isSet(object.negotiationId)
+        ? globalThis.String(object.negotiationId)
+        : isSet(object.negotiation_id)
+        ? globalThis.String(object.negotiation_id)
+        : "",
+      profileId: isSet(object.profileId)
+        ? globalThis.String(object.profileId)
+        : isSet(object.profile_id)
+        ? globalThis.String(object.profile_id)
+        : "",
+      plane: isSet(object.plane) ? planeFromJSON(object.plane) : 0,
+      provides: globalThis.Array.isArray(object?.provides) ? object.provides.map((e: any) => globalThis.String(e)) : [],
+      limits: isSet(object.limits) ? Limits.fromJSON(object.limits) : undefined,
+    };
+  },
+
+  toJSON(message: ReadyRequest): unknown {
+    const obj: any = {};
+    if (message.negotiationId !== undefined && message.negotiationId !== "") {
+      obj.negotiationId = message.negotiationId;
+    }
+    if (message.profileId !== undefined && message.profileId !== "") {
+      obj.profileId = message.profileId;
+    }
+    if (message.plane !== undefined && message.plane !== 0) {
+      obj.plane = planeToJSON(message.plane);
+    }
+    if (message.provides?.length) {
+      obj.provides = message.provides;
+    }
+    if (message.limits !== undefined) {
+      obj.limits = Limits.toJSON(message.limits);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ReadyRequest>, I>>(base?: I): ReadyRequest {
+    return ReadyRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ReadyRequest>, I>>(object: I): ReadyRequest {
+    const message = createBaseReadyRequest();
+    message.negotiationId = object.negotiationId ?? "";
+    message.profileId = object.profileId ?? "";
+    message.plane = object.plane ?? 0;
+    message.provides = object.provides?.map((e) => e) || [];
+    message.limits = (object.limits !== undefined && object.limits !== null)
+      ? Limits.fromPartial(object.limits)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseReadyResponse(): ReadyResponse {
+  return { negotiationId: "", profileId: "", plane: 0, provides: [], limits: undefined, linkIdentity: undefined };
+}
+
+export const ReadyResponse: MessageFns<ReadyResponse> = {
+  encode(message: ReadyResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.negotiationId !== undefined && message.negotiationId !== "") {
+      writer.uint32(10).string(message.negotiationId);
+    }
+    if (message.profileId !== undefined && message.profileId !== "") {
+      writer.uint32(18).string(message.profileId);
+    }
+    if (message.plane !== undefined && message.plane !== 0) {
+      writer.uint32(24).int32(message.plane);
+    }
+    if (message.provides !== undefined && message.provides.length !== 0) {
+      for (const v of message.provides) {
+        writer.uint32(34).string(v!);
+      }
+    }
+    if (message.limits !== undefined) {
+      Limits.encode(message.limits, writer.uint32(42).fork()).join();
+    }
+    if (message.linkIdentity !== undefined) {
+      LinkIdentity.encode(message.linkIdentity, writer.uint32(50).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ReadyResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseReadyResponse();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.negotiationId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.profileId = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.plane = reader.int32() as any;
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            const el = reader.string();
+            if (el !== undefined) {
+              message.provides!.push(el);
+            }
+            continue;
+          }
+          case 5: {
+            if (tag !== 42) {
+              break;
+            }
+
+            message.limits = Limits.decode(reader, reader.uint32());
+            continue;
+          }
+          case 6: {
+            if (tag !== 50) {
+              break;
+            }
+
+            message.linkIdentity = LinkIdentity.decode(reader, reader.uint32());
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): ReadyResponse {
+    return {
+      negotiationId: isSet(object.negotiationId)
+        ? globalThis.String(object.negotiationId)
+        : isSet(object.negotiation_id)
+        ? globalThis.String(object.negotiation_id)
+        : "",
+      profileId: isSet(object.profileId)
+        ? globalThis.String(object.profileId)
+        : isSet(object.profile_id)
+        ? globalThis.String(object.profile_id)
+        : "",
+      plane: isSet(object.plane) ? planeFromJSON(object.plane) : 0,
+      provides: globalThis.Array.isArray(object?.provides) ? object.provides.map((e: any) => globalThis.String(e)) : [],
+      limits: isSet(object.limits) ? Limits.fromJSON(object.limits) : undefined,
+      linkIdentity: isSet(object.linkIdentity)
+        ? LinkIdentity.fromJSON(object.linkIdentity)
+        : isSet(object.link_identity)
+        ? LinkIdentity.fromJSON(object.link_identity)
+        : undefined,
+    };
+  },
+
+  toJSON(message: ReadyResponse): unknown {
+    const obj: any = {};
+    if (message.negotiationId !== undefined && message.negotiationId !== "") {
+      obj.negotiationId = message.negotiationId;
+    }
+    if (message.profileId !== undefined && message.profileId !== "") {
+      obj.profileId = message.profileId;
+    }
+    if (message.plane !== undefined && message.plane !== 0) {
+      obj.plane = planeToJSON(message.plane);
+    }
+    if (message.provides?.length) {
+      obj.provides = message.provides;
+    }
+    if (message.limits !== undefined) {
+      obj.limits = Limits.toJSON(message.limits);
+    }
+    if (message.linkIdentity !== undefined) {
+      obj.linkIdentity = LinkIdentity.toJSON(message.linkIdentity);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ReadyResponse>, I>>(base?: I): ReadyResponse {
+    return ReadyResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ReadyResponse>, I>>(object: I): ReadyResponse {
+    const message = createBaseReadyResponse();
+    message.negotiationId = object.negotiationId ?? "";
+    message.profileId = object.profileId ?? "";
+    message.plane = object.plane ?? 0;
+    message.provides = object.provides?.map((e) => e) || [];
+    message.limits = (object.limits !== undefined && object.limits !== null)
+      ? Limits.fromPartial(object.limits)
+      : undefined;
+    message.linkIdentity = (object.linkIdentity !== undefined && object.linkIdentity !== null)
+      ? LinkIdentity.fromPartial(object.linkIdentity)
       : undefined;
     return message;
   },
