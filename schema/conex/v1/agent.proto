@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package conex.v1;
+
+import "conex/v1/control.proto";
+
+// Registration is authenticated by the transport credential; no secret is
+// carried in this message or returned by the host.
+message AgentEndpoint {
+  string endpoint_id = 1;
+  string root = 2;
+  repeated string methods = 3;
+}
+
+message AgentRegisterRequest {
+  string agent_id = 1;
+  string tenant_id = 2;
+  repeated AgentEndpoint endpoints = 3;
+  repeated string provides = 4;
+  optional string host_origin = 5;
+}
+
+message AgentRegisterResult {
+  string agent_id = 1;
+  string link_id = 2;
+  repeated string accepted_endpoint_ids = 3;
+  repeated RejectedCapability rejected_capabilities = 4;
+}
