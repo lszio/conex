@@ -16,9 +16,13 @@ conex 的文档按「规范 / 契约 / 计划 / 证据 / 操作」分层，每�
 | 契约 | [P0 wire 契约](contracts/p0-wire.md) | `conex-jsonrpc2-http-v1` 信封、参数、错误码、HTTP 行为 | 实现或对接 wire 时 |
 | 计划 | [路线图](plans/2026-09-15-conex-roadmap.md) | P0–P4 阶段、依赖与工作包 | 了解全局与推进顺序 |
 | 计划 | [P1 执行计划](plans/2026-09-15-conex-p1.md) | 下一步：P1 范围、P1-01 细化、里程碑 | 开始下一步工作 |
+| 计划 | [中心服务与交互落地页](plans/2026-09-20-conex-connected-landing.md) | 已确认 A 拓扑：浏览器连接中心 Host，私有 Agent 反连；含安全接入、真实路由、页面和验收 | 实施多地服务连接展示时 |
+| 契约 | [Connected landing](contracts/connected-landing.md) | 中心 Host、浏览器会话/ticket、Agent 反连与只读端点目录的 L01 冻结契约 | 实施 connected landing 或校验信任边界时 |
 | 计划 | [P0 执行计划（归档）](plans/archive/2026-09-15-conex-p0.md) | 已完成的 P0 计划：冻结决定、任务→提交→证据、遗留缺口 | 追溯 P0 决策 |
 | 证据 | [P0 验证记录](verification/p0.md) | 环境、命令、结果、逐任务已知缺口 | 验收、排障、审计 |
 | 操作 | [P0 运行手册](runbooks/p0.md) | 生成、启动、入站 token / 出站凭据、SDK 调用 | 部署与联调 |
+| 操作 | [Connected landing 运行手册](runbooks/connected-landing.md) | `cargo xtask landing-demo` 三进程、token 三元组、docker-compose、日志、门禁 | 部署 / 演示 / 联调多 Agent 场景 |
+| 证据 | [Connected landing 验证记录](verification/connected-landing.md) | 两条 e2e + Rust 单测 + bun 测试实际输出、未验证项 | 验收、排障 |
 
 ## 阅读顺序
 

@@ -502,11 +502,13 @@ host 不必内置所有 provider 业务类型，但必须调用已安装的 `Met
 
 ### 8.5 浏览器登录与 ticket
 
-浏览器采用 authorization-code + PKCE。host 的 Web 登录会话 cookie 使用独立、随机且不可预测的值，并设置 Secure、HttpOnly、SameSite；它与业务 sessionId 是不同概念。登录校验 state/nonce；修改状态的 HTTP 请求和 `/tickets` 实施 CSRF 与 Origin 校验。
+受控部署的默认浏览器入口使用管理员签发的专用 UI 静态凭据，而不是把尚未闭环的 OIDC 重定向标为本轮已用能力。浏览器同源调用 `POST /web/login`，在 `Authorization` 头提交 `role=ui` 的 bearer；host 校验 token hash、主体、租户和 audience 后建立独立、随机且不可预测的 Web 登录会话。会话 cookie 设置 `Secure`（仅 HTTPS）、`HttpOnly`、`SameSite=Strict`；它与业务 `sessionId`、WS `linkId` 和 `bindingId` 都是不同概念。
 
-`POST /tickets` 在已认证 Web 会话中签发 30 秒、一次性 ticket，绑定主体、Web 会话、目标 host、peer 角色、能力上限及可选 Session。WS 握手校验 Origin 并原子消费 ticket；断线后重新获取，不延长或重复使用已消费 ticket。
+`GET /web/session` 只返回当前主体显示信息和一次 CSRF nonce，不返回长期凭据。状态修改和 `/tickets` 校验精确配置的 `web_origin` 与 CSRF；不开放任意 CORS。凭据不得进入 URL、localStorage、页面日志或审计。登出撤销当前 Web 会话、其未消费 ticket 及所属 UI Link，不影响同主体的其他会话。
 
-WS URL 可以携带短期 ticket，但接入代理、访问日志和诊断必须脱敏 query。IP/UA 只作异常信号，不作为身份凭证或强制绑定条件，避免 NAT/移动网络变更破坏合法重连。长期 token 不进入 URL。
+`POST /tickets` 在有效 Web 会话中签发 30 秒、一次性 ticket，绑定主体、租户、目标 host、`ui` 角色、能力上限和 Web 会话。WS upgrade 校验 Origin、目标 Host、会话有效性并原子消费 ticket；断线后重新取票，不能延长或重复使用。接入代理、访问日志和诊断必须脱敏整个 ticket query；长期 token 不进入 URL。
+
+完整 authorization-code + PKCE OIDC 保留为另一种登录适配器：若启用，必须校验 issuer、subject、audience、nonce、签名和时效，且 OIDC token 不得冒充 Agent 注册凭据。connected landing 本轮只承诺 `source/list|read|search` 的只读远端调用，不提供会话/流跨进程恢复；Agent 反连须先完成 TLS 身份校验、认证、hello/ready 和静态注册授权。
 
 ### 8.6 审计与可观察性
 
