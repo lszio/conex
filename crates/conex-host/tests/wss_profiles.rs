@@ -168,7 +168,9 @@ async fn bootstrap_json(
             "params": {
                 "negotiationId": negotiation_id,
                 "profileId": profile,
-                "plane": "broker"
+                "plane": "broker",
+                "provides": hello["result"]["provides"],
+                "limits": hello["result"]["limits"]
             }
         })
         .to_string()
@@ -217,23 +219,26 @@ async fn wss_json_profile_round_trip() {
         .expect("ws connect (json)");
     bootstrap_json(&mut ws, "conex-jsonrpc2-wss-v1").await;
 
-    // Business call over the JSON profile: agent/register with the
-    // configured host_origin succeeds. Identity comes from the upgrade
-    // bearer, not from the frame context.
+    // Agent registration is reserved for an authenticated agent-role WSS
+    // link; a service-role WSS link must be rejected without dispatch.
     ws.send(Message::Text(
         json!({
-            "request_id": ULID_A,
+            "jsonrpc": "2.0",
+            "id": ULID_A,
             "method": "agent/register",
-            "context": {
-                "providerEndpointId": "agent-mgr",
-                "plane": 1
-            },
             "params": {
-                "agentId": "ws-agent-json",
-                "providerIds": ["notes-local"],
-                "methods": ["source/read"],
-                "resources": ["a.md"],
-                "hostOrigin": "conex://broker.local"
+                "context": {
+                    "providerEndpointId": "agent-mgr",
+                    "plane": "broker"
+                },
+                "timeoutBudgetMs": 8000,
+                "input": {
+                    "agentId": "ws-agent-json",
+                    "providerIds": ["notes-local"],
+                    "methods": ["source/read"],
+                    "resources": ["a.md"],
+                    "hostOrigin": "conex://broker.local"
+                }
             }
         })
         .to_string()
@@ -251,9 +256,9 @@ async fn wss_json_profile_round_trip() {
         other => panic!("expected text business result, got {other:?}"),
     };
     assert_eq!(
-        reply["result"]["agentId"].as_str(),
-        Some("ws-agent-json"),
-        "agent/register over JSON WSS must succeed: {reply}"
+        reply["error"]["data"]["code"].as_str(),
+        Some("forbidden"),
+        "service-role agent/register must be rejected: {reply}"
     );
 
     let _ = child.kill();
@@ -283,8 +288,7 @@ async fn wss_protobuf_profile_round_trip() {
 
     bootstrap_json(&mut ws, "conex-protobuf-wss-v1").await;
 
-    // Business call over the protobuf profile: a typed v1::Message Request
-    // for agent/register, encoded with prost.
+    // Agent registration is reserved for authenticated agent-role WSS links.
     use std::collections::HashMap;
     let mut fields: HashMap<String, pbjson_types::Value> = HashMap::new();
     fields.insert("agentId".into(), "ws-agent-proto".into());
@@ -333,18 +337,66 @@ async fn wss_protobuf_profile_round_trip() {
     };
     let message = v1::Message::decode(bytes.as_ref()).expect("decode response");
     match message.body {
-        Some(v1::message::Body::Success(success)) => {
-            let result = success.result.expect("result");
-            let value: Value = serde_json::to_value(&result).expect("result to json");
+        Some(v1::message::Body::Failure(failure)) => {
             assert_eq!(
-                value["agentId"].as_str(),
-                Some("ws-agent-proto"),
-                "agent/register over protobuf WSS must succeed: {value}"
+                failure.error.as_ref().map(|error| v1::ErrorCode::try_from(error.code)),
+                Some(Ok(v1::ErrorCode::Forbidden)),
+                "service-role agent/register must be rejected: {failure:?}"
             );
         }
-        other => panic!("expected success body, got {other:?}"),
+        other => panic!("expected forbidden failure body, got {other:?}"),
     }
 
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn wss_server_does_not_echo_client_capabilities() {
+    let (port, mut child, _keepalive) = spawn_host();
+    for _ in 0..100 {
+        if tokio::net::TcpStream::connect(("127.0.0.1", port))
+            .await
+            .is_ok()
+        {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    let url = format!("ws://127.0.0.1:{port}/wss");
+    let mut ws = connect_with_bearer(&url, "e2e-token")
+        .await
+        .expect("ws connect");
+    ws.send(Message::Text(
+        json!({
+            "jsonrpc": "2.0",
+            "id": ULID_A,
+            "method": "conex/hello",
+            "params": {
+                "profileId": "conex-jsonrpc2-wss-v1",
+                "plane": "broker",
+                "provides": ["ui/probe"],
+                "requires": ["ui/probe"]
+            }
+        })
+        .to_string()
+        .into(),
+    ))
+    .await
+    .expect("send hello");
+    let reply = ws.next().await.expect("hello reply").expect("hello frame");
+    let Message::Text(text) = reply else {
+        panic!("expected text hello result");
+    };
+    let value: Value = serde_json::from_str(&text).expect("hello json");
+    assert!(
+        value["result"]["provides"] != json!(["ui/probe"]),
+        "server must not echo client provides: {value}"
+    );
+    assert!(
+        value["error"]["message"].as_str().is_some(),
+        "hard requires must reject before ready: {value}"
+    );
     let _ = child.kill();
     let _ = child.wait();
 }

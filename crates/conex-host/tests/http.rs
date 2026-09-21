@@ -171,6 +171,7 @@ impl HttpFixture {
                 broker: None,
                 host_side: None,
                 p1_provides: Vec::new(),
+                web_auth: None,
             }),
             build_p0_router(),
         );
