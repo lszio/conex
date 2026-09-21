@@ -190,6 +190,29 @@ fn same_method_on_different_endpoints_does_not_conflict() {
 }
 
 #[test]
+fn manually_built_routes_use_install_validation() {
+    let mut registry = Registry::new();
+    let first = installation("remote", "tenant", &["source/read"]);
+    registry
+        .install_routes(
+            first.clone(),
+            make_routes(&first, &["source/read"]).unwrap(),
+        )
+        .unwrap();
+    assert!(registry.route("remote", "conex", 1, "source/read").is_some());
+
+    let mut second = Registry::new();
+    let second_installation = installation("remote", "tenant", &["source/read"]);
+    let error = second
+        .install_routes(
+            second_installation.clone(),
+            make_routes(&second_installation, &["source/list"]).unwrap(),
+        )
+        .unwrap_err();
+    assert!(matches!(error, RegistryError::InvalidInstallation(_)));
+}
+
+#[test]
 fn tenant_mismatch_is_rejected() {
     let mut registry = Registry::new();
     registry

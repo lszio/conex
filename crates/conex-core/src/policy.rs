@@ -55,6 +55,26 @@ impl StaticPolicy {
         state.rules = rules;
         state.version
     }
+    /// Return the configured rules that apply to a caller and endpoint.
+    ///
+    /// Consumers must still call [`Policy::authorize`] for the claim they
+    /// project; this helper only avoids duplicating principal/tenant/endpoint
+    /// matching when building read-only views.
+    pub fn rules_for(&self, caller: &Caller, endpoint: &Endpoint) -> Vec<PolicyRule> {
+        self.inner
+            .read()
+            .expect("policy lock poisoned")
+            .rules
+            .iter()
+            .filter(|rule| {
+                rule.principal_id == caller.principal_id
+                    && rule.tenant_id == caller.tenant_id
+                    && rule.endpoint_id == endpoint.id
+            })
+            .cloned()
+            .collect()
+    }
+
 }
 
 impl Policy for StaticPolicy {
