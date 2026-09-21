@@ -14,3 +14,12 @@ export {
   SourceSearchRequest,
   SourceSearchResponse,
 } from "./generated/conex/v1/source";
+export {
+  AttachmentKind,
+  AuthorizedScope,
+  ConnectionState,
+  EndpointListRequest,
+  EndpointListResult,
+  EndpointSummary,
+} from "./generated/conex/v1/endpoint";
+export * from "./ws-client";
