@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Conex connected services" />
+    <title>Conex · Connected capabilities</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">CONEX / CONNECTED HOST</p>
+          <h1>把分散的服务，连接成可调用的能力</h1>
+          <p class="lede">由中心 Host 统一认证、授权，并把只读请求路由到真实在线端点。</p>
+        </div>
+        <div id="host-status" class="status-pill" role="status">未连接</div>
+      </header>
+
+      <section id="login-panel" class="panel login-panel" aria-labelledby="login-title">
+        <h2 id="login-title">登录 Host</h2>
+        <p class="muted">使用管理员签发的 UI 访问凭据。凭据只在本次请求中使用，不会保存。</p>
+        <form id="login-form">
+          <label for="token">访问凭据</label>
+          <input id="token" name="token" type="password" autocomplete="current-password" required />
+          <button type="submit">登录并连接</button>
+        </form>
+        <p id="login-error" class="error" role="alert" hidden></p>
+      </section>
+
+      <section id="app-panel" hidden>
+        <section class="stage panel" aria-labelledby="stage-title">
+          <div class="section-heading"><h2 id="stage-title">连接阶段</h2><button id="logout" class="secondary">退出登录</button></div>
+          <ol id="stages" class="stages" aria-label="连接阶段">
+            <li data-stage="auth">认证</li><li data-stage="transport">建立连接</li><li data-stage="hello">hello</li><li data-stage="ready">ready</li><li data-stage="done">就绪</li>
+          </ol>
+          <p id="connection-detail" class="muted" role="status">等待连接</p>
+        </section>
+
+        <div class="workspace">
+          <section class="panel topology" aria-labelledby="topology-title">
+            <div class="section-heading"><h2 id="topology-title">连接拓扑</h2><span id="endpoint-count" class="count">0 个端点</span></div>
+            <div id="topology-graph" class="topology-graph"></div>
+          </section>
+
+          <section class="panel catalog" aria-labelledby="catalog-title">
+            <div class="section-heading"><h2 id="catalog-title">服务目录</h2><span id="catalog-state" class="muted">加载中</span></div>
+            <div id="endpoint-list" class="endpoint-list" aria-live="polite"></div>
+          </section>
+        </div>
+
+        <section id="operation-panel" class="panel operations" aria-labelledby="operation-title">
+          <div class="section-heading"><div><h2 id="operation-title">读取服务</h2><p id="selected-endpoint" class="muted">选择一个端点查看可用操作</p></div></div>
+          <div class="operation-tabs" role="tablist" aria-label="服务操作">
+            <button data-operation="list" role="tab" aria-selected="true">列目录</button>
+            <button data-operation="read" role="tab" aria-selected="false">读取</button>
+            <button data-operation="search" role="tab" aria-selected="false">搜索</button>
+          </div>
+          <form id="operation-form" class="operation-form"></form>
+          <p id="operation-error" class="error" role="alert" hidden></p>
+          <pre id="operation-result" class="result" tabindex="0" aria-live="polite">尚未执行操作</pre>
+        </section>
+
+        <section class="panel timeline" aria-labelledby="timeline-title">
+          <div class="section-heading"><h2 id="timeline-title">事件时间线</h2><span class="muted">最多保留 200 条</span></div>
+          <ol id="events" class="events" aria-live="polite"></ol>
+        </section>
+      </section>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
