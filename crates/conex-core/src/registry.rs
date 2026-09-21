@@ -42,6 +42,37 @@ impl Registry {
     }
 
     pub fn install(&mut self, installation: Installation) -> Result<(), RegistryError> {
+        if installation.endpoint.plane != v1::Plane::Broker {
+            return Err(RegistryError::InvalidInstallation(format!(
+                "P0 only supports the broker plane, got {:?}",
+                installation.endpoint.plane
+            )));
+        }
+        if installation.factory.protocol != P0_PROTOCOL
+            || installation.factory.version != P0_VERSION
+        {
+            return Err(RegistryError::InvalidInstallation(format!(
+                "P0 only supports {P0_PROTOCOL}/v{P0_VERSION}, got {}/v{}",
+                installation.factory.protocol, installation.factory.version
+            )));
+        }
+        let factory = self
+            .factories
+            .get(&installation.factory)
+            .ok_or_else(|| RegistryError::UnknownFactory(format!("{:?}", installation.factory)))?;
+        let routes = factory(&installation).map_err(|e| {
+            RegistryError::InvalidInstallation(format!("factory error: {}", e.message()))
+        })?;
+        self.install_routes(installation, routes)
+    }
+
+    /// Install routes produced outside a [`FactoryFn`] through the same
+    /// endpoint/protocol/advertisement validation as normal installations.
+    pub fn install_routes(
+        &mut self,
+        installation: Installation,
+        routes: Vec<Route>,
+    ) -> Result<(), RegistryError> {
         let endpoint = installation.endpoint.clone();
 
         if endpoint.plane != v1::Plane::Broker {
@@ -66,14 +97,6 @@ impl Registry {
                 endpoint.id
             )));
         }
-
-        let factory = self
-            .factories
-            .get(&installation.factory)
-            .ok_or_else(|| RegistryError::UnknownFactory(format!("{:?}", installation.factory)))?;
-        let routes = factory(&installation).map_err(|e| {
-            RegistryError::InvalidInstallation(format!("factory error: {}", e.message()))
-        })?;
 
         let advertised: HashSet<&str> = endpoint.provides.iter().map(String::as_str).collect();
         let mut returned: HashSet<&str> = HashSet::new();
