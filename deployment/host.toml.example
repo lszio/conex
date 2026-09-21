@@ -1,0 +1,77 @@
+# Copy to a private host.toml and replace every <...> value before deployment.
+listen = "0.0.0.0:8787"
+audience = "host.example.internal"
+host_origin = "conex://host.example.internal"
+web_origin = "https://landing.example.com"
+web_root = "/opt/conex/web"
+content_root = "/var/lib/conex/content"
+session_root = "/var/lib/conex/session"
+operation_root = "/var/lib/conex/operation"
+
+[[tokens]]
+token_hash = "<sha256-of-ui-token>"
+principal_id = "ui-admin"
+tenant_id = "production"
+audience = "host.example.internal"
+role = "ui"
+
+[[tokens]]
+token_hash = "<sha256-of-agent-a-token>"
+principal_id = "agent-a"
+tenant_id = "production"
+audience = "host.example.internal"
+role = "agent"
+
+[[tokens]]
+token_hash = "<sha256-of-agent-b-token>"
+principal_id = "agent-b"
+tenant_id = "production"
+audience = "host.example.internal"
+role = "agent"
+
+[[agents]]
+id = "agent-a"
+tenant_id = "production"
+credential_name = "agent-a-token"
+credential_backend = "file:/run/secrets/agent_a_token"
+
+[[agents]]
+id = "agent-b"
+tenant_id = "production"
+credential_name = "agent-b-token"
+credential_backend = "file:/run/secrets/agent_b_token"
+
+[[endpoints]]
+id = "notes-a"
+tenant_id = "production"
+provider_id = "notes-a-provider"
+kind = "source-remote"
+provides = ["source/list", "source/read", "source/search"]
+root = "team"
+agent_id = "agent-a"
+
+[[endpoints]]
+id = "notes-b"
+tenant_id = "production"
+provider_id = "notes-b-provider"
+kind = "source-remote"
+provides = ["source/list", "source/read", "source/search"]
+root = "team"
+agent_id = "agent-b"
+
+# Add one policy block per principal/endpoint pair. Keep roots narrower than "".
+[[policy]]
+principal_id = "ui-admin"
+tenant_id = "production"
+endpoint_id = "notes-a"
+actions = ["list", "read", "search"]
+root = "team"
+subtree = true
+
+[[policy]]
+principal_id = "ui-admin"
+tenant_id = "production"
+endpoint_id = "notes-b"
+actions = ["list", "read", "search"]
+root = "team"
+subtree = true

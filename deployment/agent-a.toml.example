@@ -1,0 +1,14 @@
+agent_id = "agent-a"
+tenant_id = "production"
+host_url = "wss://host.example.com/wss"
+token_name = "agent-a-token"
+token_backend = "file:/run/secrets/agent_a_token"
+ca_pem = "/etc/conex/ca.pem"
+expected_server_name = "host.example.com"
+host_origin = "conex://host.example.internal"
+
+[[endpoints]]
+endpoint_id = "notes-a"
+root = "/srv/agent-a"
+methods = ["source/list", "source/read", "source/search"]
+resources = ["*"]

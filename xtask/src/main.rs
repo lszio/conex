@@ -3,6 +3,7 @@ mod additivity;
 mod check;
 mod conformance;
 mod e2e;
+mod landing_demo;
 mod generate;
 mod schema;
 
@@ -40,9 +41,19 @@ fn main() -> ExitCode {
                 .unwrap_or("conformance/vectors/p0");
             conformance::run(vectors)
         }
+        "landing-demo" => {
+            if args.iter().any(|arg| matches!(arg.as_str(), "--help" | "-h")) {
+                eprintln!("usage: cargo xtask landing-demo");
+                Ok(())
+            } else {
+                landing_demo::run()
+            }
+        }
         "check" => check::run(),
         "" | "help" | "--help" | "-h" => {
             eprintln!("usage: cargo xtask <generate [--check]>");
+            eprintln!("       cargo xtask landing-demo");
+            eprintln!("       cargo xtask e2e --suite connected-landing");
             return ExitCode::SUCCESS;
         }
         other => Err(anyhow::anyhow!("unknown xtask command: {other}")),
