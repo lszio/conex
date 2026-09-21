@@ -7,6 +7,7 @@ use sha2::{Digest, Sha256};
 pub struct InboundCaller {
     pub caller: Caller,
     pub audience: String,
+    pub role: String,
 }
 
 #[derive(Debug, Clone)]
@@ -16,6 +17,7 @@ pub struct TokenRecord {
     pub tenant_id: String,
     pub actor_peer_id: String,
     pub audience: String,
+    pub role: String,
 }
 
 impl TokenRecord {
@@ -31,6 +33,7 @@ impl TokenRecord {
             tenant_id: tenant_id.into(),
             actor_peer_id: "inbound-http".into(),
             audience: audience.into(),
+            role: "service".into(),
         }
     }
 }
@@ -41,11 +44,16 @@ pub trait InboundAuth: Send + Sync {
 
 pub struct StaticBearerAuth {
     tokens: Vec<TokenRecord>,
+    expected_audience: Option<String>,
 }
 
 impl StaticBearerAuth {
     pub fn new(tokens: Vec<TokenRecord>) -> Self {
-        Self { tokens }
+        Self { tokens, expected_audience: None }
+    }
+
+    pub fn new_for_audience(tokens: Vec<TokenRecord>, audience: impl Into<String>) -> Self {
+        Self { tokens, expected_audience: Some(audience.into()) }
     }
 }
 
@@ -58,6 +66,9 @@ impl InboundAuth for StaticBearerAuth {
         let digest: [u8; 32] = Sha256::digest(token.as_bytes()).into();
         for record in &self.tokens {
             if constant_time_eq(&digest, &record.token_hash) {
+                if self.expected_audience.as_deref().is_some_and(|expected| expected != record.audience) {
+                    continue;
+                }
                 return Ok(InboundCaller {
                     caller: Caller {
                         principal_id: record.principal_id.clone(),
@@ -65,6 +76,7 @@ impl InboundAuth for StaticBearerAuth {
                         actor_peer_id: record.actor_peer_id.clone(),
                     },
                     audience: record.audience.clone(),
+                    role: record.role.clone(),
                 });
             }
         }

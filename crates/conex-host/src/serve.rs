@@ -19,7 +19,7 @@ use conex_proto::v1;
 use conex_transport_http::{HttpConnector, TlsTrustConfig, TokioResolver};
 use serde_json::{Value, json};
 
-use crate::agent::HostSide;
+use crate::agent::{AgentAuthorization, HostSide};
 use crate::audit_file::{FileAuditSink, NullAudit};
 use crate::auth::{InboundAuth, StaticBearerAuth, TokenRecord};
 use crate::binding::BindingStore;
@@ -36,10 +36,12 @@ pub struct BuiltHost {
     pub auth: Arc<dyn InboundAuth>,
     pub broker: Option<Arc<Broker>>,
     pub host_side: Option<HostSide>,
+    pub catalog: Option<Arc<crate::catalog::EndpointCatalog>>,
     pub p1_provides: Vec<String>,
 }
 
 pub const P1_PROVIDES: &[&str] = &[
+    "endpoint/list",
     "blob/put",
     "blob/chunk",
     "blob/commit",
@@ -64,6 +66,36 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
     let mut registry = Registry::new();
     conex_assembly::register_all(&mut registry).map_err(registry_error)?;
 
+    let mut authorizations: HashMap<String, AgentAuthorization> = HashMap::new();
+    for agent in &config.agents {
+        authorizations.insert(
+            agent.id.clone(),
+            AgentAuthorization {
+                agent_id: agent.id.clone(),
+                tenant_id: agent.tenant_id.clone(),
+                provider_ids: Vec::new(),
+                methods: Vec::new(),
+                resources: Vec::new(),
+            },
+        );
+    }
+    for endpoint in config.endpoints.iter().filter(|endpoint| endpoint.kind == "source-remote") {
+        if let Some(agent_id) = endpoint.agent_id.as_deref()
+            && let Some(authorization) = authorizations.get_mut(agent_id)
+        {
+            authorization.provider_ids.push(endpoint.provider_id.clone());
+            authorization.provider_ids.push(endpoint.id.clone());
+            authorization.methods.extend(endpoint.provides.iter().cloned());
+            authorization.resources.push(
+                endpoint
+                    .root
+                    .as_deref()
+                    .map(|path| path.to_string_lossy().into_owned())
+                    .unwrap_or_default(),
+            );
+        }
+    }
+    let route_side = HostSide::with_authorizations(authorizations.into_values().collect());
     let mut credential_bindings: Vec<CredentialBinding> = Vec::new();
     let mut capabilities: HashMap<String, Vec<String>> = HashMap::new();
     for endpoint in &config.endpoints {
@@ -75,7 +107,26 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
         if let Some(binding) = credential_binding {
             credential_bindings.push(binding);
         }
-        registry.install(installation).map_err(registry_error)?;
+        if endpoint.kind == "source-remote" {
+            let agent_id = endpoint
+                .agent_id
+                .as_deref()
+                .ok_or_else(|| invalid("source-remote requires agent_id"))?;
+            let root = endpoint
+                .root
+                .as_deref()
+                .ok_or_else(|| invalid("source-remote requires root"))?
+                .to_string_lossy();
+            let routes = crate::remote::routes(
+                &installation,
+                agent_id,
+                &root,
+                route_side.connections.clone(),
+            )?;
+            registry.install_routes(installation, routes).map_err(registry_error)?;
+        } else {
+            registry.install(installation).map_err(registry_error)?;
+        }
     }
     for values in capabilities.values_mut() {
         values.sort();
@@ -126,7 +177,7 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
 
     let host = Arc::new(Host::new(
         registry,
-        policy as Arc<dyn Policy>,
+        policy.clone() as Arc<dyn Policy>,
         Arc::new(TargetPolicy::new()),
         Arc::new(TokioResolver),
         connector,
@@ -164,7 +215,7 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
         (None, None, None)
     };
     let mut host_side = if p1_active {
-        Some(HostSide::new())
+        Some(route_side)
     } else {
         None
     };
@@ -191,12 +242,23 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
         }
     }
     let host_side = host_side;
+    let catalog = if p1_active {
+        Some(Arc::new(crate::catalog::EndpointCatalog::from_config(
+            config,
+            &host,
+            policy,
+            host_side.as_ref(),
+        )?))
+    } else {
+        None
+    };
     let broker = if p1_active {
         let deps = BrokerDeps {
             content: content_store.clone(),
             session: session_store.clone(),
             operation: operation_store.clone(),
             agents: host_side.as_ref().map(|side| side.agents.clone()),
+            catalog: catalog.clone(),
             host_origin: Some(config.host_origin()),
         };
         Some(Arc::new(Broker::new(host.clone(), deps)))
@@ -228,19 +290,30 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
         .iter()
         .map(token_record)
         .collect::<Result<Vec<_>, _>>()?;
-    let auth: Arc<dyn InboundAuth> = Arc::new(StaticBearerAuth::new(tokens));
+    let auth: Arc<dyn InboundAuth> =
+        Arc::new(StaticBearerAuth::new_for_audience(tokens, config.audience()));
     Ok(BuiltHost {
         host,
         bindings,
         auth,
         broker,
         host_side,
+        catalog,
         p1_provides,
     })
 }
 
 pub fn build_router(config: &HostConfig) -> Result<Router, CallError> {
     let built = build(config)?;
+    let web_auth = built.host_side.as_ref().and_then(|side| {
+        config.web_origin.as_ref().map(|origin| {
+            Arc::new(crate::web_auth::WebAuth::new(
+                origin.clone(),
+                !config.allow_loopback_http,
+                side.tickets.clone(),
+            ))
+        })
+    });
     let http_state = Arc::new(HttpState {
         host: built.host.clone(),
         bindings: built.bindings.clone(),
@@ -248,10 +321,14 @@ pub fn build_router(config: &HostConfig) -> Result<Router, CallError> {
         broker: built.broker.clone(),
         host_side: built.host_side.clone(),
         p1_provides: built.p1_provides.clone(),
+        web_auth,
     });
     let mut base = build_p0_router();
     if built.broker.is_some() && built.host_side.is_some() {
         base = attach_p1(base);
+    }
+    if let Some(root) = config.web_root.as_deref() {
+        base = crate::web::WebAssets::load(root)?.router().merge(base);
     }
     Ok(attach_state(http_state, base))
 }
@@ -391,6 +468,7 @@ fn build_installation(
             }
             (Value::Object(provider), Some(target), key, backend)
         }
+        "source-remote" => (Value::Object(serde_json::Map::new()), None, None, None),
         other => return Err(invalid(format!("unknown factory kind {other}"))),
     };
 
@@ -431,6 +509,7 @@ fn token_record(token: &crate::config::TokenConfig) -> Result<TokenRecord, CallE
         tenant_id: token.tenant_id.clone(),
         actor_peer_id: "inbound-http".into(),
         audience: token.audience.clone(),
+        role: token.role.clone(),
     })
 }
 

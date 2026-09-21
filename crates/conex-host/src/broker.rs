@@ -59,6 +59,7 @@ pub struct BrokerDeps {
     pub session: Option<Arc<SessionStore>>,
     pub operation: Option<Arc<OperationStore>>,
     pub agents: Option<Arc<crate::agent::AgentRegistry>>,
+    pub catalog: Option<Arc<crate::catalog::EndpointCatalog>>,
     /// Expected `hostOrigin` string that `agent/register` must advertise.
     /// Required when `agents` is set.
     pub host_origin: Option<String>,
@@ -89,6 +90,14 @@ impl Broker {
                 v1::ErrorCode::BadRequest,
                 "conex/hello is handled by the transport, not the broker",
             ));
+        }
+        if call.method == "endpoint/list" {
+            let catalog = self
+                .deps
+                .catalog
+                .as_ref()
+                .ok_or_else(|| unavailable("endpoint catalog is not configured"))?;
+            return catalog.list(&call.caller, call.input).await;
         }
         if call.method.starts_with("blob/") {
             return self.dispatch_blob(&call).await;

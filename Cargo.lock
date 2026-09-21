@@ -373,9 +373,20 @@ version = "0.0.0"
 dependencies = [
  "conex-core",
  "conex-proto",
+ "conex-provider-fs",
+ "conex-source",
+ "futures",
+ "http",
+ "rustls",
+ "rustls-pemfile",
  "serde",
  "serde_json",
+ "sha2",
+ "tempfile",
  "tokio",
+ "tokio-tungstenite 0.30.0",
+ "toml",
+ "webpki-roots 0.26.11",
 ]
 
 [[package]]
@@ -434,6 +445,7 @@ dependencies = [
  "conex-core",
  "conex-proto",
  "conex-provider-fs",
+ "conex-source",
  "conex-transport-http",
  "futures",
  "hex",
@@ -2865,6 +2877,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "tempfile",
+ "tokio",
  "walkdir",
 ]
 
