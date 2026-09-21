@@ -74,6 +74,7 @@ async fn make_broker(
         session: Some(Arc::new(session)),
         operation: Some(Arc::new(operation)),
         agents: Some(side.agents.clone()),
+        catalog: None,
         host_origin: Some("conex://broker.local".into()),
     };
     Arc::new(Broker::new(host, deps))

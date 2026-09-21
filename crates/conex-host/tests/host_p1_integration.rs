@@ -243,7 +243,8 @@ root = \"{notes_root}\"\n",
         "PKCE mismatch must reject"
     );
 
-    // 4. agent/register via /rpc (broker path) accepts matching hostOrigin.
+    // 4. agent/register over HTTP is always rejected; agents must use an
+    // authenticated WSS link.
     let register: Value = reqwest::Client::new()
         .post(base_url(bound_addr))
         .header("Authorization", format!("Bearer {token}"))
@@ -273,7 +274,7 @@ root = \"{notes_root}\"\n",
         .json()
         .await
         .expect("register json");
-    assert_eq!(register["result"]["agentId"].as_str(), Some("agent-1"));
+    assert_eq!(register["error"]["data"]["code"].as_str(), Some("forbidden"));
 
     // 4b. agent/register with mismatched hostOrigin must be rejected.
     let bad_origin: Value = reqwest::Client::new()
