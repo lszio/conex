@@ -1,6 +1,23 @@
 # Connected landing contract
 
-状态：**L01 契约冻结**（2026-09-20）。类型源为 `schema/conex/v1/endpoint.proto`、`agent.proto` 与 `control.proto`；Rust/TypeScript/JSON Schema 由 `cargo xtask generate` 生成。本文冻结边界，不表示后续 L02–L09 已实现。
+状态：**L01 契约冻结 + L10 连接面板契约冻结**（2026-09-21）。L10 在 `schema/conex/v1/dashboard.proto` 新增 `ConnectionListRequest` / `ConnectionListResponse` / `UiLinkSummary` / `AgentLinkSummary`；Rust/TypeScript/JSON Schema 由 `cargo xtask generate` 生成。L02–L09 边界不变。
+
+## 7. 连接面板契约（L10）
+
+落地页在 ready 之后持续调用 `connection/list`，host 返回当前主体的所有浏览器 UI 链接 + 所有已注册 Agent 链接。Broker 在 `lib: /rpc` 上严格只接受 `role=ui`；`service` / `agent` 调用直接返回 `Forbidden`，不进入 registry。
+
+`UiLinkSummary` 每条包含：`linkId`（8 字节随机 base64url，登录时分配）、`principalId` / `tenantId`（来自会话）、`connectedAtMs`（web session 创建）、`lastSeenAtMs`（每帧 ready / 业务帧自上次心跳后的最新时间）、`ticketsIssued`（ticket 被消费的累计）、`callsTotal`（业务调用累计）、`callsInFlight`（进行中调用，未排空时大于 0）。
+
+`AgentLinkSummary` 来自既有 `AgentRegistry`：agentId、principalId、tenantId、registeredAtMs、lastHeartbeatAtMs、providerIds、resources、methods。
+
+要点：
+- WSS upgrade 收到 ticket 后 host 立即 `increment_tickets`；连接进入 ready 后 `touch` 更新 `lastSeenAtMs`。
+- 业务帧 dispatch 路径在 `dispatch_business` 包裹 `begin_call` / `end_call`，保证 `callsInFlight` 排空为 0、`callsTotal` 严格递增。
+- WS 关闭后链接保留在 registry 中，`lastSeenAtMs` 不再前进；下一次 `connection/list` 仍返回同一行。
+- 列表对当前主体隔离：`list_for_principal(Some(caller))`；service / agent 角色被 Broker 直接拒绝。
+- 票据、token、cookie 不出现在面板任何字段；面板只投影已存在的会话元数据 + 计数器。
+
+未在本轮覆盖：跨主机面板投影、agent 跨进程的代次差分面板；详见 `verification/connected-landing.md` §未验证项。
 
 ## 1. 拓扑与信任边界
 

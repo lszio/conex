@@ -3,6 +3,9 @@ import type { Limits } from "./generated/conex/v1/common";
 import type { LinkIdentity } from "./generated/conex/v1/control";
 import { mintUlid } from "./client";
 import type {
+  ConnectionListResponse,
+} from "./generated/conex/v1/dashboard";
+import type {
   EndpointListRequest,
   EndpointListResult,
 } from "./generated/conex/v1/endpoint";
@@ -165,6 +168,10 @@ export class ConexWsClient {
 
   listEndpoints(input: EndpointListRequest = {}): Promise<EndpointListResult> {
     return this.call<EndpointListResult>("endpoint/list", "", input);
+  }
+
+  listConnections(input: Record<string, never> = {}): Promise<ConnectionListResponse> {
+    return this.call<ConnectionListResponse>("connection/list", "", input);
   }
 
   list(endpointId: string, input: SourceListRequest): Promise<SourceListResponse> {

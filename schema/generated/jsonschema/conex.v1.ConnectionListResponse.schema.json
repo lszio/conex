@@ -2363,7 +2363,7 @@
       "type": "object"
     }
   },
-  "$id": "conex:conex.v1.AgentRegisterResult",
-  "$ref": "#/$defs/conex.v1.AgentRegisterResult",
+  "$id": "conex:conex.v1.ConnectionListResponse",
+  "$ref": "#/$defs/conex.v1.ConnectionListResponse",
   "$schema": "https://json-schema.org/draft/2020-12/schema"
 }

@@ -42,6 +42,7 @@ pub struct HttpState {
     /// P1 capabilities to advertise through hello.
     pub p1_provides: Vec<String>,
     pub web_auth: Option<Arc<crate::web_auth::WebAuth>>,
+    pub ui_links: Arc<crate::ui_links::UiLinkRegistry>,
 }
 
 /// Build the P0 `/rpc` router without any shared state attached. Callers
@@ -210,6 +211,7 @@ async fn handle_request(
             method: request.method.clone(),
             input,
             deadline: tokio::time::Instant::now() + timeout,
+            role: inbound.role.clone(),
         };
         return match broker.invoke(call).await {
             Ok(value) => success(&request_id, value),
@@ -234,6 +236,7 @@ async fn handle_request(
 
 fn is_p1_method(method: &str) -> bool {
     method == "endpoint/list"
+        || method == "connection/list"
         || method.starts_with("blob/")
         || method.starts_with("session/")
         || method.starts_with("operation/")

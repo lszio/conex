@@ -123,6 +123,7 @@ pub async fn issue_ticket(
                 "ui",
                 vec![
                     "endpoint/list".into(),
+                    "connection/list".into(),
                     "source/list".into(),
                     "source/read".into(),
                     "source/search".into(),

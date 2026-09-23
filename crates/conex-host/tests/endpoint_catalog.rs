@@ -180,6 +180,7 @@ async fn broker_endpoint_list_strictly_decodes_input_and_hides_other_principals(
         method: "endpoint/list".into(),
         input: json!({}),
         deadline: Instant::now() + Duration::from_secs(1),
+        role: "service".into(),
     };
     let result = broker.invoke(base()).await.unwrap();
     let result: v1::EndpointListResult = serde_json::from_value(result).unwrap();

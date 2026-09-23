@@ -1,10 +1,11 @@
-import { ConexWsClient, type EndpointSummary } from "@conex/sdk";
+import { ConexWsClient, type EndpointSummary, type UiLinkSummary } from "@conex/sdk";
 import {
   appendEvent,
   bindLogin,
   bindLogout,
   bindOperationTabs,
   renderCatalog,
+  renderConnections,
   renderError,
   renderResult,
   renderSelected,
@@ -22,6 +23,9 @@ let selected: EndpointSummary | undefined;
 let operation: Operation = "list";
 let pollTimer = 0;
 let pollInFlight = false;
+let connectionsPollTimer = 0;
+let connectionsPollInFlight = false;
+let connectionRows: UiLinkSummary[] = [];
 
 function log(phase: string, message: string, method?: string): void {
   appendEvent({ at: Date.now(), phase, message, method });
@@ -124,6 +128,25 @@ async function refreshCatalog(): Promise<void> {
 function startPolling(): void {
   window.clearInterval(pollTimer);
   pollTimer = window.setInterval(() => { void refreshCatalog(); }, 3000);
+  window.clearInterval(connectionsPollTimer);
+  connectionsPollTimer = window.setInterval(() => { void refreshConnections(); }, 1000);
+  void refreshConnections();
+}
+
+async function refreshConnections(): Promise<void> {
+  if (!client || connectionsPollInFlight || document.hidden) return;
+  connectionsPollInFlight = true;
+  try {
+    const result = await client.listConnections({});
+    const next = (result.browserLinks ?? []) as UiLinkSummary[];
+    connectionRows = next;
+    renderConnections(next);
+  } catch (err) {
+    // Connection panel is best-effort; do not log each tick to avoid
+    // overwhelming the timeline when the link is not yet ready.
+  } finally {
+    connectionsPollInFlight = false;
+  }
 }
 
 function selectEndpoint(endpoint: EndpointSummary): void {
@@ -153,12 +176,15 @@ async function invoke(kind: Operation, input: Record<string, string>): Promise<v
 
 async function logout(): Promise<void> {
   window.clearInterval(pollTimer);
+  window.clearInterval(connectionsPollTimer);
   client?.close();
   client = undefined;
   await fetch("/web/logout", { method: "POST", credentials: "same-origin", headers: { "x-csrf-token": csrfToken } });
   csrfToken = "";
   endpoints = [];
   selected = undefined;
+  connectionRows = [];
+  renderConnections([]);
   showLogin();
   setHostStatus("未连接", "");
   log("认证", "已退出登录");
@@ -171,8 +197,14 @@ bindOperationTabs((next) => {
   renderSelected(selected, operation, invoke);
 });
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden) window.clearInterval(pollTimer);
-  else if (client) { void refreshCatalog(); startPolling(); }
+  if (document.hidden) {
+    window.clearInterval(pollTimer);
+    window.clearInterval(connectionsPollTimer);
+  } else if (client) {
+    void refreshCatalog();
+    void refreshConnections();
+    startPolling();
+  }
 });
 
 void session().then((active) => {

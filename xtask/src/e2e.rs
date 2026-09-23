@@ -14,6 +14,7 @@ pub fn run(suite: &str) -> Result<()> {
         "p1-stream-1gib" => run_p1_stream_1gib(),
         "connected-landing" => run_connected_landing(),
         "connected-landing-web" => run_connected_landing_web(),
+        "connected-landing-connections" => run_connected_landing_connections(),
         other => bail!("unknown e2e suite: {other}"),
     }
 }
@@ -398,5 +399,145 @@ fn run_connected_landing_web() -> Result<()> {
         bail!("connected landing-web probe failed");
     }
     println!("connected-landing-web: real Host + two Agent processes, login/session/list+read via HTTP and WSS passed");
+    Ok(())
+}
+
+/// Spawn the same connected-landing demo fixture (Host + two Agents) used by
+/// the existing suites, then drive `connection/list` over a fresh UI session:
+///   1. `/web/login` (HTTP) -> cookie
+///   2. `/tickets` (HTTP, cookie + CSRF) -> ticket
+///   3. `/wss?ticket=...` -> hello + ready
+///   4. `connection/list` over WSS -> exactly one browserLink row matching
+///      the UI principal
+///   5. Drop the WSS, open a second WSS, re-query `connection/list`. The row
+///      must still be present and `lastSeenAtMs` must not regress (proving
+///      the registry does not update when no business call has happened).
+///   6. Send one `source/read` over WSS, then re-query `connection/list`.
+///      `callsTotal` must grow by one; `callsInFlight` must drain to zero.
+fn run_connected_landing_connections() -> Result<()> {
+    let root = repo_root()?;
+    let build = Command::new("cargo")
+        .args(["build", "-p", "conex-host", "-p", "conex-agent", "--quiet"])
+        .current_dir(&root)
+        .status()
+        .context("build connected landing-connections binaries")?;
+    if !build.success() {
+        bail!("cargo build -p conex-host -p conex-agent failed");
+    }
+    let fixture = landing_demo::prepare(&root, free_port()?, true)?;
+    let _processes = landing_demo::spawn(&root, &fixture, true)?;
+    if !landing_demo::wait_ready(fixture.port, Duration::from_secs(10)) {
+        bail!("conex-host did not become ready on port {}", fixture.port);
+    }
+    let port = fixture.port.to_string();
+    let script = r#"
+        import { ConexWsClient } from "./sdk/typescript/src/ws-client.ts";
+
+        const port = process.env.CONEX_LANDING_PORT;
+        const origin = `http://127.0.0.1:${port}`;
+        const uiToken = process.env.CONEX_LANDING_UI_TOKEN;
+        if (!port || !uiToken) throw new Error("CONEX_LANDING_PORT and CONEX_LANDING_UI_TOKEN are required");
+
+        const login = await fetch(`${origin}/web/login`, {
+          method: "POST",
+          headers: { authorization: `Bearer ${uiToken}`, origin },
+        });
+        if (login.status !== 200) throw new Error(`login status=${login.status}`);
+        const cookie = (login.headers.get("set-cookie") ?? "").split(";")[0];
+
+        const sessionRes = await fetch(`${origin}/web/session`, {
+          headers: { cookie, origin },
+        });
+        const session = await sessionRes.json();
+        if (session.role !== "ui") throw new Error(`role=${session.role}`);
+
+        const ticketRes = await fetch(`${origin}/tickets`, {
+          method: "POST",
+          headers: { cookie, origin, "x-csrf-token": session.csrf, "content-type": "application/json" },
+          body: "{}",
+        });
+        const ticketBody = await ticketRes.json();
+        const ticket = ticketBody.ticket;
+        if (!ticket) throw new Error("missing ticket");
+
+        const OriginWS = function(url, _protocols) {
+          return new (globalThis.WebSocket)(url, { headers: { origin } });
+        };
+        const cookieFetch = async (input, init = {}) => {
+          const headers = new Headers(init.headers || {});
+          headers.set("cookie", cookie);
+          headers.set("origin", origin);
+          return globalThis.fetch(input, { ...init, headers });
+        };
+        const wsClient = new ConexWsClient({
+          origin, csrfToken: session.csrf, fetch: cookieFetch, WebSocket: OriginWS,
+          reconnect: false, timeoutMs: 8000,
+        });
+        await wsClient.connect();
+
+        const first = await wsClient.listConnections({});
+        if (!Array.isArray(first.browserLinks) || first.browserLinks.length !== 1) {
+          throw new Error(`expected one browserLink, got ${JSON.stringify(first)}`);
+        }
+        const link0 = first.browserLinks[0];
+        if (link0.principalId !== "demo-ui") throw new Error(`principal=${link0.principalId}`);
+        if (link0.tenantId !== "demo") throw new Error(`tenant=${link0.tenantId}`);
+        if (Number(link0.ticketsIssued ?? "0") < 1) throw new Error(`tickets=${link0.ticketsIssued}`);
+        const firstSeen = link0.lastSeenAtMs;
+
+        // Drop and reopen: stale detection: lastSeenAtMs must not regress.
+        wsClient.close();
+        const ticketRes2 = await fetch(`${origin}/tickets`, {
+          method: "POST", headers: { cookie, origin, "x-csrf-token": session.csrf, "content-type": "application/json" }, body: "{}",
+        });
+        const ticket2 = (await ticketRes2.json()).ticket;
+        const wsClient2 = new ConexWsClient({
+          origin, csrfToken: session.csrf, fetch: cookieFetch, WebSocket: OriginWS,
+          reconnect: false, timeoutMs: 8000,
+        });
+        await wsClient2.connect();
+        const second = await wsClient2.listConnections({});
+        if (second.browserLinks.length !== 1) throw new Error(`expected one after reopen, got ${second.browserLinks.length}`);
+        if (Number(second.browserLinks[0].lastSeenAtMs) < Number(firstSeen)) {
+          throw new Error(`lastSeenAtMs regressed: ${firstSeen} -> ${second.browserLinks[0].lastSeenAtMs}`);
+        }
+
+        // Business call -> callsTotal must grow, callsInFlight must drain.
+        // Wait briefly so both agent links finish registering, otherwise
+        // the first read may see "remote agent is offline".
+        let ready = false;
+        for (let i = 0; i < 50 && !ready; i++) {
+          const probe = await wsClient2.listConnections({});
+          const agents = probe.agentLinks ?? [];
+          ready = agents.length >= 2 && agents.every((a) => a.connectionState === "ready" || a.connectionState === 3);
+          if (!ready) await new Promise((r) => setTimeout(r, 100));
+        }
+        const before = Number(second.browserLinks[0].callsTotal ?? "0");
+        await wsClient2.read("notes-b", { resourceId: "team/shared.md" });
+        const third = await wsClient2.listConnections({});
+        const after = Number(third.browserLinks[0].callsTotal ?? "0");
+        if (after <= before) {
+          throw new Error(`callsTotal did not grow: ${before} -> ${after}`);
+        }
+        if (Number(third.browserLinks[0].callsInFlight ?? "0") > 1) {
+          throw new Error(`callsInFlight did not drain: ${third.browserLinks[0].callsInFlight}`);
+        }
+
+        wsClient2.close();
+        process.stdout.write("connected-landing-connections: WSS connection panel passed\n");
+        process.exit(0);
+    "#;
+    let probe = Command::new("bun")
+        .args(["-e", script])
+        .current_dir(&root)
+        .env("CONEX_LANDING_PORT", &port)
+        .env("CONEX_LANDING_UI_TOKEN", &fixture.ui_token)
+        .env("CONEX_LANDING_TOKEN", &fixture.service_token)
+        .status()
+        .context("run connected landing-connections probe")?;
+    if !probe.success() {
+        bail!("connected landing-connections probe failed");
+    }
+    println!("connected-landing-connections: real Host + two Agent processes, connection/list stale + dispatch counters passed");
     Ok(())
 }

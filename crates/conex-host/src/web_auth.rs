@@ -13,6 +13,7 @@ use tokio::sync::Notify;
 use crate::agent::{TicketRegistry, now_ms};
 use crate::auth::InboundCaller;
 use crate::http::HttpState;
+use crate::ui_links::UiLinkRegistry;
 
 pub const SESSION_COOKIE: &str = "conex_web_session";
 pub const CSRF_HEADER: &str = "x-csrf-token";
@@ -26,6 +27,7 @@ pub struct WebSession {
     pub role: String,
     pub origin: String,
     pub expires_at_ms: u64,
+    pub link_id: String,
     revoked: std::sync::atomic::AtomicBool,
     pub revoked_signal: Notify,
 }
@@ -45,17 +47,28 @@ pub struct WebAuth {
     origin: String,
     secure_cookie: bool,
     tickets: Arc<TicketRegistry>,
+    ui_links: Arc<UiLinkRegistry>,
     sessions: Mutex<HashMap<String, Arc<WebSession>>>,
 }
 
 impl WebAuth {
-    pub fn new(origin: impl Into<String>, secure_cookie: bool, tickets: Arc<TicketRegistry>) -> Self {
+    pub fn new(
+        origin: impl Into<String>,
+        secure_cookie: bool,
+        tickets: Arc<TicketRegistry>,
+        ui_links: Arc<UiLinkRegistry>,
+    ) -> Self {
         Self {
             origin: origin.into(),
             secure_cookie,
             tickets,
+            ui_links,
             sessions: Mutex::new(HashMap::new()),
         }
+    }
+
+    pub fn ui_links(&self) -> &Arc<UiLinkRegistry> {
+        &self.ui_links
     }
 
     pub fn origin(&self) -> &str { &self.origin }
@@ -71,6 +84,7 @@ impl WebAuth {
         if principal_count >= 8 || sessions.len() >= 1024 {
             return Err(CallError::new(v1::ErrorCode::QuotaExceeded, "web session capacity exceeded"));
         }
+        let link = self.ui_links.register(&inbound.caller.principal_id, &inbound.caller.tenant_id);
         let session = Arc::new(WebSession {
             id: random_token(),
             csrf: random_token(),
@@ -78,6 +92,7 @@ impl WebAuth {
             role: inbound.role,
             origin: self.origin.clone(),
             expires_at_ms: now + SESSION_TTL_MS,
+            link_id: link.link_id.clone(),
             revoked: std::sync::atomic::AtomicBool::new(false),
             revoked_signal: Notify::new(),
         });
@@ -102,6 +117,7 @@ impl WebAuth {
         if let Some(session) = session {
             session.revoke();
             self.tickets.revoke_session(id);
+            self.ui_links.remove(&session.link_id);
             true
         } else {
             self.tickets.revoke_session(id);
@@ -195,7 +211,10 @@ pub async fn logout(
 }
 
 pub fn allowed_ui_method(method: &str) -> bool {
-    matches!(method, "endpoint/list" | "source/list" | "source/read" | "source/search")
+    matches!(
+        method,
+        "endpoint/list" | "connection/list" | "source/list" | "source/read" | "source/search"
+    )
 }
 
 pub fn error_response(error: CallError) -> Response {

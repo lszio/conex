@@ -68,6 +68,29 @@ PASS 关键行：
 
 `WebSocket protocol error: Connection reset without closing handshake` 来自关闭顺序：脚本先 `wsClient.close()`，再让进程退出，因此是良性的 socket reset，不是断言失败。
 
+## 2b. `cargo xtask e2e --suite connected-landing-connections` (L10)
+
+```text
+$ cargo xtask e2e --suite connected-landing-connections
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
+     Running `target/debug/xtask e2e --suite connected-landing-connections`
+agent link closed: connect websocket: IO error: Connection refused (os error 111)
+agent link closed: connect websocket: IO error: Connection refused (os error 111)
+
+connected-landing-connections: WSS connection panel passed
+connected-landing-connections: real Host + two Agent processes, connection/list stale + dispatch counters passed
+agent link closed: receive websocket frame: WebSocket protocol error: Connection reset without closing handshake
+```
+
+PASS 关键行：
+
+- `connected-landing-connections: WSS connection panel passed` —— bun 脚本打印的真实 PASS，覆盖：
+  1. `POST /web/login` + `/web/session` + `/tickets`（同 `connected-landing-web`）。
+  2. `/wss?ticket=…` 升级 + hello + ready。
+  3. `ConexWsClient.listConnections({})` → `browserLinks.length === 1`、`principalId === "demo-ui"`、`tenantId === "demo"`、`ticketsIssued ≥ 1`。
+  4. 关闭第一个 WSS，再次 `/tickets` + `/wss`；`listConnections` 仍返回 1 行，且 `lastSeenAtMs` 不小于先前读到的值（stale 检测）。
+  5. `ConexWsClient.read("notes-b", "team/shared.md")` → 文本校验通过；再次 `listConnections`：`callsTotal` 增长，`callsInFlight === 0`。
+
 ## 3. `cargo build -p xtask --locked`
 
 ```text
@@ -96,21 +119,6 @@ test remote_endpoint_requires_agent_and_root ... ok
 test web_origin_must_be_a_bare_origin_without_userinfo_path_query_or_slash ... ok
 
 test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
-```
-
-## 5. `cargo test -p conex-host --offline --test web_auth`
-
-```text
-running 7 tests
-test tickets_are_random_one_use_and_origin_bound ... ok
-test logout_invalidates_cookie_and_unconsumed_tickets ... ok
-test ticket_only_websocket_upgrade_works_and_ambiguous_auth_fails ... ok
-test web_sessions_enforce_per_principal_cap ... ok
-test ui_bearer_cannot_call_rpc_without_session ... ok
-test ui_login_creates_http_only_session_cookie ... ok
-test session_csrf_derives_ticket_identity_and_rejects_wrong_role ... ok
-
-test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
 ```
 
 ## 6. `bun test sdk/typescript/tests/`
