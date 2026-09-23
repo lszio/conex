@@ -172,6 +172,7 @@ impl HttpFixture {
                 host_side: None,
                 p1_provides: Vec::new(),
                 web_auth: None,
+                ui_links: Arc::new(conex_host::ui_links::UiLinkRegistry::new()),
             }),
             build_p0_router(),
         );

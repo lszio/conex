@@ -110,6 +110,7 @@ async fn invoke(
             method: method.into(),
             input,
             deadline: deadline(),
+            role: "service".into(),
         })
         .await
         .expect("broker call")
@@ -246,6 +247,7 @@ async fn session_lifecycle_and_binding_mismatch() {
                 }
             }),
             deadline: deadline(),
+            role: "service".into(),
         })
         .await
         .expect_err("binding mismatch must reject");

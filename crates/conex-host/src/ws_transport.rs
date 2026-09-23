@@ -58,6 +58,8 @@ pub struct WssState {
     pub web_session: Option<Arc<crate::web_auth::WebSession>>,
     pub host_side: Option<crate::agent::HostSide>,
     pub stream: tokio::sync::Mutex<Option<StreamHub>>,
+    pub ui_links: Option<Arc<crate::ui_links::UiLinkRegistry>>,
+    pub ui_link_id: Option<String>,
 }
 
 impl WssState {
@@ -82,6 +84,8 @@ impl WssState {
             web_session: None,
             host_side: None,
             stream: tokio::sync::Mutex::new(None),
+            ui_links: None,
+            ui_link_id: None,
         }
     }
 }
@@ -205,7 +209,7 @@ pub async fn ws_handler_with_state(
     if ticket.is_some() && authorization.is_some() {
         return (StatusCode::UNAUTHORIZED, "ticket and bearer authentication are mutually exclusive").into_response();
     }
-    let (caller, role, capability_caps, web_session) = if let Some(ticket) = ticket {
+    let (caller, role, capability_caps, web_session, ui_links_ref) = if let Some(ticket) = ticket {
         let Some(web) = state.web_auth.as_ref() else {
             return (StatusCode::UNAUTHORIZED, "web auth is not configured").into_response();
         };
@@ -231,7 +235,9 @@ pub async fn ws_handler_with_state(
 
             return (StatusCode::UNAUTHORIZED, "ticket session binding mismatch").into_response();
         }
-        (session.caller.clone(), session.role.clone(), entry.capability_caps, Some(session))
+        let registry = state.ui_links.clone();
+        registry.increment_tickets(&session.link_id);
+        (session.caller.clone(), session.role.clone(), entry.capability_caps, Some(session), Some(registry))
     } else {
         let inbound = match state.auth.authenticate(authorization) {
             Ok(inbound) => inbound,
@@ -240,7 +246,7 @@ pub async fn ws_handler_with_state(
         if inbound.role == "ui" {
             return (StatusCode::UNAUTHORIZED, "UI links require a session ticket").into_response();
         }
-        (inbound.caller, inbound.role, Vec::new(), None)
+        (inbound.caller, inbound.role, Vec::new(), None, None)
     };
     let advertised = if role == "ui" {
         capability_caps.clone()
@@ -256,7 +262,11 @@ pub async fn ws_handler_with_state(
     wss_state.role = role;
     wss_state.capability_caps = capability_caps;
     wss_state.host_side = state.host_side.clone();
-    wss_state.web_session = web_session;
+    wss_state.web_session = web_session.clone();
+    wss_state.ui_links = ui_links_ref.clone();
+    if let Some(session) = web_session.as_ref() {
+        wss_state.ui_link_id = Some(session.link_id.clone());
+    }
     let wss_state = Arc::new(wss_state);
     let max_frame = usize::try_from(wss_state.limits.max_frame_bytes).unwrap_or(usize::MAX);
     ws.max_frame_size(max_frame).max_message_size(max_frame)
@@ -334,6 +344,9 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
             return;
         }
     };
+    if let (Some(registry), Some(link_id)) = (state.ui_links.as_ref(), state.ui_link_id.as_ref()) {
+        registry.touch(link_id);
+    }
 
     let generation = NEXT_GENERATION.fetch_add(1, Ordering::Relaxed);
     let pending = Arc::new(PendingRequests::new(generation));
@@ -1021,13 +1034,30 @@ async fn dispatch_business(
             "P1 only supports the broker plane",
         ));
     }
-    if state.role == "agent" {
-        return dispatch_agent(state, frame, generation).await;
+    let tracked_link = if state.role == "ui" {
+        if let (Some(registry), Some(link_id)) = (state.ui_links.as_ref(), state.ui_link_id.as_ref()) {
+            registry.begin_call(link_id);
+            Some((registry.clone(), link_id.clone()))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    let result = async {
+        if state.role == "agent" {
+            return dispatch_agent(state, frame, generation).await;
+        }
+        if frame.method.starts_with("stream/") {
+            return handle_stream(state, &frame, business_profile).await;
+        }
+        dispatch_rpc(state, frame).await
     }
-    if frame.method.starts_with("stream/") {
-        return handle_stream(state, &frame, business_profile).await;
+    .await;
+    if let Some((registry, link_id)) = tracked_link {
+        registry.end_call(&link_id);
     }
-    dispatch_rpc(state, frame).await
+    result
 }
 
 async fn dispatch_agent(
@@ -1125,6 +1155,7 @@ async fn dispatch_rpc(state: &WssState, frame: BrokerFrame) -> CallResult<Value>
         method: frame.method.clone(),
         input,
         deadline,
+        role: state.role.clone(),
     };
     state.broker.invoke(call.clone()).await
 }

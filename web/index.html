@@ -66,6 +66,11 @@
           <div class="section-heading"><h2 id="timeline-title">事件时间线</h2><span class="muted">最多保留 200 条</span></div>
           <ol id="events" class="events" aria-live="polite"></ol>
         </section>
+
+        <section class="panel connection-panel" aria-labelledby="connection-panel-title">
+          <div class="section-heading"><h2 id="connection-panel-title">浏览器 UI 链接</h2><span class="count"><span id="connection-count">0 个连接</span> · <span id="connection-stamp" class="muted">未刷新</span></span></div>
+          <div id="connection-list" class="connection-list" aria-live="polite"></div>
+        </section>
       </section>
     </main>
     <script type="module" src="/app.js"></script>

@@ -144,26 +144,59 @@ docker compose -f deployment/docker-compose.yml up --build
 ## 7. 冒烟门禁
 
 ```bash
-cargo xtask e2e --suite connected-landing       # 现有三进程 source 三方法 + A/B 隔离
-cargo xtask e2e --suite connected-landing-web   # 本轮新增：登录 + 会话 + WSS 列表 + 远端读取
+cargo xtask e2e --suite connected-landing            # 现有三进程 source 三方法 + A/B 隔离
+cargo xtask e2e --suite connected-landing-web        # 本轮新增：登录 + 会话 + WSS 列表 + 远端读取
+cargo xtask e2e --suite connected-landing-connections # L10 新增：UI Link 面板 + 计数器 + stale 检测
 ```
 
-两条套件**共享同一 fixture 与同源 token**，因此任何一个回归都会在另一条上显形。`cargo xtask check` 在集成阶段把两条套件一起作为门禁。
+三条套件**共享同一 fixture 与同源 token**，因此任何一个回归都会在另一条上显形。`cargo xtask check` 在集成阶段把三条套件一起作为门禁。
 
-## 8. 验证清单
+## 8. 查看 / 回收 UI Link（L10）
+
+`cargo xtask landing-demo` 启动后，落地页右下角的「浏览器 UI 链接」面板每 1 秒刷新一次，列出当前主体名下每条 UI 链接：
+
+| 字段 | 来源 |
+|---|---|
+| 短哈希 | `linkId`（8 字节随机 base64url）前 6 + 后 2 |
+| principal | `principalId` |
+| tenant | `tenantId` |
+| connected | `connectedAtMs`（会话创建时间） |
+| seen | `lastSeenAtMs`（最近一次 ready / 业务帧） |
+| calls / in-flight / tickets | `callsTotal` / `callsInFlight` / `ticketsIssued` |
+
+WS 关闭后行不消失，但 `seen` 停止前进；下一次重连会刷新 `seen`。新进入的行带 1.4s 的绿色 flash 提示。
+
+强制回收当前主体的所有 UI Link + 取消其未消费 ticket：
+
+```bash
+# 浏览器侧：调用 /web/logout（页面右上角按钮或手动 fetch）
+curl -X POST http://127.0.0.1:<port>/web/logout \
+     -H "Origin: http://127.0.0.1:<port>" \
+     -H "Cookie: conex_web_session=…" \
+     -H "x-csrf-token: <csrf>"
+```
+
+注销后 host 同步：
+- 撤销该 web session；
+- 删除该 session 签发但未消费的 ticket；
+- 从 `UiLinkRegistry` 中移除对应 `linkId`（下一次 `connection/list` 不再返回该行）。
+
+## 9. 验证清单
 
 | 项 | 落地证据 |
 |---|---|
 | `cargo xtask e2e --suite connected-landing` 通过 | [verification §1](../../verification/connected-landing.md#1-cargo-xtask-e2e---suite-connected-landing) |
 | `cargo xtask e2e --suite connected-landing-web` 通过 | [verification §2](../../verification/connected-landing.md#2-cargo-xtask-e2e---suite-connected-landing-web) |
+| `cargo xtask e2e --suite connected-landing-connections` 通过 | [verification §2b](../../verification/connected-landing.md#2b-cargo-xtask-e2e---suite-connected-landing-connections) |
 | `cargo build -p xtask --locked` 无警告 | [verification §3](../../verification/connected-landing.md#3-cargo-build--p-xtask---locked) |
 | `cargo test -p conex-host --offline --test connected_landing_config` 通过 | [verification §4](../../verification/connected-landing.md#4-cargo-test--p-conex-host---offline---test-connected_landing_config) |
 | `cargo test -p conex-host --offline --test web_auth` 通过 | [verification §5](../../verification/connected-landing.md#5-cargo-test--p-conex-host---offline---test-web_auth) |
+| `cargo test -p conex-host --offline --test ui_links` 通过 | [verification §5b](../../verification/connected-landing.md#5b-cargo-test--p-conex-host---offline---test-ui_links) |
 | `bun test sdk/typescript/tests/` 通过 | [verification §6](../../verification/connected-landing.md#6-bun-test-sdktypescripttests) |
 | `bun run typecheck` 通过 | [verification §7](../../verification/connected-landing.md#7-bun-run-typecheck) |
 | 跨主机真实网络验收 | **未验证**（环境未具备，见 [verification §未验证项](../../verification/connected-landing.md#未验证项)） |
 
-## 9. 已知缺口
+## 10. 已知缺口
 
 - 浏览器真实视口截图（1440px / 390px）尚未在本轮采集；落地页逻辑已通过 SDK 路径冒烟，但视觉回归属后续。
 - `cargo xtask e2e --suite connected-landing-web` 仍依赖 loopback 明文；真实 TLS + 跨主机路径未在 CI 验证。

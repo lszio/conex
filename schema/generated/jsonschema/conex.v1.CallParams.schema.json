@@ -36,6 +36,50 @@
       ],
       "type": "object"
     },
+    "conex.v1.AgentLinkSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "agentId": {
+          "type": "string"
+        },
+        "endpointIds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "generation": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "lastHeartbeatAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "principalId": {
+          "type": "string"
+        },
+        "registeredAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "tenantId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "agentId",
+        "principalId",
+        "tenantId",
+        "generation",
+        "registeredAtMs",
+        "lastHeartbeatAtMs"
+      ],
+      "type": "object"
+    },
     "conex.v1.AgentRegisterRequest": {
       "additionalProperties": false,
       "properties": {
@@ -534,6 +578,29 @@
         "chunkSize",
         "contentLength"
       ],
+      "type": "object"
+    },
+    "conex.v1.ConnectionListRequest": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    },
+    "conex.v1.ConnectionListResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "agentLinks": {
+          "items": {
+            "$ref": "#/$defs/conex.v1.AgentLinkSummary"
+          },
+          "type": "array"
+        },
+        "browserLinks": {
+          "items": {
+            "$ref": "#/$defs/conex.v1.UiLinkSummary"
+          },
+          "type": "array"
+        }
+      },
       "type": "object"
     },
     "conex.v1.ContentAddress": {
@@ -2189,6 +2256,56 @@
       },
       "required": [
         "requestId"
+      ],
+      "type": "object"
+    },
+    "conex.v1.UiLinkSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "callsInFlight": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "callsTotal": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "connectedAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "lastSeenAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "linkId": {
+          "type": "string"
+        },
+        "principalId": {
+          "type": "string"
+        },
+        "tenantId": {
+          "type": "string"
+        },
+        "ticketsIssued": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "linkId",
+        "principalId",
+        "tenantId",
+        "connectedAtMs",
+        "lastSeenAtMs",
+        "ticketsIssued",
+        "callsTotal",
+        "callsInFlight"
       ],
       "type": "object"
     },

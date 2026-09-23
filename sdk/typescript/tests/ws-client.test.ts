@@ -178,3 +178,53 @@ test("reconnect gets a fresh ticket and restores ready state", async () => {
   expect(replacement.url).toBe("wss://host.example/wss?ticket=ticket-2");
   client.close();
 });
+
+test("listConnections sends connection/list over the ready link", async () => {
+  FakeWebSocket.instances = [];
+  const { fetchImpl } = fetchStub();
+  const client = new ConexWsClient({
+    origin: "https://host.example",
+    fetch: fetchImpl,
+    WebSocket: FakeWebSocket,
+    reconnect: false,
+  });
+  const socketReady = new Promise<void>((resolve) => {
+    client.onEvent((event) => {
+      if (event.phase === "negotiating") resolve();
+    });
+  });
+  const connecting = client.connect();
+  await socketReady;
+  respondHandshake(FakeWebSocket.instances[0]);
+  await connecting;
+  expect(client.state).toBe("ready");
+
+  const listPromise = client.listConnections({});
+  const sent = JSON.parse(FakeWebSocket.instances[0].sent.at(-1)!);
+  expect(sent.method).toBe("connection/list");
+  expect(sent.params.input).toEqual({});
+
+  FakeWebSocket.instances[0].receive({
+    jsonrpc: "2.0",
+    id: sent.id,
+    result: {
+      browserLinks: [
+        {
+          linkId: "abc12345",
+          principalId: "alice",
+          tenantId: "tenant-a",
+          connectedAtMs: "1700000000000",
+          lastSeenAtMs: "1700000000000",
+          ticketsIssued: "1",
+          callsTotal: "0",
+          callsInFlight: "0",
+        },
+      ],
+      agentLinks: [],
+    },
+  });
+  const result = await listPromise;
+  expect(result.browserLinks?.[0]?.linkId).toBe("abc12345");
+  expect(result.browserLinks?.[0]?.principalId).toBe("alice");
+  client.close();
+});

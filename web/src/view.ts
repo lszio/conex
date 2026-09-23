@@ -1,7 +1,8 @@
-import type { EndpointSummary } from "@conex/sdk";
+import type { EndpointSummary, UiLinkSummary } from "@conex/sdk";
 
 export type Operation = "list" | "read" | "search";
 export type EventItem = { at: number; phase: string; message: string; method?: string };
+export type ConnectionRow = UiLinkSummary;
 
 const $ = <T extends HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
 
@@ -137,6 +138,74 @@ export function renderSelected(endpoint: EndpointSummary | undefined, operation:
 
 export function renderResult(value: unknown): void {
   $("#operation-result").textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+}
+
+function shortLinkId(id: string | undefined): string {
+  if (!id) return "";
+  return id.length > 8 ? `${id.slice(0, 6)}…${id.slice(-2)}` : id;
+}
+
+function formatTimestamp(ms: string | number | undefined): string {
+  if (!ms) return "—";
+  const value = typeof ms === "string" ? Number(ms) : ms;
+  if (!Number.isFinite(value) || value <= 0) return "—";
+  return new Date(value).toLocaleTimeString();
+}
+
+function diffNew(prev: Set<string> | null, next: Set<string>): Set<string> {
+  if (!prev) return new Set();
+  const added = new Set<string>();
+  for (const id of next) {
+    if (!prev.has(id)) added.add(id);
+  }
+  return added;
+}
+
+export function renderConnections(rows: readonly ConnectionRow[]): void {
+  const list = $("#connection-list");
+  const counter = $("#connection-count");
+  const stamp = $("#connection-stamp");
+  if (!list || !counter) return;
+  list.replaceChildren();
+  const ids = rows
+    .map((row) => row.linkId ?? "")
+    .filter((id) => id.length > 0);
+  counter.textContent = `${rows.length} 个连接`;
+  if (stamp) stamp.textContent = new Date().toLocaleTimeString();
+  if (rows.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = "本主体尚无浏览器 UI 链接。";
+    list.append(empty);
+    return;
+  }
+  const knownIds = new Set(ids);
+  // Mark each row that just appeared with .flash; consumers can use the
+  // existing flash animation defined in style.css.
+  for (const row of rows) {
+    const card = document.createElement("div");
+    card.className = "connection-card";
+    card.dataset.connectionId = row.linkId ?? "";
+    const id = document.createElement("strong");
+    id.textContent = shortLinkId(row.linkId);
+    const meta = document.createElement("span");
+    const principal = row.principalId ?? "—";
+    const tenant = row.tenantId ?? "—";
+    meta.textContent = `${principal} · ${tenant}`;
+    const times = document.createElement("span");
+    times.className = "muted";
+    times.textContent = `connected ${formatTimestamp(row.connectedAtMs)} · seen ${formatTimestamp(row.lastSeenAtMs)}`;
+    const stats = document.createElement("span");
+    const total = Number(row.callsTotal ?? "0");
+    const inflight = Number(row.callsInFlight ?? "0");
+    const tickets = Number(row.ticketsIssued ?? "0");
+    stats.className = "stats";
+    stats.textContent = `calls ${total} · in-flight ${inflight} · tickets ${tickets}`;
+    card.append(id, meta, times, stats);
+    list.append(card);
+  }
+  // Diff tracking is performed by the caller; this renderer is pure.
+  void diffNew(null, knownIds);
 }
 
 export function renderError(message: string): void {

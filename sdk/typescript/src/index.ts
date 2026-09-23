@@ -22,4 +22,10 @@ export {
   EndpointListResult,
   EndpointSummary,
 } from "./generated/conex/v1/endpoint";
+export {
+  ConnectionListRequest,
+  ConnectionListResponse,
+  UiLinkSummary,
+  AgentLinkSummary,
+} from "./generated/conex/v1/dashboard";
 export * from "./ws-client";

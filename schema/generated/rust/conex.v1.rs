@@ -538,6 +538,54 @@ impl PersistenceLevel {
         }
     }
 }
+/// Connection panel messages (L10). Real-time view of every browser link and
+/// every reverse-connected agent link on the host. Only ui role callers can
+/// inspect the UI link rows; service/agent roles are rejected at the broker.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ConnectionListRequest {}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct UiLinkSummary {
+    #[prost(string, tag = "1")]
+    pub link_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub principal_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub tenant_id: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "4")]
+    pub connected_at_ms: u64,
+    #[prost(uint64, tag = "5")]
+    pub last_seen_at_ms: u64,
+    #[prost(uint64, tag = "6")]
+    pub tickets_issued: u64,
+    #[prost(uint64, tag = "7")]
+    pub calls_total: u64,
+    #[prost(uint64, tag = "8")]
+    pub calls_in_flight: u64,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentLinkSummary {
+    #[prost(string, tag = "1")]
+    pub agent_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub principal_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub tenant_id: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "4")]
+    pub generation: u64,
+    #[prost(uint64, tag = "5")]
+    pub registered_at_ms: u64,
+    #[prost(uint64, tag = "6")]
+    pub last_heartbeat_at_ms: u64,
+    #[prost(string, repeated, tag = "7")]
+    pub endpoint_ids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ConnectionListResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub browser_links: ::prost::alloc::vec::Vec<UiLinkSummary>,
+    #[prost(message, repeated, tag = "2")]
+    pub agent_links: ::prost::alloc::vec::Vec<AgentLinkSummary>,
+}
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct AuthorizedScope {
     #[prost(string, tag = "1")]

@@ -31,6 +31,7 @@ pub struct BrokerCall {
     pub method: String,
     pub input: Value,
     pub deadline: Instant,
+    pub role: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -68,11 +69,16 @@ pub struct BrokerDeps {
 pub struct Broker {
     host: Arc<CoreHost>,
     deps: BrokerDeps,
+    ui_links: std::sync::Arc<std::sync::Mutex<Option<Arc<crate::ui_links::UiLinkRegistry>>>>,
 }
 
 impl Broker {
     pub fn new(host: Arc<CoreHost>, deps: BrokerDeps) -> Self {
-        Self { host, deps }
+        Self {
+            host,
+            deps,
+            ui_links: std::sync::Arc::new(std::sync::Mutex::new(None)),
+        }
     }
 
     pub fn host(&self) -> &Arc<CoreHost> {
@@ -81,6 +87,20 @@ impl Broker {
 
     pub fn deps(&self) -> &BrokerDeps {
         &self.deps
+    }
+
+    pub fn attach_ui_links(&self, registry: Arc<crate::ui_links::UiLinkRegistry>) {
+        *self
+            .ui_links
+            .lock()
+            .expect("broker ui_links slot poisoned") = Some(registry);
+    }
+
+    fn ui_links(&self) -> Option<Arc<crate::ui_links::UiLinkRegistry>> {
+        self.ui_links
+            .lock()
+            .expect("broker ui_links slot poisoned")
+            .clone()
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -110,6 +130,9 @@ impl Broker {
         }
         if call.method.starts_with("agent/") {
             return crate::agent::handle(self, call).await;
+        }
+        if call.method == "connection/list" {
+            return self.dispatch_connection_list(&call).await;
         }
         let duration = call.deadline.saturating_duration_since(Instant::now());
         self.host
@@ -228,6 +251,47 @@ impl Broker {
         };
         (contract.validate_output)(&value)?;
         Ok(value)
+    }
+
+    async fn dispatch_connection_list(&self, call: &BrokerCall) -> CallResult<Value> {
+        if call.role != "ui" {
+            return Err(CallError::new(
+                v1::ErrorCode::Forbidden,
+                "connection/list is restricted to the ui role",
+            ));
+        }
+        let _ = object(&call.input)?;
+        let principal_id = call.caller.principal_id.clone();
+        let browser_links = self
+            .ui_links()
+            .ok_or_else(|| unavailable("ui link registry is not configured"))?
+            .list_for_principal(Some(&principal_id))
+            .into_iter()
+            .map(ui_link_to_json)
+            .collect::<Vec<_>>();
+        let agent_links = self
+            .deps
+            .agents
+            .as_ref()
+            .map(|agents| {
+                let mut rows: Vec<Value> = agents
+                    .list()
+                    .into_iter()
+                    .map(agent_link_to_json)
+                    .collect();
+                rows.sort_by(|a, b| {
+                    a.get("agentId")
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .cmp(b.get("agentId").and_then(Value::as_str).unwrap_or(""))
+                });
+                rows
+            })
+            .unwrap_or_default();
+        Ok(json!({
+            "browserLinks": browser_links,
+            "agentLinks": agent_links,
+        }))
     }
 }
 
@@ -804,6 +868,31 @@ fn now_ms() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0)
+}
+
+fn ui_link_to_json(link: crate::ui_links::UiLink) -> Value {
+    json!({
+        "linkId": link.link_id,
+        "principalId": link.principal_id,
+        "tenantId": link.tenant_id,
+        "connectedAtMs": link.connected_at_ms.to_string(),
+        "lastSeenAtMs": link.last_seen_at_ms.to_string(),
+        "ticketsIssued": link.tickets_issued.to_string(),
+        "callsTotal": link.calls_total.to_string(),
+        "callsInFlight": link.calls_in_flight.to_string(),
+    })
+}
+
+fn agent_link_to_json(agent: crate::agent::AgentRegistration) -> Value {
+    json!({
+        "agentId": agent.agent_id,
+        "principalId": agent.principal_id,
+        "tenantId": agent.tenant_id,
+        "registeredAtMs": agent.registered_at_ms.to_string(),
+        "lastHeartbeatAtMs": agent.last_heartbeat_at_ms.to_string(),
+        "methods": agent.methods,
+        "resources": agent.resources,
+    })
 }
 
 fn plane_to_enum(value: i32) -> conex_proto::v1::Plane {

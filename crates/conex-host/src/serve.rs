@@ -42,6 +42,7 @@ pub struct BuiltHost {
 
 pub const P1_PROVIDES: &[&str] = &[
     "endpoint/list",
+    "connection/list",
     "blob/put",
     "blob/chunk",
     "blob/commit",
@@ -305,15 +306,20 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
 
 pub fn build_router(config: &HostConfig) -> Result<Router, CallError> {
     let built = build(config)?;
+    let ui_links = Arc::new(crate::ui_links::UiLinkRegistry::new());
     let web_auth = built.host_side.as_ref().and_then(|side| {
         config.web_origin.as_ref().map(|origin| {
             Arc::new(crate::web_auth::WebAuth::new(
                 origin.clone(),
                 !config.allow_loopback_http,
                 side.tickets.clone(),
+                ui_links.clone(),
             ))
         })
     });
+    if let Some(broker) = built.broker.as_ref() {
+        broker.attach_ui_links(ui_links.clone());
+    }
     let http_state = Arc::new(HttpState {
         host: built.host.clone(),
         bindings: built.bindings.clone(),
@@ -322,6 +328,7 @@ pub fn build_router(config: &HostConfig) -> Result<Router, CallError> {
         host_side: built.host_side.clone(),
         p1_provides: built.p1_provides.clone(),
         web_auth,
+        ui_links,
     });
     let mut base = build_p0_router();
     if built.broker.is_some() && built.host_side.is_some() {
