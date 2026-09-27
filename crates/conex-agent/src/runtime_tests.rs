@@ -1,7 +1,7 @@
 
 use serde_json::json;
 
-use conex_proto::v1;
+use conex_proto;
 use conex_proto::wire::{decode_wire, encode_wire};
 
 use super::{LocalProvider, dispatch_local, handle_request};
@@ -18,14 +18,14 @@ async fn local_read_uses_canonical_wire_envelope() {
         resources: vec!["*".into()],
     };
     let provider = LocalProvider::new(&endpoint).expect("provider");
-    let request = v1::Message {
-        body: Some(v1::message::Body::Request(v1::Request {
+    let request = conex_proto::Message {
+        body: Some(conex_proto::message::Body::Request(conex_proto::Request {
             request_id: "01ARZ3NDEKTSV4RRFFQ69G5FAV".into(),
             method: "source/read".into(),
-            params: Some(v1::CallParams {
-                context: Some(v1::RequestContext {
+            params: Some(conex_proto::CallParams {
+                context: Some(conex_proto::RequestContext {
                     provider_endpoint_id: "notes".into(),
-                    plane: v1::Plane::Broker as i32,
+                    plane: conex_proto::Plane::Broker as i32,
                     binding_id: None,
                 }),
                 timeout_budget_ms: 1_000,
@@ -37,7 +37,7 @@ async fn local_read_uses_canonical_wire_envelope() {
     decode_wire(&encoded).expect("request decodes");
     let response = handle_request(&[provider], &encoded).await.expect("response");
     let message = decode_wire(response.as_bytes()).expect("decode response");
-    let Some(v1::message::Body::Success(success)) = message.body else {
+    let Some(conex_proto::message::Body::Success(success)) = message.body else {
         panic!("expected success");
     };
     let result = success.result.expect("result");

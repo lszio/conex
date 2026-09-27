@@ -2,8 +2,8 @@
 export * from "./client";
 export * from "./content";
 export * from "./errors";
-export { ErrorCode, Limits, Plane } from "./generated/conex/v1/common";
-export { HelloRequest, HelloResponse } from "./generated/conex/v1/control";
+export { ErrorCode, Limits, Plane } from "./generated/conex/common";
+export { HelloRequest, HelloResponse } from "./generated/conex/control";
 export {
   ResourceSummary,
   SearchHit,
@@ -13,7 +13,7 @@ export {
   SourceReadResponse,
   SourceSearchRequest,
   SourceSearchResponse,
-} from "./generated/conex/v1/source";
+} from "./generated/conex/source";
 export {
   AttachmentKind,
   AuthorizedScope,
@@ -21,11 +21,11 @@ export {
   EndpointListRequest,
   EndpointListResult,
   EndpointSummary,
-} from "./generated/conex/v1/endpoint";
+} from "./generated/conex/endpoint";
 export {
   ConnectionListRequest,
   ConnectionListResponse,
   UiLinkSummary,
   AgentLinkSummary,
-} from "./generated/conex/v1/dashboard";
+} from "./generated/conex/dashboard";
 export * from "./ws-client";

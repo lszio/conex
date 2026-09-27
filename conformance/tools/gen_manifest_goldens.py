@@ -26,8 +26,8 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 VECTORS = ROOT / "conformance/vectors/p1/chunking.json"
-CHUNKING_PROTO = "conex/v1/chunking.proto"
-MANIFEST_TYPE = "conex.v1.ChunkManifest"
+CHUNKING_PROTO = "conex/chunking.proto"
+MANIFEST_TYPE = "conex.ChunkManifest"
 
 FORMAT_VERSION = 1
 MANIFEST_FANOUT = 1024
@@ -161,7 +161,7 @@ def build() -> dict:
     return {
         "$schema": "conex P1 canonical chunked-content addressing (ChunkManifest)",
         "contract": "docs/contracts/p1-chunking.md",
-        "structure": "schema/conex/v1/chunking.proto (ChunkManifest)",
+        "structure": "schema/conex/chunking.proto (ChunkManifest)",
         "generator": "conformance/tools/gen_manifest_goldens.py (protoc --encode + python stdlib)",
         "formatVersion": FORMAT_VERSION,
         "manifestFanout": MANIFEST_FANOUT,

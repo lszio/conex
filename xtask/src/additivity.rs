@@ -11,7 +11,7 @@ const DENIED_PREFIXES: &[&str] = &[
     "crates/conex-proto/",
     "crates/conex-source/",
     "crates/conex-host/",
-    "schema/conex/v1/",
+    "schema/conex/",
 ];
 
 /// Explicit registration-only exceptions under a denied prefix (none in P0).

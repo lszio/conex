@@ -10,7 +10,7 @@ use multihash::Multihash;
 use prost::Message;
 use sha2::{Digest, Sha256};
 
-use crate::v1::{ChunkEntry, ChunkManifest, ManifestEntries};
+use crate::{ChunkEntry, ChunkManifest, ManifestEntries};
 use crate::wire::ProtocolError;
 
 /// multicodec: raw

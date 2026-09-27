@@ -2,7 +2,7 @@
 use std::collections::HashSet;
 
 use conex_core::{CallError, CallResult};
-use conex_proto::v1;
+use conex_proto;
 use serde_json::Value;
 
 pub const MAX_ENTRIES: usize = 10_000;
@@ -32,7 +32,7 @@ impl Catalog {
             .ok_or_else(|| bad("catalog.entries must be an array"))?;
         if entries.len() > MAX_ENTRIES {
             return Err(CallError::new(
-                v1::ErrorCode::QuotaExceeded,
+                conex_proto::ErrorCode::QuotaExceeded,
                 "catalog exceeds the item budget",
             ));
         }
@@ -55,7 +55,7 @@ impl Catalog {
             let text = string_field(map, "text")?;
             if text.len() > MAX_DOC_BYTES {
                 return Err(CallError::new(
-                    v1::ErrorCode::PayloadTooLarge,
+                    conex_proto::ErrorCode::PayloadTooLarge,
                     "catalog entry exceeds the per-document limit",
                 ));
             }
@@ -88,5 +88,5 @@ fn string_field(map: &serde_json::Map<String, Value>, key: &str) -> CallResult<S
 }
 
 fn bad(message: impl Into<String>) -> CallError {
-    CallError::new(v1::ErrorCode::BadRequest, message)
+    CallError::new(conex_proto::ErrorCode::BadRequest, message)
 }

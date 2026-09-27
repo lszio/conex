@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { ErrorCode } from "../src/generated/conex/v1/common";
+import { ErrorCode } from "../src/generated/conex/common";
 
 const vectorsUrl = new URL("../../../conformance/vectors/p0/wire.json", import.meta.url);
 const vectors = JSON.parse(readFileSync(vectorsUrl, "utf8")) as {

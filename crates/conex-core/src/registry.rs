@@ -1,7 +1,7 @@
 //! Factory and route tables. Data-driven: dispatch never branches on provider.
 use std::collections::{HashMap, HashSet};
 
-use conex_proto::v1;
+use conex_proto;
 
 use crate::types::{Endpoint, FactoryFn, FactoryKey, Installation, RegistryError, Route};
 
@@ -42,7 +42,7 @@ impl Registry {
     }
 
     pub fn install(&mut self, installation: Installation) -> Result<(), RegistryError> {
-        if installation.endpoint.plane != v1::Plane::Broker {
+        if installation.endpoint.plane != conex_proto::Plane::Broker {
             return Err(RegistryError::InvalidInstallation(format!(
                 "P0 only supports the broker plane, got {:?}",
                 installation.endpoint.plane
@@ -75,7 +75,7 @@ impl Registry {
     ) -> Result<(), RegistryError> {
         let endpoint = installation.endpoint.clone();
 
-        if endpoint.plane != v1::Plane::Broker {
+        if endpoint.plane != conex_proto::Plane::Broker {
             return Err(RegistryError::InvalidInstallation(format!(
                 "P0 only supports the broker plane, got {:?}",
                 endpoint.plane

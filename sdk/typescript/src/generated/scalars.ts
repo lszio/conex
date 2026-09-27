@@ -7,7 +7,7 @@
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 
-export const protobufPackage = "conex.test.v1";
+export const protobufPackage = "conex.test";
 
 export interface Scalars {
   count?: string | undefined;

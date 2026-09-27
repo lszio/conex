@@ -54,7 +54,7 @@ fn canonical_name(root: &Path, proto: &Path) -> PathBuf {
 
 fn collect_protos(root: &Path) -> Result<Vec<PathBuf>> {
     let mut protos = Vec::new();
-    for dir in ["conformance/schema", "schema/conex/v1"] {
+    for dir in ["conformance/schema", "schema/conex"] {
         let path = root.join(dir);
         if let Ok(entries) = fs::read_dir(&path) {
             for entry in entries.filter_map(|e| e.ok()) {
@@ -67,7 +67,7 @@ fn collect_protos(root: &Path) -> Result<Vec<PathBuf>> {
     }
     protos.sort();
     if protos.is_empty() {
-        bail!("no .proto files found under conformance/schema or schema/conex/v1");
+        bail!("no .proto files found under conformance/schema or schema/conex");
     }
     Ok(protos)
 }

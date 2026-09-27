@@ -1,7 +1,7 @@
 # P1 operation 与幂等、副作用边界契约（设计 §7.3）
 
 状态：**P1-01 冻结**（2026-09-15）。
-类型源：`schema/conex/v1/operation.proto`。
+类型源：`schema/conex/operation.proto`。
 向量：`conformance/vectors/p1/operation.json`，Rust（`crates/conex-proto/tests/operation.rs`）与 TS（`sdk/typescript/tests/operation.test.ts`）两侧分类一致。
 
 ## 1. operationId 与去重键

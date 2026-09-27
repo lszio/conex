@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::types::CallError;
-use conex_proto::v1;
+use conex_proto;
 
 /// 24h default TTL for dedup records (design §7.3).
 pub const DEFAULT_TTL_HOURS: u64 = 24;
@@ -154,7 +154,7 @@ pub struct OperationRecord {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SettledResult {
     pub success: Option<serde_json::Value>,
-    pub failure: Option<v1::Error>,
+    pub failure: Option<conex_proto::Error>,
     pub execution: ExecutionState,
 }
 
@@ -176,7 +176,7 @@ pub enum OperationError {
 
 impl OperationError {
     pub fn to_call_error(&self) -> CallError {
-        use conex_proto::v1::ErrorCode;
+        use conex_proto::ErrorCode;
         match self {
             OperationError::Conflict => CallError::new(ErrorCode::Conflict, "operationId conflict"),
             OperationError::Unknown => {
@@ -378,7 +378,7 @@ impl OperationStore {
     pub fn settle_failure(
         &self,
         key: &DedupKey,
-        failure: v1::Error,
+        failure: conex_proto::Error,
     ) -> Result<OperationRecord, OperationError> {
         let id = key.sanitize();
         let mut guard = self.state.lock().expect("operation state poisoned");
@@ -513,7 +513,7 @@ impl OperationStore {
 }
 
 /// Convenience: serialize an Error to a stable JSON string for failure persistence.
-pub fn serialize_failure(error: &v1::Error) -> String {
+pub fn serialize_failure(error: &conex_proto::Error) -> String {
     serde_json::to_string(error).unwrap_or_default()
 }
 

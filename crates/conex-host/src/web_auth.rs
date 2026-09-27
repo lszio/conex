@@ -6,7 +6,7 @@ use axum::Extension;
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use conex_core::CallError;
-use conex_proto::v1;
+use conex_proto;
 use serde_json::json;
 use tokio::sync::Notify;
 
@@ -75,14 +75,14 @@ impl WebAuth {
 
     pub fn login(&self, inbound: InboundCaller) -> Result<Arc<WebSession>, CallError> {
         if inbound.role != "ui" {
-            return Err(CallError::new(v1::ErrorCode::Unauthorized, "UI role required"));
+            return Err(CallError::new(conex_proto::ErrorCode::Unauthorized, "UI role required"));
         }
         let mut sessions = self.sessions.lock().expect("web session registry poisoned");
         let now = now_ms();
         sessions.retain(|_, session| session.is_active() && session.expires_at_ms > now);
         let principal_count = sessions.values().filter(|session| session.caller.principal_id == inbound.caller.principal_id).count();
         if principal_count >= 8 || sessions.len() >= 1024 {
-            return Err(CallError::new(v1::ErrorCode::QuotaExceeded, "web session capacity exceeded"));
+            return Err(CallError::new(conex_proto::ErrorCode::QuotaExceeded, "web session capacity exceeded"));
         }
         let link = self.ui_links.register(&inbound.caller.principal_id, &inbound.caller.tenant_id);
         let session = Arc::new(WebSession {
@@ -219,16 +219,16 @@ pub fn allowed_ui_method(method: &str) -> bool {
 
 pub fn error_response(error: CallError) -> Response {
     let status = match error.code() {
-        code if code == v1::ErrorCode::Unauthorized as i32 => StatusCode::UNAUTHORIZED,
-        code if code == v1::ErrorCode::Forbidden as i32 => StatusCode::FORBIDDEN,
-        code if code == v1::ErrorCode::QuotaExceeded as i32 => StatusCode::TOO_MANY_REQUESTS,
+        code if code == conex_proto::ErrorCode::Unauthorized as i32 => StatusCode::UNAUTHORIZED,
+        code if code == conex_proto::ErrorCode::Forbidden as i32 => StatusCode::FORBIDDEN,
+        code if code == conex_proto::ErrorCode::QuotaExceeded as i32 => StatusCode::TOO_MANY_REQUESTS,
         _ => StatusCode::BAD_REQUEST,
     };
     (status, axum::Json(json!({ "code": error.code(), "message": error.message() }))).into_response()
 }
 
-fn unauthorized(message: impl Into<String>) -> CallError { CallError::new(v1::ErrorCode::Unauthorized, message) }
-fn unavailable(message: impl Into<String>) -> CallError { CallError::new(v1::ErrorCode::Unavailable, message) }
+fn unauthorized(message: impl Into<String>) -> CallError { CallError::new(conex_proto::ErrorCode::Unauthorized, message) }
+fn unavailable(message: impl Into<String>) -> CallError { CallError::new(conex_proto::ErrorCode::Unavailable, message) }
 
 fn cookie_value<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
     let value = headers.get(header::COOKIE)?.to_str().ok()?;

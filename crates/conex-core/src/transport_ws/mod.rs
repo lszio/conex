@@ -25,7 +25,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use conex_proto::v1;
+use conex_proto;
 
 /// UTF-8 JSON-RPC 2.0 envelope, capped at 64 KiB per message.
 pub const MAX_BOOTSTRAP_MESSAGE_BYTES: usize = 65_536;
@@ -36,17 +36,17 @@ pub const DEFAULT_HANDSHAKE_TIMEOUT_MS: u64 = 10_000;
 /// Identifier for the two bootstrap profiles the demo slice recognises.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ProfileId {
-    #[serde(rename = "conex-jsonrpc2-wss-v1")]
-    JsonRpc2WssV1,
-    #[serde(rename = "conex-protobuf-wss-v1")]
-    ProtobufWssV1,
+    #[serde(rename = "conex-jsonrpc2-wss")]
+    JsonRpc2Wss,
+    #[serde(rename = "conex-protobuf-wss")]
+    ProtobufWss,
 }
 
 impl ProfileId {
     pub fn as_str(&self) -> &'static str {
         match self {
-            ProfileId::JsonRpc2WssV1 => "conex-jsonrpc2-wss-v1",
-            ProfileId::ProtobufWssV1 => "conex-protobuf-wss-v1",
+            ProfileId::JsonRpc2Wss => "conex-jsonrpc2-wss",
+            ProfileId::ProtobufWss => "conex-protobuf-wss",
         }
     }
 }
@@ -94,17 +94,17 @@ pub enum BootstrapError {
 }
  
 
-pub fn plane_name(plane: v1::Plane) -> &'static str {
+pub fn plane_name(plane: conex_proto::Plane) -> &'static str {
     match plane {
-        v1::Plane::Broker => "broker",
-        v1::Plane::Relay => "relay",
-        v1::Plane::Unspecified => "unspecified",
+        conex_proto::Plane::Broker => "broker",
+        conex_proto::Plane::Relay => "relay",
+        conex_proto::Plane::Unspecified => "unspecified",
     }
 }
-fn plane_from_str(s: &str) -> Option<v1::Plane> {
+fn plane_from_str(s: &str) -> Option<conex_proto::Plane> {
     match s {
-        "broker" => Some(v1::Plane::Broker),
-        "relay" => Some(v1::Plane::Relay),
+        "broker" => Some(conex_proto::Plane::Broker),
+        "relay" => Some(conex_proto::Plane::Relay),
         _ => None,
     }
 }
@@ -114,7 +114,7 @@ fn plane_from_str(s: &str) -> Option<v1::Plane> {
 /// Generated control type used for both JSON ready projection and protobuf
 /// mapping. JSON uses explicit lowercase field/plane mapping below because
 /// prost messages do not implement serde.
-pub type ReadyRequest = v1::ReadyRequest;
+pub type ReadyRequest = conex_proto::ReadyRequest;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BootstrapFrame {
@@ -123,8 +123,8 @@ pub struct BootstrapFrame {
 
 fn profile_from_str(s: &str) -> Option<ProfileId> {
     match s {
-        "conex-jsonrpc2-wss-v1" => Some(ProfileId::JsonRpc2WssV1),
-        "conex-protobuf-wss-v1" => Some(ProfileId::ProtobufWssV1),
+        "conex-jsonrpc2-wss" => Some(ProfileId::JsonRpc2Wss),
+        "conex-protobuf-wss" => Some(ProfileId::ProtobufWss),
         _ => None,
     }
 }
@@ -165,8 +165,8 @@ fn generate_negotiation_id() -> String {
     )
 }
 
-fn default_limits() -> v1::Limits {
-    v1::Limits {
+fn default_limits() -> conex_proto::Limits {
+    conex_proto::Limits {
         max_frame_bytes: 1_048_576,
         max_inflight: 4,
         max_queued_bytes: 8_388_608,
@@ -174,7 +174,7 @@ fn default_limits() -> v1::Limits {
     }
 }
 
-fn limits_json(limits: v1::Limits) -> serde_json::Value {
+fn limits_json(limits: conex_proto::Limits) -> serde_json::Value {
     serde_json::json!({
         "maxFrameBytes": limits.max_frame_bytes,
         "maxInflight": limits.max_inflight,
@@ -183,7 +183,7 @@ fn limits_json(limits: v1::Limits) -> serde_json::Value {
     })
 }
 
-fn limits_from_json(value: &serde_json::Value) -> Result<v1::Limits, BootstrapError> {
+fn limits_from_json(value: &serde_json::Value) -> Result<conex_proto::Limits, BootstrapError> {
     let number = |field: &str| {
         value
             .get(field)
@@ -192,7 +192,7 @@ fn limits_from_json(value: &serde_json::Value) -> Result<v1::Limits, BootstrapEr
             .filter(|v| *v > 0)
             .ok_or_else(|| BootstrapError::MalformedEnvelope(format!("invalid limits.{field}")))
     };
-    Ok(v1::Limits {
+    Ok(conex_proto::Limits {
         max_frame_bytes: number("maxFrameBytes")?,
         max_inflight: number("maxInflight")?,
         max_queued_bytes: number("maxQueuedBytes")?,
@@ -217,7 +217,7 @@ fn string_list(
         .collect()
 }
 
-fn hello_request_from_json(value: &serde_json::Value) -> Result<v1::HelloRequest, BootstrapError> {
+fn hello_request_from_json(value: &serde_json::Value) -> Result<conex_proto::HelloRequest, BootstrapError> {
     let profile_id = value
         .get("profileId")
         .and_then(serde_json::Value::as_str)
@@ -228,14 +228,14 @@ fn hello_request_from_json(value: &serde_json::Value) -> Result<v1::HelloRequest
         .and_then(serde_json::Value::as_str)
         .and_then(plane_from_str)
         .ok_or_else(|| BootstrapError::MalformedEnvelope("missing or invalid plane".into()))?;
-    Ok(v1::HelloRequest {
+    Ok(conex_proto::HelloRequest {
         profile_id,
         plane: plane as i32,
         provides: string_list(value, "provides")?,
         requires: string_list(value, "requires")?,
     })
 }
-fn ready_request_from_json(value: &serde_json::Value) -> Result<v1::ReadyRequest, BootstrapError> {
+fn ready_request_from_json(value: &serde_json::Value) -> Result<conex_proto::ReadyRequest, BootstrapError> {
     let negotiation_id = value
         .get("negotiationId")
         .and_then(serde_json::Value::as_str)
@@ -255,7 +255,7 @@ fn ready_request_from_json(value: &serde_json::Value) -> Result<v1::ReadyRequest
         .get("limits")
         .map(limits_from_json)
         .transpose()?;
-    Ok(v1::ReadyRequest {
+    Ok(conex_proto::ReadyRequest {
         negotiation_id,
         profile_id,
         plane: plane as i32,
@@ -272,20 +272,20 @@ pub struct ServerHandshake {
     /// Profile the client negotiated in `conex/hello`; echoed in ready.
     agreed_profile: Option<ProfileId>,
 
-    server_plane: v1::Plane,
-    server_capabilities: v1::NegotiatedCapabilities,
-    link_identity: v1::LinkIdentity,
-    limits: v1::Limits,
+    server_plane: conex_proto::Plane,
+    server_capabilities: conex_proto::NegotiatedCapabilities,
+    link_identity: conex_proto::LinkIdentity,
+    limits: conex_proto::Limits,
 }
 
 impl ServerHandshake {
-    pub fn new(server_profile: ProfileId, server_plane: v1::Plane) -> Self {
+    pub fn new(server_profile: ProfileId, server_plane: conex_proto::Plane) -> Self {
         Self::new_with_profiles(&[server_profile], server_plane)
     }
 
     /// The server may accept more than one profile (design §4.4). The first
     /// entry is the default advertised when the client does not pin one.
-    pub fn new_with_profiles(server_profiles: &[ProfileId], server_plane: v1::Plane) -> Self {
+    pub fn new_with_profiles(server_profiles: &[ProfileId], server_plane: conex_proto::Plane) -> Self {
         Self::new_with_profiles_and_capabilities(
             server_profiles,
             server_plane,
@@ -299,7 +299,7 @@ impl ServerHandshake {
     /// truth for the negotiated capability and link summaries.
     pub fn new_with_profiles_and_capabilities(
         server_profiles: &[ProfileId],
-        server_plane: v1::Plane,
+        server_plane: conex_proto::Plane,
         server_provides: Vec<String>,
         negotiation_id: String,
     ) -> Self {
@@ -312,12 +312,12 @@ impl ServerHandshake {
             server_profiles: server_profiles.to_vec(),
             agreed_profile: None,
             server_plane,
-            server_capabilities: v1::NegotiatedCapabilities {
+            server_capabilities: conex_proto::NegotiatedCapabilities {
                 provides: server_provides,
                 requires: Vec::new(),
                 rejected_capabilities: Vec::new(),
             },
-            link_identity: v1::LinkIdentity {
+            link_identity: conex_proto::LinkIdentity {
                 link_id: negotiation_id,
                 peer_id: String::new(),
                 tenant_id: String::new(),
@@ -330,7 +330,7 @@ impl ServerHandshake {
         &self.state
     }
 
-    pub fn link_identity(&self) -> &v1::LinkIdentity {
+    pub fn link_identity(&self) -> &conex_proto::LinkIdentity {
         &self.link_identity
     }
 
@@ -369,8 +369,8 @@ impl ServerHandshake {
             .find(|p| p.as_str() == req.profile_id)
             .copied()
             .ok_or_else(|| BootstrapError::UnsupportedProfile(req.profile_id.clone()))?;
-        let req_plane = v1::Plane::try_from(req.plane)
-            .unwrap_or(v1::Plane::Unspecified);
+        let req_plane = conex_proto::Plane::try_from(req.plane)
+            .unwrap_or(conex_proto::Plane::Unspecified);
         if req_plane != self.server_plane {
             return Err(BootstrapError::PlaneMismatch {
                 client: plane_name(req_plane).to_string(),
@@ -390,7 +390,7 @@ impl ServerHandshake {
         {
             return Err(BootstrapError::UnsupportedCapability(missing.clone()));
         }
-        let response = v1::HelloResponse {
+        let response = conex_proto::HelloResponse {
             binding_id: String::new(),
             expires_in_ms: 0,
             profile_id: negotiated.as_str().to_owned(),
@@ -405,7 +405,7 @@ impl ServerHandshake {
             "result": {
                 "negotiationId": self.negotiation_id,
                 "profileId": response.profile_id,
-                "plane": plane_name(v1::Plane::try_from(response.plane).unwrap_or(self.server_plane)),
+                "plane": plane_name(conex_proto::Plane::try_from(response.plane).unwrap_or(self.server_plane)),
                 "limits": limits_json(response.limits.unwrap_or_else(default_limits)),
                 "provides": response.provides,
                 "requires": self.server_capabilities.requires,
@@ -469,7 +469,7 @@ impl ServerHandshake {
             self.server_profiles
                 .first()
                 .copied()
-                .unwrap_or(ProfileId::JsonRpc2WssV1)
+                .unwrap_or(ProfileId::JsonRpc2Wss)
         });
         if req.profile_id != agreed.as_str() {
             return Err(BootstrapError::UnsupportedProfile(req.profile_id));
@@ -477,8 +477,8 @@ impl ServerHandshake {
         if req.negotiation_id != self.negotiation_id {
             return Err(BootstrapError::NegotiationIdMismatch);
         }
-        let req_plane = v1::Plane::try_from(req.plane)
-            .unwrap_or(v1::Plane::Unspecified);
+        let req_plane = conex_proto::Plane::try_from(req.plane)
+            .unwrap_or(conex_proto::Plane::Unspecified);
         if req_plane != self.server_plane {
             return Err(BootstrapError::PlaneMismatch {
                 client: plane_name(req_plane).to_string(),
@@ -498,7 +498,7 @@ impl ServerHandshake {
         if req.limits.as_ref().ok_or(BootstrapError::LimitsMismatch)? != &self.limits {
             return Err(BootstrapError::LimitsMismatch);
         }
-        let ready_response = v1::ReadyResponse {
+        let ready_response = conex_proto::ReadyResponse {
             negotiation_id: self.negotiation_id.clone(),
             profile_id: agreed.as_str().to_owned(),
             plane: self.server_plane as i32,
@@ -513,7 +513,7 @@ impl ServerHandshake {
             "result": {
                 "negotiationId": ready_response.negotiation_id,
                 "profileId": ready_response.profile_id,
-                "plane": plane_name(v1::Plane::try_from(ready_response.plane).unwrap_or(self.server_plane)),
+                "plane": plane_name(conex_proto::Plane::try_from(ready_response.plane).unwrap_or(self.server_plane)),
                 "provides": ready_response.provides,
                 "requires": self.server_capabilities.requires,
                 "limits": limits_json(ready_response.limits.unwrap_or_else(default_limits)),
@@ -542,7 +542,7 @@ pub struct ClientHandshake {
     state: BootstrapState,
     expected_negotiation_id: String,
     agreed_profile: Option<ProfileId>,
-    server_hello_plane: v1::Plane,
+    server_hello_plane: conex_proto::Plane,
     server_hello_profile: String,
     server_hello_id: Option<serde_json::Value>,
     request_counter: u64,
@@ -563,7 +563,7 @@ impl ClientHandshake {
             state: BootstrapState::AwaitingHello,
             expected_negotiation_id: String::new(),
             agreed_profile: None,
-            server_hello_plane: v1::Plane::Broker,
+            server_hello_plane: conex_proto::Plane::Broker,
             server_hello_profile: String::new(),
             server_hello_id: None,
             request_counter: 0,
@@ -580,14 +580,14 @@ impl ClientHandshake {
     pub fn build_hello(
         &mut self,
         profile: ProfileId,
-        plane: v1::Plane,
+        plane: conex_proto::Plane,
         provides: Vec<String>,
         requires: Vec<String>,
     ) -> Result<BootstrapFrame, BootstrapError> {
         if !matches!(self.state, BootstrapState::AwaitingHello) {
             return Err(BootstrapError::RepeatedReady);
         }
-        if plane == v1::Plane::Unspecified {
+        if plane == conex_proto::Plane::Unspecified {
             return Err(BootstrapError::MissingPlane);
         }
         self.request_counter += 1;
@@ -753,7 +753,7 @@ impl ClientHandshake {
                     return Err(BootstrapError::LimitsMismatch);
                 }
                 self.state = BootstrapState::Ready {
-                    profile: self.agreed_profile.unwrap_or(ProfileId::JsonRpc2WssV1),
+                    profile: self.agreed_profile.unwrap_or(ProfileId::JsonRpc2Wss),
                     negotiation_id: self.expected_negotiation_id.clone(),
                 };
                 Ok(ReadyRequest {
@@ -782,7 +782,7 @@ impl ClientHandshake {
             "params": {
                 "negotiationId": ready.negotiation_id,
                 "profileId": ready.profile_id,
-                "plane": plane_name(v1::Plane::try_from(ready.plane).unwrap_or(v1::Plane::Unspecified)),
+                "plane": plane_name(conex_proto::Plane::try_from(ready.plane).unwrap_or(conex_proto::Plane::Unspecified)),
                 "provides": ready.provides,
                 "limits": ready.limits.map(limits_json),
             }
@@ -808,12 +808,12 @@ mod tests {
 
     #[test]
     fn bootstrap_happy_path_round_trip() {
-        let mut server = ServerHandshake::new(ProfileId::JsonRpc2WssV1, v1::Plane::Broker);
+        let mut server = ServerHandshake::new(ProfileId::JsonRpc2Wss, conex_proto::Plane::Broker);
         let mut client = ClientHandshake::new();
         let hello = client
             .build_hello(
-                ProfileId::JsonRpc2WssV1,
-                v1::Plane::Broker,
+                ProfileId::JsonRpc2Wss,
+                conex_proto::Plane::Broker,
                 vec!["source/read".into()],
                 vec![],
             )
@@ -829,13 +829,13 @@ mod tests {
 
     #[test]
     fn profile_mismatch_rejected() {
-        let mut server = ServerHandshake::new(ProfileId::JsonRpc2WssV1, v1::Plane::Broker);
+        let mut server = ServerHandshake::new(ProfileId::JsonRpc2Wss, conex_proto::Plane::Broker);
         let hello = serde_json::json!({
             "jsonrpc": "2.0",
             "id": "req-1",
             "method": "conex/hello",
             "params": {
-                "profileId": "conex-protobuf-wss-v1",
+                "profileId": "conex-protobuf-wss",
                 "plane": "broker",
                 "provides": [],
                 "requires": [],
@@ -848,13 +848,13 @@ mod tests {
 
     #[test]
     fn plane_mismatch_rejected() {
-        let mut server = ServerHandshake::new(ProfileId::JsonRpc2WssV1, v1::Plane::Broker);
+        let mut server = ServerHandshake::new(ProfileId::JsonRpc2Wss, conex_proto::Plane::Broker);
         let hello = serde_json::json!({
             "jsonrpc": "2.0",
             "id": "req-1",
             "method": "conex/hello",
             "params": {
-                "profileId": "conex-jsonrpc2-wss-v1",
+                "profileId": "conex-jsonrpc2-wss",
                 "plane": "relay",
                 "provides": [],
                 "requires": [],
@@ -867,13 +867,13 @@ mod tests {
 
     #[test]
     fn unknown_method_rejected() {
-        let mut server = ServerHandshake::new(ProfileId::JsonRpc2WssV1, v1::Plane::Broker);
+        let mut server = ServerHandshake::new(ProfileId::JsonRpc2Wss, conex_proto::Plane::Broker);
         let bad = serde_json::json!({
             "jsonrpc": "2.0",
             "id": "req-1",
             "method": "conex/foobar",
             "params": {
-                "profileId": "conex-jsonrpc2-wss-v1",
+                "profileId": "conex-jsonrpc2-wss",
                 "plane": "broker",
             }
         })
@@ -884,10 +884,10 @@ mod tests {
 
     #[test]
     fn repeated_hello_rejected_after_hello() {
-        let mut server = ServerHandshake::new(ProfileId::JsonRpc2WssV1, v1::Plane::Broker);
+        let mut server = ServerHandshake::new(ProfileId::JsonRpc2Wss, conex_proto::Plane::Broker);
         let mut client = ClientHandshake::new();
         let hello = client
-            .build_hello(ProfileId::JsonRpc2WssV1, v1::Plane::Broker, vec![], vec![])
+            .build_hello(ProfileId::JsonRpc2Wss, conex_proto::Plane::Broker, vec![], vec![])
             .unwrap();
         let _ = server.ingest(hello.clone()).unwrap();
         let second = server.ingest(hello);
@@ -896,10 +896,10 @@ mod tests {
 
     #[test]
     fn ready_frame_after_ready_rejected_as_early_business() {
-        let mut server = ServerHandshake::new(ProfileId::JsonRpc2WssV1, v1::Plane::Broker);
+        let mut server = ServerHandshake::new(ProfileId::JsonRpc2Wss, conex_proto::Plane::Broker);
         let mut client = ClientHandshake::new();
         let hello = client
-            .build_hello(ProfileId::JsonRpc2WssV1, v1::Plane::Broker, vec![], vec![])
+            .build_hello(ProfileId::JsonRpc2Wss, conex_proto::Plane::Broker, vec![], vec![])
             .unwrap();
         let hello_result = server.ingest(hello).unwrap();
         let ready = client.ingest(hello_result).unwrap();
@@ -911,7 +911,7 @@ mod tests {
 
     #[test]
     fn oversized_bootstrap_message_rejected() {
-        let mut server = ServerHandshake::new(ProfileId::JsonRpc2WssV1, v1::Plane::Broker);
+        let mut server = ServerHandshake::new(ProfileId::JsonRpc2Wss, conex_proto::Plane::Broker);
         let huge = "x".repeat(MAX_BOOTSTRAP_MESSAGE_BYTES + 1);
         let err = server.ingest(BootstrapFrame { json: huge }).unwrap_err();
         assert!(matches!(err, BootstrapError::BufferExceeded));
@@ -919,10 +919,10 @@ mod tests {
 
     #[test]
     fn negotiation_id_mismatch_rejected_after_hello() {
-        let mut server = ServerHandshake::new(ProfileId::JsonRpc2WssV1, v1::Plane::Broker);
+        let mut server = ServerHandshake::new(ProfileId::JsonRpc2Wss, conex_proto::Plane::Broker);
         let mut client = ClientHandshake::new();
         let hello = client
-            .build_hello(ProfileId::JsonRpc2WssV1, v1::Plane::Broker, vec![], vec![])
+            .build_hello(ProfileId::JsonRpc2Wss, conex_proto::Plane::Broker, vec![], vec![])
             .unwrap();
         let hello_result = server.ingest(hello).unwrap();
         let _ = client.ingest(hello_result).unwrap();
@@ -932,7 +932,7 @@ mod tests {
             "method": "conex/ready",
             "params": {
                 "negotiationId": "spoofed",
-                "profileId": "conex-jsonrpc2-wss-v1",
+                "profileId": "conex-jsonrpc2-wss",
                 "plane": "broker",
             }
         })
@@ -943,18 +943,18 @@ mod tests {
 
     #[test]
     fn both_profiles_known() {
-        let s1 = ProfileId::JsonRpc2WssV1.as_str();
-        let s2 = ProfileId::ProtobufWssV1.as_str();
-        assert_eq!(s1, "conex-jsonrpc2-wss-v1");
-        assert_eq!(s2, "conex-protobuf-wss-v1");
+        let s1 = ProfileId::JsonRpc2Wss.as_str();
+        let s2 = ProfileId::ProtobufWss.as_str();
+        assert_eq!(s1, "conex-jsonrpc2-wss");
+        assert_eq!(s2, "conex-protobuf-wss");
     }
 
     #[test]
     fn early_business_frame_rejected_after_ready() {
-        let mut server = ServerHandshake::new(ProfileId::JsonRpc2WssV1, v1::Plane::Broker);
+        let mut server = ServerHandshake::new(ProfileId::JsonRpc2Wss, conex_proto::Plane::Broker);
         let mut client = ClientHandshake::new();
         let hello = client
-            .build_hello(ProfileId::JsonRpc2WssV1, v1::Plane::Broker, vec![], vec![])
+            .build_hello(ProfileId::JsonRpc2Wss, conex_proto::Plane::Broker, vec![], vec![])
             .unwrap();
         let hello_result = server.ingest(hello).unwrap();
         let ready = client.ingest(hello_result).unwrap();
@@ -978,8 +978,8 @@ mod tests {
         let mut client = ClientHandshake::new();
         let err = client
             .build_hello(
-                ProfileId::JsonRpc2WssV1,
-                v1::Plane::Unspecified,
+                ProfileId::JsonRpc2Wss,
+                conex_proto::Plane::Unspecified,
                 vec![],
                 vec![],
             )
@@ -989,34 +989,34 @@ mod tests {
 
     #[test]
     fn protobuf_profile_negotiates() {
-        let mut server = ServerHandshake::new(ProfileId::ProtobufWssV1, v1::Plane::Broker);
+        let mut server = ServerHandshake::new(ProfileId::ProtobufWss, conex_proto::Plane::Broker);
         let mut client = ClientHandshake::new();
         let hello = client
             .build_hello(
-                ProfileId::ProtobufWssV1,
-                v1::Plane::Broker,
+                ProfileId::ProtobufWss,
+                conex_proto::Plane::Broker,
                 vec!["blob/commit".into()],
                 vec![],
             )
             .unwrap();
         let hello_result = server.ingest(hello).unwrap();
         let ready = client.ingest(hello_result).unwrap();
-        assert_eq!(ready.profile_id, "conex-protobuf-wss-v1");
+        assert_eq!(ready.profile_id, "conex-protobuf-wss");
     }
  
     #[test]
     fn server_advertises_own_capabilities_and_rejects_hard_requires() {
         let mut server = ServerHandshake::new_with_profiles_and_capabilities(
-            &[ProfileId::JsonRpc2WssV1],
-            v1::Plane::Broker,
+            &[ProfileId::JsonRpc2Wss],
+            conex_proto::Plane::Broker,
             vec!["source/read".into()],
             "neg-test".into(),
         );
         let mut client = ClientHandshake::new();
         let hello = client
             .build_hello(
-                ProfileId::JsonRpc2WssV1,
-                v1::Plane::Broker,
+                ProfileId::JsonRpc2Wss,
+                conex_proto::Plane::Broker,
                 vec!["ui/probe".into()],
                 vec!["source/read".into()],
             )
@@ -1027,16 +1027,16 @@ mod tests {
         assert_ne!(value["result"]["provides"], serde_json::json!(["ui/probe"]));
 
         let mut rejecting = ServerHandshake::new_with_profiles_and_capabilities(
-            &[ProfileId::JsonRpc2WssV1],
-            v1::Plane::Broker,
+            &[ProfileId::JsonRpc2Wss],
+            conex_proto::Plane::Broker,
             vec!["source/read".into()],
             "neg-test".into(),
         );
         let mut client = ClientHandshake::new();
         let hello = client
             .build_hello(
-                ProfileId::JsonRpc2WssV1,
-                v1::Plane::Broker,
+                ProfileId::JsonRpc2Wss,
+                conex_proto::Plane::Broker,
                 vec![],
                 vec!["source/search".into()],
             )
@@ -1050,16 +1050,16 @@ mod tests {
     #[test]
     fn ready_rejects_capability_or_limit_mismatch() {
         let mut server = ServerHandshake::new_with_profiles_and_capabilities(
-            &[ProfileId::JsonRpc2WssV1],
-            v1::Plane::Broker,
+            &[ProfileId::JsonRpc2Wss],
+            conex_proto::Plane::Broker,
             vec!["source/read".into()],
             "neg-ready".into(),
         );
         let mut client = ClientHandshake::new();
         let hello = client
             .build_hello(
-                ProfileId::JsonRpc2WssV1,
-                v1::Plane::Broker,
+                ProfileId::JsonRpc2Wss,
+                conex_proto::Plane::Broker,
                 vec![],
                 vec![],
             )
@@ -1080,16 +1080,16 @@ mod tests {
     #[test]
     fn client_rejects_ready_result_capability_mismatch() {
         let mut server = ServerHandshake::new_with_profiles_and_capabilities(
-            &[ProfileId::JsonRpc2WssV1],
-            v1::Plane::Broker,
+            &[ProfileId::JsonRpc2Wss],
+            conex_proto::Plane::Broker,
             vec!["source/read".into()],
             "neg-client-ready".into(),
         );
         let mut client = ClientHandshake::new();
         let hello = client
             .build_hello(
-                ProfileId::JsonRpc2WssV1,
-                v1::Plane::Broker,
+                ProfileId::JsonRpc2Wss,
+                conex_proto::Plane::Broker,
                 vec![],
                 vec![],
             )

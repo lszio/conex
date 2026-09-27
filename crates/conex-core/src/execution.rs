@@ -1,7 +1,7 @@
 //! The single authorized execution path. Ordering follows design S8.4.
 use std::time::Duration;
 
-use conex_proto::v1;
+use conex_proto;
 use serde_json::Value;
 use tokio::time::Instant;
 
@@ -30,7 +30,7 @@ impl Host {
             .cloned()
             .ok_or_else(|| {
                 CallError::new(
-                    v1::ErrorCode::UnknownProvider,
+                    conex_proto::ErrorCode::UnknownProvider,
                     format!("unknown provider endpoint {endpoint_id}"),
                 )
             })?;
@@ -39,7 +39,7 @@ impl Host {
             .route(endpoint_id, P0_PROTOCOL, P0_VERSION, method)
             .ok_or_else(|| {
                 CallError::new(
-                    v1::ErrorCode::UnknownMethod,
+                    conex_proto::ErrorCode::UnknownMethod,
                     format!("unknown method {method}"),
                 )
             })?;
@@ -52,9 +52,9 @@ impl Host {
             }
         };
 
-        if endpoint.plane != v1::Plane::Broker {
+        if endpoint.plane != conex_proto::Plane::Broker {
             let error = CallError::new(
-                v1::ErrorCode::PlaneMismatch,
+                conex_proto::ErrorCode::PlaneMismatch,
                 "P0 only supports the broker plane",
             );
             self.deny(
@@ -70,7 +70,7 @@ impl Host {
         }
         if caller.tenant_id != endpoint.tenant_id {
             let error = CallError::new(
-                v1::ErrorCode::Forbidden,
+                conex_proto::ErrorCode::Forbidden,
                 "tenant does not own this endpoint",
             );
             self.deny(
@@ -162,7 +162,7 @@ impl Host {
 
             if self.policy.version() != grant.policy_version {
                 let error =
-                    CallError::new(v1::ErrorCode::Forbidden, "policy changed during handshake");
+                    CallError::new(conex_proto::ErrorCode::Forbidden, "policy changed during handshake");
                 self.deny(
                     caller,
                     &endpoint,
@@ -231,7 +231,7 @@ impl Host {
         let mut result = match outcome {
             Ok(result) => result,
             Err(_) => Err(CallError::new(
-                v1::ErrorCode::Timeout,
+                conex_proto::ErrorCode::Timeout,
                 "handler exceeded the deadline",
             )),
         };

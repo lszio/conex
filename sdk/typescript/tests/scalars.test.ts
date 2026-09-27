@@ -4,7 +4,7 @@ import Ajv2020 from "ajv/dist/2020";
 import { Scalars } from "../src/generated/scalars";
 
 const schemaUrl = new URL(
-  "../../../schema/generated/jsonschema/conex.test.v1.Scalars.schema.json",
+  "../../../schema/generated/jsonschema/conex.test.Scalars.schema.json",
   import.meta.url,
 );
 const vectorsUrl = new URL("../../../conformance/vectors/p0/scalars.json", import.meta.url);

@@ -78,7 +78,7 @@ P0 未创建空的 `conex-agent/node/coordinator` crate；接口仅随对应调�
 
 | 工作包 | 输入 | 输出位置与实现动作 | 验收证据 |
 |---|---|---|---|
-| P1-01 契约冻结 | P0 类型/路由 + 设计 §5–7 | `schema/conex/v1/session.proto`、`stream.proto`、`blob.proto`、`operation.proto`；冻结 manifest 树形、上传/commit 原子性、已知答案向量和持久记录后端 | 审查原始黄金字节、崩溃点列表；不得将 protobuf 普通序列化当规范化内容 |
+| P1-01 契约冻结 | P0 类型/路由 + 设计 §5–7 | `schema/conex/session.proto`、`stream.proto`、`blob.proto`、`operation.proto`；冻结 manifest 树形、上传/commit 原子性、已知答案向量和持久记录后端 | 审查原始黄金字节、崩溃点列表；不得将 protobuf 普通序列化当规范化内容 |
 | P1-02 WSS 引导 | P0 身份/Profile 注册 | `crates/conex-transport-ws/`；固定 64 KiB JSON 引导、hello/ready、JSON 与 protobuf Profile | 业务过早发送、重复 ready、版本/平面/方向能力不符均拒绝 |
 | P1-03 Session/attachment | P1-01/02 | `crates/conex-core/src/session/`；固定身份/执行端点、每 attachment 租约与 epoch、显式 close/renew | 别人拿到 sessionId 无法恢复；UI 重连不替换 provider 连接；provider 心跳不能代替 consumer 续租 |
 | P1-04 Stream | P1-03 | `crates/conex-core/src/stream/`；独立方向、累计信用、有界控制队列、缓存与 reset | 重放不增加信用；慢消费者停发；数据信用为零仍能取消；30 秒断网后窗口内恢复 |

@@ -3,7 +3,7 @@ use conex_proto::validation;
 use serde_json::Value;
 
 const SCHEMA: &str =
-    include_str!("../../../schema/generated/jsonschema/conex.test.v1.Scalars.schema.json");
+    include_str!("../../../schema/generated/jsonschema/conex.test.Scalars.schema.json");
 
 fn vectors() -> Vec<Value> {
     let path = concat!(
@@ -29,7 +29,7 @@ fn shared_scalar_vectors_match_schema() {
 
 #[test]
 fn max_u64_and_false_keep_presence() {
-    use conex_proto::test::v1::Scalars;
+    use conex_proto::test::Scalars;
     let value: Scalars =
         serde_json::from_str(r#"{"count":"18446744073709551615","enabled":false}"#).unwrap();
     assert_eq!(value.count, Some(u64::MAX));
@@ -38,7 +38,7 @@ fn max_u64_and_false_keep_presence() {
 
 #[test]
 fn empty_object_is_all_none() {
-    use conex_proto::test::v1::Scalars;
+    use conex_proto::test::Scalars;
     let value: Scalars = serde_json::from_str("{}").unwrap();
     assert_eq!(value.count, None);
     assert_eq!(value.enabled, None);

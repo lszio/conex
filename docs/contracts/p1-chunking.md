@@ -1,7 +1,7 @@
-# P1 分块与 manifest 契约（conex/1 broker 分块）
+# P1 分块与 manifest 契约（conex broker 分块）
 
 状态：**P1-01 冻结，§3/§4 于 2026-09-16 由 P1-01b 修正并重新冻结**（见 [P1 计划 §2.1](../plans/2026-09-15-conex-p1.md)）。
-类型源：`schema/conex/v1/chunking.proto`（`ChunkEntry / ManifestEntries / ChunkManifest / ContentAddress / BlobRef / BlobAccess`）。
+类型源：`schema/conex/chunking.proto`（`ChunkEntry / ManifestEntries / ChunkManifest / ContentAddress / BlobRef / BlobAccess`）。
 权威实现：`crates/conex-proto/src/cid.rs`（Rust）与 `sdk/typescript/src/content.ts`（TS）。二者是同一规则的两侧实现，**不得**在别处重建 manifest 字节。
 向量：`conformance/vectors/p1/chunking.json`，由 `conformance/tools/gen_manifest_goldens.py`（`protoc --encode` + Python 标准库，与 prost/ts-proto 无共享代码）生成；Rust（`crates/conex-proto/tests/chunking.rs`）与 TS（`sdk/typescript/tests/chunking.test.ts`）两侧必须逐字节复现。
 

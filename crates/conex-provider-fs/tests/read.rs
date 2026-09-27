@@ -54,7 +54,7 @@ fn factory_exposes_all_source_methods_with_shared_contracts() {
         id: "notes-local".into(),
         provider_id: "source".into(),
         tenant_id: "t".into(),
-        plane: conex_proto::v1::Plane::Broker,
+        plane: conex_proto::Plane::Broker,
         provides: vec![
             "source/list".into(),
             "source/read".into(),
@@ -94,6 +94,6 @@ fn oversized_document_is_rejected() {
     let error = root.read("big.md", 256 * 1024).unwrap_err();
     assert_eq!(
         error.code_enum(),
-        Some(conex_proto::v1::ErrorCode::PayloadTooLarge)
+        Some(conex_proto::ErrorCode::PayloadTooLarge)
     );
 }

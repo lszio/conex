@@ -6,7 +6,7 @@ use conex_core::{
     AllowedTarget, CallError, CallResult, Connection, Connector, PeerVerification, TlsTrust,
     VerifiedPeer,
 };
-use conex_proto::v1;
+use conex_proto;
 use hyper_util::rt::TokioIo;
 use rustls::pki_types::ServerName;
 use tokio::net::TcpStream;
@@ -70,14 +70,14 @@ impl Connector for HttpConnector {
             let config = build_client_config(&self.trust)?;
             let connector = TlsConnector::from(Arc::new(config));
             let server_name = ServerName::try_from(target.server_name.clone()).map_err(|_| {
-                CallError::new(v1::ErrorCode::BadRequest, "invalid TLS server name")
+                CallError::new(conex_proto::ErrorCode::BadRequest, "invalid TLS server name")
             })?;
             let stream = timeout_at(deadline, connector.connect(server_name, tcp))
                 .await
                 .map_err(|_| unavailable("tls handshake exceeded the deadline"))?
                 .map_err(|error| {
                     CallError::new(
-                        v1::ErrorCode::PeerUntrusted,
+                        conex_proto::ErrorCode::PeerUntrusted,
                         format!("tls verification failed: {error}"),
                     )
                 })?;
@@ -109,7 +109,7 @@ impl Connector for HttpConnector {
 }
 
 fn unavailable(message: impl Into<String>) -> CallError {
-    CallError::new(v1::ErrorCode::Unavailable, message)
+    CallError::new(conex_proto::ErrorCode::Unavailable, message)
 }
 
 pub fn build_client_config(trust: &TlsTrustConfig) -> CallResult<rustls::ClientConfig> {
@@ -125,14 +125,14 @@ pub fn build_client_config(trust: &TlsTrustConfig) -> CallResult<rustls::ClientC
     }
     if roots.is_empty() {
         return Err(CallError::new(
-            v1::ErrorCode::Internal,
+            conex_proto::ErrorCode::Internal,
             "no TLS trust anchors configured",
         ));
     }
     let provider = Arc::new(rustls::crypto::ring::default_provider());
     let config = rustls::ClientConfig::builder_with_provider(provider)
         .with_safe_default_protocol_versions()
-        .map_err(|error| CallError::new(v1::ErrorCode::Internal, format!("tls config: {error}")))?
+        .map_err(|error| CallError::new(conex_proto::ErrorCode::Internal, format!("tls config: {error}")))?
         .with_root_certificates(roots)
         .with_no_client_auth();
     Ok(config)
@@ -143,16 +143,16 @@ fn add_pem_roots(roots: &mut rustls::RootCertStore, pem: &[u8]) -> CallResult<()
     let mut added = 0usize;
     for cert in rustls_pemfile::certs(&mut cursor) {
         let cert = cert.map_err(|error| {
-            CallError::new(v1::ErrorCode::Internal, format!("invalid CA pem: {error}"))
+            CallError::new(conex_proto::ErrorCode::Internal, format!("invalid CA pem: {error}"))
         })?;
         roots.add(cert).map_err(|error| {
-            CallError::new(v1::ErrorCode::Internal, format!("invalid CA cert: {error}"))
+            CallError::new(conex_proto::ErrorCode::Internal, format!("invalid CA cert: {error}"))
         })?;
         added += 1;
     }
     if added == 0 {
         return Err(CallError::new(
-            v1::ErrorCode::Internal,
+            conex_proto::ErrorCode::Internal,
             "no certificates found in trust material",
         ));
     }

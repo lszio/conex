@@ -6,7 +6,7 @@ use conex_core::Caller;
 use conex_host::broker::BrokerCall;
 use conex_host::config::{AgentConfig, EndpointConfig, HostConfig, PolicyConfig, TokenConfig};
 use conex_host::serve::build;
-use conex_proto::v1;
+use conex_proto;
 use serde_json::json;
 use tempfile::TempDir;
 use tokio::time::Instant;
@@ -130,11 +130,11 @@ async fn catalog_filters_scopes_paginates_and_keeps_remote_offline_visible() {
     let alice = caller("alice");
 
     let page = catalog.list(&alice, json!({"limit": 1})).await.unwrap();
-    let page: v1::EndpointListResult = serde_json::from_value(page).unwrap();
+    let page: conex_proto::EndpointListResult = serde_json::from_value(page).unwrap();
     assert_eq!(page.endpoints.len(), 1);
     assert_eq!(page.endpoints[0].endpoint_id, "notes-local");
     assert_eq!(page.endpoints[0].available_methods, ["source/list", "source/read"]);
-    assert_eq!(page.endpoints[0].connection_state, v1::ConnectionState::NotApplicable as i32);
+    assert_eq!(page.endpoints[0].connection_state, conex_proto::ConnectionState::NotApplicable as i32);
     assert!(page.endpoints[0].authorized_scopes.iter().all(|scope| scope.root == "team"));
     assert_eq!(page.next_after_endpoint_id.as_deref(), Some("notes-local"));
 
@@ -142,13 +142,13 @@ async fn catalog_filters_scopes_paginates_and_keeps_remote_offline_visible() {
         .list(&alice, json!({"afterEndpointId":"notes-local"}))
         .await
         .unwrap();
-    let second: v1::EndpointListResult = serde_json::from_value(second).unwrap();
+    let second: conex_proto::EndpointListResult = serde_json::from_value(second).unwrap();
     assert_eq!(second.endpoints.len(), 1);
     assert_eq!(second.endpoints[0].display_name, "Private notes");
     assert_eq!(second.endpoints[0].endpoint_id, "notes-remote");
-    assert_eq!(second.endpoints[0].connection_state, v1::ConnectionState::Offline as i32);
+    assert_eq!(second.endpoints[0].connection_state, conex_proto::ConnectionState::Offline as i32);
     let bob = catalog.list(&caller("bob"), json!({})).await.unwrap();
-    let bob: v1::EndpointListResult = serde_json::from_value(bob).unwrap();
+    let bob: conex_proto::EndpointListResult = serde_json::from_value(bob).unwrap();
     assert!(bob.endpoints.is_empty());
 
     let encoded = serde_json::to_string(&second).unwrap();
@@ -165,7 +165,7 @@ async fn catalog_filters_scopes_paginates_and_keeps_remote_offline_visible() {
         )
         .await
         .unwrap_err();
-    assert_eq!(error.code_enum(), Some(v1::ErrorCode::Forbidden));
+    assert_eq!(error.code_enum(), Some(conex_proto::ErrorCode::Forbidden));
 }
 
 #[tokio::test]
@@ -183,15 +183,15 @@ async fn broker_endpoint_list_strictly_decodes_input_and_hides_other_principals(
         role: "service".into(),
     };
     let result = broker.invoke(base()).await.unwrap();
-    let result: v1::EndpointListResult = serde_json::from_value(result).unwrap();
+    let result: conex_proto::EndpointListResult = serde_json::from_value(result).unwrap();
     assert_eq!(result.endpoints.len(), 2);
 
     let mut invalid = base();
     invalid.input = json!({"limit": 101});
-    assert_eq!(broker.invoke(invalid).await.unwrap_err().code_enum(), Some(v1::ErrorCode::BadRequest));
+    assert_eq!(broker.invoke(invalid).await.unwrap_err().code_enum(), Some(conex_proto::ErrorCode::BadRequest));
     let mut unknown = base();
     unknown.input = json!({"unexpected": true});
-    assert_eq!(broker.invoke(unknown).await.unwrap_err().code_enum(), Some(v1::ErrorCode::BadRequest));
+    assert_eq!(broker.invoke(unknown).await.unwrap_err().code_enum(), Some(conex_proto::ErrorCode::BadRequest));
 }
 #[tokio::test]
 async fn catalog_reflects_remote_ready_state() {
@@ -215,9 +215,9 @@ async fn catalog_reflects_remote_ready_state() {
         .list(&caller("alice"), json!({"afterEndpointId":"notes-local"}))
         .await
         .unwrap();
-    let result: v1::EndpointListResult = serde_json::from_value(value).unwrap();
+    let result: conex_proto::EndpointListResult = serde_json::from_value(value).unwrap();
     assert_eq!(
         result.endpoints[0].connection_state,
-        v1::ConnectionState::Ready as i32
+        conex_proto::ConnectionState::Ready as i32
     );
 }

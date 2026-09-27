@@ -1,6 +1,6 @@
 //! Shared source MethodContracts: strict decode, claim extraction, output check.
 use conex_core::{CallError, CallResult, MethodContract, PreparedInput};
-use conex_proto::v1;
+use conex_proto;
 use serde_json::{Map, Value, json};
 
 use crate::resource::{read_claim, subtree_claim};
@@ -21,8 +21,8 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
             SOURCE_LIST,
             MethodContract {
                 adapter_id: "conex-source",
-                input_schema: "conex.v1.SourceListRequest",
-                output_schema: "conex.v1.SourceListResponse",
+                input_schema: "conex.SourceListRequest",
+                output_schema: "conex.SourceListResponse",
                 prepare: prepare_list,
                 validate_output: validate_list_output,
             },
@@ -31,8 +31,8 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
             SOURCE_READ,
             MethodContract {
                 adapter_id: "conex-source",
-                input_schema: "conex.v1.SourceReadRequest",
-                output_schema: "conex.v1.SourceReadResponse",
+                input_schema: "conex.SourceReadRequest",
+                output_schema: "conex.SourceReadResponse",
                 prepare: prepare_read,
                 validate_output: validate_read_output,
             },
@@ -41,8 +41,8 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
             SOURCE_SEARCH,
             MethodContract {
                 adapter_id: "conex-source",
-                input_schema: "conex.v1.SourceSearchRequest",
-                output_schema: "conex.v1.SourceSearchResponse",
+                input_schema: "conex.SourceSearchRequest",
+                output_schema: "conex.SourceSearchResponse",
                 prepare: prepare_search,
                 validate_output: validate_search_output,
             },
@@ -51,7 +51,7 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
 }
 
 fn bad(message: &str) -> CallError {
-    CallError::new(v1::ErrorCode::BadRequest, message)
+    CallError::new(conex_proto::ErrorCode::BadRequest, message)
 }
 
 fn object(input: &Value) -> CallResult<&Map<String, Value>> {

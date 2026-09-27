@@ -3,7 +3,7 @@ mod support;
 
 use std::time::Duration;
 
-use conex_proto::v1;
+use conex_proto;
 use serde_json::json;
 
 use support::CatalogFixture;
@@ -23,7 +23,7 @@ async fn file_only_permission_does_not_fetch_whole_catalog() {
         .await;
     assert_eq!(
         result.unwrap_err().code_enum(),
-        Some(v1::ErrorCode::Forbidden)
+        Some(conex_proto::ErrorCode::Forbidden)
     );
     assert_eq!(fixture.server.get_count(), 0);
 }
@@ -43,7 +43,7 @@ async fn subtree_permission_is_not_enough_for_list() {
         .await;
     assert_eq!(
         result.unwrap_err().code_enum(),
-        Some(v1::ErrorCode::Forbidden)
+        Some(conex_proto::ErrorCode::Forbidden)
     );
     assert_eq!(fixture.server.get_count(), 0);
 }

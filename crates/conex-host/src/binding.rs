@@ -4,7 +4,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use conex_core::{CallError, CallResult, Caller, Limits};
-use conex_proto::v1;
+use conex_proto;
 use sha2::{Digest, Sha256};
 use tokio::time::Instant;
 
@@ -66,17 +66,17 @@ impl BindingStore {
     pub fn issue(
         &self,
         caller: &Caller,
-        hello: &v1::HelloRequest,
-    ) -> CallResult<v1::HelloResponse> {
+        hello: &conex_proto::HelloRequest,
+    ) -> CallResult<conex_proto::HelloResponse> {
         if hello.profile_id != self.profile_id {
             return Err(CallError::new(
-                v1::ErrorCode::UnsupportedCapability,
+                conex_proto::ErrorCode::UnsupportedCapability,
                 "unknown profile",
             ));
         }
-        if hello.plane != v1::Plane::Broker as i32 {
+        if hello.plane != conex_proto::Plane::Broker as i32 {
             return Err(CallError::new(
-                v1::ErrorCode::PlaneMismatch,
+                conex_proto::ErrorCode::PlaneMismatch,
                 "P0 only supports the broker plane",
             ));
         }
@@ -92,7 +92,7 @@ impl BindingStore {
             .collect();
         if !rejected.is_empty() {
             return Err(CallError::new(
-                v1::ErrorCode::UnsupportedCapability,
+                conex_proto::ErrorCode::UnsupportedCapability,
                 "required capabilities are not available",
             ));
         }
@@ -108,13 +108,13 @@ impl BindingStore {
             .count();
         if per_principal >= self.max_per_principal {
             return Err(CallError::new(
-                v1::ErrorCode::QuotaExceeded,
+                conex_proto::ErrorCode::QuotaExceeded,
                 "too many bindings for this principal",
             ));
         }
         if inner.records.len() >= self.max_total {
             return Err(CallError::new(
-                v1::ErrorCode::QuotaExceeded,
+                conex_proto::ErrorCode::QuotaExceeded,
                 "too many bindings on this host",
             ));
         }
@@ -130,17 +130,17 @@ impl BindingStore {
                 tenant_id: caller.tenant_id.clone(),
                 audience: self.audience.clone(),
                 profile_id: self.profile_id.clone(),
-                plane: v1::Plane::Broker as i32,
+                plane: conex_proto::Plane::Broker as i32,
                 provides: provides.clone(),
                 limits: self.limits,
                 expires_at,
             },
         );
-        Ok(v1::HelloResponse {
+        Ok(conex_proto::HelloResponse {
             binding_id,
             expires_in_ms: self.ttl.as_millis() as u32,
             profile_id: self.profile_id.clone(),
-            plane: v1::Plane::Broker as i32,
+            plane: conex_proto::Plane::Broker as i32,
             provides,
             rejected_capabilities: vec![],
             limits: Some(wire_limits(self.limits)),
@@ -151,11 +151,11 @@ impl BindingStore {
         let mut inner = self.inner.lock().expect("binding lock poisoned");
         purge(&mut inner);
         let binding = inner.records.get(binding_id).cloned().ok_or_else(|| {
-            CallError::new(v1::ErrorCode::Unauthorized, "unknown or expired binding")
+            CallError::new(conex_proto::ErrorCode::Unauthorized, "unknown or expired binding")
         })?;
         if binding.principal_id != caller.principal_id || binding.tenant_id != caller.tenant_id {
             return Err(CallError::new(
-                v1::ErrorCode::Forbidden,
+                conex_proto::ErrorCode::Forbidden,
                 "binding belongs to another principal",
             ));
         }
@@ -193,8 +193,8 @@ fn mint(principal: &str, counter: u64) -> String {
     format!("bnd-{}", &hex::encode(bytes)[..32])
 }
 
-fn wire_limits(limits: Limits) -> v1::Limits {
-    v1::Limits {
+fn wire_limits(limits: Limits) -> conex_proto::Limits {
+    conex_proto::Limits {
         max_frame_bytes: limits.max_frame_bytes,
         max_inflight: limits.max_inflight,
         max_queued_bytes: limits.max_queued_bytes,

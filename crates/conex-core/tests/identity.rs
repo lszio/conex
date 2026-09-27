@@ -1,6 +1,6 @@
 //! Identity keys are namespaced by source; sub alone never merges identities.
 use conex_core::{IdentityBinding, IdentityKey, IdentityMap};
-use conex_proto::v1;
+use conex_proto;
 
 fn oidc(issuer: &str, subject: &str, principal: &str, tenant: &str) -> IdentityBinding {
     IdentityBinding {
@@ -54,7 +54,7 @@ fn unknown_identity_has_no_default_principal() {
             "peer",
         )
         .unwrap_err();
-    assert_eq!(err.code_enum(), Some(v1::ErrorCode::Unauthorized));
+    assert_eq!(err.code_enum(), Some(conex_proto::ErrorCode::Unauthorized));
 }
 
 #[test]

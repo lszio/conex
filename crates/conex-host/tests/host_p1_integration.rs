@@ -116,7 +116,7 @@ root = \"{notes_root}\"\n",
     let bound_addr: std::net::SocketAddr = format!("127.0.0.1:{port}").parse().unwrap();
     // Probe until /rpc responds
     let client = reqwest::Client::new();
-    let hello_body = r#"{"jsonrpc":"2.0","id":"01ARZ3NDEKTSV4RRFFQ69G5FAX","method":"conex/hello","params":{"context":{"providerEndpointId":"notes-local","plane":"broker"},"input":{"supportedProfiles":["conex-jsonrpc2-http-v1"],"capabilities":[]}}}"#;
+    let hello_body = r#"{"jsonrpc":"2.0","id":"01ARZ3NDEKTSV4RRFFQ69G5FAX","method":"conex/hello","params":{"context":{"providerEndpointId":"notes-local","plane":"broker"},"input":{"supportedProfiles":["conex-jsonrpc2-http"],"capabilities":[]}}}"#;
     let mut ready = false;
     for _ in 0..200 {
         if let Ok(resp) = client
@@ -154,7 +154,7 @@ root = \"{notes_root}\"\n",
             "params": {
                 "context": { "providerEndpointId": "notes-local", "plane": "broker" },
                 "input": {
-                    "supportedProfiles": ["conex-jsonrpc2-http-v1"],
+                    "supportedProfiles": ["conex-jsonrpc2-http"],
                     "capabilities": ["blob/get", "session/open"]
                 }
             }

@@ -1,7 +1,7 @@
 # P1 blob 状态机、持久提交与 GC 契约（设计 §5.4、§5.5）
 
 状态：**P1-01 冻结**（2026-09-15）；§2 的 commit 校验语义与 §7 的用例在 2026-09-16 由 P1-01b 修正并落地于 `crates/conex-content`（见 [P1 计划 §2.1](../plans/2026-09-15-conex-p1.md)）。
-类型源：`schema/conex/v1/blob.proto`；分块/根 CID 规则见 [p1-chunking 契约](p1-chunking.md)。
+类型源：`schema/conex/blob.proto`；分块/根 CID 规则见 [p1-chunking 契约](p1-chunking.md)。
 向量：`conformance/vectors/p1/blob.json`（生命周期、崩溃、GC 与 commit 拒绝用例），Rust 侧由 `crates/conex-content/tests/blob.rs` 消费；manifest 根与黄金字节来自 `conformance/vectors/p1/chunking.json`。
 
 ## 1. 状态机

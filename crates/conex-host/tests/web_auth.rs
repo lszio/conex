@@ -163,7 +163,7 @@ async fn ticket_only_websocket_upgrade_works_and_ambiguous_auth_fails() {
     let mut request = ws_url.clone().into_client_request().expect("ws request");
     request.headers_mut().insert("Origin", origin.parse().unwrap());
     let (mut ws, _) = tokio_tungstenite::connect_async(request).await.expect("ticket-only websocket");
-    ws.send(Message::Text(serde_json::json!({"jsonrpc":"2.0","id":"01ARZ3NDEKTSV4RRFFQ69G5FAV","method":"conex/hello","params":{"profileId":"conex-jsonrpc2-wss-v1","plane":"broker","provides":[],"requires":[]}}).to_string().into())).await.expect("hello");
+    ws.send(Message::Text(serde_json::json!({"jsonrpc":"2.0","id":"01ARZ3NDEKTSV4RRFFQ69G5FAV","method":"conex/hello","params":{"profileId":"conex-jsonrpc2-wss","plane":"broker","provides":[],"requires":[]}}).to_string().into())).await.expect("hello");
     let hello = ws.next().await.expect("hello response").expect("hello frame");
     let hello: Value = match hello {
         Message::Text(text) => serde_json::from_str(&text).expect("hello json"),

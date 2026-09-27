@@ -1,5 +1,5 @@
-//! Real-socket WSS profile tests: both `conex-jsonrpc2-wss-v1` (JSON text)
-//! and `conex-protobuf-wss-v1` (prost binary) run a real hello/ready
+//! Real-socket WSS profile tests: both `conex-jsonrpc2-wss` (JSON text)
+//! and `conex-protobuf-wss` (prost binary) run a real hello/ready
 //! handshake against the live `conex-host` binary and complete a business
 //! call. The bootstrap is UTF-8 JSON-RPC text for both profiles; the
 //! business encoding switches after `ready` (design §4.4).
@@ -13,7 +13,7 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use tokio_tungstenite::tungstenite::Message;
 
-use conex_proto::v1;
+use conex_proto;
 use prost::Message as ProstMessage;
 
 fn tmp(name: &str) -> (tempfile::TempDir, PathBuf) {
@@ -217,7 +217,7 @@ async fn wss_json_profile_round_trip() {
     let mut ws = connect_with_bearer(&url, "e2e-token")
         .await
         .expect("ws connect (json)");
-    bootstrap_json(&mut ws, "conex-jsonrpc2-wss-v1").await;
+    bootstrap_json(&mut ws, "conex-jsonrpc2-wss").await;
 
     // Agent registration is reserved for an authenticated agent-role WSS
     // link; a service-role WSS link must be rejected without dispatch.
@@ -286,7 +286,7 @@ async fn wss_protobuf_profile_round_trip() {
         .await
         .expect("ws connect (protobuf)");
 
-    bootstrap_json(&mut ws, "conex-protobuf-wss-v1").await;
+    bootstrap_json(&mut ws, "conex-protobuf-wss").await;
 
     // Agent registration is reserved for authenticated agent-role WSS links.
     use std::collections::HashMap;
@@ -305,17 +305,17 @@ async fn wss_protobuf_profile_round_trip() {
         vec![<pbjson_types::Value>::from("a.md")].into(),
     );
     fields.insert("hostOrigin".into(), "conex://broker.local".into());
-    let input = v1::CallParams {
-        context: Some(v1::RequestContext {
+    let input = conex_proto::CallParams {
+        context: Some(conex_proto::RequestContext {
             provider_endpoint_id: "agent-mgr".into(),
-            plane: v1::Plane::Broker as i32,
+            plane: conex_proto::Plane::Broker as i32,
             binding_id: None,
         }),
         timeout_budget_ms: 8000,
         input: Some(fields.into()),
     };
-    let request = v1::Message {
-        body: Some(v1::message::Body::Request(v1::Request {
+    let request = conex_proto::Message {
+        body: Some(conex_proto::message::Body::Request(conex_proto::Request {
             request_id: ULID_A.into(),
             method: "agent/register".into(),
             params: Some(input),
@@ -335,12 +335,12 @@ async fn wss_protobuf_profile_round_trip() {
     let Message::Binary(bytes) = reply else {
         panic!("expected binary business result, got {reply:?}");
     };
-    let message = v1::Message::decode(bytes.as_ref()).expect("decode response");
+    let message = conex_proto::Message::decode(bytes.as_ref()).expect("decode response");
     match message.body {
-        Some(v1::message::Body::Failure(failure)) => {
+        Some(conex_proto::message::Body::Failure(failure)) => {
             assert_eq!(
-                failure.error.as_ref().map(|error| v1::ErrorCode::try_from(error.code)),
-                Some(Ok(v1::ErrorCode::Forbidden)),
+                failure.error.as_ref().map(|error| conex_proto::ErrorCode::try_from(error.code)),
+                Some(Ok(conex_proto::ErrorCode::Forbidden)),
                 "service-role agent/register must be rejected: {failure:?}"
             );
         }
@@ -373,7 +373,7 @@ async fn wss_server_does_not_echo_client_capabilities() {
             "id": ULID_A,
             "method": "conex/hello",
             "params": {
-                "profileId": "conex-jsonrpc2-wss-v1",
+                "profileId": "conex-jsonrpc2-wss",
                 "plane": "broker",
                 "provides": ["ui/probe"],
                 "requires": ["ui/probe"]

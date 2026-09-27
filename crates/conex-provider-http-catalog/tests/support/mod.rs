@@ -13,7 +13,7 @@ use conex_core::{
     StaticPolicy, Target, TargetPolicy, TlsTrust,
 };
 use conex_host::{CredentialBackend, CredentialBinding, EnvFileStore, SecretReader};
-use conex_proto::v1;
+use conex_proto;
 use conex_transport_http::{HttpConnector, TlsTrustConfig};
 use rcgen::{BasicConstraints, CertificateParams, CertifiedIssuer, DnType, IsCa, KeyPair};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
@@ -208,7 +208,7 @@ impl CatalogFixture {
                 id: ENDPOINT.into(),
                 provider_id: "catalog".into(),
                 tenant_id: TENANT.into(),
-                plane: v1::Plane::Broker,
+                plane: conex_proto::Plane::Broker,
                 provides: vec![
                     "source/list".into(),
                     "source/read".into(),

@@ -18,7 +18,7 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use base64::Engine;
 use conex_core::CallError;
-use conex_proto::v1;
+use conex_proto;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -38,13 +38,13 @@ pub struct OidcState {
 
 fn call_error_to_response(error: CallError) -> Response {
     let code = error.code();
-    let status = if code == v1::ErrorCode::Unauthorized as i32 {
+    let status = if code == conex_proto::ErrorCode::Unauthorized as i32 {
         StatusCode::UNAUTHORIZED
-    } else if code == v1::ErrorCode::BadRequest as i32 {
+    } else if code == conex_proto::ErrorCode::BadRequest as i32 {
         StatusCode::BAD_REQUEST
-    } else if code == v1::ErrorCode::Forbidden as i32 {
+    } else if code == conex_proto::ErrorCode::Forbidden as i32 {
         StatusCode::FORBIDDEN
-    } else if code == v1::ErrorCode::QuotaExceeded as i32 {
+    } else if code == conex_proto::ErrorCode::QuotaExceeded as i32 {
         StatusCode::TOO_MANY_REQUESTS
     } else {
         StatusCode::INTERNAL_SERVER_ERROR
@@ -103,7 +103,7 @@ pub async fn issue_ticket(
 ) -> Response {
     let side = match state.host_side.as_ref() {
         Some(side) => side,
-        None => return call_error_data_to_response(CallError::new(v1::ErrorCode::Unavailable, "ticket backend is not configured")),
+        None => return call_error_data_to_response(CallError::new(conex_proto::ErrorCode::Unavailable, "ticket backend is not configured")),
     };
     if let Some(web) = state.web_auth.as_ref() {
         if headers.get(axum::http::header::COOKIE).is_some() {
@@ -144,7 +144,7 @@ pub async fn issue_ticket(
     // callers; browser UI issuance always takes the session branch above.
     if caller.principal_id != request.principal_id || caller.tenant_id != request.tenant_id {
         return call_error_data_to_response(CallError::new(
-            v1::ErrorCode::Forbidden,
+            conex_proto::ErrorCode::Forbidden,
             "ticket principal/tenant does not match the bearer",
         ));
     }
@@ -199,7 +199,7 @@ pub async fn oidc_authorize(
         Some(side) => side,
         None => {
             return call_error_data_to_response(CallError::new(
-                v1::ErrorCode::Unavailable,
+                conex_proto::ErrorCode::Unavailable,
                 "oidc backend is not configured",
             ));
         }
@@ -210,7 +210,7 @@ pub async fn oidc_authorize(
     };
     if caller.principal_id != request.principal_id || caller.tenant_id != request.tenant_id {
         return call_error_data_to_response(CallError::new(
-            v1::ErrorCode::Forbidden,
+            conex_proto::ErrorCode::Forbidden,
             "oidc principal/tenant does not match the bearer",
         ));
     }
@@ -260,7 +260,7 @@ pub async fn oidc_token(
         Some(side) => side,
         None => {
             return call_error_data_to_response(CallError::new(
-                v1::ErrorCode::Unavailable,
+                conex_proto::ErrorCode::Unavailable,
                 "oidc backend is not configured",
             ));
         }
@@ -297,12 +297,12 @@ pub async fn oidc_token(
                         .into_response()
                 }
                 Err(error) => call_error_data_to_response(CallError::new(
-                    v1::ErrorCode::Unauthorized,
+                    conex_proto::ErrorCode::Unauthorized,
                     format!("id_token verification failed: {error}"),
                 )),
             },
             None => call_error_data_to_response(CallError::new(
-                v1::ErrorCode::BadRequest,
+                conex_proto::ErrorCode::BadRequest,
                 "idToken is required when [oidc] is configured",
             )),
         };

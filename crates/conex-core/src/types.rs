@@ -4,7 +4,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
 use bytes::Bytes;
-use conex_proto::v1;
+use conex_proto;
 
 use crate::ports::{Connection, Handler};
 
@@ -13,13 +13,13 @@ pub type CallResult<T> = Result<T, CallError>;
 /// Core newtype over the wire error. Business code uses the frozen ErrorCode.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CallError {
-    error: Box<v1::Error>,
+    error: Box<conex_proto::Error>,
 }
 
 impl CallError {
-    pub fn new(code: v1::ErrorCode, message: impl Into<String>) -> Self {
+    pub fn new(code: conex_proto::ErrorCode, message: impl Into<String>) -> Self {
         Self {
-            error: Box::new(v1::Error {
+            error: Box::new(conex_proto::Error {
                 code: code as i32,
                 message: message.into(),
                 diagnostic_id: String::new(),
@@ -30,7 +30,7 @@ impl CallError {
         }
     }
 
-    pub fn from_wire(error: v1::Error) -> Self {
+    pub fn from_wire(error: conex_proto::Error) -> Self {
         Self {
             error: Box::new(error),
         }
@@ -40,19 +40,19 @@ impl CallError {
         self.error.code
     }
 
-    pub fn code_enum(&self) -> Option<v1::ErrorCode> {
-        v1::ErrorCode::try_from(self.error.code).ok()
+    pub fn code_enum(&self) -> Option<conex_proto::ErrorCode> {
+        conex_proto::ErrorCode::try_from(self.error.code).ok()
     }
 
     pub fn message(&self) -> &str {
         &self.error.message
     }
 
-    pub fn wire(&self) -> &v1::Error {
+    pub fn wire(&self) -> &conex_proto::Error {
         &self.error
     }
 
-    pub fn into_wire(self) -> v1::Error {
+    pub fn into_wire(self) -> conex_proto::Error {
         *self.error
     }
 
@@ -133,7 +133,7 @@ pub struct Caller {
 pub struct CallContext {
     pub caller: Caller,
     pub endpoint_id: String,
-    pub plane: v1::Plane,
+    pub plane: conex_proto::Plane,
     pub method: String,
     pub claim: ResourceClaim,
     pub policy_version: u64,
@@ -164,7 +164,7 @@ pub struct Endpoint {
     pub id: String,
     pub provider_id: String,
     pub tenant_id: String,
-    pub plane: v1::Plane,
+    pub plane: conex_proto::Plane,
     pub provides: Vec<String>,
     pub limits: Limits,
 }

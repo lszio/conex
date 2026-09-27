@@ -15,7 +15,6 @@ use serde::Deserialize;
 use serde::de::{self, MapAccess, Visitor};
 use serde_json::{Map, Value};
 
-use crate::v1;
 
 const EXECUTION_VALUES: [&str; 3] = ["not_started", "completed", "unknown"];
 const RETRY_VALUES: [&str; 3] = ["never", "safe", "with_operation_id"];
@@ -37,7 +36,7 @@ impl ProtocolError {
     }
 
     pub fn bad_request(request_id: Option<String>, message: impl Into<String>) -> Self {
-        Self::new(v1::ErrorCode::BadRequest as i32, request_id, message)
+        Self::new(crate::ErrorCode::BadRequest as i32, request_id, message)
     }
 }
 
@@ -114,10 +113,10 @@ impl<'de> Deserialize<'de> for RawEnvelope {
     }
 }
 
-pub fn decode_wire(bytes: &[u8]) -> Result<v1::Message, ProtocolError> {
+pub fn decode_wire(bytes: &[u8]) -> Result<crate::Message, ProtocolError> {
     let raw: RawEnvelope = serde_json::from_slice(bytes).map_err(|e| {
         ProtocolError::new(
-            v1::ErrorCode::ParseError as i32,
+            crate::ErrorCode::ParseError as i32,
             None,
             format!("invalid JSON-RPC envelope: {e}"),
         )
@@ -143,8 +142,8 @@ pub fn decode_wire(bytes: &[u8]) -> Result<v1::Message, ProtocolError> {
         })?;
         let params = parse_call_params(&params_value, None)?;
         match raw.id.clone() {
-            None => Ok(v1::Message {
-                body: Some(v1::message::Body::Notification(v1::Notification {
+            None => Ok(crate::Message {
+                body: Some(crate::message::Body::Notification(crate::Notification {
                     method,
                     params: Some(params),
                 })),
@@ -156,8 +155,8 @@ pub fn decode_wire(bytes: &[u8]) -> Result<v1::Message, ProtocolError> {
                         "request id must be a ULID",
                     ));
                 }
-                Ok(v1::Message {
-                    body: Some(v1::message::Body::Request(v1::Request {
+                Ok(crate::Message {
+                    body: Some(crate::message::Body::Request(crate::Request {
                         request_id,
                         method,
                         params: Some(params),
@@ -205,15 +204,15 @@ pub fn decode_wire(bytes: &[u8]) -> Result<v1::Message, ProtocolError> {
                 })?),
                 None => None,
             };
-            Ok(v1::Message {
-                body: Some(v1::message::Body::Success(v1::Success {
+            Ok(crate::Message {
+                body: Some(crate::message::Body::Success(crate::Success {
                     request_id,
                     result,
                 })),
             })
         } else if let Some(error) = raw.error.clone() {
-            Ok(v1::Message {
-                body: Some(v1::message::Body::Failure(v1::Failure {
+            Ok(crate::Message {
+                body: Some(crate::message::Body::Failure(crate::Failure {
                     request_id,
                     error: Some(parse_error(&error, None)?),
                 })),
@@ -227,7 +226,7 @@ pub fn decode_wire(bytes: &[u8]) -> Result<v1::Message, ProtocolError> {
     }
 }
 
-pub fn encode_wire(message: &v1::Message) -> Result<Vec<u8>, ProtocolError> {
+pub fn encode_wire(message: &crate::Message) -> Result<Vec<u8>, ProtocolError> {
     let body = message
         .body
         .as_ref()
@@ -235,12 +234,12 @@ pub fn encode_wire(message: &v1::Message) -> Result<Vec<u8>, ProtocolError> {
     let mut out = Map::new();
     out.insert("jsonrpc".into(), Value::String("2.0".into()));
     match body {
-        v1::message::Body::Request(r) => {
+        crate::message::Body::Request(r) => {
             out.insert("id".into(), Value::String(r.request_id.clone()));
             out.insert("method".into(), Value::String(r.method.clone()));
             out.insert("params".into(), call_params_to_json(r.params.as_ref())?);
         }
-        v1::message::Body::Success(s) => {
+        crate::message::Body::Success(s) => {
             out.insert("id".into(), Value::String(s.request_id.clone()));
             out.insert(
                 "result".into(),
@@ -251,7 +250,7 @@ pub fn encode_wire(message: &v1::Message) -> Result<Vec<u8>, ProtocolError> {
                     .unwrap_or(Value::Null),
             );
         }
-        v1::message::Body::Failure(f) => {
+        crate::message::Body::Failure(f) => {
             out.insert(
                 "id".into(),
                 f.request_id
@@ -261,27 +260,27 @@ pub fn encode_wire(message: &v1::Message) -> Result<Vec<u8>, ProtocolError> {
             );
             out.insert("error".into(), error_to_json(f.error.as_ref())?);
         }
-        v1::message::Body::Notification(n) => {
+        crate::message::Body::Notification(n) => {
             out.insert("method".into(), Value::String(n.method.clone()));
             out.insert("params".into(), call_params_to_json(n.params.as_ref())?);
         }
     }
     serde_json::to_vec(&Value::Object(out)).map_err(|e| {
         ProtocolError::new(
-            v1::ErrorCode::Internal as i32,
+            crate::ErrorCode::Internal as i32,
             None,
             format!("encode error: {e}"),
         )
     })
 }
 
-pub fn validate_message(message: &v1::Message) -> Result<(), ProtocolError> {
+pub fn validate_message(message: &crate::Message) -> Result<(), ProtocolError> {
     let body = message
         .body
         .as_ref()
         .ok_or_else(|| ProtocolError::bad_request(None, "message has no body"))?;
     match body {
-        v1::message::Body::Request(r) => {
+        crate::message::Body::Request(r) => {
             if !is_ulid(&r.request_id) {
                 return Err(ProtocolError::bad_request(None, "requestId must be a ULID"));
             }
@@ -296,12 +295,12 @@ pub fn validate_message(message: &v1::Message) -> Result<(), ProtocolError> {
             })?;
             validate_params(params, Some(r.request_id.clone()))?;
         }
-        v1::message::Body::Success(s) => {
+        crate::message::Body::Success(s) => {
             if !is_ulid(&s.request_id) {
                 return Err(ProtocolError::bad_request(None, "requestId must be a ULID"));
             }
         }
-        v1::message::Body::Failure(f) => {
+        crate::message::Body::Failure(f) => {
             if let Some(id) = &f.request_id {
                 if !is_ulid(id) {
                     return Err(ProtocolError::bad_request(None, "requestId must be a ULID"));
@@ -310,7 +309,7 @@ pub fn validate_message(message: &v1::Message) -> Result<(), ProtocolError> {
             let error = f.error.as_ref().ok_or_else(|| {
                 ProtocolError::bad_request(f.request_id.clone(), "failure requires error")
             })?;
-            if error.code == v1::ErrorCode::Unspecified as i32 {
+            if error.code == crate::ErrorCode::Unspecified as i32 {
                 return Err(ProtocolError::bad_request(
                     f.request_id.clone(),
                     "error code must be specified",
@@ -330,7 +329,7 @@ pub fn validate_message(message: &v1::Message) -> Result<(), ProtocolError> {
                 ));
             }
         }
-        v1::message::Body::Notification(n) => {
+        crate::message::Body::Notification(n) => {
             if n.method.is_empty() {
                 return Err(ProtocolError::bad_request(None, "method must not be empty"));
             }
@@ -345,16 +344,16 @@ pub fn validate_message(message: &v1::Message) -> Result<(), ProtocolError> {
 }
 
 fn validate_params(
-    params: &v1::CallParams,
+    params: &crate::CallParams,
     request_id: Option<String>,
 ) -> Result<(), ProtocolError> {
     let context = params
         .context
         .as_ref()
         .ok_or_else(|| ProtocolError::bad_request(request_id.clone(), "params requires context"))?;
-    if context.plane != v1::Plane::Broker as i32 {
+    if context.plane != crate::Plane::Broker as i32 {
         return Err(ProtocolError::new(
-            v1::ErrorCode::PlaneMismatch as i32,
+            crate::ErrorCode::PlaneMismatch as i32,
             request_id,
             "P0 only supports the broker plane",
         ));
@@ -391,14 +390,14 @@ struct RawContext {
 fn parse_call_params(
     value: &Value,
     request_id: Option<String>,
-) -> Result<v1::CallParams, ProtocolError> {
+) -> Result<crate::CallParams, ProtocolError> {
     let raw: RawCallParams = serde_json::from_value(value.clone()).map_err(|e| {
         ProtocolError::bad_request(request_id.clone(), format!("invalid params: {e}"))
     })?;
     let plane = match raw.context.plane.as_str() {
-        "broker" => v1::Plane::Broker as i32,
-        "relay" => v1::Plane::Relay as i32,
-        "unspecified" => v1::Plane::Unspecified as i32,
+        "broker" => crate::Plane::Broker as i32,
+        "relay" => crate::Plane::Relay as i32,
+        "unspecified" => crate::Plane::Unspecified as i32,
         other => {
             return Err(ProtocolError::bad_request(
                 request_id,
@@ -412,8 +411,8 @@ fn parse_call_params(
         })?),
         None => None,
     };
-    Ok(v1::CallParams {
-        context: Some(v1::RequestContext {
+    Ok(crate::CallParams {
+        context: Some(crate::RequestContext {
             provider_endpoint_id: raw.context.provider_endpoint_id,
             plane,
             binding_id: raw.context.binding_id,
@@ -447,7 +446,7 @@ struct RawErrorData {
     details: Option<Value>,
 }
 
-fn parse_error(value: &Value, request_id: Option<String>) -> Result<v1::Error, ProtocolError> {
+fn parse_error(value: &Value, request_id: Option<String>) -> Result<crate::Error, ProtocolError> {
     let raw: RawError = serde_json::from_value(value.clone()).map_err(|e| {
         ProtocolError::bad_request(request_id.clone(), format!("invalid error object: {e}"))
     })?;
@@ -475,7 +474,7 @@ fn parse_error(value: &Value, request_id: Option<String>) -> Result<v1::Error, P
         })?),
         None => None,
     };
-    Ok(v1::Error {
+    Ok(crate::Error {
         code,
         message: raw.message,
         diagnostic_id: data.diagnostic_id.unwrap_or_default(),
@@ -485,7 +484,7 @@ fn parse_error(value: &Value, request_id: Option<String>) -> Result<v1::Error, P
     })
 }
 
-fn call_params_to_json(params: Option<&v1::CallParams>) -> Result<Value, ProtocolError> {
+fn call_params_to_json(params: Option<&crate::CallParams>) -> Result<Value, ProtocolError> {
     let params = params.ok_or_else(|| ProtocolError::bad_request(None, "params is required"))?;
     let context = params
         .context
@@ -515,7 +514,7 @@ fn call_params_to_json(params: Option<&v1::CallParams>) -> Result<Value, Protoco
     Ok(Value::Object(out))
 }
 
-fn error_to_json(error: Option<&v1::Error>) -> Result<Value, ProtocolError> {
+fn error_to_json(error: Option<&crate::Error>) -> Result<Value, ProtocolError> {
     let error = error.ok_or_else(|| ProtocolError::bad_request(None, "error is required"))?;
     let mut data = Map::new();
     data.insert(
@@ -547,7 +546,7 @@ fn error_to_json(error: Option<&v1::Error>) -> Result<Value, ProtocolError> {
 fn value_to_json(value: &pbjson_types::Value) -> Result<Value, ProtocolError> {
     serde_json::to_value(value).map_err(|e| {
         ProtocolError::new(
-            v1::ErrorCode::Internal as i32,
+            crate::ErrorCode::Internal as i32,
             None,
             format!("value encode error: {e}"),
         )
@@ -555,10 +554,10 @@ fn value_to_json(value: &pbjson_types::Value) -> Result<Value, ProtocolError> {
 }
 
 fn plane_name(plane: i32) -> &'static str {
-    match v1::Plane::try_from(plane) {
-        Ok(v1::Plane::Broker) => "broker",
-        Ok(v1::Plane::Relay) => "relay",
-        Ok(v1::Plane::Unspecified) => "unspecified",
+    match crate::Plane::try_from(plane) {
+        Ok(crate::Plane::Broker) => "broker",
+        Ok(crate::Plane::Relay) => "relay",
+        Ok(crate::Plane::Unspecified) => "unspecified",
         Err(_) => "unspecified",
     }
 }
@@ -567,7 +566,7 @@ fn plane_name(plane: i32) -> &'static str {
 /// exhaustive over Ok variants, so adding an enum value without updating this
 /// function fails to compile.
 pub fn error_code_name(code: i32) -> &'static str {
-    use v1::ErrorCode as E;
+    use crate::ErrorCode as E;
     match E::try_from(code) {
         Ok(E::Unspecified) => "unspecified",
         Ok(E::ParseError) => "parse_error",

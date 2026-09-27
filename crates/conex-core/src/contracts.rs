@@ -34,11 +34,11 @@ pub const OPERATION_CANCEL: &str = "operation/cancel";
 const ADAPTER_ID: &str = "conex-broker"; // every P1 method is owned by the broker adapter.
 
 fn bad(message: impl Into<String>) -> CallError {
-    CallError::new(conex_proto::v1::ErrorCode::BadRequest, message)
+    CallError::new(conex_proto::ErrorCode::BadRequest, message)
 }
 
 fn unsupported(message: impl Into<String>) -> CallError {
-    CallError::new(conex_proto::v1::ErrorCode::UnsupportedCapability, message)
+    CallError::new(conex_proto::ErrorCode::UnsupportedCapability, message)
 }
 
 fn object(input: &Value) -> CallResult<&Map<String, Value>> {
@@ -106,14 +106,14 @@ fn content_address(value: &Value) -> CallResult<String> {
     Err(bad("contentAddress must carry rawCid or manifestCid"))
 }
 
-fn blob_access(value: &Value) -> CallResult<conex_proto::v1::BlobAccess> {
+fn blob_access(value: &Value) -> CallResult<conex_proto::BlobAccess> {
     let map = object(value)?;
     known_keys(map, &["providerId", "plane", "spaceId", "resourceId"])?;
     let provider_id = required_string(map, "providerId")?.to_string();
     let plane = required_string(map, "plane")?.to_string();
     let space_id = optional_string(map, "spaceId")?.map(str::to_string);
     let resource_id = required_string(map, "resourceId")?.to_string();
-    Ok(conex_proto::v1::BlobAccess {
+    Ok(conex_proto::BlobAccess {
         provider_id,
         plane,
         space_id,
@@ -141,7 +141,7 @@ fn not_negative_u32(map: &Map<String, Value>, key: &str) -> CallResult<u32> {
         .map_err(|_| bad(format!("{key} is not a valid u32")))
 }
 
-fn dedup_key(value: &Value) -> CallResult<conex_proto::v1::DedupKey> {
+fn dedup_key(value: &Value) -> CallResult<conex_proto::DedupKey> {
     let map = object(value)?;
     known_keys(
         map,
@@ -168,7 +168,7 @@ fn dedup_key(value: &Value) -> CallResult<conex_proto::v1::DedupKey> {
     if method.is_empty() {
         return Err(bad("method must not be empty"));
     }
-    Ok(conex_proto::v1::DedupKey {
+    Ok(conex_proto::DedupKey {
         tenant_id,
         principal_id,
         provider_endpoint_id,
@@ -179,7 +179,7 @@ fn dedup_key(value: &Value) -> CallResult<conex_proto::v1::DedupKey> {
     })
 }
 
-fn stream_cursors(value: &Value) -> CallResult<Vec<conex_proto::v1::StreamCursor>> {
+fn stream_cursors(value: &Value) -> CallResult<Vec<conex_proto::StreamCursor>> {
     let array = value
         .as_array()
         .ok_or_else(|| bad("streams must be an array"))?;
@@ -190,7 +190,7 @@ fn stream_cursors(value: &Value) -> CallResult<Vec<conex_proto::v1::StreamCursor
         let stream_id = required_string(map, "streamId")?.to_string();
         let last_received_seq = required_u64(map, "lastReceivedSeq")?;
         let consumed_bytes = required_u64(map, "consumedBytes")?;
-        cursors.push(conex_proto::v1::StreamCursor {
+        cursors.push(conex_proto::StreamCursor {
             stream_id,
             last_received_seq,
             consumed_bytes,
@@ -199,7 +199,7 @@ fn stream_cursors(value: &Value) -> CallResult<Vec<conex_proto::v1::StreamCursor
     Ok(cursors)
 }
 
-fn session_binding(value: &Value) -> CallResult<conex_proto::v1::SessionBinding> {
+fn session_binding(value: &Value) -> CallResult<conex_proto::SessionBinding> {
     let map = object(value)?;
     known_keys(
         map,
@@ -224,7 +224,7 @@ fn session_binding(value: &Value) -> CallResult<conex_proto::v1::SessionBinding>
     if principal_id.is_empty() || tenant_id.is_empty() || provider_endpoint_id.is_empty() {
         return Err(bad("binding fields must not be empty"));
     }
-    Ok(conex_proto::v1::SessionBinding {
+    Ok(conex_proto::SessionBinding {
         principal_id,
         tenant_id,
         provider_endpoint_id,
@@ -234,7 +234,7 @@ fn session_binding(value: &Value) -> CallResult<conex_proto::v1::SessionBinding>
     })
 }
 
-fn stream_cursors_to_value(cursors: &[conex_proto::v1::StreamCursor]) -> Value {
+fn stream_cursors_to_value(cursors: &[conex_proto::StreamCursor]) -> Value {
     Value::Array(
         cursors
             .iter()
@@ -935,8 +935,8 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
             BLOB_PUT,
             MethodContract {
                 adapter_id: ADAPTER_ID,
-                input_schema: "conex.v1.BlobPutRequest",
-                output_schema: "conex.v1.BlobPutResponse",
+                input_schema: "conex.BlobPutRequest",
+                output_schema: "conex.BlobPutResponse",
                 prepare: prepare_blob_put,
                 validate_output: validate_blob_put_output,
             },
@@ -945,8 +945,8 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
             BLOB_CHUNK,
             MethodContract {
                 adapter_id: ADAPTER_ID,
-                input_schema: "conex.v1.BlobChunkRequest",
-                output_schema: "conex.v1.BlobChunkResponse",
+                input_schema: "conex.BlobChunkRequest",
+                output_schema: "conex.BlobChunkResponse",
                 prepare: prepare_blob_chunk,
                 validate_output: validate_blob_chunk_output,
             },
@@ -955,8 +955,8 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
             BLOB_COMMIT,
             MethodContract {
                 adapter_id: ADAPTER_ID,
-                input_schema: "conex.v1.BlobCommitRequest",
-                output_schema: "conex.v1.BlobCommitResponse",
+                input_schema: "conex.BlobCommitRequest",
+                output_schema: "conex.BlobCommitResponse",
                 prepare: prepare_blob_commit,
                 validate_output: validate_blob_commit_output,
             },
@@ -965,8 +965,8 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
             BLOB_PIN,
             MethodContract {
                 adapter_id: ADAPTER_ID,
-                input_schema: "conex.v1.BlobPinRequest",
-                output_schema: "conex.v1.BlobPinResponse",
+                input_schema: "conex.BlobPinRequest",
+                output_schema: "conex.BlobPinResponse",
                 prepare: prepare_blob_pin,
                 validate_output: validate_blob_pin_output,
             },
@@ -975,8 +975,8 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
             BLOB_UNPIN,
             MethodContract {
                 adapter_id: ADAPTER_ID,
-                input_schema: "conex.v1.BlobUnpinRequest",
-                output_schema: "conex.v1.BlobUnpinResponse",
+                input_schema: "conex.BlobUnpinRequest",
+                output_schema: "conex.BlobUnpinResponse",
                 prepare: prepare_blob_unpin,
                 validate_output: pass,
             },
@@ -985,8 +985,8 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
             BLOB_HAVE,
             MethodContract {
                 adapter_id: ADAPTER_ID,
-                input_schema: "conex.v1.BlobHaveRequest",
-                output_schema: "conex.v1.BlobHaveResponse",
+                input_schema: "conex.BlobHaveRequest",
+                output_schema: "conex.BlobHaveResponse",
                 prepare: prepare_blob_have,
                 validate_output: validate_blob_have_output,
             },
@@ -995,8 +995,8 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
             BLOB_GET,
             MethodContract {
                 adapter_id: ADAPTER_ID,
-                input_schema: "conex.v1.BlobGetRequest",
-                output_schema: "conex.v1.BlobGetResponse",
+                input_schema: "conex.BlobGetRequest",
+                output_schema: "conex.BlobGetResponse",
                 prepare: prepare_blob_get,
                 validate_output: validate_blob_get_output,
             },
@@ -1005,8 +1005,8 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
             BLOB_CANCEL,
             MethodContract {
                 adapter_id: ADAPTER_ID,
-                input_schema: "conex.v1.BlobCancelRequest",
-                output_schema: "conex.v1.BlobCancelResponse",
+                input_schema: "conex.BlobCancelRequest",
+                output_schema: "conex.BlobCancelResponse",
                 prepare: prepare_blob_cancel,
                 validate_output: pass,
             },
@@ -1015,8 +1015,8 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
             SESSION_OPEN,
             MethodContract {
                 adapter_id: ADAPTER_ID,
-                input_schema: "conex.v1.SessionOpenRequest",
-                output_schema: "conex.v1.SessionOpenResponse",
+                input_schema: "conex.SessionOpenRequest",
+                output_schema: "conex.SessionOpenResponse",
                 prepare: prepare_session_open,
                 validate_output: validate_session_open_output,
             },
@@ -1025,8 +1025,8 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
             SESSION_RESUME,
             MethodContract {
                 adapter_id: ADAPTER_ID,
-                input_schema: "conex.v1.SessionResumeRequest",
-                output_schema: "conex.v1.SessionResumeResponse",
+                input_schema: "conex.SessionResumeRequest",
+                output_schema: "conex.SessionResumeResponse",
                 prepare: prepare_session_resume,
                 validate_output: validate_session_resume_output,
             },
@@ -1035,8 +1035,8 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
             SESSION_RENEW,
             MethodContract {
                 adapter_id: ADAPTER_ID,
-                input_schema: "conex.v1.SessionRenewRequest",
-                output_schema: "conex.v1.SessionRenewResponse",
+                input_schema: "conex.SessionRenewRequest",
+                output_schema: "conex.SessionRenewResponse",
                 prepare: prepare_session_renew,
                 validate_output: validate_session_renew_output,
             },
@@ -1045,8 +1045,8 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
             SESSION_CLOSE,
             MethodContract {
                 adapter_id: ADAPTER_ID,
-                input_schema: "conex.v1.SessionCloseRequest",
-                output_schema: "conex.v1.SessionCloseResponse",
+                input_schema: "conex.SessionCloseRequest",
+                output_schema: "conex.SessionCloseResponse",
                 prepare: prepare_session_close,
                 validate_output: validate_session_close_output,
             },
@@ -1055,8 +1055,8 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
             OPERATION_GET,
             MethodContract {
                 adapter_id: ADAPTER_ID,
-                input_schema: "conex.v1.OperationGetRequest",
-                output_schema: "conex.v1.OperationGetResponse",
+                input_schema: "conex.OperationGetRequest",
+                output_schema: "conex.OperationGetResponse",
                 prepare: prepare_operation_get,
                 validate_output: validate_operation_get_output,
             },
@@ -1065,8 +1065,8 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
             OPERATION_CANCEL,
             MethodContract {
                 adapter_id: ADAPTER_ID,
-                input_schema: "conex.v1.OperationCancelRequest",
-                output_schema: "conex.v1.OperationCancelResponse",
+                input_schema: "conex.OperationCancelRequest",
+                output_schema: "conex.OperationCancelResponse",
                 prepare: prepare_operation_cancel,
                 validate_output: validate_operation_cancel_output,
             },

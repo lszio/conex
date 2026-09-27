@@ -8,7 +8,7 @@ use axum::extract::ws::Message;
 use conex_core::{
     CallContext, CallError, CallResult, ExecutionIo, Handler, Installation, Route,
 };
-use conex_proto::v1;
+use conex_proto;
 use conex_proto::wire::encode_wire;
 use serde_json::Value;
 use tokio::sync::Mutex;
@@ -95,14 +95,14 @@ impl RemoteLink {
             NEXT_REQUEST.fetch_add(1, Ordering::Relaxed)
         );
         let receiver = self.pending.register(&request_id).await?;
-        let message = v1::Message {
-            body: Some(v1::message::Body::Request(v1::Request {
+        let message = conex_proto::Message {
+            body: Some(conex_proto::message::Body::Request(conex_proto::Request {
                 request_id: request_id.clone(),
                 method: method.to_owned(),
-                params: Some(v1::CallParams {
-                    context: Some(v1::RequestContext {
+                params: Some(conex_proto::CallParams {
+                    context: Some(conex_proto::RequestContext {
                         provider_endpoint_id: endpoint_id.to_owned(),
-                        plane: v1::Plane::Broker as i32,
+                        plane: conex_proto::Plane::Broker as i32,
                         binding_id: None,
                     }),
                     timeout_budget_ms: deadline
@@ -120,11 +120,11 @@ impl RemoteLink {
             Ok(bytes) => bytes,
             Err(error) => {
                 self.pending.cancel(self.generation, &request_id).await;
-                return Err(CallError::new(v1::ErrorCode::Internal, error.message));
+                return Err(CallError::new(conex_proto::ErrorCode::Internal, error.message));
             }
         };
         let text = String::from_utf8(bytes).map_err(|error| {
-            CallError::new(v1::ErrorCode::Internal, format!("remote envelope is not UTF-8: {error}"))
+            CallError::new(conex_proto::ErrorCode::Internal, format!("remote envelope is not UTF-8: {error}"))
         })?;
         if !enqueue_message(
             &self.tx,
@@ -133,7 +133,7 @@ impl RemoteLink {
             Message::Text(text.into()),
         ) {
             self.pending.cancel(self.generation, &request_id).await;
-            return Err(CallError::new(v1::ErrorCode::QuotaExceeded, "remote link queue is full"));
+            return Err(CallError::new(conex_proto::ErrorCode::QuotaExceeded, "remote link queue is full"));
         }
         match tokio::time::timeout_at(deadline, receiver).await {
             Ok(Ok(result)) => result,
@@ -234,10 +234,10 @@ impl Handler for RemoteHandler {
         io: ExecutionIo,
     ) -> CallResult<Value> {
         if io.connection.is_some() || io.secret.is_some() {
-            return Err(CallError::new(v1::ErrorCode::Internal, "remote source received unexpected outbound HTTP state"));
+            return Err(CallError::new(conex_proto::ErrorCode::Internal, "remote source received unexpected outbound HTTP state"));
         }
         if !conex_source::within(&self.root, &ctx.claim.resource_id) {
-            return Err(CallError::new(v1::ErrorCode::Forbidden, "resource is outside remote endpoint root"));
+            return Err(CallError::new(conex_proto::ErrorCode::Forbidden, "resource is outside remote endpoint root"));
         }
         self.connections
             .request(
@@ -285,13 +285,13 @@ pub fn routes(
 }
 
 fn bad(message: impl Into<String>) -> CallError {
-    CallError::new(v1::ErrorCode::BadRequest, message)
+    CallError::new(conex_proto::ErrorCode::BadRequest, message)
 }
 
 fn unavailable(message: impl Into<String>) -> CallError {
-    CallError::new(v1::ErrorCode::Unavailable, message)
+    CallError::new(conex_proto::ErrorCode::Unavailable, message)
 }
 
 fn timeout() -> CallError {
-    CallError::new(v1::ErrorCode::Timeout, "remote agent exceeded the deadline")
+    CallError::new(conex_proto::ErrorCode::Timeout, "remote agent exceeded the deadline")
 }

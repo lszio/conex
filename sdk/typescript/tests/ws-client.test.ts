@@ -44,7 +44,7 @@ class FakeWebSocket implements WebSocketLike {
 function helloResult() {
   return {
     negotiationId: "neg-1",
-    profileId: "conex-jsonrpc2-wss-v1",
+    profileId: "conex-jsonrpc2-wss",
     plane: "broker",
     provides: ["endpoint/list", "source/list", "source/read", "source/search"],
     requires: [],
@@ -101,7 +101,7 @@ test("connect performs ticket handshake and routes endpoint/source requests", as
   expect(new Headers(calls[0].init?.headers).get("x-csrf-token")).toBe("csrf-1");
   expect(client.negotiation).toMatchObject({
     negotiationId: "neg-1",
-    profileId: "conex-jsonrpc2-wss-v1",
+    profileId: "conex-jsonrpc2-wss",
     plane: "broker",
     provides: ["endpoint/list", "source/list", "source/read", "source/search"],
     linkIdentity: { linkId: "link-1", peerId: "host", tenantId: "tenant-a" },

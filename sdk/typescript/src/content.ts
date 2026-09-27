@@ -9,7 +9,7 @@ import { CID } from "multiformats/cid";
 import { sha256 } from "multiformats/hashes/sha2";
 import * as raw from "multiformats/codecs/raw";
 
-import { ChunkEntry, ChunkManifest, ManifestEntries } from "./generated/conex/v1/chunking";
+import { ChunkEntry, ChunkManifest, ManifestEntries } from "./generated/conex/chunking";
 
 /** Content format version for P1 manifests (`ChunkManifest.format_version`). */
 export const MANIFEST_FORMAT_VERSION = 1;

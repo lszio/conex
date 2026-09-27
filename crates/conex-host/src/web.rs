@@ -87,7 +87,7 @@ fn asset_response(bytes: &[u8], content_type: &'static str, html: bool) -> Respo
 }
 
 fn invalid(message: impl std::fmt::Display) -> CallError {
-    CallError::new(conex_proto::v1::ErrorCode::Internal, message.to_string())
+    CallError::new(conex_proto::ErrorCode::Internal, message.to_string())
 }
 
 #[cfg(test)]

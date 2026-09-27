@@ -6,7 +6,7 @@ use conex_core::operation::{
     DEFAULT_TTL_HOURS, DedupKey, ExecutionClass, ExecutionState, OperationError, OperationState,
     OperationStore, RetryPolicy, read_record_file,
 };
-use conex_proto::v1;
+use conex_proto;
 use tempfile::TempDir;
 
 fn tmp_store(tmp: &TempDir) -> OperationStore {
@@ -278,8 +278,8 @@ fn failure_settled_preserves_error_code() {
         )
         .unwrap();
     store.mark_running(&k).unwrap();
-    let err = v1::Error {
-        code: v1::ErrorCode::Forbidden as i32,
+    let err = conex_proto::Error {
+        code: conex_proto::ErrorCode::Forbidden as i32,
         message: "denied".into(),
         diagnostic_id: "d".into(),
         execution: "not_started".into(),
@@ -293,7 +293,7 @@ fn failure_settled_preserves_error_code() {
     assert_eq!(result.success, None);
     assert_eq!(
         result.failure.unwrap().code,
-        v1::ErrorCode::Forbidden as i32
+        conex_proto::ErrorCode::Forbidden as i32
     );
 }
 
@@ -332,8 +332,8 @@ fn settled_failure_writes_result_file() {
         )
         .unwrap();
     store.mark_running(&k).unwrap();
-    let err = v1::Error {
-        code: v1::ErrorCode::Conflict as i32,
+    let err = conex_proto::Error {
+        code: conex_proto::ErrorCode::Conflict as i32,
         message: "duplicate".into(),
         diagnostic_id: "d2".into(),
         execution: "completed".into(),

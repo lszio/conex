@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use conex_core::{Connector, OutboundRequest};
-use conex_proto::v1;
+use conex_proto;
 use conex_transport_http::{HttpConnector, TlsTrustConfig};
 use tokio::time::Instant;
 
@@ -35,7 +35,7 @@ async fn oversized_response_is_rejected() {
         .request(request("/"), Instant::now() + Duration::from_secs(2))
         .await
         .unwrap_err();
-    assert_eq!(error.code_enum(), Some(v1::ErrorCode::PayloadTooLarge));
+    assert_eq!(error.code_enum(), Some(conex_proto::ErrorCode::PayloadTooLarge));
 }
 
 #[tokio::test]
@@ -73,5 +73,5 @@ async fn path_outside_fixed_path_is_rejected() {
         .request(request("/other"), Instant::now() + Duration::from_secs(2))
         .await
         .unwrap_err();
-    assert_eq!(error.code_enum(), Some(v1::ErrorCode::Forbidden));
+    assert_eq!(error.code_enum(), Some(conex_proto::ErrorCode::Forbidden));
 }

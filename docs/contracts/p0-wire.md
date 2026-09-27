@@ -1,7 +1,7 @@
-# P0 wire 契约（conex-jsonrpc2-http-v1）
+# P0 wire 契约（conex-jsonrpc2-http）
 
 状态：P0 冻结草案，对应设计 v6 §5.2 与 P0 计划 Task 02。
-类型源：`schema/conex/v1/*.proto`；派生产物见 `schema/generated/`。
+类型源：`schema/conex/*.proto`；派生产物见 `schema/generated/`。
 权威严格解码点是 `MethodContract.prepare`/`validate_output`；JSON Schema 只作文档与 TS 边界输入。
 
 ## 1. 信封

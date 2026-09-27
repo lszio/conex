@@ -22,7 +22,7 @@ function helloResult(bindingId = "binding-a") {
   return {
     bindingId,
     expiresInMs: 60000,
-    profileId: "conex-jsonrpc2-http-v1",
+    profileId: "conex-jsonrpc2-http",
     plane: "broker",
     provides: ["source/list", "source/read", "source/search"],
     rejectedCapabilities: [],

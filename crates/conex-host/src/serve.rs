@@ -15,7 +15,7 @@ use conex_core::{
     Limits, Policy, PolicyRule, Registry, RegistryError, StaticPolicy, Target, TargetPolicy,
     TlsTrust,
 };
-use conex_proto::v1;
+use conex_proto;
 use conex_transport_http::{HttpConnector, TlsTrustConfig, TokioResolver};
 use serde_json::{Value, json};
 
@@ -490,7 +490,7 @@ fn build_installation(
                 id: endpoint.id.clone(),
                 provider_id: endpoint.provider_id.clone(),
                 tenant_id: endpoint.tenant_id.clone(),
-                plane: v1::Plane::Broker,
+                plane: conex_proto::Plane::Broker,
                 provides: endpoint.provides.clone(),
                 limits: Limits::default(),
             },
@@ -532,9 +532,9 @@ fn host_of(origin: &str) -> String {
 }
 
 fn registry_error(error: RegistryError) -> CallError {
-    CallError::new(v1::ErrorCode::Internal, error.to_string())
+    CallError::new(conex_proto::ErrorCode::Internal, error.to_string())
 }
 
 fn invalid(message: impl std::fmt::Display) -> CallError {
-    CallError::new(v1::ErrorCode::Internal, message.to_string())
+    CallError::new(conex_proto::ErrorCode::Internal, message.to_string())
 }

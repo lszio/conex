@@ -15,7 +15,7 @@ use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 
 use conex_core::CallError;
-use conex_proto::v1;
+use conex_proto;
 
 use crate::broker::{Broker, BrokerCall};
 use crate::remote::{RemoteConnections, RemoteLink};
@@ -233,10 +233,10 @@ pub enum AgentError {
 impl AgentError {
     fn into_call(self) -> CallError {
         let code = match self {
-            AgentError::Unknown => v1::ErrorCode::UnknownProvider,
-            AgentError::NotAuthorized => v1::ErrorCode::Forbidden,
-            AgentError::StaleGeneration => v1::ErrorCode::Conflict,
-            _ => v1::ErrorCode::BadRequest,
+            AgentError::Unknown => conex_proto::ErrorCode::UnknownProvider,
+            AgentError::NotAuthorized => conex_proto::ErrorCode::Forbidden,
+            AgentError::StaleGeneration => conex_proto::ErrorCode::Conflict,
+            _ => conex_proto::ErrorCode::BadRequest,
         };
         CallError::new(code, self.to_string())
     }
@@ -280,19 +280,19 @@ impl TicketRegistry {
     ) -> Result<WebTicket, CallError> {
         if origin.is_empty() || !(origin.starts_with("http://") || origin.starts_with("https://")) {
             return Err(CallError::new(
-                v1::ErrorCode::BadRequest,
+                conex_proto::ErrorCode::BadRequest,
                 "origin must be a non-empty http(s) URL",
             ));
         }
         if !is_safe_component(principal_id) || !is_safe_component(tenant_id) {
             return Err(CallError::new(
-                v1::ErrorCode::BadRequest,
+                conex_proto::ErrorCode::BadRequest,
                 "principal/tenant must be alphanumeric/-/_",
             ));
         }
         if !["ui", "agent"].contains(&peer_role) {
             return Err(CallError::new(
-                v1::ErrorCode::BadRequest,
+                conex_proto::ErrorCode::BadRequest,
                 format!("peer_role {peer_role} not allowed"),
             ));
         }
@@ -315,14 +315,14 @@ impl TicketRegistry {
         guard.retain(|_, entry| entry.expires_at_ms > now);
         if guard.len() >= 4096 {
             return Err(CallError::new(
-                v1::ErrorCode::QuotaExceeded,
+                conex_proto::ErrorCode::QuotaExceeded,
                 "ticket registry capacity exceeded",
             ));
         }
         if let Some(session_id) = ticket.session_id.as_deref() {
             if guard.values().filter(|entry| entry.session_id.as_deref() == Some(session_id)).count() >= 8 {
                 return Err(CallError::new(
-                    v1::ErrorCode::QuotaExceeded,
+                    conex_proto::ErrorCode::QuotaExceeded,
                     "session ticket capacity exceeded",
                 ));
             }
@@ -342,13 +342,13 @@ impl TicketRegistry {
         guard.retain(|_, entry| entry.expires_at_ms > now);
         let entry = guard.get(ticket).ok_or_else(|| {
             CallError::new(
-                v1::ErrorCode::Unauthorized,
+                conex_proto::ErrorCode::Unauthorized,
                 "ticket is unknown, expired, or already consumed",
             )
         })?;
         if entry.origin != origin || entry.target_host != target_host {
             return Err(CallError::new(
-                v1::ErrorCode::Unauthorized,
+                conex_proto::ErrorCode::Unauthorized,
                 "ticket origin or target host does not match",
             ));
         }
@@ -358,10 +358,10 @@ impl TicketRegistry {
     pub fn consume(&self, ticket: &str) -> Result<WebTicket, CallError> {
         let mut guard = self.inner.lock().expect("ticket registry poisoned");
         let entry = guard.remove(ticket).ok_or_else(|| {
-            CallError::new(v1::ErrorCode::Unauthorized, "ticket is unknown or already consumed")
+            CallError::new(conex_proto::ErrorCode::Unauthorized, "ticket is unknown or already consumed")
         })?;
         if entry.expires_at_ms <= now_ms() {
-            return Err(CallError::new(v1::ErrorCode::Unauthorized, "ticket has expired"));
+            return Err(CallError::new(conex_proto::ErrorCode::Unauthorized, "ticket has expired"));
         }
         Ok(entry)
     }
@@ -424,19 +424,19 @@ impl OidcRegistry {
     ) -> Result<OidcCode, CallError> {
         if !is_safe_component(principal_id) || !is_safe_component(tenant_id) {
             return Err(CallError::new(
-                v1::ErrorCode::BadRequest,
+                conex_proto::ErrorCode::BadRequest,
                 "principal/tenant must be alphanumeric/-/_",
             ));
         }
         if code_challenge_method != "S256" {
             return Err(CallError::new(
-                v1::ErrorCode::BadRequest,
+                conex_proto::ErrorCode::BadRequest,
                 "code_challenge_method must be S256",
             ));
         }
         if code_challenge.len() < 32 {
             return Err(CallError::new(
-                v1::ErrorCode::BadRequest,
+                conex_proto::ErrorCode::BadRequest,
                 "code_challenge must be at least 32 bytes",
             ));
         }
@@ -476,19 +476,19 @@ impl OidcRegistry {
         let mut guard = self.inner.lock().expect("oidc registry poisoned");
         let entry = guard.remove(code).ok_or_else(|| {
             CallError::new(
-                v1::ErrorCode::Unauthorized,
+                conex_proto::ErrorCode::Unauthorized,
                 "oidc code is unknown or already consumed",
             )
         })?;
         if entry.expires_at_ms < now_ms() {
             return Err(CallError::new(
-                v1::ErrorCode::Unauthorized,
+                conex_proto::ErrorCode::Unauthorized,
                 "oidc code has expired",
             ));
         }
         if entry.origin != origin {
             return Err(CallError::new(
-                v1::ErrorCode::Unauthorized,
+                conex_proto::ErrorCode::Unauthorized,
                 "origin does not match the issued oidc code",
             ));
         }
@@ -496,7 +496,7 @@ impl OidcRegistry {
             .encode(Sha256::digest(code_verifier.as_bytes()));
         if challenge != entry.code_challenge {
             return Err(CallError::new(
-                v1::ErrorCode::Unauthorized,
+                conex_proto::ErrorCode::Unauthorized,
                 "code_verifier does not match the challenge",
             ));
         }
@@ -521,13 +521,13 @@ pub fn is_safe_component(value: &str) -> bool {
 pub fn object(input: &Value) -> Result<&Map<String, Value>, CallError> {
     input
         .as_object()
-        .ok_or_else(|| CallError::new(v1::ErrorCode::BadRequest, "input must be an object"))
+        .ok_or_else(|| CallError::new(conex_proto::ErrorCode::BadRequest, "input must be an object"))
 }
 
 pub fn require_string<'a>(map: &'a Map<String, Value>, key: &str) -> Result<&'a str, CallError> {
     map.get(key)
         .and_then(Value::as_str)
-        .ok_or_else(|| CallError::new(v1::ErrorCode::BadRequest, format!("{key} required")))
+        .ok_or_else(|| CallError::new(conex_proto::ErrorCode::BadRequest, format!("{key} required")))
 }
 
 pub fn optional_string<'a>(
@@ -538,7 +538,7 @@ pub fn optional_string<'a>(
         None => Ok(None),
         Some(Value::String(s)) => Ok(Some(s)),
         Some(_) => Err(CallError::new(
-            v1::ErrorCode::BadRequest,
+            conex_proto::ErrorCode::BadRequest,
             format!("{key} must be a string"),
         )),
     }
@@ -548,12 +548,12 @@ pub fn string_list(map: &Map<String, Value>, key: &str) -> Result<Vec<String>, C
     let arr = map
         .get(key)
         .and_then(Value::as_array)
-        .ok_or_else(|| CallError::new(v1::ErrorCode::BadRequest, format!("{key} required")))?;
+        .ok_or_else(|| CallError::new(conex_proto::ErrorCode::BadRequest, format!("{key} required")))?;
     arr.iter()
         .map(|value| {
             value.as_str().map(str::to_string).ok_or_else(|| {
                 CallError::new(
-                    v1::ErrorCode::BadRequest,
+                    conex_proto::ErrorCode::BadRequest,
                     format!("{key} entries must be strings"),
                 )
             })
@@ -569,7 +569,7 @@ pub async fn handle(broker: &Broker, call: BrokerCall) -> Result<Value, CallErro
         Some(map) => map,
         None => {
             return Err(CallError::new(
-                v1::ErrorCode::BadRequest,
+                conex_proto::ErrorCode::BadRequest,
                 "agent input must be an object",
             ));
         }
@@ -580,13 +580,13 @@ pub async fn handle(broker: &Broker, call: BrokerCall) -> Result<Value, CallErro
             if let Some(expected) = broker.deps().host_origin.as_deref() {
                 if host_origin != expected {
                     return Err(CallError::new(
-                        v1::ErrorCode::Forbidden,
+                        conex_proto::ErrorCode::Forbidden,
                         format!("agent hostOrigin {host_origin} does not match host {expected}"),
                     ));
                 }
             } else if !host_origin.starts_with("conex://") {
                 return Err(CallError::new(
-                    v1::ErrorCode::BadRequest,
+                    conex_proto::ErrorCode::BadRequest,
                     "agent hostOrigin must start with conex://",
                 ));
             }
@@ -622,7 +622,7 @@ pub async fn handle(broker: &Broker, call: BrokerCall) -> Result<Value, CallErro
             Ok(json!({ "agents": names }))
         }
         other => Err(CallError::new(
-            v1::ErrorCode::UnknownMethod,
+            conex_proto::ErrorCode::UnknownMethod,
             format!("unknown agent method {other}"),
         )),
     }

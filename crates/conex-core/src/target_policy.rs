@@ -1,7 +1,7 @@
 //! Outbound address admission. No DNS here; the caller supplies resolved IPs.
 use std::net::IpAddr;
 
-use conex_proto::v1;
+use conex_proto;
 
 use crate::types::{AllowedTarget, CallError, CallResult, Caller, Target};
 
@@ -79,7 +79,7 @@ pub fn origin_hostname(origin: &str) -> CallResult<String> {
 }
 
 fn forbidden(message: &str) -> CallError {
-    CallError::new(v1::ErrorCode::Forbidden, message)
+    CallError::new(conex_proto::ErrorCode::Forbidden, message)
 }
 
 fn parse_origin(origin: &str) -> CallResult<(String, String, u16)> {

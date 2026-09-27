@@ -1,6 +1,6 @@
 //! Inbound static bearer auth. Tokens are stored as SHA-256 digests only.
 use conex_core::{CallError, CallResult, Caller};
-use conex_proto::v1;
+use conex_proto;
 use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone)]
@@ -85,7 +85,7 @@ impl InboundAuth for StaticBearerAuth {
 }
 
 fn unauthorized(message: &str) -> CallError {
-    CallError::new(v1::ErrorCode::Unauthorized, message)
+    CallError::new(conex_proto::ErrorCode::Unauthorized, message)
 }
 
 fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {

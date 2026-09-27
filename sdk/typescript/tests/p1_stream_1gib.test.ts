@@ -119,14 +119,14 @@ async function bootstrap(client: WsClient): Promise<void> {
     jsonrpc: "2.0",
     id: ULID_A,
     method: "conex/hello",
-    params: { profileId: "conex-jsonrpc2-wss-v1", plane: "broker", provides: [], requires: [] },
+    params: { profileId: "conex-jsonrpc2-wss", plane: "broker", provides: [], requires: [] },
   });
   const negotiationId = stringField(hello.result, "negotiationId");
   const ready = await rpc(client, {
     jsonrpc: "2.0",
     id: ULID_B,
     method: "conex/ready",
-    params: { negotiationId, profileId: "conex-jsonrpc2-wss-v1", plane: "broker" },
+    params: { negotiationId, profileId: "conex-jsonrpc2-wss", plane: "broker" },
   });
   expect(stringField(ready.result, "negotiationId")).toBe(negotiationId);
 }

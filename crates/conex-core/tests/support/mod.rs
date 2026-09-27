@@ -15,7 +15,7 @@ use conex_core::{
     Resolver, ResourceClaim, Route, Secret, StaticPolicy, Target, TargetPolicy, TlsTrust,
     VerifiedPeer,
 };
-use conex_proto::v1;
+use conex_proto;
 use serde_json::{Value, json};
 use tokio::time::Instant;
 
@@ -148,7 +148,7 @@ impl Connector for FakeConnector {
         self.counts.connect.fetch_add(1, Ordering::SeqCst);
         if self.fail {
             return Err(CallError::new(
-                v1::ErrorCode::PeerUntrusted,
+                conex_proto::ErrorCode::PeerUntrusted,
                 "tls verification failed",
             ));
         }
@@ -202,7 +202,7 @@ impl AuditSink for TestAudit {
     fn reserve(&self, _start: &AuditStart) -> CallResult<Box<dyn AuditReservation>> {
         if self.fail {
             return Err(CallError::new(
-                v1::ErrorCode::Unavailable,
+                conex_proto::ErrorCode::Unavailable,
                 "audit sink unavailable",
             ));
         }
@@ -215,11 +215,11 @@ impl AuditSink for TestAudit {
 fn prepare_test_read(value: &Value) -> CallResult<PreparedInput> {
     let map = value
         .as_object()
-        .ok_or_else(|| CallError::new(v1::ErrorCode::BadRequest, "input must be an object"))?;
+        .ok_or_else(|| CallError::new(conex_proto::ErrorCode::BadRequest, "input must be an object"))?;
     for key in map.keys() {
         if key != "resourceId" {
             return Err(CallError::new(
-                v1::ErrorCode::BadRequest,
+                conex_proto::ErrorCode::BadRequest,
                 "unknown input field",
             ));
         }
@@ -249,13 +249,13 @@ fn test_factory(installation: &Installation) -> CallResult<Vec<Route>> {
         .provider
         .get("handlerToken")
         .and_then(Value::as_u64)
-        .ok_or_else(|| CallError::new(v1::ErrorCode::Internal, "missing handler token"))?;
+        .ok_or_else(|| CallError::new(conex_proto::ErrorCode::Internal, "missing handler token"))?;
     let handler = handlers()
         .lock()
         .unwrap()
         .get(&token)
         .cloned()
-        .ok_or_else(|| CallError::new(v1::ErrorCode::Internal, "missing handler"))?;
+        .ok_or_else(|| CallError::new(conex_proto::ErrorCode::Internal, "missing handler"))?;
     Ok(installation
         .endpoint
         .provides
@@ -306,7 +306,7 @@ fn endpoint(id: &str) -> Endpoint {
         id: id.into(),
         provider_id: "source".into(),
         tenant_id: "tenant-a".into(),
-        plane: v1::Plane::Broker,
+        plane: conex_proto::Plane::Broker,
         provides: vec!["test/read".into()],
         limits: Limits::default(),
     }
