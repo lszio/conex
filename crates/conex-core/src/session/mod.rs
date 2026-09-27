@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::types::CallError;
-use conex_proto::v1;
+use conex_proto;
 
 /// Default lease per attachment: 120 s (design §7.1).
 pub const DEFAULT_ATTACHMENT_LEASE_MS: u64 = 120_000;
@@ -38,7 +38,7 @@ pub struct SessionBinding {
     pub principal_id: String,
     pub tenant_id: String,
     pub provider_endpoint_id: String,
-    pub plane: v1::Plane,
+    pub plane: conex_proto::Plane,
     pub workspace_peer_id: Option<String>,
     pub human_peer_id: Option<String>,
 }
@@ -87,7 +87,7 @@ pub enum SessionError {
 
 impl SessionError {
     pub fn code(&self) -> i32 {
-        use v1::ErrorCode as E;
+        use conex_proto::ErrorCode as E;
         match self {
             SessionError::NotFound(_) => E::UnknownProvider as i32,
             SessionError::AttachmentNotFound(_) => E::UnknownProvider as i32,
@@ -101,7 +101,7 @@ impl SessionError {
     }
 
     pub fn to_call_error(&self) -> CallError {
-        use conex_proto::v1::ErrorCode;
+        use conex_proto::ErrorCode;
         match self {
             SessionError::NotFound(_) => {
                 CallError::new(ErrorCode::UnknownProvider, "session not found")

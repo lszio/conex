@@ -1,14 +1,14 @@
 import { ConexError, toConexError } from "./errors";
-import type { Limits } from "./generated/conex/v1/common";
-import type { LinkIdentity } from "./generated/conex/v1/control";
+import type { Limits } from "./generated/conex/common";
+import type { LinkIdentity } from "./generated/conex/control";
 import { mintUlid } from "./client";
 import type {
   ConnectionListResponse,
-} from "./generated/conex/v1/dashboard";
+} from "./generated/conex/dashboard";
 import type {
   EndpointListRequest,
   EndpointListResult,
-} from "./generated/conex/v1/endpoint";
+} from "./generated/conex/endpoint";
 import type {
   SourceListRequest,
   SourceListResponse,
@@ -16,9 +16,9 @@ import type {
   SourceReadResponse,
   SourceSearchRequest,
   SourceSearchResponse,
-} from "./generated/conex/v1/source";
+} from "./generated/conex/source";
 
-const PROFILE_ID = "conex-jsonrpc2-wss-v1";
+const PROFILE_ID = "conex-jsonrpc2-wss";
 const PLANE = "broker";
 const DEFAULT_TIMEOUT_MS = 8000;
 const DEFAULT_TICKET_PATH = "/tickets";

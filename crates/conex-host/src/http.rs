@@ -9,7 +9,7 @@ use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use conex_core::{CallError, Host, Limits};
-use conex_proto::v1;
+use conex_proto;
 use conex_proto::wire::{ProtocolError, decode_wire, encode_wire};
 use serde_json::{Map, Value};
 
@@ -21,7 +21,7 @@ use crate::binding::BindingStore;
 use crate::broker::{Broker, BrokerCall};
 use crate::tickets;
 
-pub const PROFILE_ID: &str = "conex-jsonrpc2-http-v1";
+pub const PROFILE_ID: &str = "conex-jsonrpc2-http";
 pub const MAX_BODY_BYTES: usize = 1_048_576;
 pub const HELLO_METHOD: &str = "conex/hello";
 
@@ -100,14 +100,14 @@ async fn rpc(
         Err(error) => return protocol_error(&error),
     };
     match message.body {
-        Some(v1::message::Body::Notification(notification)) => {
+        Some(conex_proto::message::Body::Notification(notification)) => {
             handle_notification(&state, &inbound, notification).await;
             StatusCode::NO_CONTENT.into_response()
         }
-        Some(v1::message::Body::Request(request)) => {
+        Some(conex_proto::message::Body::Request(request)) => {
             handle_request(&state, &inbound, request).await
         }
-        Some(v1::message::Body::Success(_)) | Some(v1::message::Body::Failure(_)) => {
+        Some(conex_proto::message::Body::Success(_)) | Some(conex_proto::message::Body::Failure(_)) => {
             (StatusCode::BAD_REQUEST, "clients must not send responses").into_response()
         }
         None => (StatusCode::BAD_REQUEST, "empty message").into_response(),
@@ -117,7 +117,7 @@ async fn rpc(
 async fn handle_request(
     state: &Arc<HttpState>,
     inbound: &InboundCaller,
-    request: v1::Request,
+    request: conex_proto::Request,
 ) -> Response {
     let request_id = request.request_id.clone();
     let params = match request.params {
@@ -125,7 +125,7 @@ async fn handle_request(
         None => {
             return failure(
                 &request_id,
-                CallError::new(v1::ErrorCode::BadRequest, "params are required"),
+                CallError::new(conex_proto::ErrorCode::BadRequest, "params are required"),
             );
         }
     };
@@ -134,15 +134,15 @@ async fn handle_request(
         None => {
             return failure(
                 &request_id,
-                CallError::new(v1::ErrorCode::BadRequest, "context is required"),
+                CallError::new(conex_proto::ErrorCode::BadRequest, "context is required"),
             );
         }
     };
-    if context.plane != v1::Plane::Broker as i32 {
+    if context.plane != conex_proto::Plane::Broker as i32 {
         return failure(
             &request_id,
             CallError::new(
-                v1::ErrorCode::PlaneMismatch,
+                conex_proto::ErrorCode::PlaneMismatch,
                 "P0 only supports the broker plane",
             ),
         );
@@ -173,7 +173,7 @@ async fn handle_request(
             return failure(
                 &request_id,
                 CallError::new(
-                    v1::ErrorCode::Unauthorized,
+                    conex_proto::ErrorCode::Unauthorized,
                     "business calls require a bindingId",
                 ),
             );
@@ -187,7 +187,7 @@ async fn handle_request(
         return failure(
             &request_id,
             CallError::new(
-                v1::ErrorCode::Forbidden,
+                conex_proto::ErrorCode::Forbidden,
                 "agent methods are only available on authenticated agent WSS links",
             ),
         );
@@ -197,7 +197,7 @@ async fn handle_request(
             return failure(
                 &request_id,
                 CallError::new(
-                    v1::ErrorCode::Unavailable,
+                    conex_proto::ErrorCode::Unavailable,
                     format!(
                         "{} is not wired into this host (configure content_root/session_root/operation_root)",
                         request.method
@@ -246,7 +246,7 @@ fn is_p1_method(method: &str) -> bool {
 async fn handle_notification(
     state: &Arc<HttpState>,
     inbound: &InboundCaller,
-    notification: v1::Notification,
+    notification: conex_proto::Notification,
 ) {
     let Some(params) = notification.params else {
         return;
@@ -254,7 +254,7 @@ async fn handle_notification(
     let Some(context) = params.context else {
         return;
     };
-    if context.plane != v1::Plane::Broker as i32 {
+    if context.plane != conex_proto::Plane::Broker as i32 {
         return;
     }
     if let Some(binding_id) = &context.binding_id
@@ -283,9 +283,9 @@ async fn handle_notification(
         .await;
 }
 
-fn parse_hello(input: &Value) -> Result<v1::HelloRequest, CallError> {
+fn parse_hello(input: &Value) -> Result<conex_proto::HelloRequest, CallError> {
     let map = input.as_object().ok_or_else(|| {
-        CallError::new(v1::ErrorCode::BadRequest, "hello input must be an object")
+        CallError::new(conex_proto::ErrorCode::BadRequest, "hello input must be an object")
     })?;
     let profile_id = map
         .get("profileId")
@@ -293,11 +293,11 @@ fn parse_hello(input: &Value) -> Result<v1::HelloRequest, CallError> {
         .unwrap_or(PROFILE_ID)
         .to_string();
     let plane = match map.get("plane").and_then(Value::as_str) {
-        None | Some("broker") | Some("PLANE_BROKER") => v1::Plane::Broker as i32,
-        Some("relay") | Some("PLANE_RELAY") => v1::Plane::Relay as i32,
-        Some(_) => return Err(CallError::new(v1::ErrorCode::BadRequest, "unknown plane")),
+        None | Some("broker") | Some("PLANE_BROKER") => conex_proto::Plane::Broker as i32,
+        Some("relay") | Some("PLANE_RELAY") => conex_proto::Plane::Relay as i32,
+        Some(_) => return Err(CallError::new(conex_proto::ErrorCode::BadRequest, "unknown plane")),
     };
-    Ok(v1::HelloRequest {
+    Ok(conex_proto::HelloRequest {
         profile_id,
         plane,
         provides: string_array(map, "provides"),
@@ -327,8 +327,8 @@ fn is_json(headers: &HeaderMap) -> bool {
 }
 
 fn success(request_id: &str, value: Value) -> Response {
-    let message = v1::Message {
-        body: Some(v1::message::Body::Success(v1::Success {
+    let message = conex_proto::Message {
+        body: Some(conex_proto::message::Body::Success(conex_proto::Success {
             request_id: request_id.to_string(),
             result: Some(json_to_pbjson(value)),
         })),
@@ -337,8 +337,8 @@ fn success(request_id: &str, value: Value) -> Response {
 }
 
 fn failure(request_id: &str, error: CallError) -> Response {
-    let message = v1::Message {
-        body: Some(v1::message::Body::Failure(v1::Failure {
+    let message = conex_proto::Message {
+        body: Some(conex_proto::message::Body::Failure(conex_proto::Failure {
             request_id: Some(request_id.to_string()),
             error: Some(error.into_wire()),
         })),
@@ -360,7 +360,7 @@ fn protocol_error(error: &ProtocolError) -> Response {
         .into_response()
 }
 
-fn encode_response(message: &v1::Message) -> Response {
+fn encode_response(message: &conex_proto::Message) -> Response {
     match encode_wire(message) {
         Ok(bytes) => (
             StatusCode::OK,
@@ -381,8 +381,8 @@ pub fn json_to_pbjson(value: Value) -> pbjson_types::Value {
 }
 
 /// Wire limits for the hello response are derived from core limits.
-pub fn wire_limits(limits: Limits) -> v1::Limits {
-    v1::Limits {
+pub fn wire_limits(limits: Limits) -> conex_proto::Limits {
+    conex_proto::Limits {
         max_frame_bytes: limits.max_frame_bytes,
         max_inflight: limits.max_inflight,
         max_queued_bytes: limits.max_queued_bytes,

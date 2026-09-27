@@ -131,7 +131,7 @@ docker compose -f deployment/docker-compose.yml up --build
 
 成功路径必须看到：
 
-- Host 启动：`conex/1 broker listening on <addr>`（仅 stdout，不含任何 token / cookie / ticket 明文）。
+- Host 启动：`conex broker listening on <addr>`（仅 stdout，不含任何 token / cookie / ticket 明文）。
 - Agent 重连：`agent link closed: connect websocket: IO error: Connection refused` 仅出现于启动序列握手前；握手后只能看到 `hello → ready → registered` 之类的 trace（trace 来自 agent runtime）。
 - `cargo xtask landing-demo` 的 `web/dist` 缺失时立即失败（错误指向缺失文件）；不会回退到占位 HTML。
 

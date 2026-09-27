@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use conex_core::policy::is_valid_resource;
 use conex_core::{CallError, CallResult, Caller, Endpoint, Host, Policy, ResourceClaim, StaticPolicy};
-use conex_proto::v1;
+use conex_proto;
 use serde_json::Value;
 
 use crate::agent::HostSide;
@@ -88,7 +88,7 @@ impl EndpointCatalog {
     }
 
     pub async fn list(&self, caller: &Caller, input: Value) -> CallResult<Value> {
-        let request: v1::EndpointListRequest = serde_json::from_value(input)
+        let request: conex_proto::EndpointListRequest = serde_json::from_value(input)
             .map_err(|error| bad(format!("invalid endpoint/list request: {error}")))?;
         let limit = request.limit.unwrap_or(DEFAULT_LIMIT);
         if !(1..=MAX_LIMIT).contains(&limit) {
@@ -128,7 +128,7 @@ impl EndpointCatalog {
         let next_after_endpoint_id = has_more
             .then(|| summaries.last().map(|summary| summary.endpoint_id.clone()))
             .flatten();
-        serde_json::to_value(v1::EndpointListResult {
+        serde_json::to_value(conex_proto::EndpointListResult {
             endpoints: summaries,
             next_after_endpoint_id,
         })
@@ -139,7 +139,7 @@ impl EndpointCatalog {
         &self,
         caller: &Caller,
         entry: &CatalogEntry,
-    ) -> CallResult<Option<v1::EndpointSummary>> {
+    ) -> CallResult<Option<conex_proto::EndpointSummary>> {
         let actions = [
             ("source/list", "list"),
             ("source/read", "read"),
@@ -167,7 +167,7 @@ impl EndpointCatalog {
                 if self.policy.authorize(caller, &entry.endpoint, &claim).is_err() {
                     continue;
                 }
-                let scope = v1::AuthorizedScope {
+                let scope = conex_proto::AuthorizedScope {
                     method: method.to_string(),
                     root: rule.root.clone(),
                     subtree: rule.subtree,
@@ -184,17 +184,17 @@ impl EndpointCatalog {
         if available_methods.is_empty() {
             return Ok(None);
         }
-        let connection_state = if entry.kind == v1::AttachmentKind::ReverseAgent as i32 {
+        let connection_state = if entry.kind == conex_proto::AttachmentKind::ReverseAgent as i32 {
             match (&self.connections, &entry.agent_id) {
                 (Some(connections), Some(agent_id)) if connections.is_ready(agent_id).await => {
-                    v1::ConnectionState::Ready as i32
+                    conex_proto::ConnectionState::Ready as i32
                 }
-                _ => v1::ConnectionState::Offline as i32,
+                _ => conex_proto::ConnectionState::Offline as i32,
             }
         } else {
-            v1::ConnectionState::NotApplicable as i32
+            conex_proto::ConnectionState::NotApplicable as i32
         };
-        Ok(Some(v1::EndpointSummary {
+        Ok(Some(conex_proto::EndpointSummary {
             endpoint_id: entry.endpoint.id.clone(),
             display_name: entry.display_name.clone(),
             provider_id: entry.endpoint.provider_id.clone(),
@@ -210,17 +210,17 @@ impl EndpointCatalog {
 
 fn attachment_kind(kind: &str) -> i32 {
     match kind {
-        "source-fs" => v1::AttachmentKind::Embedded as i32,
-        "source-http-catalog" => v1::AttachmentKind::OutboundHttp as i32,
-        "source-remote" => v1::AttachmentKind::ReverseAgent as i32,
-        _ => v1::AttachmentKind::Unspecified as i32,
+        "source-fs" => conex_proto::AttachmentKind::Embedded as i32,
+        "source-http-catalog" => conex_proto::AttachmentKind::OutboundHttp as i32,
+        "source-remote" => conex_proto::AttachmentKind::ReverseAgent as i32,
+        _ => conex_proto::AttachmentKind::Unspecified as i32,
     }
 }
 
 fn bad(message: impl Into<String>) -> CallError {
-    CallError::new(v1::ErrorCode::BadRequest, message)
+    CallError::new(conex_proto::ErrorCode::BadRequest, message)
 }
 
 fn internal(message: impl Into<String>) -> CallError {
-    CallError::new(v1::ErrorCode::Internal, message)
+    CallError::new(conex_proto::ErrorCode::Internal, message)
 }

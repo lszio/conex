@@ -4,7 +4,7 @@ use bytes::Bytes;
 use conex_core::{
     CallError, CallResult, Connection, OutboundRequest, OutboundResponse, VerifiedPeer,
 };
-use conex_proto::v1;
+use conex_proto;
 use http_body_util::Full;
 use hyper::body::Incoming;
 use tokio::time::{Instant, timeout_at};
@@ -29,13 +29,13 @@ impl Connection for HttpConnection {
     ) -> CallResult<OutboundResponse> {
         if request.path.starts_with("http://") || request.path.starts_with("https://") {
             return Err(CallError::new(
-                v1::ErrorCode::BadRequest,
+                conex_proto::ErrorCode::BadRequest,
                 "absolute request URLs are not allowed",
             ));
         }
         if !request.path.starts_with(&self.fixed_path) {
             return Err(CallError::new(
-                v1::ErrorCode::Forbidden,
+                conex_proto::ErrorCode::Forbidden,
                 "request path is outside the installed fixedPath",
             ));
         }
@@ -50,18 +50,18 @@ impl Connection for HttpConnection {
             .uri(&path)
             .body(Full::new(body))
             .map_err(|error| {
-                CallError::new(v1::ErrorCode::BadRequest, format!("build request: {error}"))
+                CallError::new(conex_proto::ErrorCode::BadRequest, format!("build request: {error}"))
             })?;
         *built.headers_mut() = headers;
 
         let response = timeout_at(deadline, self.sender.send_request(built))
             .await
             .map_err(|_| {
-                CallError::new(v1::ErrorCode::Timeout, "http request exceeded the deadline")
+                CallError::new(conex_proto::ErrorCode::Timeout, "http request exceeded the deadline")
             })?
             .map_err(|error| {
                 CallError::new(
-                    v1::ErrorCode::Unavailable,
+                    conex_proto::ErrorCode::Unavailable,
                     format!("http request failed: {error}"),
                 )
             })?;
@@ -69,7 +69,7 @@ impl Connection for HttpConnection {
         let status = response.status().as_u16();
         if (300..400).contains(&status) {
             return Err(CallError::new(
-                v1::ErrorCode::Unavailable,
+                conex_proto::ErrorCode::Unavailable,
                 "redirects are not followed",
             ));
         }
@@ -81,7 +81,7 @@ impl Connection for HttpConnection {
         .await
         .map_err(|_| {
             CallError::new(
-                v1::ErrorCode::Timeout,
+                conex_proto::ErrorCode::Timeout,
                 "http response body exceeded the deadline",
             )
         })??;
@@ -99,14 +99,14 @@ async fn read_bounded(mut body: Incoming, max: usize) -> CallResult<Bytes> {
     while let Some(frame) = body.frame().await {
         let frame = frame.map_err(|error| {
             CallError::new(
-                v1::ErrorCode::Unavailable,
+                conex_proto::ErrorCode::Unavailable,
                 format!("response body error: {error}"),
             )
         })?;
         if let Some(chunk) = frame.data_ref() {
             if out.len() + chunk.len() > max {
                 return Err(CallError::new(
-                    v1::ErrorCode::PayloadTooLarge,
+                    conex_proto::ErrorCode::PayloadTooLarge,
                     "response body exceeds max_response_bytes",
                 ));
             }

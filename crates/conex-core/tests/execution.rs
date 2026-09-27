@@ -3,7 +3,7 @@ mod support;
 
 use std::time::Duration;
 
-use conex_proto::v1;
+use conex_proto;
 use serde_json::json;
 
 use support::TestRig;
@@ -23,7 +23,7 @@ async fn denied_call_has_no_business_side_effects() {
         .await;
     assert_eq!(
         result.unwrap_err().code_enum(),
-        Some(v1::ErrorCode::Forbidden)
+        Some(conex_proto::ErrorCode::Forbidden)
     );
     let counts = rig.counts();
     assert_eq!((counts.connect, counts.resolve, counts.execute), (0, 0, 0));
@@ -82,7 +82,7 @@ async fn connect_failure_has_no_credential_or_execute() {
         .await;
     assert_eq!(
         result.unwrap_err().code_enum(),
-        Some(v1::ErrorCode::PeerUntrusted)
+        Some(conex_proto::ErrorCode::PeerUntrusted)
     );
     let counts = rig.counts();
     assert_eq!((counts.connect, counts.resolve, counts.execute), (1, 0, 0));
@@ -103,7 +103,7 @@ async fn policy_revoked_during_handshake_blocks_credentials_and_execute() {
         .await;
     assert_eq!(
         result.unwrap_err().code_enum(),
-        Some(v1::ErrorCode::Forbidden)
+        Some(conex_proto::ErrorCode::Forbidden)
     );
     let counts = rig.counts();
     assert_eq!((counts.connect, counts.resolve, counts.execute), (1, 0, 0));
@@ -141,7 +141,7 @@ async fn audit_reserve_failure_rejects_before_execution() {
         .await;
     assert_eq!(
         result.unwrap_err().code_enum(),
-        Some(v1::ErrorCode::Unavailable)
+        Some(conex_proto::ErrorCode::Unavailable)
     );
     assert_eq!(rig.counts().execute, 0);
 }
@@ -161,7 +161,7 @@ async fn prepare_rejects_unknown_business_field() {
         .await;
     assert_eq!(
         result.unwrap_err().code_enum(),
-        Some(v1::ErrorCode::BadRequest)
+        Some(conex_proto::ErrorCode::BadRequest)
     );
     assert_eq!(rig.counts().execute, 0);
 }
@@ -181,7 +181,7 @@ async fn slow_handler_is_bounded_by_deadline() {
         .await;
     assert_eq!(
         result.unwrap_err().code_enum(),
-        Some(v1::ErrorCode::Timeout)
+        Some(conex_proto::ErrorCode::Timeout)
     );
 }
 
@@ -199,7 +199,7 @@ async fn unknown_provider_and_method_are_distinct() {
         )
         .await
         .unwrap_err();
-    assert_eq!(provider.code_enum(), Some(v1::ErrorCode::UnknownProvider));
+    assert_eq!(provider.code_enum(), Some(conex_proto::ErrorCode::UnknownProvider));
     let method = rig
         .host
         .invoke(
@@ -211,5 +211,5 @@ async fn unknown_provider_and_method_are_distinct() {
         )
         .await
         .unwrap_err();
-    assert_eq!(method.code_enum(), Some(v1::ErrorCode::UnknownMethod));
+    assert_eq!(method.code_enum(), Some(conex_proto::ErrorCode::UnknownMethod));
 }

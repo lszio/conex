@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use conex_core::{Caller, Limits};
 use conex_host::{BindingStore, PROFILE_ID};
-use conex_proto::v1;
+use conex_proto;
 
 fn store() -> BindingStore {
     let mut capabilities = HashMap::new();
@@ -22,10 +22,10 @@ fn alice() -> Caller {
     }
 }
 
-fn hello() -> v1::HelloRequest {
-    v1::HelloRequest {
+fn hello() -> conex_proto::HelloRequest {
+    conex_proto::HelloRequest {
         profile_id: PROFILE_ID.into(),
-        plane: v1::Plane::Broker as i32,
+        plane: conex_proto::Plane::Broker as i32,
         provides: vec![],
         requires: vec!["source/read".into()],
     }
@@ -72,7 +72,7 @@ async fn unsupported_requires_is_rejected() {
     request.requires = vec!["source/write".into()];
     assert_eq!(
         store.issue(&alice(), &request).unwrap_err().code_enum(),
-        Some(v1::ErrorCode::UnsupportedCapability)
+        Some(conex_proto::ErrorCode::UnsupportedCapability)
     );
 }
 
@@ -84,6 +84,6 @@ async fn per_principal_binding_cap_is_enforced() {
     }
     assert_eq!(
         store.issue(&alice(), &hello()).unwrap_err().code_enum(),
-        Some(v1::ErrorCode::QuotaExceeded)
+        Some(conex_proto::ErrorCode::QuotaExceeded)
     );
 }

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use conex_core::{CallError, CallResult};
-use conex_proto::v1;
+use conex_proto;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SnapshotKey {
@@ -89,7 +89,7 @@ impl SnapshotCache {
     pub fn create(&mut self, key: SnapshotKey, items: Vec<PageItem>) -> CallResult<String> {
         if items.len() > self.limits.max_items {
             return Err(CallError::new(
-                v1::ErrorCode::QuotaExceeded,
+                conex_proto::ErrorCode::QuotaExceeded,
                 "snapshot exceeds the item budget",
             ));
         }
@@ -104,7 +104,7 @@ impl SnapshotCache {
             .count();
         if open >= self.limits.max_snapshots_per_principal {
             return Err(CallError::new(
-                v1::ErrorCode::QuotaExceeded,
+                conex_proto::ErrorCode::QuotaExceeded,
                 "too many open pagination snapshots",
             ));
         }
@@ -182,5 +182,5 @@ impl SnapshotCache {
 }
 
 fn bad_request(message: &str) -> CallError {
-    CallError::new(v1::ErrorCode::BadRequest, message)
+    CallError::new(conex_proto::ErrorCode::BadRequest, message)
 }

@@ -1,4 +1,4 @@
-//! Typed HTTP consumer for conex/1. Business params go in context/input; the
+//! Typed HTTP consumer for conex. Business params go in context/input; the
 //! bearer token only ever appears in the Authorization header.
 import { ConexError, toConexError } from "./errors";
 import type {
@@ -8,7 +8,7 @@ import type {
   SourceReadResponse,
   SourceSearchRequest,
   SourceSearchResponse,
-} from "./generated/conex/v1/source";
+} from "./generated/conex/source";
 
 export type ClientFetch = (url: string | URL, init?: RequestInit) => Promise<Response>;
 
@@ -33,7 +33,7 @@ export interface SearchManyResult {
   error?: ConexError;
 }
 
-const PROFILE_ID = "conex-jsonrpc2-http-v1";
+const PROFILE_ID = "conex-jsonrpc2-http";
 const DEFAULT_TIMEOUT_MS = 8000;
 const DEFAULT_MAX_RESPONSE_BYTES = 1024 * 1024;
 const ULID_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";

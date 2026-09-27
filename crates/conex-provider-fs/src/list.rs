@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use conex_core::{CallContext, CallError, CallResult, ExecutionIo, Handler};
-use conex_proto::v1;
+use conex_proto;
 use conex_source::contracts::{DEFAULT_PAGE, MAX_DOC_BYTES, MAX_ITEMS};
 use conex_source::pagination::{PageItem, SnapshotCache, SnapshotKey};
 use serde_json::Value;
@@ -19,11 +19,11 @@ pub fn mime_for(resource: &str) -> Option<&'static str> {
     }
 }
 
-pub fn build_summary(resource: &str, size: u64) -> CallResult<v1::ResourceSummary> {
+pub fn build_summary(resource: &str, size: u64) -> CallResult<conex_proto::ResourceSummary> {
     let mime = mime_for(resource)
-        .ok_or_else(|| CallError::new(v1::ErrorCode::BadRequest, "unsupported resource type"))?;
+        .ok_or_else(|| CallError::new(conex_proto::ErrorCode::BadRequest, "unsupported resource type"))?;
     let title = resource.rsplit('/').next().unwrap_or(resource).to_string();
-    Ok(v1::ResourceSummary {
+    Ok(conex_proto::ResourceSummary {
         resource_id: resource.to_string(),
         title,
         mime: mime.to_string(),
@@ -95,7 +95,7 @@ pub fn scan(
             items.push(item);
             if items.len() > max_items {
                 return Err(CallError::new(
-                    v1::ErrorCode::QuotaExceeded,
+                    conex_proto::ErrorCode::QuotaExceeded,
                     "scan exceeds the item budget",
                 ));
             }
@@ -170,18 +170,18 @@ impl Handler for ListHandler {
                 Some(cursor) => cache.page(cursor, &key, limit)?,
             }
         };
-        let response = v1::SourceListResponse {
+        let response = conex_proto::SourceListResponse {
             items: items.iter().map(to_summary).collect(),
             next_cursor,
         };
         serde_json::to_value(response).map_err(|error| {
-            CallError::new(v1::ErrorCode::Internal, format!("encode response: {error}"))
+            CallError::new(conex_proto::ErrorCode::Internal, format!("encode response: {error}"))
         })
     }
 }
 
-fn to_summary(item: &PageItem) -> v1::ResourceSummary {
-    v1::ResourceSummary {
+fn to_summary(item: &PageItem) -> conex_proto::ResourceSummary {
+    conex_proto::ResourceSummary {
         resource_id: item.resource_id.clone(),
         title: item.title.clone(),
         mime: item.mime.clone(),

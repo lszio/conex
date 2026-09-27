@@ -187,7 +187,7 @@ async fn bootstrap(
             "id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
             "method": "conex/hello",
             "params": {
-                "profileId": "conex-jsonrpc2-wss-v1",
+                "profileId": "conex-jsonrpc2-wss",
                 "plane": "broker",
                 "provides": [],
                 "requires": []
@@ -213,7 +213,7 @@ async fn bootstrap(
             "method": "conex/ready",
             "params": {
                 "negotiationId": negotiation,
-                "profileId": "conex-jsonrpc2-wss-v1",
+                "profileId": "conex-jsonrpc2-wss",
                 "plane": "broker",
                 "provides": hello["result"]["provides"],
                 "limits": hello["result"]["limits"]

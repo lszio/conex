@@ -149,7 +149,7 @@ region 是管理员标签。内嵌和 HTTP catalog 不因为“有配置”而�
 
 | 边界 | 现有文件 | 新增文件 |
 |---|---|---|
-| 类型/契约 | `schema/conex/v1/control.proto`、`schema/conex/v1/rpc.proto`、生成目录 | `schema/conex/v1/endpoint.proto`、`schema/conex/v1/agent.proto` |
+| 类型/契约 | `schema/conex/control.proto`、`schema/conex/rpc.proto`、生成目录 | `schema/conex/endpoint.proto`、`schema/conex/agent.proto` |
 | 共享握手/安装 | `crates/conex-core/src/transport_ws/mod.rs`、`registry.rs`、`policy.rs` | 不新建框架 crate |
 | Host 装配/认证 | `crates/conex-host/src/{config,auth,serve,http,tickets,agent,ws_transport,lib}.rs` | `crates/conex-host/src/web_auth.rs` |
 | 反连路由与目录 | `crates/conex-host/src/serve.rs`、`broker.rs` | `crates/conex-host/src/remote.rs`、`catalog.rs` |

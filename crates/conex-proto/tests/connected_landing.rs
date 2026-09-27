@@ -1,4 +1,4 @@
-use conex_proto::v1::{self, AgentEndpoint, AgentRegisterRequest, EndpointListRequest, EndpointListResult, EndpointSummary};
+use conex_proto::{self, AgentEndpoint, AgentRegisterRequest, EndpointListRequest, EndpointListResult, EndpointSummary};
 use prost::Message;
 
 #[test]
@@ -8,12 +8,12 @@ fn endpoint_catalog_round_trips_and_preserves_optional_cursor() {
             endpoint_id: "notes-remote".into(),
             display_name: "Remote notes".into(),
             provider_id: "notes".into(),
-            attachment_kind: v1::AttachmentKind::ReverseAgent as i32,
+            attachment_kind: conex_proto::AttachmentKind::ReverseAgent as i32,
             agent_id: Some("agent-a".into()),
             region: Some("private".into()),
-            connection_state: v1::ConnectionState::Ready as i32,
+            connection_state: conex_proto::ConnectionState::Ready as i32,
             available_methods: vec!["source/list".into(), "source/read".into()],
-            authorized_scopes: vec![v1::AuthorizedScope {
+            authorized_scopes: vec![conex_proto::AuthorizedScope {
                 method: "source/read".into(),
                 root: "team".into(),
                 subtree: true,
@@ -24,8 +24,8 @@ fn endpoint_catalog_round_trips_and_preserves_optional_cursor() {
     let decoded = EndpointListResult::decode(value.encode_to_vec().as_slice()).expect("decode");
     assert_eq!(decoded, value);
     assert_eq!(
-        v1::AttachmentKind::try_from(decoded.endpoints[0].attachment_kind),
-        Ok(v1::AttachmentKind::ReverseAgent)
+        conex_proto::AttachmentKind::try_from(decoded.endpoints[0].attachment_kind),
+        Ok(conex_proto::AttachmentKind::ReverseAgent)
     );
     assert_eq!(decoded.next_after_endpoint_id.as_deref(), Some("notes-remote"));
 
@@ -76,14 +76,14 @@ fn invalid_enum_value_is_preserved_on_decode_and_rejected_by_typed_reader() {
         attachment_kind: 99,
         agent_id: None,
         region: None,
-        connection_state: v1::ConnectionState::Ready as i32,
+        connection_state: conex_proto::ConnectionState::Ready as i32,
         available_methods: Vec::new(),
         authorized_scopes: Vec::new(),
     };
     let decoded =
         EndpointSummary::decode(value.encode_to_vec().as_slice()).expect("decode unknown enum");
     assert_eq!(decoded.attachment_kind, 99);
-    assert!(v1::AttachmentKind::try_from(decoded.attachment_kind).is_err());
+    assert!(conex_proto::AttachmentKind::try_from(decoded.attachment_kind).is_err());
 }
 
 #[test]
@@ -115,34 +115,34 @@ fn registration_vectors_keep_missing_identity_and_duplicate_endpoints_visible() 
 
 #[test]
 fn partial_scope_and_control_negotiation_round_trip() {
-    let scope = v1::AuthorizedScope {
+    let scope = conex_proto::AuthorizedScope {
         method: "source/read".into(),
         root: "team".into(),
         subtree: false,
     };
-    let decoded = v1::AuthorizedScope::decode(scope.encode_to_vec().as_slice()).expect("decode");
+    let decoded = conex_proto::AuthorizedScope::decode(scope.encode_to_vec().as_slice()).expect("decode");
     assert_eq!(decoded, scope);
 
-    let capabilities = v1::NegotiatedCapabilities {
+    let capabilities = conex_proto::NegotiatedCapabilities {
         provides: vec!["source/read".into()],
         requires: vec!["source/list".into()],
-        rejected_capabilities: vec![v1::RejectedCapability {
+        rejected_capabilities: vec![conex_proto::RejectedCapability {
             method: "source/write".into(),
             direction: "provides".into(),
             reason: "read-only".into(),
         }],
     };
     let decoded =
-        v1::NegotiatedCapabilities::decode(capabilities.encode_to_vec().as_slice()).expect("decode");
+        conex_proto::NegotiatedCapabilities::decode(capabilities.encode_to_vec().as_slice()).expect("decode");
     assert_eq!(decoded, capabilities);
 
-    let identity = v1::LinkIdentity {
+    let identity = conex_proto::LinkIdentity {
         link_id: "link-1".into(),
         peer_id: "agent-a".into(),
         tenant_id: "tenant-a".into(),
     };
     assert_eq!(
-        v1::LinkIdentity::decode(identity.encode_to_vec().as_slice()).expect("decode"),
+        conex_proto::LinkIdentity::decode(identity.encode_to_vec().as_slice()).expect("decode"),
         identity
     );
 }

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
-use conex_proto::v1;
+use conex_proto;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tokio::time::Instant;
 
@@ -54,7 +54,7 @@ impl ProviderBudget {
         if queued > self.max_queue_len {
             self.queued.fetch_sub(1, Ordering::SeqCst);
             return Err(CallError::new(
-                v1::ErrorCode::QuotaExceeded,
+                conex_proto::ErrorCode::QuotaExceeded,
                 "provider queue is full",
             ));
         }
@@ -63,7 +63,7 @@ impl ProviderBudget {
             self.queued_bytes.fetch_sub(bytes, Ordering::SeqCst);
             self.queued.fetch_sub(1, Ordering::SeqCst);
             return Err(CallError::new(
-                v1::ErrorCode::QuotaExceeded,
+                conex_proto::ErrorCode::QuotaExceeded,
                 "provider queue byte budget exceeded",
             ));
         }
@@ -73,14 +73,14 @@ impl ProviderBudget {
                 Ok(Err(_)) => {
                     self.release(bytes);
                     return Err(CallError::new(
-                        v1::ErrorCode::Internal,
+                        conex_proto::ErrorCode::Internal,
                         "provider slot closed",
                     ));
                 }
                 Err(_) => {
                     self.release(bytes);
                     return Err(CallError::new(
-                        v1::ErrorCode::Timeout,
+                        conex_proto::ErrorCode::Timeout,
                         "timed out waiting for a provider slot",
                     ));
                 }
@@ -128,11 +128,11 @@ impl Limiter {
         match tokio::time::timeout_at(deadline, self.global.clone().acquire_owned()).await {
             Ok(Ok(permit)) => Ok(permit),
             Ok(Err(_)) => Err(CallError::new(
-                v1::ErrorCode::Internal,
+                conex_proto::ErrorCode::Internal,
                 "global slot closed",
             )),
             Err(_) => Err(CallError::new(
-                v1::ErrorCode::Timeout,
+                conex_proto::ErrorCode::Timeout,
                 "timed out waiting for a global slot",
             )),
         }

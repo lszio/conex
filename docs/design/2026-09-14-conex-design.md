@@ -1,6 +1,6 @@
 # conex 设计
 
-> 项目名：**conex**（connect + nexus）；工作协议名 `conex/1`。
+> 项目名：**conex**（connect + nexus）；工作协议名 `conex`。
 > 状态：设计草案 v6（2026-09-15），在原 2026-09-14 文档上修订；尚未发布线协议。
 > v6 变更：补「与既有实现的关系」；统一内容寻址函数与 source/blob CID 语义；冻结完整 ErrorCode 数值表与信封预留字段；统一聚合/ID/方法命名；拆分 ACP 与 MCP 原生映射；补 key epoch 分发、Change CID 与签名、流恢复信用锚定、blob 分块方法。
 > v5 变更：补齐调用授权上下文、消息变体、握手引导、会话恢复与副作用边界；明确 CID/加密/持久性、ACL 定序与冲突语义；修正 ACP 映射和 TOML；收敛阶段范围与验收。
@@ -32,10 +32,10 @@
 
 ### 0.1 与既有实现的关系
 
-本仓库 `dev` 分支存在前一阶段的 **CONEX** 实现（TypeScript/Bun，Anytype ↔ Apple Reminders 双向同步，Phase 0–3 已跑通，见该分支 `ARCHITECTURE.md`、`AGENTS.md` 与 `src/adapters/**`）。本设计（`conex`，工作协议 `conex/1`）是**取代它的下一代内核**：把「Anytype↔Apple 专用桥」提升为「可嵌入的双向能力路由内核 + ACP/MCP 网关 + 可选 P2P」。
+本仓库 `dev` 分支存在前一阶段的 **CONEX** 实现（TypeScript/Bun，Anytype ↔ Apple Reminders 双向同步，Phase 0–3 已跑通，见该分支 `ARCHITECTURE.md`、`AGENTS.md` 与 `src/adapters/**`）。本设计（`conex`，工作协议 `conex`）是**取代它的下一代内核**：把「Anytype↔Apple 专用桥」提升为「可嵌入的双向能力路由内核 + ACP/MCP 网关 + 可选 P2P」。
 
 - 既有实现不就地演化；其产物（Anytype API `v2025-11-08` 接入经验、状态映射、冲突日志、Apple 侧适配）只作为**领域参考**，通过 §9.1 的 provider/桥接契约重新实现，不复用其运行时与状态库。
-- 本设计从当时的 docs-only 树开始构建独立 Rust workspace；P0 已在该 workspace 交付（`e649ded`，文档入口见 [docs/README](../README.md)）。`dev` 分支历史仅作证据，不构成 `conex/1` 的既有实现，其 TypeScript 代码不进入 P0–P4 的交付物。
+- 本设计从当时的 docs-only 树开始构建独立 Rust workspace；P0 已在该 workspace 交付（`e649ded`，文档入口见 [docs/README](../README.md)）。`dev` 分支历史仅作证据，不构成 `conex` 的既有实现，其 TypeScript 代码不进入 P0–P4 的交付物。
 - §15 的 notez 记录是外部参考与反面教材，与上述既有 CONEX 实现相互独立。
 - 仓库继续使用 `conex` 名称；旧实现保留在 `dev` 分支，不发布新包、不迁移真实用户数据。
 
@@ -163,10 +163,10 @@ provides        = ["source/list", "source/read", "source/search", "blob/get"]
 requires        = []
 
 [[profiles]]
-id = "conex-jsonrpc2-wss-v1"
+id = "conex-jsonrpc2-wss"
 
 [[profiles]]
-id = "conex-protobuf-wss-v1"
+id = "conex-protobuf-wss"
 
 [auth]
 mode       = "agent-held"
@@ -221,9 +221,9 @@ maxQueuedBytes = 8388608
 | Profile | 语义 / 编码 / 分帧 / 承载 | 能力 | 阶段 |
 |---|---|---|---|
 | `conex-inproc-v1` | conex / 内部类型 / 无字节分帧 / inproc | 同一方法及授权契约；无网络恢复测试 | P0 |
-| `conex-jsonrpc2-http-v1` | conex 方法 + JSON-RPC 2.0 / JSON / HTTP body / HTTPS | 同步请求响应；无异步回调 | P0 |
-| `conex-jsonrpc2-wss-v1` | conex 方法 + JSON-RPC 2.0 / JSON / WS message / WSS | 双向回调、Stream、恢复 | P1 |
-| `conex-protobuf-wss-v1` | conex 消息变体 / protobuf / WS message / WSS | 同上；二进制 blob 数据 | P1 |
+| `conex-jsonrpc2-http` | conex 方法 + JSON-RPC 2.0 / JSON / HTTP body / HTTPS | 同步请求响应；无异步回调 | P0 |
+| `conex-jsonrpc2-wss` | conex 方法 + JSON-RPC 2.0 / JSON / WS message / WSS | 双向回调、Stream、恢复 | P1 |
+| `conex-protobuf-wss` | conex 消息变体 / protobuf / WS message / WSS | 同上；二进制 blob 数据 | P1 |
 | `acp-jsonrpc2-stdio-v1` | ACP v1 / JSON / newline / stdio | ACP 原生双向；无原生 conex resume | P2 |
 | `mcp-streamable-http-2025-06-18` | MCP 指定版本 / JSON / HTTP 与 SSE / HTTPS | 按 MCP 原生规范实现 | P2 |
 
@@ -703,7 +703,7 @@ P0–P2 默认单 host；运行态会话不承诺跨 host 漂移。生产 HA 必
 
 ### 13.1 唯一类型源与语言映射
 
-conex 自有规范类型源放 `schema/conex/v1/*.proto`；JSON Schema、Rust/TS/Python/Go 类型和字段文档均由其生成，禁止同时手改 JSON Schema。外部 ACP/MCP 类型仍以锁定的上游 schema 为准，不由 conex 重新定义。状态机、授权、JSON-RPC 映射和持久性要求由本文及相应 Profile 规范定义。类型源与行为规范出现冲突时阻止发布并修正，不允许实现自行选一边；向量不覆盖规范。
+conex 自有规范类型源放 `schema/conex/*.proto`；JSON Schema、Rust/TS/Python/Go 类型和字段文档均由其生成，禁止同时手改 JSON Schema。外部 ACP/MCP 类型仍以锁定的上游 schema 为准，不由 conex 重新定义。状态机、授权、JSON-RPC 映射和持久性要求由本文及相应 Profile 规范定义。类型源与行为规范出现冲突时阻止发布并修正，不允许实现自行选一边；向量不覆盖规范。
 
 - 标识统一 string；计数/序号使用无符号 64 位整数，JSON 映射为十进制字符串，禁止经 JS Number 丢精度。
 - optional 与缺省值有区别；字段为 0/false 不等于未提供。null 只在 schema 明确允许的位置出现。
@@ -713,7 +713,7 @@ conex 自有规范类型源放 `schema/conex/v1/*.proto`；JSON Schema、Rust/TS
 
 ### 13.2 协议演化
 
-`conex/1` 主版本尚未冻结；发布前允许 v6 后续修订。冻结后，任何使既有合法报文变非法或改变可观察行为的变更都要兼容迁移或升主版本，包括授权范围、字段类型/必需性、ID、流、取消、错误、CID 和平面语义，不限于四个字段类别。
+conex 主版本尚未冻结；发布前允许 v6 后续修订。冻结后，任何使既有合法报文变非法或改变可观察行为的变更都要兼容迁移或升主版本，包括授权范围、字段类型/必需性、ID、流、取消、错误、CID 和平面语义，不限于四个字段类别。
 
 新增可选能力/方法通常可兼容，但必须明确旧客户端收到新错误/未知枚举的行为。内容格式版本、加密 Profile、外部协议版本与 conex 主版本分别标识。外部 ACP/MCP schema 必须保存来源版本或 commit、下载日期及内容摘要；不能用“站点最新”作为固定 conformance 输入。
 

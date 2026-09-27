@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use conex_core::{CallContext, CallError, CallResult, ExecutionIo, Handler};
-use conex_proto::v1;
+use conex_proto;
 use conex_source::contracts::{DEFAULT_PAGE, MAX_ITEMS};
 use conex_source::pagination::{PageItem, SnapshotCache, SnapshotKey};
 use serde_json::Value;
@@ -28,7 +28,7 @@ impl Handler for SearchHandler {
         let query = input
             .get("query")
             .and_then(Value::as_str)
-            .ok_or_else(|| CallError::new(v1::ErrorCode::BadRequest, "query is required"))?;
+            .ok_or_else(|| CallError::new(conex_proto::ErrorCode::BadRequest, "query is required"))?;
         let limit = input
             .get("limit")
             .and_then(Value::as_u64)
@@ -53,25 +53,25 @@ impl Handler for SearchHandler {
                 Some(cursor) => cache.page(cursor, &key, limit)?,
             }
         };
-        let hits: Vec<v1::SearchHit> = items
+        let hits: Vec<conex_proto::SearchHit> = items
             .iter()
-            .map(|item| v1::SearchHit {
+            .map(|item| conex_proto::SearchHit {
                 resource: Some(summary(item)),
                 excerpt: item.excerpt.clone().unwrap_or_default(),
             })
             .collect();
-        let response = v1::SourceSearchResponse {
+        let response = conex_proto::SourceSearchResponse {
             items: hits,
             next_cursor,
         };
         serde_json::to_value(response).map_err(|error| {
-            CallError::new(v1::ErrorCode::Internal, format!("encode response: {error}"))
+            CallError::new(conex_proto::ErrorCode::Internal, format!("encode response: {error}"))
         })
     }
 }
 
-fn summary(item: &PageItem) -> v1::ResourceSummary {
-    v1::ResourceSummary {
+fn summary(item: &PageItem) -> conex_proto::ResourceSummary {
+    conex_proto::ResourceSummary {
         resource_id: item.resource_id.clone(),
         title: item.title.clone(),
         mime: item.mime.clone(),

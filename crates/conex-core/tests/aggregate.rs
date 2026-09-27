@@ -4,7 +4,7 @@ mod support;
 use std::time::Duration;
 
 use conex_core::{AggregateResult, TargetCall};
-use conex_proto::v1;
+use conex_proto;
 use serde_json::json;
 
 use support::TestRig;
@@ -31,7 +31,7 @@ async fn aggregate_preserves_success_and_isolates_timeout() {
     assert_eq!(aggregate.provider_results.len(), 2);
     assert!(aggregate.provider_results[0].result.is_ok());
     let error = aggregate.provider_results[1].result.as_ref().unwrap_err();
-    assert_eq!(error.code_enum(), Some(v1::ErrorCode::Timeout));
+    assert_eq!(error.code_enum(), Some(conex_proto::ErrorCode::Timeout));
     assert_eq!(aggregate.successes().count(), 1);
     assert_eq!(aggregate.failures().count(), 1);
 }

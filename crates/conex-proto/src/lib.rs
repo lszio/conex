@@ -1,28 +1,32 @@
-//! conex/1 protocol types, generated from `.proto` sources.
+//! conex protocol types, generated from `.proto` sources.
 //!
 //! `.proto` is the single structural type source (design §13.1). Generated code
 //! lives in `OUT_DIR`; the JSON Schema under `schema/generated/jsonschema` is a
 //! derived artifact consumed by both the Rust and TypeScript boundaries.
+//!
+//! The API surface is unversioned: generated messages are re-exported from the
+//! crate root (package `conex`), not nested under a version module.
 #![forbid(unsafe_code)]
 
-#[cfg(has_conex_v1)]
+#[cfg(has_conex)]
 pub mod cid;
 pub mod validation;
-#[cfg(has_conex_v1)]
+#[cfg(has_conex)]
 pub mod wire;
 
 #[allow(clippy::all)]
 pub mod test {
     //! Test-only schema (`conformance/schema`), never advertised as a capability.
-    pub mod v1 {
-        include!(concat!(env!("OUT_DIR"), "/conex.test.v1.rs"));
-        include!(concat!(env!("OUT_DIR"), "/conex.test.v1.serde.rs"));
-    }
+    include!(concat!(env!("OUT_DIR"), "/conex.test.rs"));
+    include!(concat!(env!("OUT_DIR"), "/conex.test.serde.rs"));
 }
 
-#[cfg(has_conex_v1)]
+#[cfg(has_conex)]
 #[allow(clippy::all)]
-pub mod v1 {
-    include!(concat!(env!("OUT_DIR"), "/conex.v1.rs"));
-    include!(concat!(env!("OUT_DIR"), "/conex.v1.serde.rs"));
+mod generated {
+    include!(concat!(env!("OUT_DIR"), "/conex.rs"));
+    include!(concat!(env!("OUT_DIR"), "/conex.serde.rs"));
 }
+
+#[cfg(has_conex)]
+pub use generated::*;

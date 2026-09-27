@@ -80,7 +80,7 @@ async fn ready(
             "id": "hello",
             "method": "conex/hello",
             "params": {
-                "profileId": "conex-jsonrpc2-wss-v1",
+                "profileId": "conex-jsonrpc2-wss",
                 "plane": "broker",
                 "provides": ["ui/probe"],
                 "requires": []
@@ -105,7 +105,7 @@ async fn ready(
             "method": "conex/ready",
             "params": {
                 "negotiationId": negotiation_id,
-                "profileId": "conex-jsonrpc2-wss-v1",
+                "profileId": "conex-jsonrpc2-wss",
                 "plane": "broker",
                 "provides": hello["result"]["provides"],
                 "limits": hello["result"]["limits"]

@@ -1,7 +1,7 @@
 //! Shared wire vectors: envelope classification, error codes and rejection.
 #![allow(clippy::collapsible_if)]
 
-use conex_proto::{v1, wire};
+use conex_proto::{wire};
 use serde_json::Value;
 
 fn vectors() -> Value {
@@ -13,36 +13,36 @@ fn vectors() -> Value {
     serde_json::from_str(&text).expect("parse wire vectors")
 }
 
-fn kind(message: &v1::Message) -> &'static str {
+fn kind(message: &conex_proto::Message) -> &'static str {
     match message.body.as_ref() {
-        Some(v1::message::Body::Request(_)) => "request",
-        Some(v1::message::Body::Success(_)) => "success",
-        Some(v1::message::Body::Failure(_)) => "failure",
-        Some(v1::message::Body::Notification(_)) => "notification",
+        Some(conex_proto::message::Body::Request(_)) => "request",
+        Some(conex_proto::message::Body::Success(_)) => "success",
+        Some(conex_proto::message::Body::Failure(_)) => "failure",
+        Some(conex_proto::message::Body::Notification(_)) => "notification",
         None => "none",
     }
 }
 
-fn request_id(message: &v1::Message) -> Option<&str> {
+fn request_id(message: &conex_proto::Message) -> Option<&str> {
     match message.body.as_ref() {
-        Some(v1::message::Body::Request(r)) => Some(r.request_id.as_str()),
-        Some(v1::message::Body::Success(s)) => Some(s.request_id.as_str()),
-        Some(v1::message::Body::Failure(f)) => f.request_id.as_deref(),
+        Some(conex_proto::message::Body::Request(r)) => Some(r.request_id.as_str()),
+        Some(conex_proto::message::Body::Success(s)) => Some(s.request_id.as_str()),
+        Some(conex_proto::message::Body::Failure(f)) => f.request_id.as_deref(),
         _ => None,
     }
 }
 
-fn method(message: &v1::Message) -> Option<&str> {
+fn method(message: &conex_proto::Message) -> Option<&str> {
     match message.body.as_ref() {
-        Some(v1::message::Body::Request(r)) => Some(r.method.as_str()),
-        Some(v1::message::Body::Notification(n)) => Some(n.method.as_str()),
+        Some(conex_proto::message::Body::Request(r)) => Some(r.method.as_str()),
+        Some(conex_proto::message::Body::Notification(n)) => Some(n.method.as_str()),
         _ => None,
     }
 }
 
-fn error_code(message: &v1::Message) -> Option<i32> {
+fn error_code(message: &conex_proto::Message) -> Option<i32> {
     match message.body.as_ref() {
-        Some(v1::message::Body::Failure(f)) => f.error.as_ref().map(|e| e.code),
+        Some(conex_proto::message::Body::Failure(f)) => f.error.as_ref().map(|e| e.code),
         _ => None,
     }
 }
@@ -59,7 +59,7 @@ fn error_code_table_is_frozen() {
             "semantic name for {value}"
         );
         assert_eq!(
-            v1::ErrorCode::try_from(value).unwrap() as i32,
+            conex_proto::ErrorCode::try_from(value).unwrap() as i32,
             value,
             "enum number for {name}"
         );
@@ -147,11 +147,11 @@ fn request_round_trips_through_encode() {
 
 #[test]
 fn failure_encodes_numeric_code_and_semantic_name() {
-    let message = v1::Message {
-        body: Some(v1::message::Body::Failure(v1::Failure {
+    let message = conex_proto::Message {
+        body: Some(conex_proto::message::Body::Failure(conex_proto::Failure {
             request_id: Some("01ARZ3NDEKTSV4RRFFQ69G5FAV".into()),
-            error: Some(v1::Error {
-                code: v1::ErrorCode::Forbidden as i32,
+            error: Some(conex_proto::Error {
+                code: conex_proto::ErrorCode::Forbidden as i32,
                 message: "denied".into(),
                 diagnostic_id: "d1".into(),
                 execution: "not_started".into(),
@@ -182,7 +182,7 @@ fn deeply_nested_json_is_rejected() {
 }
 
 const SOURCE_READ_SCHEMA: &str =
-    include_str!("../../../schema/generated/jsonschema/conex.v1.SourceReadRequest.schema.json");
+    include_str!("../../../schema/generated/jsonschema/conex.SourceReadRequest.schema.json");
 
 #[test]
 fn source_request_rejects_unknown_business_field() {

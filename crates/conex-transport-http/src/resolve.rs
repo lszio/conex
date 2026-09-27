@@ -3,7 +3,7 @@ use std::net::IpAddr;
 
 use async_trait::async_trait;
 use conex_core::{CallError, CallResult, Resolver};
-use conex_proto::v1;
+use conex_proto;
 use tokio::time::{Instant, timeout_at};
 
 pub struct TokioResolver;
@@ -16,13 +16,13 @@ impl Resolver for TokioResolver {
             .await
             .map_err(|_| {
                 CallError::new(
-                    v1::ErrorCode::Timeout,
+                    conex_proto::ErrorCode::Timeout,
                     "dns resolution exceeded the deadline",
                 )
             })?
             .map_err(|error| {
                 CallError::new(
-                    v1::ErrorCode::Unavailable,
+                    conex_proto::ErrorCode::Unavailable,
                     format!("dns resolution failed: {error}"),
                 )
             })?;
@@ -31,7 +31,7 @@ impl Resolver for TokioResolver {
         addresses.dedup();
         if addresses.is_empty() {
             return Err(CallError::new(
-                v1::ErrorCode::Unavailable,
+                conex_proto::ErrorCode::Unavailable,
                 "dns returned no addresses",
             ));
         }

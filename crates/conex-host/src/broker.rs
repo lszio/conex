@@ -22,7 +22,7 @@ use conex_core::{
     CallError, CallResult, Caller, Host as CoreHost, MethodContract, PreparedInput, ResourceClaim,
 };
 use conex_proto::cid;
-use conex_proto::v1;
+use conex_proto;
 
 #[derive(Debug, Clone)]
 pub struct BrokerCall {
@@ -107,7 +107,7 @@ impl Broker {
     pub async fn invoke(&self, call: BrokerCall) -> CallResult<Value> {
         if call.method == "conex/hello" {
             return Err(CallError::new(
-                v1::ErrorCode::BadRequest,
+                conex_proto::ErrorCode::BadRequest,
                 "conex/hello is handled by the transport, not the broker",
             ));
         }
@@ -154,7 +154,7 @@ impl Broker {
             .ok_or_else(|| unavailable("blob backend is not configured"))?;
         let contract = find_contract(&call.method).ok_or_else(|| {
             CallError::new(
-                v1::ErrorCode::UnknownMethod,
+                conex_proto::ErrorCode::UnknownMethod,
                 format!("unknown blob method {}", call.method),
             )
         })?;
@@ -163,7 +163,7 @@ impl Broker {
         } = (contract.prepare)(&call.input)?;
         if !claim_blob(&claim) {
             return Err(CallError::new(
-                v1::ErrorCode::Forbidden,
+                conex_proto::ErrorCode::Forbidden,
                 format!("{} does not grant blob access", claim.action),
             ));
         }
@@ -184,7 +184,7 @@ impl Broker {
             "blob/cancel" => blob_cancel(&content, &canonical).await?,
             other => {
                 return Err(CallError::new(
-                    v1::ErrorCode::UnknownMethod,
+                    conex_proto::ErrorCode::UnknownMethod,
                     format!("unsupported blob method {other}"),
                 ));
             }
@@ -201,7 +201,7 @@ impl Broker {
             .ok_or_else(|| unavailable("session backend is not configured"))?;
         let contract = find_contract(&call.method).ok_or_else(|| {
             CallError::new(
-                v1::ErrorCode::UnknownMethod,
+                conex_proto::ErrorCode::UnknownMethod,
                 format!("unknown session method {}", call.method),
             )
         })?;
@@ -214,7 +214,7 @@ impl Broker {
             "session/close" => session_close(&store, &canonical, &call.caller).await?,
             other => {
                 return Err(CallError::new(
-                    v1::ErrorCode::UnknownMethod,
+                    conex_proto::ErrorCode::UnknownMethod,
                     format!("unsupported session method {other}"),
                 ));
             }
@@ -231,7 +231,7 @@ impl Broker {
             .ok_or_else(|| unavailable("operation backend is not configured"))?;
         let contract = find_contract(&call.method).ok_or_else(|| {
             CallError::new(
-                v1::ErrorCode::UnknownMethod,
+                conex_proto::ErrorCode::UnknownMethod,
                 format!("unknown operation method {}", call.method),
             )
         })?;
@@ -244,7 +244,7 @@ impl Broker {
             "operation/cancel" => operation_cancel(&store, &canonical, &call.caller).await?,
             other => {
                 return Err(CallError::new(
-                    v1::ErrorCode::UnknownMethod,
+                    conex_proto::ErrorCode::UnknownMethod,
                     format!("unsupported operation method {other}"),
                 ));
             }
@@ -256,7 +256,7 @@ impl Broker {
     async fn dispatch_connection_list(&self, call: &BrokerCall) -> CallResult<Value> {
         if call.role != "ui" {
             return Err(CallError::new(
-                v1::ErrorCode::Forbidden,
+                conex_proto::ErrorCode::Forbidden,
                 "connection/list is restricted to the ui role",
             ));
         }
@@ -310,7 +310,7 @@ fn claim_blob(claim: &ResourceClaim) -> bool {
 }
 
 fn unavailable(message: &str) -> CallError {
-    CallError::new(v1::ErrorCode::Unavailable, message)
+    CallError::new(conex_proto::ErrorCode::Unavailable, message)
 }
 
 fn require_string<'a>(map: &'a Map<String, Value>, key: &str) -> CallResult<&'a str> {
@@ -339,7 +339,7 @@ fn missing(field: &str) -> CallError {
 }
 
 fn bad_req(message: &str) -> CallError {
-    CallError::new(v1::ErrorCode::BadRequest, message)
+    CallError::new(conex_proto::ErrorCode::BadRequest, message)
 }
 
 fn expect_resource_id(label: &str, value: &str) -> CallResult<()> {
@@ -378,7 +378,7 @@ async fn blob_put(store: &ContentStore, input: &Value) -> CallResult<Value> {
     let format_version = require_u64(map, "formatVersion")? as u32;
     if format_version != 1 {
         return Err(CallError::new(
-            v1::ErrorCode::UnsupportedCapability,
+            conex_proto::ErrorCode::UnsupportedCapability,
             format!("formatVersion {format_version} not supported"),
         ));
     }
@@ -456,7 +456,7 @@ async fn blob_chunk(store: &ContentStore, input: &Value) -> CallResult<Value> {
     let recomputed = conex_proto::cid::cid_for_raw(&bytes);
     if recomputed != chunk_cid {
         return Err(CallError::new(
-            v1::ErrorCode::BadBlob,
+            conex_proto::ErrorCode::BadBlob,
             format!("chunk cid mismatch: declared {chunk_cid}, recomputed {recomputed}"),
         ));
     }
@@ -479,7 +479,7 @@ async fn blob_commit(store: &ContentStore, input: &Value) -> CallResult<Value> {
     let persistence = require_string(map, "persistence")?.to_string();
     if persistence != "local" {
         return Err(CallError::new(
-            v1::ErrorCode::Unavailable,
+            conex_proto::ErrorCode::Unavailable,
             format!("persistence {persistence} not supported by local broker"),
         ));
     }
@@ -573,7 +573,7 @@ async fn session_open(store: &SessionStore, input: &Value, caller: &Caller) -> C
     let tenant_id = require_string(binding, "tenantId")?.to_string();
     if principal_id != caller.principal_id || tenant_id != caller.tenant_id {
         return Err(CallError::new(
-            v1::ErrorCode::Forbidden,
+            conex_proto::ErrorCode::Forbidden,
             "session binding principal/tenant does not match the bearer",
         ));
     }
@@ -598,7 +598,7 @@ async fn session_open(store: &SessionStore, input: &Value, caller: &Caller) -> C
         "persistent" => RecoveryLevel::Persistent,
         other => {
             return Err(CallError::new(
-                v1::ErrorCode::UnsupportedCapability,
+                conex_proto::ErrorCode::UnsupportedCapability,
                 format!("recovery level {other} not recognised"),
             ));
         }
@@ -639,13 +639,13 @@ async fn session_resume(store: &SessionStore, input: &Value, caller: &Caller) ->
     if let Some(b) = &binding {
         if !b.principal_id.is_empty() && b.principal_id != caller.principal_id {
             return Err(CallError::new(
-                v1::ErrorCode::Forbidden,
+                conex_proto::ErrorCode::Forbidden,
                 "session resume binding does not match the bearer principal",
             ));
         }
         if !b.tenant_id.is_empty() && b.tenant_id != caller.tenant_id {
             return Err(CallError::new(
-                v1::ErrorCode::Forbidden,
+                conex_proto::ErrorCode::Forbidden,
                 "session resume binding does not match the bearer tenant",
             ));
         }
@@ -748,7 +748,7 @@ async fn operation_get(
     let key = parse_dedup_key(map.get("key").ok_or_else(|| missing("key"))?)?;
     if key.principal_id != caller.principal_id || key.tenant_id != caller.tenant_id {
         return Err(CallError::new(
-            v1::ErrorCode::Forbidden,
+            conex_proto::ErrorCode::Forbidden,
             format!("{method} dedup key principal/tenant does not match the bearer"),
         ));
     }
@@ -777,7 +777,7 @@ async fn operation_cancel(
     let key = parse_dedup_key(map.get("key").ok_or_else(|| missing("key"))?)?;
     if key.principal_id != caller.principal_id || key.tenant_id != caller.tenant_id {
         return Err(CallError::new(
-            v1::ErrorCode::Forbidden,
+            conex_proto::ErrorCode::Forbidden,
             "operation/cancel dedup key principal/tenant does not match the bearer",
         ));
     }
@@ -823,8 +823,8 @@ fn content_to_call(error: conex_content::ContentError) -> CallError {
     )
 }
 
-fn error_code_for_content(code: i32) -> v1::ErrorCode {
-    use v1::ErrorCode as E;
+fn error_code_for_content(code: i32) -> conex_proto::ErrorCode {
+    use conex_proto::ErrorCode as E;
     match code {
         c if c == E::BadBlob as i32 => E::BadBlob,
         c if c == E::UnknownMethod as i32 => E::UnknownMethod,
@@ -838,13 +838,13 @@ fn error_code_for_content(code: i32) -> v1::ErrorCode {
 
 fn session_to_call(error: SessionError) -> CallError {
     CallError::new(
-        v1::ErrorCode::try_from(error.code()).unwrap_or(v1::ErrorCode::Internal),
+        conex_proto::ErrorCode::try_from(error.code()).unwrap_or(conex_proto::ErrorCode::Internal),
         format!("{error}"),
     )
 }
 
 fn op_to_call(error: OperationError) -> CallError {
-    use v1::ErrorCode as E;
+    use conex_proto::ErrorCode as E;
     let message = format!("{error}");
     match error {
         OperationError::Conflict => CallError::new(E::Conflict, message),
@@ -895,9 +895,9 @@ fn agent_link_to_json(agent: crate::agent::AgentRegistration) -> Value {
     })
 }
 
-fn plane_to_enum(value: i32) -> conex_proto::v1::Plane {
+fn plane_to_enum(value: i32) -> conex_proto::Plane {
     match value {
-        2 => conex_proto::v1::Plane::Relay,
-        _ => conex_proto::v1::Plane::Broker,
+        2 => conex_proto::Plane::Relay,
+        _ => conex_proto::Plane::Broker,
     }
 }

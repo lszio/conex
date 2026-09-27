@@ -2,12 +2,12 @@
 //!
 //! One `conex/wss` connection runs the JSON-RPC 2.0 handshake from
 //! `conex-core::transport_ws` until `Ready`, then accepts business envelopes
-//! using the same `conex-jsonrpc2-http-v1` envelope. Business frames are
+//! using the same `conex-jsonrpc2-http` envelope. Business frames are
 //! dispatched through the shared `Broker` so wire-side cap rules are
 //! identical to HTTP.
 //!
-//! Why one transport for both profiles: both `conex-jsonrpc2-wss-v1` and
-//! `conex-protobuf-wss-v1` agree on envelope shape after handshake (they
+//! Why one transport for both profiles: both `conex-jsonrpc2-wss` and
+//! `conex-protobuf-wss` agree on envelope shape after handshake (they
 //! differ only in the bootstrap body); the protobuf business profile is
 //! layered on top of `decode_wire`/`encode_wire` as soon as negotiation
 //! completes. For P1 only the JSON profile is required; the protobuf path
@@ -38,14 +38,14 @@ use conex_core::transport_ws::{
 };
 use conex_core::{CallContext, CallError, CallResult, Limits, MethodContract};
 use conex_proto::cid;
-use conex_proto::v1;
+use conex_proto;
 use conex_proto::wire::{decode_wire, encode_wire, validate_message, ProtocolError};
-use prost::Message as _; // v1::Message decode/encode for protobuf frames
+use prost::Message as _; // conex_proto::Message decode/encode for protobuf frames
 
 use crate::broker::{Broker, BrokerCall, BrokerFrame};
 use crate::http::HttpState;
 
-const WSS_PROFILES: &[ProfileId] = &[ProfileId::JsonRpc2WssV1, ProfileId::ProtobufWssV1];
+const WSS_PROFILES: &[ProfileId] = &[ProfileId::JsonRpc2Wss, ProfileId::ProtobufWss];
 
 pub struct WssState {
     pub broker: Arc<Broker>,
@@ -129,7 +129,7 @@ impl PendingRequests {
         let mut inner = self.inner.lock().await;
         if inner.contains_key(&key) {
             return Err(CallError::new(
-                v1::ErrorCode::Conflict,
+                conex_proto::ErrorCode::Conflict,
                 "duplicate request id in link generation",
             ));
         }
@@ -156,7 +156,7 @@ impl PendingRequests {
         let mut inner = self.inner.lock().await;
         for (_, tx) in inner.drain() {
             let _ = tx.send(Err(CallError::new(
-                v1::ErrorCode::Unavailable,
+                conex_proto::ErrorCode::Unavailable,
                 "websocket connection closed",
             )));
         }
@@ -197,7 +197,7 @@ pub async fn ws_handler_with_state(
     let Some(broker) = state.broker.clone() else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
-            axum::Json(json!({ "code": v1::ErrorCode::Unavailable as i32, "message": "p1 backend is not configured" })),
+            axum::Json(json!({ "code": conex_proto::ErrorCode::Unavailable as i32, "message": "p1 backend is not configured" })),
         ).into_response();
     };
     let query = uri.query().unwrap_or_default();
@@ -277,7 +277,7 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
     let (mut sender, mut receiver) = socket.split();
     let mut handshake = ServerHandshake::new_with_profiles_and_capabilities(
         &state.supported_profiles,
-        v1::Plane::Broker,
+        conex_proto::Plane::Broker,
         state.server_provides.clone(),
         random_identity(),
     );
@@ -404,11 +404,11 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                     Message::Close(_) => 0,
                 };
                 if frame_len > usize::try_from(state.limits.max_frame_bytes).unwrap_or(usize::MAX) {
-                    let failure = v1::Message {
-                        body: Some(v1::message::Body::Failure(v1::Failure {
+                    let failure = conex_proto::Message {
+                        body: Some(conex_proto::message::Body::Failure(conex_proto::Failure {
                             request_id: None,
                             error: Some(to_wire_error(&CallError::new(
-                                v1::ErrorCode::QuotaExceeded,
+                                conex_proto::ErrorCode::QuotaExceeded,
                                 "websocket frame exceeds negotiated limit",
                             ))),
                         })),
@@ -427,10 +427,10 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                 }
                 match message {
                     Message::Text(text) => {
-                        if business_profile != ProfileId::JsonRpc2WssV1 {
+                        if business_profile != ProfileId::JsonRpc2Wss {
                             let failure = wire_failure(
                                 None,
-                                v1::ErrorCode::BadRequest,
+                                conex_proto::ErrorCode::BadRequest,
                                 "text business frames require the JSON profile",
                             );
                             if let Some(bytes) = encode_proto_message(&failure) {
@@ -450,8 +450,8 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                             Err(error) => {
                                 let failure = wire_failure(
                                     error.request_id,
-                                    v1::ErrorCode::try_from(error.rpc_code)
-                                        .unwrap_or(v1::ErrorCode::ParseError),
+                                    conex_proto::ErrorCode::try_from(error.rpc_code)
+                                        .unwrap_or(conex_proto::ErrorCode::ParseError),
                                     error.message,
                                 );
                                 if let Some(reply) = encode_json_message(&failure) {
@@ -470,8 +470,8 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                         if let Err(error) = validate_message(&message) {
                             let failure = wire_failure(
                                 error.request_id,
-                                v1::ErrorCode::try_from(error.rpc_code)
-                                    .unwrap_or(v1::ErrorCode::BadRequest),
+                                conex_proto::ErrorCode::try_from(error.rpc_code)
+                                    .unwrap_or(conex_proto::ErrorCode::BadRequest),
                                 error.message,
                             );
                             if let Some(reply) = encode_json_message(&failure) {
@@ -482,7 +482,7 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                             continue;
                         }
                         match message.body.as_ref() {
-                            Some(v1::message::Body::Success(success)) => {
+                            Some(conex_proto::message::Body::Success(success)) => {
                                 let value = success
                                     .result
                                     .as_ref()
@@ -491,21 +491,21 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                 let _ = pending.route(generation, &success.request_id, Ok(value)).await;
                                 continue;
                             }
-                            Some(v1::message::Body::Failure(failure)) => {
+                            Some(conex_proto::message::Body::Failure(failure)) => {
                                 if let Some(id) = failure.request_id.as_ref() {
                                     let error = failure
                                         .error
                                         .as_ref()
                                         .map(|error| {
                                             CallError::new(
-                                                v1::ErrorCode::try_from(error.code)
-                                                    .unwrap_or(v1::ErrorCode::BadRequest),
+                                                conex_proto::ErrorCode::try_from(error.code)
+                                                    .unwrap_or(conex_proto::ErrorCode::BadRequest),
                                                 error.message.clone(),
                                             )
                                         })
                                         .unwrap_or_else(|| {
                                             CallError::new(
-                                                v1::ErrorCode::BadRequest,
+                                                conex_proto::ErrorCode::BadRequest,
                                                 "remote failure",
                                             )
                                         });
@@ -513,15 +513,15 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                 }
                                 continue;
                             }
-                            Some(v1::message::Body::Request(_)) => {}
-                            Some(v1::message::Body::Notification(_)) | None => continue,
+                            Some(conex_proto::message::Body::Request(_)) => {}
+                            Some(conex_proto::message::Body::Notification(_)) | None => continue,
                         }
                         let frame = match broker_frame_from_message(message) {
                             Ok(Some(frame)) => frame,
                             Ok(None) => continue,
                             Err(error) => {
-                                if let Ok(bytes) = encode_wire(&v1::Message {
-                                    body: Some(v1::message::Body::Failure(v1::Failure {
+                                if let Ok(bytes) = encode_wire(&conex_proto::Message {
+                                    body: Some(conex_proto::message::Body::Failure(conex_proto::Failure {
                                         request_id: None,
                                         error: Some(to_wire_error(&error)),
                                     })),
@@ -549,7 +549,7 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                         {
                             let failure = wire_failure(
                                 Some(frame.request_id.clone()),
-                                v1::ErrorCode::Forbidden,
+                                conex_proto::ErrorCode::Forbidden,
                                 "method is not allowed on UI links",
                             );
                             if let Some(reply) = encode_json_message(&failure) {
@@ -563,11 +563,11 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                         let permit = match inflight.clone().try_acquire_owned() {
                             Ok(permit) => permit,
                             Err(_) => {
-                                let failure = v1::Message {
-                                    body: Some(v1::message::Body::Failure(v1::Failure {
+                                let failure = conex_proto::Message {
+                                    body: Some(conex_proto::message::Body::Failure(conex_proto::Failure {
                                         request_id: Some(request_id),
                                         error: Some(to_wire_error(&CallError::new(
-                                            v1::ErrorCode::QuotaExceeded,
+                                            conex_proto::ErrorCode::QuotaExceeded,
                                             "too many in-flight requests",
                                         ))),
                                     })),
@@ -591,13 +591,13 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                         let close_task = close_tx.clone();
                         dispatch_tasks.spawn(async move {
                             let result = dispatch_business(&task_state, frame, business_profile, generation).await;
-                            let response = v1::Message {
+                            let response = conex_proto::Message {
                                 body: Some(match result {
-                                    Ok(value) => v1::message::Body::Success(v1::Success {
+                                    Ok(value) => conex_proto::message::Body::Success(conex_proto::Success {
                                         request_id,
                                         result: Some(crate::http::json_to_pbjson(value)),
                                     }),
-                                    Err(error) => v1::message::Body::Failure(v1::Failure {
+                                    Err(error) => conex_proto::message::Body::Failure(conex_proto::Failure {
                                         request_id: Some(request_id),
                                         error: Some(to_wire_error(&error)),
                                     }),
@@ -621,10 +621,10 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                         });
                     }
                     Message::Binary(bytes) => {
-                        if business_profile != ProfileId::ProtobufWssV1 {
+                        if business_profile != ProfileId::ProtobufWss {
                             let failure = wire_failure(
                                 None,
-                                v1::ErrorCode::BadRequest,
+                                conex_proto::ErrorCode::BadRequest,
                                 "binary business frames require the protobuf profile",
                             );
                             if let Some(reply) = encode_json_message(&failure) {
@@ -634,12 +634,12 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                             }
                             continue;
                         }
-                        let message = match v1::Message::decode(bytes.as_ref()) {
+                        let message = match conex_proto::Message::decode(bytes.as_ref()) {
                             Ok(message) => message,
                             Err(error) => {
                                 let failure = wire_failure(
                                     None,
-                                    v1::ErrorCode::ParseError,
+                                    conex_proto::ErrorCode::ParseError,
                                     format!("cannot decode protobuf frame: {error}"),
                                 );
                                 if let Some(bytes) = encode_proto_message(&failure) {
@@ -658,8 +658,8 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                         if let Err(error) = validate_message(&message) {
                             let failure = wire_failure(
                                 error.request_id,
-                                v1::ErrorCode::try_from(error.rpc_code)
-                                    .unwrap_or(v1::ErrorCode::BadRequest),
+                                conex_proto::ErrorCode::try_from(error.rpc_code)
+                                    .unwrap_or(conex_proto::ErrorCode::BadRequest),
                                 error.message,
                             );
                             if let Some(bytes) = encode_proto_message(&failure) {
@@ -675,7 +675,7 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                             continue;
                         }
                         match message.body.as_ref() {
-                            Some(v1::message::Body::Success(success)) => {
+                            Some(conex_proto::message::Body::Success(success)) => {
                                 let value = success
                                     .result
                                     .as_ref()
@@ -684,21 +684,21 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                 let _ = pending.route(generation, &success.request_id, Ok(value)).await;
                                 continue;
                             }
-                            Some(v1::message::Body::Failure(failure)) => {
+                            Some(conex_proto::message::Body::Failure(failure)) => {
                                 if let Some(id) = failure.request_id.as_ref() {
                                     let error = failure
                                         .error
                                         .as_ref()
                                         .map(|error| {
                                             CallError::new(
-                                                v1::ErrorCode::try_from(error.code)
-                                                    .unwrap_or(v1::ErrorCode::BadRequest),
+                                                conex_proto::ErrorCode::try_from(error.code)
+                                                    .unwrap_or(conex_proto::ErrorCode::BadRequest),
                                                 error.message.clone(),
                                             )
                                         })
                                         .unwrap_or_else(|| {
                                             CallError::new(
-                                                v1::ErrorCode::BadRequest,
+                                                conex_proto::ErrorCode::BadRequest,
                                                 "remote failure",
                                             )
                                         });
@@ -714,8 +714,8 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                             Err(error) => {
                                 let failure = wire_failure(
                                     None,
-                                    v1::ErrorCode::try_from(error.code())
-                                        .unwrap_or(v1::ErrorCode::BadRequest),
+                                    conex_proto::ErrorCode::try_from(error.code())
+                                        .unwrap_or(conex_proto::ErrorCode::BadRequest),
                                     error.message(),
                                 );
                                 if let Some(buf) = encode_proto_message(&failure) {
@@ -742,7 +742,7 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                         {
                             let failure = wire_failure(
                                 Some(frame.request_id.clone()),
-                                v1::ErrorCode::Forbidden,
+                                conex_proto::ErrorCode::Forbidden,
                                 "method is not allowed on UI links",
                             );
                             if let Some(buf) = encode_proto_message(&failure) {
@@ -756,11 +756,11 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                         let permit = match inflight.clone().try_acquire_owned() {
                             Ok(permit) => permit,
                             Err(_) => {
-                                let failure = v1::Message {
-                                    body: Some(v1::message::Body::Failure(v1::Failure {
+                                let failure = conex_proto::Message {
+                                    body: Some(conex_proto::message::Body::Failure(conex_proto::Failure {
                                         request_id: Some(request_id),
                                         error: Some(to_wire_error(&CallError::new(
-                                            v1::ErrorCode::QuotaExceeded,
+                                            conex_proto::ErrorCode::QuotaExceeded,
                                             "too many in-flight requests",
                                         ))),
                                     })),
@@ -783,13 +783,13 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                         let close_task = close_tx.clone();
                         dispatch_tasks.spawn(async move {
                             let result = dispatch_business(&task_state, frame, business_profile, generation).await;
-                            let response = v1::Message {
+                            let response = conex_proto::Message {
                                 body: Some(match result {
-                                    Ok(value) => v1::message::Body::Success(v1::Success {
+                                    Ok(value) => conex_proto::message::Body::Success(conex_proto::Success {
                                         request_id,
                                         result: Some(crate::http::json_to_pbjson(value)),
                                     }),
-                                    Err(error) => v1::message::Body::Failure(v1::Failure {
+                                    Err(error) => conex_proto::message::Body::Failure(conex_proto::Failure {
                                         request_id: Some(request_id),
                                         error: Some(to_wire_error(&error)),
                                     }),
@@ -866,22 +866,22 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
 /// envelopes at the socket boundary.
 ///
 /// Notifications return `None` because they do not have a response.
-fn broker_frame_from_message(message: v1::Message) -> CallResult<Option<BrokerFrame>> {
+fn broker_frame_from_message(message: conex_proto::Message) -> CallResult<Option<BrokerFrame>> {
     let (request_id, method, call_params) = match message.body {
-        Some(v1::message::Body::Request(request)) => {
+        Some(conex_proto::message::Body::Request(request)) => {
             (Some(request.request_id), request.method, request.params)
         }
-        Some(v1::message::Body::Notification(notification)) => {
+        Some(conex_proto::message::Body::Notification(notification)) => {
             (None, notification.method, notification.params)
         }
-        Some(v1::message::Body::Success(_)) | Some(v1::message::Body::Failure(_)) => {
+        Some(conex_proto::message::Body::Success(_)) | Some(conex_proto::message::Body::Failure(_)) => {
             return Err(CallError::new(
-                v1::ErrorCode::BadRequest,
+                conex_proto::ErrorCode::BadRequest,
                 "clients must not send responses",
             ));
         }
         None => {
-            return Err(CallError::new(v1::ErrorCode::BadRequest, "empty message"));
+            return Err(CallError::new(conex_proto::ErrorCode::BadRequest, "empty message"));
         }
     };
     let context = call_params.as_ref().and_then(|p| p.context.clone());
@@ -892,7 +892,7 @@ fn broker_frame_from_message(message: v1::Message) -> CallResult<Option<BrokerFr
         .unwrap_or(Value::Null);
     let (caller, plane) = match context.as_ref() {
         Some(ctx) => (ctx.provider_endpoint_id.clone(), ctx.plane),
-        None => (String::new(), v1::Plane::Broker as i32),
+        None => (String::new(), conex_proto::Plane::Broker as i32),
     };
     let frame = BrokerFrame {
         request_id: request_id.clone().unwrap_or_else(|| "notif".to_string()),
@@ -918,18 +918,18 @@ fn broker_frame_from_message(message: v1::Message) -> CallResult<Option<BrokerFr
     })
 }
 
-fn to_wire_error(error: &CallError) -> v1::Error {
-    v1::Error {
+fn to_wire_error(error: &CallError) -> conex_proto::Error {
+    conex_proto::Error {
         code: error.code(),
         message: error.message().to_string(),
         ..Default::default()
     }
 }
-fn wire_failure(request_id: Option<String>, code: v1::ErrorCode, message: impl Into<String>) -> v1::Message {
-    v1::Message {
-        body: Some(v1::message::Body::Failure(v1::Failure {
+fn wire_failure(request_id: Option<String>, code: conex_proto::ErrorCode, message: impl Into<String>) -> conex_proto::Message {
+    conex_proto::Message {
+        body: Some(conex_proto::message::Body::Failure(conex_proto::Failure {
             request_id,
-            error: Some(v1::Error {
+            error: Some(conex_proto::Error {
                 code: code as i32,
                 message: message.into(),
                 ..Default::default()
@@ -939,17 +939,17 @@ fn wire_failure(request_id: Option<String>, code: v1::ErrorCode, message: impl I
 }
 fn protocol_error_to_call(error: ProtocolError) -> CallError {
     CallError::new(
-        v1::ErrorCode::try_from(error.rpc_code).unwrap_or(v1::ErrorCode::BadRequest),
+        conex_proto::ErrorCode::try_from(error.rpc_code).unwrap_or(conex_proto::ErrorCode::BadRequest),
         error.message,
     )
 }
 
-fn encode_proto_message(message: &v1::Message) -> Option<Vec<u8>> {
+fn encode_proto_message(message: &conex_proto::Message) -> Option<Vec<u8>> {
     let mut bytes = Vec::new();
     message.encode(&mut bytes).ok().map(|()| bytes)
 }
 
-fn encode_json_message(message: &v1::Message) -> Option<Message> {
+fn encode_json_message(message: &conex_proto::Message) -> Option<Message> {
     encode_wire(message)
         .ok()
         .map(|bytes| Message::Text(String::from_utf8_lossy(&bytes).into_owned().into()))
@@ -1017,20 +1017,20 @@ async fn dispatch_business(
         && state.web_session.as_ref().is_some_and(|session| !session.is_active())
     {
         return Err(CallError::new(
-            v1::ErrorCode::Unauthorized,
+            conex_proto::ErrorCode::Unauthorized,
             "web session is revoked or expired",
         ));
     }
     let plane = frame.context.plane;
     if frame.method.starts_with("agent/") && state.role != "agent" {
         return Err(CallError::new(
-            v1::ErrorCode::Forbidden,
+            conex_proto::ErrorCode::Forbidden,
             "agent methods require an authenticated agent WSS role",
         ));
     }
-    if plane != v1::Plane::Broker as i32 {
+    if plane != conex_proto::Plane::Broker as i32 {
         return Err(CallError::new(
-            v1::ErrorCode::PlaneMismatch,
+            conex_proto::ErrorCode::PlaneMismatch,
             "P1 only supports the broker plane",
         ));
     }
@@ -1066,11 +1066,11 @@ async fn dispatch_agent(
     generation: u64,
 ) -> CallResult<Value> {
     let side = state.host_side.as_ref().ok_or_else(|| {
-        CallError::new(v1::ErrorCode::Unavailable, "agent links are not configured")
+        CallError::new(conex_proto::ErrorCode::Unavailable, "agent links are not configured")
     })?;
     let input = frame.params.unwrap_or(Value::Null);
     let map = input.as_object().ok_or_else(|| {
-        CallError::new(v1::ErrorCode::BadRequest, "agent input must be an object")
+        CallError::new(conex_proto::ErrorCode::BadRequest, "agent input must be an object")
     })?;
     match frame.method.as_str() {
         "agent/register" => {
@@ -1084,13 +1084,13 @@ async fn dispatch_agent(
                 .is_some_and(|expected| expected != host_origin)
             {
                 return Err(CallError::new(
-                    v1::ErrorCode::Forbidden,
+                    conex_proto::ErrorCode::Forbidden,
                     "agent hostOrigin does not match host",
                 ));
             }
             if agent_id != state.caller.principal_id {
                 return Err(CallError::new(
-                    v1::ErrorCode::Forbidden,
+                    conex_proto::ErrorCode::Forbidden,
                     "agent identity does not match authenticated principal",
                 ));
             }
@@ -1106,27 +1106,27 @@ async fn dispatch_agent(
                 host_origin,
             };
             side.register_agent_link(registration.clone(), generation)
-                .map_err(|error| CallError::new(v1::ErrorCode::Forbidden, error.to_string()))?;
+                .map_err(|error| CallError::new(conex_proto::ErrorCode::Forbidden, error.to_string()))?;
             side.activate_connection(&registration.agent_id, generation)
                 .await
-                .map_err(|error| CallError::new(v1::ErrorCode::Forbidden, error.to_string()))?;
+                .map_err(|error| CallError::new(conex_proto::ErrorCode::Forbidden, error.to_string()))?;
             Ok(json!({"agentId": registration.agent_id, "generation": generation}))
         }
         "agent/heartbeat" => {
             let agent_id = crate::agent::require_string(map, "agentId")?;
             if agent_id != state.caller.principal_id {
                 return Err(CallError::new(
-                    v1::ErrorCode::Forbidden,
+                    conex_proto::ErrorCode::Forbidden,
                     "agent identity does not match authenticated principal",
                 ));
             }
             let timestamp = side
                 .heartbeat_agent(agent_id, generation)
-                .map_err(|error| CallError::new(v1::ErrorCode::Forbidden, error.to_string()))?;
+                .map_err(|error| CallError::new(conex_proto::ErrorCode::Forbidden, error.to_string()))?;
             Ok(json!({"agentId": agent_id, "heartbeatAtMs": timestamp.to_string()}))
         }
         _ => Err(CallError::new(
-            v1::ErrorCode::Forbidden,
+            conex_proto::ErrorCode::Forbidden,
             "agent links may only register and heartbeat",
         )),
     }
@@ -1195,7 +1195,7 @@ async fn handle_stream(
     let value = match frame.method.as_str() {
         "stream/ack" => {
             let ack: AckRequest = serde_json::from_value(input).map_err(|e| {
-                CallError::new(v1::ErrorCode::BadRequest, format!("bad stream/ack: {e}"))
+                CallError::new(conex_proto::ErrorCode::BadRequest, format!("bad stream/ack: {e}"))
             })?;
             hub.check_epoch(ack.epoch).map_err(stream_error_to_call)?;
             stream_outcome_to_json(
@@ -1205,7 +1205,7 @@ async fn handle_stream(
         }
         "stream/flow" => {
             let flow: FlowRequest = serde_json::from_value(input).map_err(|e| {
-                CallError::new(v1::ErrorCode::BadRequest, format!("bad stream/flow: {e}"))
+                CallError::new(conex_proto::ErrorCode::BadRequest, format!("bad stream/flow: {e}"))
             })?;
             hub.check_epoch(flow.epoch).map_err(stream_error_to_call)?;
             stream_outcome_to_json(
@@ -1219,7 +1219,7 @@ async fn handle_stream(
         }
         "stream/reset" => {
             let reset: ResetRequest = serde_json::from_value(input).map_err(|e| {
-                CallError::new(v1::ErrorCode::BadRequest, format!("bad stream/reset: {e}"))
+                CallError::new(conex_proto::ErrorCode::BadRequest, format!("bad stream/reset: {e}"))
             })?;
             hub.check_epoch(reset.epoch).map_err(stream_error_to_call)?;
             stream_outcome_to_json(
@@ -1234,7 +1234,7 @@ async fn handle_stream(
         }
         "stream/frame" => {
             let stream_frame: StreamFrame = serde_json::from_value(input).map_err(|e| {
-                CallError::new(v1::ErrorCode::BadRequest, format!("bad stream/frame: {e}"))
+                CallError::new(conex_proto::ErrorCode::BadRequest, format!("bad stream/frame: {e}"))
             })?;
             hub.check_epoch(stream_frame.epoch)
                 .map_err(stream_error_to_call)?;
@@ -1242,36 +1242,36 @@ async fn handle_stream(
                 .receive_frame(&stream_frame)
                 .map_err(stream_error_to_call)?;
             // A stream data frame carries one business message (design §1:
-            // "业务消息先经 conex-proto 解析为 v1::Message，再用 StreamFrame
+            // "业务消息先经 conex-proto 解析为 conex_proto::Message，再用 StreamFrame
             // 承载"). Decode per the agreed profile and dispatch through the
             // same broker path — credit/seq/epoch are enforced above.
             if stream_frame.message.is_empty() {
                 return Err(stream_error_to_call(StreamError::ZeroByteRejected));
             }
             let inner = match business_profile {
-                ProfileId::JsonRpc2WssV1 => {
+                ProfileId::JsonRpc2Wss => {
                     let message = decode_wire(&stream_frame.message)
                         .map_err(protocol_error_to_call)?;
                     validate_message(&message).map_err(protocol_error_to_call)?;
                     broker_frame_from_message(message)?.ok_or_else(|| {
                         CallError::new(
-                            v1::ErrorCode::BadRequest,
+                            conex_proto::ErrorCode::BadRequest,
                             "stream frame message must be a request (not a notification)",
                         )
                     })?
                 }
-                ProfileId::ProtobufWssV1 => {
+                ProfileId::ProtobufWss => {
                     let message =
-                        v1::Message::decode(stream_frame.message.as_slice()).map_err(|e| {
+                        conex_proto::Message::decode(stream_frame.message.as_slice()).map_err(|e| {
                             CallError::new(
-                                v1::ErrorCode::BadRequest,
+                                conex_proto::ErrorCode::BadRequest,
                                 format!("cannot decode stream frame message: {e}"),
                             )
                         })?;
                     validate_message(&message).map_err(protocol_error_to_call)?;
                     broker_frame_from_message(message)?.ok_or_else(|| {
                         CallError::new(
-                            v1::ErrorCode::BadRequest,
+                            conex_proto::ErrorCode::BadRequest,
                             "stream frame message must be a request (not a notification)",
                         )
                     })?
@@ -1279,7 +1279,7 @@ async fn handle_stream(
             };
             if inner.method.starts_with("agent/") {
                 return Err(CallError::new(
-                    v1::ErrorCode::Forbidden,
+                    conex_proto::ErrorCode::Forbidden,
                     "agent control methods cannot be carried in stream frames",
                 ));
             }
@@ -1293,7 +1293,7 @@ async fn handle_stream(
         }
         other => {
             return Err(CallError::new(
-                v1::ErrorCode::UnknownMethod,
+                conex_proto::ErrorCode::UnknownMethod,
                 format!("unknown stream method {other}"),
             ));
         }
@@ -1304,19 +1304,19 @@ async fn handle_stream(
 fn stream_error_to_call(error: StreamError) -> CallError {
     match error {
         StreamError::EpochFenced { .. } => {
-            CallError::new(v1::ErrorCode::ResumeUnavailable, error.to_string())
+            CallError::new(conex_proto::ErrorCode::ResumeUnavailable, error.to_string())
         }
         StreamError::ZeroByteRejected => {
-            CallError::new(v1::ErrorCode::BadRequest, error.to_string())
+            CallError::new(conex_proto::ErrorCode::BadRequest, error.to_string())
         }
-        StreamError::StreamFailed(reason) => CallError::new(v1::ErrorCode::BadRequest, reason),
+        StreamError::StreamFailed(reason) => CallError::new(conex_proto::ErrorCode::BadRequest, reason),
         StreamError::SlowConsumer { .. } => {
-            CallError::new(v1::ErrorCode::SlowConsumer, error.to_string())
+            CallError::new(conex_proto::ErrorCode::SlowConsumer, error.to_string())
         }
         StreamError::ControlQueueFull => {
-            CallError::new(v1::ErrorCode::QuotaExceeded, error.to_string())
+            CallError::new(conex_proto::ErrorCode::QuotaExceeded, error.to_string())
         }
-        StreamError::BadRequest(message) => CallError::new(v1::ErrorCode::BadRequest, message),
+        StreamError::BadRequest(message) => CallError::new(conex_proto::ErrorCode::BadRequest, message),
     }
 }
 
@@ -1380,7 +1380,7 @@ pub fn validate_envelope(value: &Value) -> CallResult<&str> {
         Some("2.0") => {}
         _ => {
             return Err(CallError::new(
-                v1::ErrorCode::BadRequest,
+                conex_proto::ErrorCode::BadRequest,
                 "jsonrpc must be \"2.0\"",
             ));
         }
@@ -1388,11 +1388,11 @@ pub fn validate_envelope(value: &Value) -> CallResult<&str> {
     value
         .get("method")
         .and_then(Value::as_str)
-        .ok_or_else(|| CallError::new(v1::ErrorCode::BadRequest, "method is required"))
+        .ok_or_else(|| CallError::new(conex_proto::ErrorCode::BadRequest, "method is required"))
 }
 
 pub fn expected_planes() -> Vec<&'static str> {
-    vec![plane_name(v1::Plane::Broker)]
+    vec![plane_name(conex_proto::Plane::Broker)]
 }
 
 pub fn accepted_profile(value: ProfileId) -> &'static str {
@@ -1407,7 +1407,7 @@ pub use conex_core::transport_ws::BootstrapError as HandshakeError;
 
 /// Standalone helper used by integration tests: build a `ClientHandshake` from
 /// the same profile the server uses.
-pub fn build_client(profile: ProfileId, plane: v1::Plane) -> ClientHandshake {
+pub fn build_client(profile: ProfileId, plane: conex_proto::Plane) -> ClientHandshake {
     let mut client = ClientHandshake::new();
     // Ignore the unused result; tests rely on `ClientHandshake::build_hello`
     // directly to drive the state machine.
@@ -1484,15 +1484,15 @@ mod tests {
 
     #[test]
     fn protobuf_business_validation_rejects_incomplete_request() {
-        let message = v1::Message {
-            body: Some(v1::message::Body::Request(v1::Request {
+        let message = conex_proto::Message {
+            body: Some(conex_proto::message::Body::Request(conex_proto::Request {
                 request_id: String::new(),
                 method: String::new(),
                 params: None,
             })),
         };
         let error = validate_message(&message).expect_err("incomplete request must be rejected");
-        assert_eq!(error.rpc_code, v1::ErrorCode::BadRequest as i32);
+        assert_eq!(error.rpc_code, conex_proto::ErrorCode::BadRequest as i32);
     }
 
     #[tokio::test]
@@ -1524,6 +1524,6 @@ mod tests {
         let rx = pending.register("close-me").await.unwrap();
         pending.fail_all().await;
         let error = rx.await.unwrap().unwrap_err();
-        assert_eq!(error.code(), v1::ErrorCode::Unavailable as i32);
+        assert_eq!(error.code(), conex_proto::ErrorCode::Unavailable as i32);
     }
 }

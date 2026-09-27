@@ -52,7 +52,7 @@ pub enum ContentError {
 
 impl ContentError {
     pub fn bad_request_code(&self) -> i32 {
-        use conex_proto::v1::ErrorCode;
+        use conex_proto::ErrorCode;
         match self {
             ContentError::BadChunk { .. }
             | ContentError::InvalidCid(_)

@@ -26,21 +26,21 @@
   "phases": {
     "p0": {
       "schemas": [
-        "schema/conex/v1/common.proto",
-        "schema/conex/v1/control.proto",
-        "schema/conex/v1/manifest.proto",
-        "schema/conex/v1/rpc.proto",
-        "schema/conex/v1/source.proto"
+        "schema/conex/common.proto",
+        "schema/conex/control.proto",
+        "schema/conex/manifest.proto",
+        "schema/conex/rpc.proto",
+        "schema/conex/source.proto"
       ],
       "vectors": "conformance/vectors/p0/"
     },
     "p1": {
       "schemas": [
-        "schema/conex/v1/chunking.proto",
-        "schema/conex/v1/session.proto",
-        "schema/conex/v1/stream.proto",
-        "schema/conex/v1/blob.proto",
-        "schema/conex/v1/operation.proto"
+        "schema/conex/chunking.proto",
+        "schema/conex/session.proto",
+        "schema/conex/stream.proto",
+        "schema/conex/blob.proto",
+        "schema/conex/operation.proto"
       ],
       "vectors": "conformance/vectors/p1/",
       "goldenGenerators": {

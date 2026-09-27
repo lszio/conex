@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use conex_core::{CallError, CallResult, CredentialKey, CredentialStore, Secret, VerifiedPeer};
-use conex_proto::v1;
+use conex_proto;
 
 pub const MAX_SECRET_BYTES: usize = 16 * 1024;
 
@@ -80,7 +80,7 @@ impl EnvFileStore {
             validate_backend(&binding.backend)?;
             if map.insert(binding.key.clone(), binding.backend).is_some() {
                 return Err(CallError::new(
-                    v1::ErrorCode::Internal,
+                    conex_proto::ErrorCode::Internal,
                     "duplicate credential binding",
                 ));
             }
@@ -122,7 +122,7 @@ impl CredentialStore for EnvFileStore {
 }
 
 fn forbidden(message: &str) -> CallError {
-    CallError::new(v1::ErrorCode::Forbidden, message)
+    CallError::new(conex_proto::ErrorCode::Forbidden, message)
 }
 
 fn validate_secret(value: &str) -> CallResult<()> {
@@ -131,13 +131,13 @@ fn validate_secret(value: &str) -> CallResult<()> {
     }
     if value.len() > MAX_SECRET_BYTES {
         return Err(CallError::new(
-            v1::ErrorCode::PayloadTooLarge,
+            conex_proto::ErrorCode::PayloadTooLarge,
             "credential value exceeds 16 KiB",
         ));
     }
     if value.contains('\r') || value.contains('\n') {
         return Err(CallError::new(
-            v1::ErrorCode::BadRequest,
+            conex_proto::ErrorCode::BadRequest,
             "credential value must not contain CR or LF",
         ));
     }
@@ -149,7 +149,7 @@ fn validate_backend(backend: &CredentialBackend) -> CallResult<()> {
         CredentialBackend::Env(name) => {
             if name.is_empty() {
                 return Err(CallError::new(
-                    v1::ErrorCode::Internal,
+                    conex_proto::ErrorCode::Internal,
                     "env credential name must not be empty",
                 ));
             }
@@ -158,7 +158,7 @@ fn validate_backend(backend: &CredentialBackend) -> CallResult<()> {
         CredentialBackend::File(path) => {
             if !path.is_absolute() {
                 return Err(CallError::new(
-                    v1::ErrorCode::Internal,
+                    conex_proto::ErrorCode::Internal,
                     "credential file path must be absolute",
                 ));
             }
@@ -167,7 +167,7 @@ fn validate_backend(backend: &CredentialBackend) -> CallResult<()> {
                 .any(|component| matches!(component, Component::ParentDir))
             {
                 return Err(CallError::new(
-                    v1::ErrorCode::Internal,
+                    conex_proto::ErrorCode::Internal,
                     "credential file path must not contain ..",
                 ));
             }

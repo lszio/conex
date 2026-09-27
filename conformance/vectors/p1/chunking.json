@@ -1,7 +1,7 @@
 {
   "$schema": "conex P1 canonical chunked-content addressing (ChunkManifest)",
   "contract": "docs/contracts/p1-chunking.md",
-  "structure": "schema/conex/v1/chunking.proto (ChunkManifest)",
+  "structure": "schema/conex/chunking.proto (ChunkManifest)",
   "generator": "conformance/tools/gen_manifest_goldens.py (protoc --encode + python stdlib)",
   "formatVersion": 1,
   "manifestFanout": 1024,

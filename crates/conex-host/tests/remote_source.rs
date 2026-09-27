@@ -8,7 +8,7 @@ use conex_host::serve::{build, BuiltHost};
 use conex_host::{
     AgentConfig, EndpointConfig, HostConfig, PendingRequests, PolicyConfig, RemoteLink, TokenConfig,
 };
-use conex_proto::v1;
+use conex_proto;
 use conex_proto::wire::decode_wire;
 use sha2::Digest;
 use serde_json::json;
@@ -71,7 +71,7 @@ async fn link(built: &BuiltHost, agent: &str, generation: u64) -> (Arc<PendingRe
 async fn reply_once(mut rx: mpsc::Receiver<(Message, usize)>, pending: Arc<PendingRequests>, generation: u64, text: &'static str) {
     let Some((Message::Text(frame), _)) = rx.recv().await else { panic!("missing remote request") };
     let message = decode_wire(frame.as_bytes()).expect("wire request");
-    let v1::message::Body::Request(request) = message.body.expect("request") else { panic!("not request") };
+    let conex_proto::message::Body::Request(request) = message.body.expect("request") else { panic!("not request") };
     pending.route(generation, &request.request_id, Ok(response(text))).await;
 }
 
@@ -92,7 +92,7 @@ async fn remote_agents_are_isolated_and_denied_before_send() {
     assert_eq!(b["text"], "B");
     side.connections.remove("agent-b", 2).await;
     let error = built.host.invoke(&caller_b, "endpoint-b", "source/read", json!({"resourceId":"team/same"}), Duration::from_millis(50)).await.unwrap_err();
-    assert_eq!(error.code_enum(), Some(v1::ErrorCode::Unavailable));
+    assert_eq!(error.code_enum(), Some(conex_proto::ErrorCode::Unavailable));
     let error = built.host.invoke(&caller_a, "endpoint-a", "source/read", json!({"resourceId":"outside/file"}), Duration::from_millis(50)).await.unwrap_err();
     let traversal = built
         .host
@@ -105,10 +105,10 @@ async fn remote_agents_are_isolated_and_denied_before_send() {
         )
         .await
         .unwrap_err();
-    assert_eq!(traversal.code_enum(), Some(v1::ErrorCode::BadRequest));
-    assert_eq!(error.code_enum(), Some(v1::ErrorCode::Forbidden));
+    assert_eq!(traversal.code_enum(), Some(conex_proto::ErrorCode::BadRequest));
+    assert_eq!(error.code_enum(), Some(conex_proto::ErrorCode::Forbidden));
     let wrong_tenant = built.host.invoke(&caller_a, "endpoint-b", "source/read", json!({"resourceId":"team/same"}), Duration::from_millis(50)).await.unwrap_err();
-    assert_eq!(wrong_tenant.code_enum(), Some(v1::ErrorCode::Forbidden));
+    assert_eq!(wrong_tenant.code_enum(), Some(conex_proto::ErrorCode::Forbidden));
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -119,12 +119,12 @@ async fn timeout_cancels_old_request_and_new_generation_cannot_receive_late_resp
     let old = tokio::spawn(async move {
         let Some((Message::Text(frame), _)) = old_rx.recv().await else { return String::new() };
         let message = decode_wire(frame.as_bytes()).unwrap();
-        let v1::message::Body::Request(request) = message.body.unwrap() else { return String::new() };
+        let conex_proto::message::Body::Request(request) = message.body.unwrap() else { return String::new() };
         request.request_id
     });
     let caller = Caller { principal_id: "alice-a".into(), tenant_id: "tenant-a".into(), actor_peer_id: "test".into() };
     let timeout = built.host.invoke(&caller, "endpoint-a", "source/read", json!({"resourceId":"team/same"}), Duration::from_millis(20)).await.unwrap_err();
-    assert_eq!(timeout.code_enum(), Some(v1::ErrorCode::Timeout));
+    assert_eq!(timeout.code_enum(), Some(conex_proto::ErrorCode::Timeout));
     let old_id = old.await.unwrap();
     let (new_pending, new_rx) = link(&built, "agent-a", 11).await;
     assert!(!old_pending.route(10, &old_id, Ok(response("late"))).await);

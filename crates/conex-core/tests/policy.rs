@@ -1,7 +1,7 @@
 //! Authorization: default deny, segment boundaries, subtree claims, versions.
 use conex_core::policy::{Policy, PolicyRule, StaticPolicy, resource_within};
 use conex_core::{Caller, Endpoint, Limits, ResourceClaim};
-use conex_proto::v1;
+use conex_proto;
 use serde_json::Value;
 
 fn caller(principal: &str, tenant: &str) -> Caller {
@@ -17,7 +17,7 @@ fn endpoint(id: &str, tenant: &str) -> Endpoint {
         id: id.into(),
         provider_id: id.into(),
         tenant_id: tenant.into(),
-        plane: v1::Plane::Broker,
+        plane: conex_proto::Plane::Broker,
         provides: vec!["source/read".into()],
         limits: Limits::default(),
     }

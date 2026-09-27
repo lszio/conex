@@ -255,7 +255,7 @@ async fn session_lifecycle_and_binding_mismatch() {
     // Forbidden. `Unauthorized` is reserved for missing/invalid bearer.
     assert_eq!(
         error.code_enum(),
-        Some(conex_proto::v1::ErrorCode::Forbidden)
+        Some(conex_proto::ErrorCode::Forbidden)
     );
 }
 

@@ -8,7 +8,7 @@ use bytes::Bytes;
 use cap_std::ambient_authority;
 use cap_std::fs::Dir;
 use conex_core::{CallContext, CallError, CallResult, ExecutionIo, Handler};
-use conex_proto::v1;
+use conex_proto;
 use serde_json::Value;
 
 use crate::list::build_summary;
@@ -28,7 +28,7 @@ pub struct FsRoot {
 impl FsRoot {
     pub fn open(path: &Path) -> CallResult<FsRoot> {
         let dir = Dir::open_ambient_dir(path, ambient_authority()).map_err(|error| {
-            CallError::new(v1::ErrorCode::Internal, format!("open fs root: {error}"))
+            CallError::new(conex_proto::ErrorCode::Internal, format!("open fs root: {error}"))
         })?;
         Ok(Self { dir })
     }
@@ -43,7 +43,7 @@ impl FsRoot {
         let metadata = file.metadata().map_err(map_io)?;
         if !metadata.is_file() {
             return Err(CallError::new(
-                v1::ErrorCode::Forbidden,
+                conex_proto::ErrorCode::Forbidden,
                 "only regular files are readable",
             ));
         }
@@ -60,7 +60,7 @@ impl FsRoot {
             let metadata = self.dir.symlink_metadata(&prefix).map_err(map_io)?;
             if metadata.file_type().is_symlink() {
                 return Err(CallError::new(
-                    v1::ErrorCode::Forbidden,
+                    conex_proto::ErrorCode::Forbidden,
                     "symlink components are not allowed",
                 ));
             }
@@ -73,14 +73,14 @@ impl FsRoot {
         let resource = conex_source::resource::normalize_resource(resource)?;
         if resource.is_empty() {
             return Err(CallError::new(
-                v1::ErrorCode::BadRequest,
+                conex_proto::ErrorCode::BadRequest,
                 "resourceId must not be empty",
             ));
         }
         let (file, length) = self.open_regular(&resource)?;
         if length > limit as u64 {
             return Err(CallError::new(
-                v1::ErrorCode::PayloadTooLarge,
+                conex_proto::ErrorCode::PayloadTooLarge,
                 "document exceeds the per-document limit",
             ));
         }
@@ -90,7 +90,7 @@ impl FsRoot {
             .map_err(map_io)?;
         if bytes.len() > limit {
             return Err(CallError::new(
-                v1::ErrorCode::PayloadTooLarge,
+                conex_proto::ErrorCode::PayloadTooLarge,
                 "document exceeds the per-document limit",
             ));
         }
@@ -107,12 +107,12 @@ impl FsRoot {
 pub fn map_io(error: std::io::Error) -> CallError {
     use std::io::ErrorKind;
     match error.kind() {
-        ErrorKind::NotFound => CallError::new(v1::ErrorCode::BadRequest, "resource not found"),
+        ErrorKind::NotFound => CallError::new(conex_proto::ErrorCode::BadRequest, "resource not found"),
         ErrorKind::PermissionDenied => {
-            CallError::new(v1::ErrorCode::Forbidden, "resource is not readable")
+            CallError::new(conex_proto::ErrorCode::Forbidden, "resource is not readable")
         }
         _ => CallError::new(
-            v1::ErrorCode::Unavailable,
+            conex_proto::ErrorCode::Unavailable,
             format!("filesystem error: {error}"),
         ),
     }
@@ -133,25 +133,25 @@ impl Handler for ReadHandler {
         let resource = input
             .get("resourceId")
             .and_then(Value::as_str)
-            .ok_or_else(|| CallError::new(v1::ErrorCode::BadRequest, "resourceId is required"))?;
+            .ok_or_else(|| CallError::new(conex_proto::ErrorCode::BadRequest, "resourceId is required"))?;
         if ctx.claim.resource_id != resource {
             return Err(CallError::new(
-                v1::ErrorCode::Forbidden,
+                conex_proto::ErrorCode::Forbidden,
                 "resource does not match the authorized claim",
             ));
         }
         let snapshot = self.root.read(resource, MAX_DOC_BYTES)?;
         let text = String::from_utf8(snapshot.bytes.to_vec()).map_err(|_| {
-            CallError::new(v1::ErrorCode::BadRequest, "document is not valid UTF-8")
+            CallError::new(conex_proto::ErrorCode::BadRequest, "document is not valid UTF-8")
         })?;
         let summary = build_summary(resource, snapshot.bytes.len() as u64)?;
-        let response = v1::SourceReadResponse {
+        let response = conex_proto::SourceReadResponse {
             resource: Some(summary),
             text,
             cid: snapshot.cid,
         };
         serde_json::to_value(response).map_err(|error| {
-            CallError::new(v1::ErrorCode::Internal, format!("encode response: {error}"))
+            CallError::new(conex_proto::ErrorCode::Internal, format!("encode response: {error}"))
         })
     }
 }

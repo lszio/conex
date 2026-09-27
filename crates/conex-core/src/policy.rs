@@ -1,7 +1,7 @@
 //! Resource authorization. Default deny; every axis must match a rule.
 use std::sync::RwLock;
 
-use conex_proto::v1;
+use conex_proto;
 
 use crate::types::{CallError, CallResult, Caller, Endpoint, ResourceClaim};
 
@@ -98,7 +98,7 @@ impl Policy for StaticPolicy {
             })
         } else {
             Err(CallError::new(
-                v1::ErrorCode::Forbidden,
+                conex_proto::ErrorCode::Forbidden,
                 "resource is not permitted for this principal and action",
             ))
         }

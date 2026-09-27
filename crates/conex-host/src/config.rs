@@ -5,7 +5,7 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
 use conex_core::CallError;
-use conex_proto::v1;
+use conex_proto;
 use serde::Deserialize;
 
 pub const SUPPORTED_KINDS: [&str; 3] = ["source-fs", "source-http-catalog", "source-remote"];
@@ -382,7 +382,7 @@ fn default_token_role() -> String {
 }
 
 fn invalid(message: impl std::fmt::Display) -> CallError {
-    CallError::new(v1::ErrorCode::Internal, message.to_string())
+    CallError::new(conex_proto::ErrorCode::Internal, message.to_string())
 }
 fn valid_web_origin(origin: &str) -> bool {
     let authority = origin

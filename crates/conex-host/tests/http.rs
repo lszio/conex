@@ -15,7 +15,7 @@ use conex_host::{
     BindingStore, HttpState, PROFILE_ID, StaticBearerAuth, TokenRecord, attach_state,
     build_router as build_p0_router,
 };
-use conex_proto::v1;
+use conex_proto;
 use serde_json::Value;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -28,7 +28,7 @@ struct UnusedResolver;
 impl Resolver for UnusedResolver {
     async fn resolve(&self, _hostname: &str, _deadline: Instant) -> CallResult<Vec<IpAddr>> {
         Err(CallError::new(
-            v1::ErrorCode::Unavailable,
+            conex_proto::ErrorCode::Unavailable,
             "unused resolver",
         ))
     }
@@ -43,7 +43,7 @@ impl Connector for UnusedConnector {
         _deadline: Instant,
     ) -> CallResult<Box<dyn Connection>> {
         Err(CallError::new(
-            v1::ErrorCode::Unavailable,
+            conex_proto::ErrorCode::Unavailable,
             "unused connector",
         ))
     }
@@ -54,7 +54,7 @@ struct UnusedCredentials;
 impl CredentialStore for UnusedCredentials {
     async fn resolve(&self, _key: &CredentialKey, _peer: &VerifiedPeer) -> CallResult<Secret> {
         Err(CallError::new(
-            v1::ErrorCode::Unavailable,
+            conex_proto::ErrorCode::Unavailable,
             "unused credentials",
         ))
     }
@@ -102,7 +102,7 @@ impl HttpFixture {
                     id: "notes".into(),
                     provider_id: "source".into(),
                     tenant_id: "tenant-a".into(),
-                    plane: v1::Plane::Broker,
+                    plane: conex_proto::Plane::Broker,
                     provides: vec![
                         "source/list".into(),
                         "source/read".into(),

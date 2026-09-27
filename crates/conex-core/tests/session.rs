@@ -5,14 +5,14 @@ use std::time::Duration;
 use conex_core::session::{
     RecoveryLevel, SessionBinding, SessionError, SessionStore, read_session_file,
 };
-use conex_proto::v1;
+use conex_proto;
 
 fn binding() -> SessionBinding {
     SessionBinding {
         principal_id: "alice".into(),
         tenant_id: "tenant-a".into(),
         provider_endpoint_id: "notes-local".into(),
-        plane: v1::Plane::Broker,
+        plane: conex_proto::Plane::Broker,
         workspace_peer_id: Some("workspace-1".into()),
         human_peer_id: Some("ui-1".into()),
     }

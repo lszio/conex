@@ -1,7 +1,7 @@
 //! Identity mapping. External keys are namespaced by source; sub alone is never a key.
 use std::collections::HashMap;
 
-use conex_proto::v1;
+use conex_proto;
 
 use crate::types::{CallError, CallResult, Caller, IdentityKey};
 
@@ -29,7 +29,7 @@ impl IdentityMap {
         let binding = self
             .bindings
             .get(key)
-            .ok_or_else(|| CallError::new(v1::ErrorCode::Unauthorized, "unknown identity"))?;
+            .ok_or_else(|| CallError::new(conex_proto::ErrorCode::Unauthorized, "unknown identity"))?;
         Ok(Caller {
             principal_id: binding.principal_id.clone(),
             tenant_id: binding.tenant_id.clone(),

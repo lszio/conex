@@ -3,7 +3,7 @@ mod support;
 
 use std::time::Duration;
 
-use conex_proto::v1;
+use conex_proto;
 use conex_provider_http_catalog::Catalog;
 use serde_json::json;
 
@@ -14,7 +14,7 @@ fn parse_rejects_duplicate_resource_ids() {
     let body = br#"{"entries":[{"resourceId":"a.md","title":"a","mime":"text/markdown","text":"x"},{"resourceId":"a.md","title":"b","mime":"text/markdown","text":"y"}]}"#;
     assert_eq!(
         Catalog::parse(body).unwrap_err().code_enum(),
-        Some(v1::ErrorCode::BadRequest)
+        Some(conex_proto::ErrorCode::BadRequest)
     );
 }
 
@@ -34,7 +34,7 @@ fn parse_rejects_oversized_entry() {
     .unwrap();
     assert_eq!(
         Catalog::parse(&body).unwrap_err().code_enum(),
-        Some(v1::ErrorCode::PayloadTooLarge)
+        Some(conex_proto::ErrorCode::PayloadTooLarge)
     );
 }
 
@@ -101,6 +101,6 @@ async fn upstream_redirect_is_rejected() {
         .await;
     assert_eq!(
         result.unwrap_err().code_enum(),
-        Some(v1::ErrorCode::Unavailable)
+        Some(conex_proto::ErrorCode::Unavailable)
     );
 }

@@ -98,7 +98,7 @@ fn per_principal_snapshot_limit_is_enforced() {
     let error = cache.create(k.clone(), vec![]).unwrap_err();
     assert_eq!(
         error.code_enum(),
-        Some(conex_proto::v1::ErrorCode::QuotaExceeded)
+        Some(conex_proto::ErrorCode::QuotaExceeded)
     );
     assert!(cache.create(key("bob", ""), vec![]).is_ok());
 }

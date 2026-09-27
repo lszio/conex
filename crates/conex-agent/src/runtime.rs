@@ -11,7 +11,7 @@ use tokio_tungstenite::Connector;
 use tokio_tungstenite::tungstenite::Message;
 
 use conex_core::transport_ws::{BootstrapFrame, BootstrapState, ClientHandshake, ProfileId};
-use conex_proto::v1;
+use conex_proto;
 use conex_proto::wire::{decode_wire, encode_wire};
 use conex_provider_fs::{FsRoot, list, read::MAX_DOC_BYTES};
 use conex_source::contracts::{DEFAULT_PAGE, MAX_ITEMS};
@@ -93,7 +93,7 @@ async fn connect_once(config: &AgentConfig, token: &str) -> Result<(), String> {
         .collect::<Vec<_>>();
     let mut handshake = ClientHandshake::new();
     let hello = handshake
-        .build_hello(ProfileId::JsonRpc2WssV1, v1::Plane::Broker, methods.clone(), vec![])
+        .build_hello(ProfileId::JsonRpc2Wss, conex_proto::Plane::Broker, methods.clone(), vec![])
         .map_err(|error| error.to_string())?;
     socket
         .send(Message::Text(hello.json.into()))
@@ -157,15 +157,15 @@ async fn connect_once(config: &AgentConfig, token: &str) -> Result<(), String> {
                     Message::Text(text) => {
                         if let Ok(message) = decode_wire(text.as_bytes()) {
                             match message.body {
-                                Some(v1::message::Body::Success(success))
+                                Some(conex_proto::message::Body::Success(success))
                                     if success.request_id == HEARTBEAT_REQUEST_ID => {}
-                                Some(v1::message::Body::Failure(failure))
+                                Some(conex_proto::message::Body::Failure(failure))
                                     if failure.request_id.as_deref() == Some(HEARTBEAT_REQUEST_ID) =>
                                 {
                                     let message = failure.error.map(|error| error.message).unwrap_or_else(|| "heartbeat rejected".into());
                                     return Err(format!("heartbeat rejected: {message}"));
                                 }
-                                Some(v1::message::Body::Request(_)) => {
+                                Some(conex_proto::message::Body::Request(_)) => {
                                     if let Some(reply) = handle_request(&providers, text.as_bytes()).await {
                                         socket.send(Message::Text(reply.into())).await.map_err(|error| format!("send response: {error}"))?;
                                     }
@@ -206,14 +206,14 @@ where
     S: futures::Sink<Message> + Unpin,
     S::Error: std::fmt::Display,
 {
-    let message = v1::Message {
-        body: Some(v1::message::Body::Request(v1::Request {
+    let message = conex_proto::Message {
+        body: Some(conex_proto::message::Body::Request(conex_proto::Request {
             request_id: request_id.into(),
             method: method.into(),
-            params: Some(v1::CallParams {
-                context: Some(v1::RequestContext {
+            params: Some(conex_proto::CallParams {
+                context: Some(conex_proto::RequestContext {
                     provider_endpoint_id: "agent-mgr".into(),
-                    plane: v1::Plane::Broker as i32,
+                    plane: conex_proto::Plane::Broker as i32,
                     binding_id: None,
                 }),
                 timeout_budget_ms: 8_000,
@@ -246,12 +246,12 @@ where
                 let message = decode_wire(text.as_bytes())
                     .map_err(|error| format!("decode response: {}", error.message))?;
                 match message.body {
-                    Some(v1::message::Body::Success(success))
+                    Some(conex_proto::message::Body::Success(success))
                         if success.request_id == request_id =>
                     {
                         return Ok(());
                     }
-                    Some(v1::message::Body::Failure(failure))
+                    Some(conex_proto::message::Body::Failure(failure))
                         if failure.request_id.as_deref() == Some(request_id) =>
                     {
                         let message = failure
@@ -277,22 +277,22 @@ where
 async fn handle_request(providers: &[LocalProvider], bytes: &[u8]) -> Option<String> {
     let message = decode_wire(bytes).ok()?;
     let request = match message.body? {
-        v1::message::Body::Request(request) => request,
+        conex_proto::message::Body::Request(request) => request,
         _ => return None,
     };
     let result = dispatch_local(providers, &request.method, request.params.as_ref().and_then(|params| params.input.as_ref()).map(|value| serde_json::to_value(value).unwrap_or(Value::Null)).unwrap_or(Value::Null), request.params.as_ref().and_then(|params| params.context.as_ref()).map(|context| context.provider_endpoint_id.as_str()).unwrap_or("")).await;
     let body = match result {
-        Ok(value) => v1::message::Body::Success(v1::Success { request_id: request.request_id, result: Some(serde_json::from_value(value).unwrap_or_default()) }),
-        Err(error) => v1::message::Body::Failure(v1::Failure { request_id: Some(request.request_id), error: Some(v1::Error { code: error.code(), message: error.message().into(), ..Default::default() }) }),
+        Ok(value) => conex_proto::message::Body::Success(conex_proto::Success { request_id: request.request_id, result: Some(serde_json::from_value(value).unwrap_or_default()) }),
+        Err(error) => conex_proto::message::Body::Failure(conex_proto::Failure { request_id: Some(request.request_id), error: Some(conex_proto::Error { code: error.code(), message: error.message().into(), ..Default::default() }) }),
     };
-    let bytes = encode_wire(&v1::Message { body: Some(body) }).ok()?;
+    let bytes = encode_wire(&conex_proto::Message { body: Some(body) }).ok()?;
     String::from_utf8(bytes).ok()
 }
 
 async fn dispatch_local(providers: &[LocalProvider], method: &str, input: Value, endpoint_id: &str) -> Result<Value, conex_core::CallError> {
-    let provider = providers.iter().find(|provider| provider.endpoint_id == endpoint_id).ok_or_else(|| conex_core::CallError::new(v1::ErrorCode::UnknownProvider, "unknown configured endpoint"))?;
+    let provider = providers.iter().find(|provider| provider.endpoint_id == endpoint_id).ok_or_else(|| conex_core::CallError::new(conex_proto::ErrorCode::UnknownProvider, "unknown configured endpoint"))?;
     if !provider.methods.contains(method) {
-        return Err(conex_core::CallError::new(v1::ErrorCode::UnsupportedCapability, "method is not enabled for endpoint"));
+        return Err(conex_core::CallError::new(conex_proto::ErrorCode::UnsupportedCapability, "method is not enabled for endpoint"));
     }
     provider.dispatch(method, input)
 }
@@ -321,31 +321,31 @@ impl LocalProvider {
     fn dispatch(&self, method: &str, input: Value) -> Result<Value, conex_core::CallError> {
         match method {
             "source/read" => {
-                let resource = input.get("resourceId").and_then(Value::as_str).ok_or_else(|| conex_core::CallError::new(v1::ErrorCode::BadRequest, "resourceId is required"))?;
+                let resource = input.get("resourceId").and_then(Value::as_str).ok_or_else(|| conex_core::CallError::new(conex_proto::ErrorCode::BadRequest, "resourceId is required"))?;
                 let resource = normalize_resource(resource)?;
-                if !self.allowed(&resource) { return Err(conex_core::CallError::new(v1::ErrorCode::Forbidden, "resource is not configured")); }
+                if !self.allowed(&resource) { return Err(conex_core::CallError::new(conex_proto::ErrorCode::Forbidden, "resource is not configured")); }
                 let snapshot = self.root.read(&resource, MAX_DOC_BYTES)?;
-                let text = String::from_utf8(snapshot.bytes.to_vec()).map_err(|_| conex_core::CallError::new(v1::ErrorCode::BadRequest, "document is not valid UTF-8"))?;
+                let text = String::from_utf8(snapshot.bytes.to_vec()).map_err(|_| conex_core::CallError::new(conex_proto::ErrorCode::BadRequest, "document is not valid UTF-8"))?;
                 let summary = list::build_summary(&resource, snapshot.bytes.len() as u64)?;
-                serde_json::to_value(v1::SourceReadResponse { resource: Some(summary), text, cid: snapshot.cid }).map_err(|error| conex_core::CallError::new(v1::ErrorCode::Internal, error.to_string()))
+                serde_json::to_value(conex_proto::SourceReadResponse { resource: Some(summary), text, cid: snapshot.cid }).map_err(|error| conex_core::CallError::new(conex_proto::ErrorCode::Internal, error.to_string()))
             }
             "source/list" | "source/search" => {
                 let root = input.get("root").and_then(Value::as_str).unwrap_or("");
                 let root = normalize_resource(root)?;
-                if !self.allowed(&root) { return Err(conex_core::CallError::new(v1::ErrorCode::Forbidden, "root is not configured")); }
+                if !self.allowed(&root) { return Err(conex_core::CallError::new(conex_proto::ErrorCode::Forbidden, "root is not configured")); }
                 let query = (method == "source/search").then(|| input.get("query").and_then(Value::as_str).unwrap_or(""));
-                if method == "source/search" && query == Some("") { return Err(conex_core::CallError::new(v1::ErrorCode::BadRequest, "query is required")); }
+                if method == "source/search" && query == Some("") { return Err(conex_core::CallError::new(conex_proto::ErrorCode::BadRequest, "query is required")); }
                 let items = list::scan(&self.root, &root, query, MAX_ITEMS)?;
                 let limit = input.get("limit").and_then(Value::as_u64).unwrap_or(DEFAULT_PAGE as u64).min(100) as usize;
                 if method == "source/list" {
                     let items = items.into_iter().take(limit).map(|item| list::build_summary(&item.resource_id, item.size_bytes)).collect::<Result<Vec<_>, _>>()?;
-                    serde_json::to_value(v1::SourceListResponse { items, next_cursor: None }).map_err(|error| conex_core::CallError::new(v1::ErrorCode::Internal, error.to_string()))
+                    serde_json::to_value(conex_proto::SourceListResponse { items, next_cursor: None }).map_err(|error| conex_core::CallError::new(conex_proto::ErrorCode::Internal, error.to_string()))
                 } else {
-                    let items = items.into_iter().take(limit).map(|item| Ok(v1::SearchHit { resource: Some(list::build_summary(&item.resource_id, item.size_bytes)?), excerpt: item.excerpt.unwrap_or_default() })).collect::<Result<Vec<_>, conex_core::CallError>>()?;
-                    serde_json::to_value(v1::SourceSearchResponse { items, next_cursor: None }).map_err(|error| conex_core::CallError::new(v1::ErrorCode::Internal, error.to_string()))
+                    let items = items.into_iter().take(limit).map(|item| Ok(conex_proto::SearchHit { resource: Some(list::build_summary(&item.resource_id, item.size_bytes)?), excerpt: item.excerpt.unwrap_or_default() })).collect::<Result<Vec<_>, conex_core::CallError>>()?;
+                    serde_json::to_value(conex_proto::SourceSearchResponse { items, next_cursor: None }).map_err(|error| conex_core::CallError::new(conex_proto::ErrorCode::Internal, error.to_string()))
                 }
             }
-            _ => Err(conex_core::CallError::new(v1::ErrorCode::UnknownMethod, "unsupported local method")),
+            _ => Err(conex_core::CallError::new(conex_proto::ErrorCode::UnknownMethod, "unsupported local method")),
         }
     }
 }

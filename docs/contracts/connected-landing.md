@@ -1,6 +1,6 @@
 # Connected landing contract
 
-状态：**L01 契约冻结 + L10 连接面板契约冻结**（2026-09-21）。L10 在 `schema/conex/v1/dashboard.proto` 新增 `ConnectionListRequest` / `ConnectionListResponse` / `UiLinkSummary` / `AgentLinkSummary`；Rust/TypeScript/JSON Schema 由 `cargo xtask generate` 生成。L02–L09 边界不变。
+状态：**L01 契约冻结 + L10 连接面板契约冻结**（2026-09-21）。L10 在 `schema/conex/dashboard.proto` 新增 `ConnectionListRequest` / `ConnectionListResponse` / `UiLinkSummary` / `AgentLinkSummary`；Rust/TypeScript/JSON Schema 由 `cargo xtask generate` 生成。L02–L09 边界不变。
 
 ## 7. 连接面板契约（L10）
 

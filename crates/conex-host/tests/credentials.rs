@@ -11,7 +11,7 @@ use conex_core::{
 use conex_host::{
     CredentialBackend, CredentialBinding, EnvFileStore, SecretReader, SystemSecretReader,
 };
-use conex_proto::v1;
+use conex_proto;
 
 mod support {
     use super::*;
@@ -59,7 +59,7 @@ mod support {
                 .unwrap()
                 .get(name)
                 .cloned()
-                .ok_or_else(|| CallError::new(v1::ErrorCode::Forbidden, "missing env secret"))
+                .ok_or_else(|| CallError::new(conex_proto::ErrorCode::Forbidden, "missing env secret"))
         }
 
         async fn read_file(&self, path: &Path) -> CallResult<String> {
@@ -69,7 +69,7 @@ mod support {
                 .unwrap()
                 .get(path)
                 .cloned()
-                .ok_or_else(|| CallError::new(v1::ErrorCode::Forbidden, "missing file secret"))
+                .ok_or_else(|| CallError::new(conex_proto::ErrorCode::Forbidden, "missing file secret"))
         }
     }
 
@@ -168,7 +168,7 @@ async fn audience_mismatch_does_not_load_secret() {
         .await;
     assert_eq!(
         result.unwrap_err().code_enum(),
-        Some(v1::ErrorCode::Forbidden)
+        Some(conex_proto::ErrorCode::Forbidden)
     );
     assert_eq!(fixture.read_count(), 0);
 }
@@ -180,7 +180,7 @@ async fn unknown_key_is_rejected_without_reading() {
     let result = fixture.store.resolve(&other, &fixture.peer()).await;
     assert_eq!(
         result.unwrap_err().code_enum(),
-        Some(v1::ErrorCode::Forbidden)
+        Some(conex_proto::ErrorCode::Forbidden)
     );
     assert_eq!(fixture.read_count(), 0);
 }
@@ -197,7 +197,7 @@ async fn principal_binding_mismatch_is_rejected_without_reading() {
     let result = fixture.store.resolve(&other, &fixture.peer()).await;
     assert_eq!(
         result.unwrap_err().code_enum(),
-        Some(v1::ErrorCode::Forbidden)
+        Some(conex_proto::ErrorCode::Forbidden)
     );
     assert_eq!(fixture.read_count(), 0);
 }
@@ -271,7 +271,7 @@ async fn empty_secret_is_rejected() {
     let result = fixture.store.resolve(&fixture.key, &fixture.peer()).await;
     assert_eq!(
         result.unwrap_err().code_enum(),
-        Some(v1::ErrorCode::Forbidden)
+        Some(conex_proto::ErrorCode::Forbidden)
     );
 }
 
@@ -284,7 +284,7 @@ async fn oversized_secret_is_rejected() {
     let result = fixture.store.resolve(&fixture.key, &fixture.peer()).await;
     assert_eq!(
         result.unwrap_err().code_enum(),
-        Some(v1::ErrorCode::PayloadTooLarge)
+        Some(conex_proto::ErrorCode::PayloadTooLarge)
     );
 }
 
@@ -297,7 +297,7 @@ async fn newline_secret_is_rejected() {
     let result = fixture.store.resolve(&fixture.key, &fixture.peer()).await;
     assert_eq!(
         result.unwrap_err().code_enum(),
-        Some(v1::ErrorCode::BadRequest)
+        Some(conex_proto::ErrorCode::BadRequest)
     );
 }
 

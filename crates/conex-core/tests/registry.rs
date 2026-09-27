@@ -6,7 +6,7 @@ use conex_core::{
     CallContext, CallError, CallResult, Endpoint, ExecutionIo, FactoryKey, Handler, Installation,
     Limits, MethodContract, PreparedInput, Registry, RegistryError, ResourceClaim, Route,
 };
-use conex_proto::v1;
+use conex_proto;
 use serde_json::Value;
 
 const METHODS: [&str; 3] = ["source/list", "source/read", "source/search"];
@@ -44,8 +44,8 @@ fn validate_ok(_: &Value) -> CallResult<()> {
 fn contract() -> MethodContract {
     MethodContract {
         adapter_id: "test-source",
-        input_schema: "conex.v1.SourceReadRequest",
-        output_schema: "conex.v1.SourceReadResponse",
+        input_schema: "conex.SourceReadRequest",
+        output_schema: "conex.SourceReadResponse",
         prepare: prepare_ok,
         validate_output: validate_ok,
     }
@@ -56,7 +56,7 @@ fn endpoint(id: &str, tenant: &str, provides: &[&str]) -> Endpoint {
         id: id.into(),
         provider_id: id.into(),
         tenant_id: tenant.into(),
-        plane: v1::Plane::Broker,
+        plane: conex_proto::Plane::Broker,
         provides: provides.iter().map(|s| s.to_string()).collect(),
         limits: Limits::default(),
     }
@@ -95,7 +95,7 @@ fn fk() -> FactoryKey {
 
 fn refusing_factory(_: &Installation) -> CallResult<Vec<Route>> {
     Err(CallError::new(
-        v1::ErrorCode::UnsupportedCapability,
+        conex_proto::ErrorCode::UnsupportedCapability,
         "test only",
     ))
 }
@@ -243,7 +243,7 @@ fn relay_plane_is_rejected_in_p0() {
     let mut registry = Registry::new();
     registry.register_factory(fk(), factory_full).unwrap();
     let mut inst = installation("a", "t", &METHODS);
-    inst.endpoint.plane = v1::Plane::Relay;
+    inst.endpoint.plane = conex_proto::Plane::Relay;
     assert!(matches!(
         registry.install(inst),
         Err(RegistryError::InvalidInstallation(_))

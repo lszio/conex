@@ -20,9 +20,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut protos = Vec::new();
     collect_protos(&repo_root.join("conformance/schema"), &mut protos);
-    collect_protos(&repo_root.join("schema/conex/v1"), &mut protos);
+    collect_protos(&repo_root.join("schema/conex"), &mut protos);
     if protos.is_empty() {
-        panic!("no .proto files found under conformance/schema or schema/conex/v1");
+        panic!("no .proto files found under conformance/schema or schema/conex");
     }
 
     println!(
@@ -31,14 +31,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!(
         "cargo:rerun-if-changed={}",
-        repo_root.join("schema/conex/v1").display()
+        repo_root.join("schema/conex").display()
     );
 
-    let v1_root = repo_root.join("schema/conex/v1");
-    let has_v1 = protos.iter().any(|p| p.starts_with(&v1_root));
-    println!("cargo:rustc-check-cfg=cfg(has_conex_v1)");
-    if has_v1 {
-        println!("cargo:rustc-cfg=has_conex_v1");
+    let conex_root = repo_root.join("schema/conex");
+    let has_conex = protos.iter().any(|p| p.starts_with(&conex_root));
+    println!("cargo:rustc-check-cfg=cfg(has_conex)");
+    if has_conex {
+        println!("cargo:rustc-cfg=has_conex");
     }
 
     let out = PathBuf::from(env::var("OUT_DIR")?);
@@ -57,9 +57,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     config.compile_protos(&protos, &includes)?;
 
     let bytes = fs::read(&descriptor)?;
-    let mut packages = vec![".conex.test.v1"];
-    if has_v1 {
-        packages.push(".conex.v1");
+    let mut packages = vec![".conex.test"];
+    if has_conex {
+        packages.push(".conex");
     }
     pbjson_build::Builder::new()
         .register_descriptors(&bytes)?

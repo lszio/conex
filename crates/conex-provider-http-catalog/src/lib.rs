@@ -11,7 +11,7 @@ use bytes::Bytes;
 use conex_core::{
     CallContext, CallError, CallResult, ExecutionIo, Handler, Installation, OutboundRequest, Route,
 };
-use conex_proto::v1;
+use conex_proto;
 use conex_source::contracts::{DEFAULT_PAGE, SOURCE_LIST, SOURCE_READ, SOURCE_SEARCH};
 use conex_source::pagination::{
     Clock, PageItem, SnapshotCache, SnapshotKey, SnapshotLimits, SystemClock,
@@ -27,7 +27,7 @@ const DEFAULT_FIXED_PATH: &str = "/catalog.json";
 pub fn factory(installation: &Installation) -> CallResult<Vec<Route>> {
     let target = installation.target.clone().ok_or_else(|| {
         CallError::new(
-            v1::ErrorCode::Internal,
+            conex_proto::ErrorCode::Internal,
             "http-catalog installation requires a target",
         )
     })?;
@@ -66,7 +66,7 @@ pub fn factory(installation: &Installation) -> CallResult<Vec<Route>> {
             }),
             other => {
                 return Err(CallError::new(
-                    v1::ErrorCode::UnsupportedCapability,
+                    conex_proto::ErrorCode::UnsupportedCapability,
                     format!("unexpected source method {other}"),
                 ));
             }
@@ -109,14 +109,14 @@ impl Handler for CatalogReadHandler {
         // Same function as every `blob/*` root (design §5.3).
         let cid =
             conex_proto::cid::content_cid(entry.text.as_bytes(), conex_proto::cid::CHUNK_SIZE);
-        let summary = v1::ResourceSummary {
+        let summary = conex_proto::ResourceSummary {
             resource_id: entry.resource_id.clone(),
             title: entry.title.clone(),
             mime: entry.mime.clone(),
             size_bytes: Some(entry.text.len() as u64),
             revision: None,
         };
-        to_value(v1::SourceReadResponse {
+        to_value(conex_proto::SourceReadResponse {
             resource: Some(summary),
             text: entry.text.clone(),
             cid,
@@ -169,7 +169,7 @@ impl Handler for CatalogListHandler {
                 (None, None) => unreachable!("fresh catalog fetched when there is no cursor"),
             }
         };
-        let response = v1::SourceListResponse {
+        let response = conex_proto::SourceListResponse {
             items: items.iter().map(to_summary).collect(),
             next_cursor,
         };
@@ -235,14 +235,14 @@ impl Handler for CatalogSearchHandler {
                 (None, None) => unreachable!("fresh catalog fetched when there is no cursor"),
             }
         };
-        let hits: Vec<v1::SearchHit> = items
+        let hits: Vec<conex_proto::SearchHit> = items
             .iter()
-            .map(|item| v1::SearchHit {
+            .map(|item| conex_proto::SearchHit {
                 resource: Some(to_summary(item)),
                 excerpt: item.excerpt.clone().unwrap_or_default(),
             })
             .collect();
-        to_value(v1::SourceSearchResponse {
+        to_value(conex_proto::SourceSearchResponse {
             items: hits,
             next_cursor,
         })
@@ -257,7 +257,7 @@ async fn fetch(
 ) -> CallResult<Catalog> {
     let connection = io.connection.as_mut().ok_or_else(|| {
         CallError::new(
-            v1::ErrorCode::Unavailable,
+            conex_proto::ErrorCode::Unavailable,
             "catalog requires a verified connection",
         )
     })?;
@@ -276,13 +276,13 @@ async fn fetch(
     let response = connection.request(request, deadline).await?;
     if response.status != 200 {
         return Err(CallError::new(
-            v1::ErrorCode::Unavailable,
+            conex_proto::ErrorCode::Unavailable,
             format!("catalog upstream status {}", response.status),
         ));
     }
     if response.body.len() > max_response {
         return Err(CallError::new(
-            v1::ErrorCode::PayloadTooLarge,
+            conex_proto::ErrorCode::PayloadTooLarge,
             "catalog response exceeds maxResponseBytes",
         ));
     }
@@ -299,8 +299,8 @@ fn to_page_item(entry: &CatalogEntry) -> PageItem {
     }
 }
 
-fn to_summary(item: &PageItem) -> v1::ResourceSummary {
-    v1::ResourceSummary {
+fn to_summary(item: &PageItem) -> conex_proto::ResourceSummary {
+    conex_proto::ResourceSummary {
         resource_id: item.resource_id.clone(),
         title: item.title.clone(),
         mime: item.mime.clone(),
@@ -332,10 +332,10 @@ fn ceil_char_boundary(text: &str, mut index: usize) -> usize {
 
 fn to_value<T: serde::Serialize>(value: T) -> CallResult<Value> {
     serde_json::to_value(value).map_err(|error| {
-        CallError::new(v1::ErrorCode::Internal, format!("encode response: {error}"))
+        CallError::new(conex_proto::ErrorCode::Internal, format!("encode response: {error}"))
     })
 }
 
 fn bad(message: impl Into<String>) -> CallError {
-    CallError::new(v1::ErrorCode::BadRequest, message)
+    CallError::new(conex_proto::ErrorCode::BadRequest, message)
 }

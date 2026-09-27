@@ -213,7 +213,7 @@ async fn tls_listener_serves_authenticated_rpc() {
     tokio::time::sleep(Duration::from_millis(300)).await;
 
     let addr: SocketAddr = format!("127.0.0.1:{port}").parse().unwrap();
-    let hello = "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"conex/hello\",\"params\":{\"context\":{\"providerEndpointId\":\"\",\"plane\":\"broker\"},\"timeoutBudgetMs\":8000,\"input\":{\"profileId\":\"conex-jsonrpc2-http-v1\",\"plane\":\"broker\",\"provides\":[],\"requires\":[\"source/read\"]}}}";
+    let hello = "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"conex/hello\",\"params\":{\"context\":{\"providerEndpointId\":\"\",\"plane\":\"broker\"},\"timeoutBudgetMs\":8000,\"input\":{\"profileId\":\"conex-jsonrpc2-http\",\"plane\":\"broker\",\"provides\":[],\"requires\":[\"source/read\"]}}}";
     let (status, _) = rpc_call(addr, ca_pem.clone(), None, hello).await;
     assert_eq!(status, 401);
     let (status, body) = rpc_call(addr, ca_pem, Some("Bearer test-token"), hello).await;

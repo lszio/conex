@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use conex_core::{AuditEnd, AuditReservation, AuditSink, AuditStart, CallError, CallResult};
-use conex_proto::v1;
+use conex_proto;
 use serde_json::json;
 
 /// Audit sink that does nothing; used when no audit file is configured.
@@ -42,7 +42,7 @@ impl FileAuditSink {
             options.mode(0o600);
         }
         let file = options.open(path).map_err(|error| {
-            CallError::new(v1::ErrorCode::Internal, format!("open audit file: {error}"))
+            CallError::new(conex_proto::ErrorCode::Internal, format!("open audit file: {error}"))
         })?;
         Ok(Self {
             file: Arc::new(Mutex::new(file)),
@@ -56,7 +56,7 @@ impl AuditSink for FileAuditSink {
     fn reserve(&self, _start: &AuditStart) -> CallResult<Box<dyn AuditReservation>> {
         if self.pending.load(Ordering::SeqCst) >= self.capacity {
             return Err(CallError::new(
-                v1::ErrorCode::Unavailable,
+                conex_proto::ErrorCode::Unavailable,
                 "audit capacity is exhausted",
             ));
         }
@@ -85,7 +85,7 @@ impl AuditReservation for FileReservation {
         let mut file = self.file.lock().expect("audit file lock poisoned");
         writeln!(file, "{record}").map_err(|error| {
             CallError::new(
-                v1::ErrorCode::Internal,
+                conex_proto::ErrorCode::Internal,
                 format!("write audit record: {error}"),
             )
         })?;
