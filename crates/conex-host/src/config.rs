@@ -63,6 +63,13 @@ pub struct HostConfig {
     /// instead of the dev-only code/PKCE pass-through.
     #[serde(default)]
     pub oidc: Option<OidcConfig>,
+    /// Issue a shared anonymous `guest` web session when the browser has
+    /// no cookie (visit a `web_origin` URL). Only the read-only UI method
+    /// whitelist (`endpoint/list` + `connection/list` + `source/*`) is
+    /// reachable through this session; production deployments should keep
+    /// this off.
+    #[serde(default)]
+    pub web_guest: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
