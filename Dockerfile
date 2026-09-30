@@ -7,6 +7,10 @@ FROM rust:1.85-bookworm AS rust-builder
 WORKDIR /src
 COPY . .
 COPY --from=web-builder /src/web/dist ./web/dist
+# prost needs protoc; ring/aws-lc-sys need cmake + C toolchain
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y protobuf-compiler cmake pkg-config \
+    && rm -rf /var/lib/apt/lists/*
 RUN cargo build --locked --release -p conex-host -p conex-agent
 
 FROM debian:bookworm-slim AS runtime
@@ -17,8 +21,9 @@ RUN apt-get update \
 COPY --from=rust-builder /src/target/release/conex-host /usr/local/bin/conex-host
 COPY --from=rust-builder /src/target/release/conex-agent /usr/local/bin/conex-agent
 COPY --from=web-builder /src/web/dist /opt/conex/web
+COPY docker/host.toml /etc/conex/host.toml
 RUN mkdir -p /etc/conex /var/lib/conex \
-    && chown -R conex:conex /var/lib/conex
+    && chown -R conex:conex /var/lib/conex /etc/conex/host.toml
 USER conex
 EXPOSE 8787
 ENTRYPOINT ["/usr/local/bin/conex-host"]
