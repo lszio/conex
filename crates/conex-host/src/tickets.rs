@@ -115,19 +115,30 @@ pub async fn issue_ticket(
                 .get(axum::http::header::HOST)
                 .and_then(|value| value.to_str().ok())
                 .unwrap_or_default();
-            let ticket = match side.tickets.issue(
-                &session.caller.principal_id,
-                &session.caller.tenant_id,
-                web.origin(),
-                target_host,
-                "ui",
+            let capabilities: Vec<String> = if session.caller.principal_id == "guest" {
                 vec![
                     "endpoint/list".into(),
                     "connection/list".into(),
                     "source/list".into(),
                     "source/read".into(),
                     "source/search".into(),
-                ],
+                ]
+            } else {
+                vec![
+                    "endpoint/list".into(),
+                    "connection/list".into(),
+                    "source/list".into(),
+                    "source/read".into(),
+                    "source/search".into(),
+                ]
+            };
+            let ticket = match side.tickets.issue(
+                &session.caller.principal_id,
+                &session.caller.tenant_id,
+                web.origin(),
+                target_host,
+                "ui",
+                capabilities,
                 Some(session.id.clone()),
             ) {
                 Ok(ticket) => ticket,

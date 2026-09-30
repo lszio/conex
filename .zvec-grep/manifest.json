@@ -1,0 +1,25 @@
+{
+  "manifestVersion": 1,
+  "id": "363ee0f9-a37c-4202-925f-964c31b63b3b",
+  "name": "conex",
+  "path": "/home/lszio/Projects/conex/.zvec-grep",
+  "rootPaths": [
+    {
+      "absolutePath": "/home/lszio/Projects/conex",
+      "recursive": true
+    }
+  ],
+  "indexPolicy": "enabled",
+  "embedding": {
+    "provider": "local",
+    "model": "potion-code-16m-v2",
+    "dimension": 256,
+    "metric": "cosine"
+  },
+  "indexVersion": 1,
+  "createdTime": 1790671002870,
+  "updatedTime": 1790671050007,
+  "embeddingRuntime": {
+    "device": "auto"
+  }
+}

@@ -111,6 +111,7 @@ fn config(dir: &TempDir) -> HostConfig {
         operation_root: Some(root.join("operation")),
         host_origin: Some("conex://broker.local".into()),
         oidc: None,
+        web_guest: false,
     }
 }
 

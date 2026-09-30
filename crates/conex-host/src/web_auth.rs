@@ -49,6 +49,7 @@ pub struct WebAuth {
     tickets: Arc<TicketRegistry>,
     ui_links: Arc<UiLinkRegistry>,
     sessions: Mutex<HashMap<String, Arc<WebSession>>>,
+    guest_enabled: bool,
 }
 
 impl WebAuth {
@@ -58,13 +59,40 @@ impl WebAuth {
         tickets: Arc<TicketRegistry>,
         ui_links: Arc<UiLinkRegistry>,
     ) -> Self {
+        Self::with_guest(origin, secure_cookie, tickets, ui_links, false)
+    }
+
+    pub fn with_guest(
+        origin: impl Into<String>,
+        secure_cookie: bool,
+        tickets: Arc<TicketRegistry>,
+        ui_links: Arc<UiLinkRegistry>,
+        guest_enabled: bool,
+    ) -> Self {
         Self {
             origin: origin.into(),
             secure_cookie,
             tickets,
             ui_links,
             sessions: Mutex::new(HashMap::new()),
+            guest_enabled,
         }
+    }
+
+    pub fn guest_enabled(&self) -> bool {
+        self.guest_enabled
+    }
+
+    /// Issue a read-only guest session. The principal is shared across all
+    /// anonymous visitors so the browser UI panel naturally aggregates them;
+    /// capacity is bounded by the per-principal cap in `login`.
+    pub fn login_guest(&self) -> Result<Arc<WebSession>, CallError> {
+        let caller = conex_core::Caller {
+            principal_id: "guest".into(),
+            tenant_id: "demo".into(),
+            actor_peer_id: String::new(),
+        };
+        self.login(InboundCaller { caller, audience: "host.local".into(), role: "ui".into() })
     }
 
     pub fn ui_links(&self) -> &Arc<UiLinkRegistry> {
@@ -188,6 +216,29 @@ pub async fn session(
     headers: HeaderMap,
 ) -> Response {
     let Some(web) = state.web_auth.as_ref() else { return error_response(unavailable("web auth is not configured")); };
+    let cookie_present = headers.get(header::COOKIE).and_then(|v| v.to_str().ok()).is_some_and(|raw| raw.split(';').any(|part| part.trim_start().starts_with(&format!("{}=", SESSION_COOKIE))));
+    if !cookie_present {
+        if !web.guest_enabled() {
+            return error_response(CallError::new(conex_proto::ErrorCode::Unauthorized, "web session cookie required"));
+        }
+        let session = match web.login_guest() {
+            Ok(session) => session,
+            Err(error) => return error_response(error),
+        };
+        let principal_id = session.caller.principal_id.clone();
+        let tenant_id = session.caller.tenant_id.clone();
+        let csrf = session.csrf.clone();
+        let expires_at_ms = session.expires_at_ms.to_string();
+        let mut response = (StatusCode::OK, axum::Json(json!({
+            "principalId": principal_id,
+            "tenantId": tenant_id,
+            "role": session.role,
+            "csrf": csrf,
+            "expiresAtMs": expires_at_ms,
+        }))).into_response();
+        response.headers_mut().insert(header::SET_COOKIE, web.set_cookie(&session));
+        return response;
+    }
     let session = match web.session_from_headers(&headers) { Ok(session) => session, Err(error) => return error_response(error) };
     (StatusCode::OK, axum::Json(json!({
         "principalId": session.caller.principal_id,

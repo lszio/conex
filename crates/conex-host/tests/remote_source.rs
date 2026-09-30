@@ -50,6 +50,7 @@ fn config(temp: &tempfile::TempDir) -> HostConfig {
         operation_root: Some(root.join("operation")),
         host_origin: Some("conex://test-host".into()),
         oidc: None,
+        web_guest: false,
     }
 }
 

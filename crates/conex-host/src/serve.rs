@@ -309,11 +309,12 @@ pub fn build_router(config: &HostConfig) -> Result<Router, CallError> {
     let ui_links = Arc::new(crate::ui_links::UiLinkRegistry::new());
     let web_auth = built.host_side.as_ref().and_then(|side| {
         config.web_origin.as_ref().map(|origin| {
-            Arc::new(crate::web_auth::WebAuth::new(
+            Arc::new(crate::web_auth::WebAuth::with_guest(
                 origin.clone(),
                 !config.allow_loopback_http,
                 side.tickets.clone(),
                 ui_links.clone(),
+                config.web_guest,
             ))
         })
     });
