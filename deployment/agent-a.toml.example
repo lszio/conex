@@ -1,12 +1,34 @@
+# Agent A configuration — mounted read-only at /etc/conex/agent.toml by
+# docker-compose / Dokploy. Replace every <...> literal; the agent
+# expects the WSS origin to match the host's `host_origin` exactly.
+
+# Token-bearing principal the agent presents at WSS upgrade. Must match
+# the `principal_id` of the matching [[tokens]] block in host.toml.
 agent_id = "agent-a"
 tenant_id = "production"
+
+# Public URL agents dial. wss:// is enforced in production — agents
+# must terminate TLS at the Dokploy proxy.
 host_url = "wss://host.example.com/wss"
+
+# Token credentials. The container's /run/secrets/agent_a_token is a
+# file secret mounted by docker-compose (secrets.agent_a_token.file
+# points to the Dokploy-managed file). The file must hold the plaintext
+# token exactly, mode 0600.
 token_name = "agent-a-token"
 token_backend = "file:/run/secrets/agent_a_token"
+
+# Pin the agent's TLS verification. Required in production: agents must
+# reject hosts that present any other certificate or hostname.
 ca_pem = "/etc/conex/ca.pem"
 expected_server_name = "host.example.com"
+
+# Origin advertised to the host at agent/register. Must equal
+# host.toml's `host_origin` byte for byte.
 host_origin = "conex://host.example.internal"
 
+# Source-remote endpoint the agent serves. `root` is the agent-side
+# filesystem root that backs the host's `root = "team"` in host.toml.
 [[endpoints]]
 endpoint_id = "notes-a"
 root = "/srv/agent-a"
