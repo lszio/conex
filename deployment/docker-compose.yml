@@ -1,3 +1,15 @@
+# Production Compose for Dokploy.
+#
+# Dokploy imports this as a Compose service: create a new project in the
+# UI, pick "Compose", point Dokploy at this file and the repo's
+# Dockerfile. The variables below are read from deployment/.env (which
+# Dokploy replaces with its own secret store at deploy time).
+#
+# Volumes are declared under `volumes:` so Dokploy provisions named
+# persistent storage on first deploy. Replace the host-mounted
+# config/toml paths with Dokploy's "File Mount" entries pointing at
+# the secrets / configs you upload through the UI.
+
 services:
   host:
     build:
@@ -5,13 +17,19 @@ services:
       dockerfile: Dockerfile
     image: conex:local
     command: ["/etc/conex/host.toml"]
-    ports:
-      - "${CONEX_HOST_PORT:-8787}:8787"
+    # Dokploy fronts this port with its own reverse proxy; the in-app
+    # listener only needs to be reachable inside the container network.
+    expose:
+      - "8787"
     read_only: true
     tmpfs:
       - /tmp
     volumes:
-      - ${CONEX_HOST_CONFIG:-./host.toml}:/etc/conex/host.toml:ro
+      # `${VAR:?msg}` syntax makes compose fail loudly when a required
+      # variable is unset; Dokploy replaces these via the UI's
+      # Environment panel.
+      - ${CONEX_HOST_CONFIG:?set CONEX_HOST_CONFIG to the host.toml path on the host}:/etc/conex/host.toml:ro
+      - ${CONEX_CA_PEM:?set CONEX_CA_PEM to the ca.pem path on the host}:/etc/conex/ca.pem:ro
       - conex-content:/var/lib/conex/content
       - conex-session:/var/lib/conex/session
       - conex-operation:/var/lib/conex/operation
@@ -20,6 +38,8 @@ services:
       - agent_b_token
     restart: unless-stopped
     healthcheck:
+      # The landing page returns 200 even with an empty guest session;
+      # this is a TCP-level probe, not a strict readiness gate.
       test: ["CMD-SHELL", "curl --fail --silent http://127.0.0.1:8787/ >/dev/null"]
       interval: 30s
       timeout: 5s
@@ -34,8 +54,12 @@ services:
     tmpfs:
       - /tmp
     volumes:
-      - ${CONEX_AGENT_A_CONFIG:-./agent-a.toml}:/etc/conex/agent.toml:ro
-      - ${CONEX_AGENT_A_DATA:-./agent-a-data}:/srv/agent-a:ro
+      - ${CONEX_AGENT_A_CONFIG:?set CONEX_AGENT_A_CONFIG}:/etc/conex/agent.toml:ro
+      - ${CONEX_CA_PEM:?set CONEX_CA_PEM}:/etc/conex/ca.pem:ro
+      # `agent.toml` mounts `/srv/agent-a` as the source-remote root.
+      # Provision the directory on the host (or a Dokploy volume) and
+      # drop the files you want visitors to read.
+      - ${CONEX_AGENT_A_DATA:?set CONEX_AGENT_A_DATA}:/srv/agent-a:ro
     secrets:
       - agent_a_token
     restart: unless-stopped
@@ -51,8 +75,9 @@ services:
     tmpfs:
       - /tmp
     volumes:
-      - ${CONEX_AGENT_B_CONFIG:-./agent-b.toml}:/etc/conex/agent.toml:ro
-      - ${CONEX_AGENT_B_DATA:-./agent-b-data}:/srv/agent-b:ro
+      - ${CONEX_AGENT_B_CONFIG:?set CONEX_AGENT_B_CONFIG}:/etc/conex/agent.toml:ro
+      - ${CONEX_CA_PEM:?set CONEX_CA_PEM}:/etc/conex/ca.pem:ro
+      - ${CONEX_AGENT_B_DATA:?set CONEX_AGENT_B_DATA}:/srv/agent-b:ro
     secrets:
       - agent_b_token
     restart: unless-stopped
@@ -67,6 +92,6 @@ volumes:
 
 secrets:
   agent_a_token:
-    file: ${CONEX_AGENT_A_TOKEN_FILE:?set CONEX_AGENT_A_TOKEN_FILE to a 0600 token file}
+    file: ${CONEX_AGENT_A_TOKEN_FILE:?set CONEX_AGENT_A_TOKEN_FILE}
   agent_b_token:
-    file: ${CONEX_AGENT_B_TOKEN_FILE:?set CONEX_AGENT_B_TOKEN_FILE to a 0600 token file}
+    file: ${CONEX_AGENT_B_TOKEN_FILE:?set CONEX_AGENT_B_TOKEN_FILE}

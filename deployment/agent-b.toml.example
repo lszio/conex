@@ -1,3 +1,6 @@
+# Agent B configuration — see agent-a.toml.example for the full
+# explanation. Replace every <...> literal before deployment.
+
 agent_id = "agent-b"
 tenant_id = "production"
 host_url = "wss://host.example.com/wss"

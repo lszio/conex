@@ -22,6 +22,7 @@ conex 的文档按「规范 / 契约 / 计划 / 证据 / 操作」分层，每�
 | 证据 | [P0 验证记录](verification/p0.md) | 环境、命令、结果、逐任务已知缺口 | 验收、排障、审计 |
 | 操作 | [P0 运行手册](runbooks/p0.md) | 生成、启动、入站 token / 出站凭据、SDK 调用 | 部署与联调 |
 | 操作 | [Connected landing 运行手册](runbooks/connected-landing.md) | `cargo xtask landing-demo` 三进程、token 三元组、docker-compose、日志、门禁 | 部署 / 演示 / 联调多 Agent 场景 |
+| 操作 | [Dokploy 部署运行手册](runbooks/dokploy.md) | Compose 形态 host + agent-a + agent-b，环境变量、File Mounts、Secrets、TLS、访客模式开关 | 把服务推到 Dokploy 实例时 |
 | 证据 | [Connected landing 验证记录](verification/connected-landing.md) | 两条 e2e + Rust 单测 + bun 测试实际输出、未验证项 | 验收、排障 |
 
 ## 阅读顺序
