@@ -19,7 +19,7 @@ use conex_proto;
 use conex_transport_http::{HttpConnector, TlsTrustConfig, TokioResolver};
 use serde_json::{Value, json};
 
-use crate::agent::{AgentAuthorization, HostSide};
+use crate::agent::{AgentAuthorization, AuthorizedEndpoint, HostSide};
 use crate::audit_file::{FileAuditSink, NullAudit};
 use crate::auth::{InboundAuth, StaticBearerAuth, TokenRecord};
 use crate::binding::BindingStore;
@@ -74,26 +74,27 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
             AgentAuthorization {
                 agent_id: agent.id.clone(),
                 tenant_id: agent.tenant_id.clone(),
-                provider_ids: Vec::new(),
-                methods: Vec::new(),
-                resources: Vec::new(),
+                endpoints: Vec::new(),
             },
         );
     }
-    for endpoint in config.endpoints.iter().filter(|endpoint| endpoint.kind == "source-remote") {
+    for endpoint in config
+        .endpoints
+        .iter()
+        .filter(|endpoint| endpoint.kind == "source-remote")
+    {
         if let Some(agent_id) = endpoint.agent_id.as_deref()
             && let Some(authorization) = authorizations.get_mut(agent_id)
         {
-            authorization.provider_ids.push(endpoint.provider_id.clone());
-            authorization.provider_ids.push(endpoint.id.clone());
-            authorization.methods.extend(endpoint.provides.iter().cloned());
-            authorization.resources.push(
-                endpoint
+            authorization.endpoints.push(AuthorizedEndpoint {
+                endpoint_id: endpoint.id.clone(),
+                root: endpoint
                     .root
                     .as_deref()
                     .map(|path| path.to_string_lossy().into_owned())
                     .unwrap_or_default(),
-            );
+                methods: endpoint.provides.clone(),
+            });
         }
     }
     let route_side = HostSide::with_authorizations(authorizations.into_values().collect());
@@ -124,7 +125,9 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
                 &root,
                 route_side.connections.clone(),
             )?;
-            registry.install_routes(installation, routes).map_err(registry_error)?;
+            registry
+                .install_routes(installation, routes)
+                .map_err(registry_error)?;
         } else {
             registry.install(installation).map_err(registry_error)?;
         }
@@ -215,11 +218,7 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
     } else {
         (None, None, None)
     };
-    let mut host_side = if p1_active {
-        Some(route_side)
-    } else {
-        None
-    };
+    let mut host_side = if p1_active { Some(route_side) } else { None };
     if let Some(oidc_cfg) = &config.oidc {
         let jwks_json = match (&oidc_cfg.jwks_json, &oidc_cfg.jwks_path) {
             (Some(json), None) => json.clone(),
@@ -261,6 +260,11 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
             agents: host_side.as_ref().map(|side| side.agents.clone()),
             catalog: catalog.clone(),
             host_origin: Some(config.host_origin()),
+            guest_principal: config
+                .web_guest
+                .as_ref()
+                .map(|guest| guest.principal_id.clone()),
+            remote: host_side.as_ref().map(|side| side.connections.clone()),
         };
         Some(Arc::new(Broker::new(host.clone(), deps)))
     } else {
@@ -291,8 +295,10 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
         .iter()
         .map(token_record)
         .collect::<Result<Vec<_>, _>>()?;
-    let auth: Arc<dyn InboundAuth> =
-        Arc::new(StaticBearerAuth::new_for_audience(tokens, config.audience()));
+    let auth: Arc<dyn InboundAuth> = Arc::new(StaticBearerAuth::new_for_audience(
+        tokens,
+        config.audience(),
+    ));
     Ok(BuiltHost {
         host,
         bindings,
@@ -314,7 +320,10 @@ pub fn build_router(config: &HostConfig) -> Result<Router, CallError> {
                 !config.allow_loopback_http,
                 side.tickets.clone(),
                 ui_links.clone(),
-                config.web_guest,
+                config
+                    .web_guest
+                    .as_ref()
+                    .map(crate::web_auth::GuestPolicy::from_config),
             ))
         })
     });

@@ -12,23 +12,56 @@ use serde_json::Value;
 use crate::read::{FsRoot, map_io};
 
 pub fn mime_for(resource: &str) -> Option<&'static str> {
-    match resource.rsplit('.').next() {
-        Some("md") => Some("text/markdown"),
-        Some("org") => Some("text/org"),
+    match resource.rsplit_once('.') {
+        Some((_, "md")) => Some("text/markdown"),
+        Some((_, "org")) => Some("text/org"),
+        Some((_, "txt")) => Some("text/plain"),
+        Some((_, "html")) => Some("text/html"),
+        Some((_, "csv")) => Some("text/csv"),
+        Some((_, "json")) => Some("application/json"),
+        Some((_, "docx")) => {
+            Some("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        }
+        Some((_, "zip")) => Some("application/zip"),
+        Some((_, "gz")) => Some("application/gzip"),
+        Some((_, "pdf")) => Some("application/pdf"),
+        Some((_, "png")) => Some("image/png"),
+        Some((_, "jpg")) | Some((_, "jpeg")) => Some("image/jpeg"),
+        Some((_, "gif")) => Some("image/gif"),
+        Some((_, "webp")) => Some("image/webp"),
+        Some((_, "avif")) => Some("image/avif"),
+        Some((_, "svg")) => Some("image/svg+xml"),
+        Some((_, "mp4")) => Some("video/mp4"),
+        Some((_, "webm")) => Some("video/webm"),
+        Some((_, "ogv")) => Some("video/ogg"),
+        Some((_, "mp3")) => Some("audio/mpeg"),
+        Some((_, "wav")) => Some("audio/wav"),
         _ => None,
     }
 }
 
-pub fn build_summary(resource: &str, size: u64) -> CallResult<conex_proto::ResourceSummary> {
-    let mime = mime_for(resource)
-        .ok_or_else(|| CallError::new(conex_proto::ErrorCode::BadRequest, "unsupported resource type"))?;
+/// Extensions eligible for inline text and content search.
+pub fn is_text_resource(resource: &str) -> bool {
+    matches!(
+        resource.rsplit_once('.'),
+        Some((_, "md") | (_, "org") | (_, "txt"))
+    )
+}
+
+pub fn build_summary(
+    resource: &str,
+    size: u64,
+    revision: Option<String>,
+) -> CallResult<conex_proto::ResourceSummary> {
+    let mime = mime_for(resource).unwrap_or("application/octet-stream");
     let title = resource.rsplit('/').next().unwrap_or(resource).to_string();
     Ok(conex_proto::ResourceSummary {
         resource_id: resource.to_string(),
         title,
         mime: mime.to_string(),
-        size_bytes: Some(size),
-        revision: None,
+        size_bytes: Some(size.to_string()),
+        revision,
+        kind: conex_proto::EntryKind::File as i32,
     })
 }
 
@@ -47,8 +80,11 @@ fn read_dir(dir: &cap_std::fs::Dir, path: &str) -> CallResult<Vec<(String, bool)
     Ok(entries)
 }
 
-/// Recursively collect supported documents under a root. Symlinks and oversized
-/// documents are skipped; a scan over the item budget is a hard quota error.
+/// Recursively collect resources under a root. Listing (query=None) includes
+/// every regular file regardless of type or size (metadata-only; content is
+/// never read). Search (query=Some) restricts to supported text extensions and
+/// skips files that are oversized or not valid UTF-8. Symlinks are rejected; a
+/// scan over the item budget is a hard quota error.
 pub fn scan(
     root: &FsRoot,
     root_resource: &str,
@@ -68,25 +104,29 @@ pub fn scan(
                 stack.push(resource);
                 continue;
             }
-            let Some(mime) = mime_for(&resource) else {
-                continue;
-            };
-            let (file, length) = root.open_regular(&resource)?;
-            if length > MAX_DOC_BYTES {
-                continue;
-            }
+            let mime = mime_for(&resource).unwrap_or("application/octet-stream");
+            let (length, mtime_ns) = root.stat(&resource)?;
             let mut item = PageItem {
                 resource_id: resource.clone(),
                 title: resource.rsplit('/').next().unwrap_or(&resource).to_string(),
                 mime: mime.to_string(),
                 size_bytes: length,
+                revision: Some(mtime_ns.to_string()),
                 excerpt: None,
             };
             if let Some(query) = query {
-                let mut text = String::new();
-                file.take(MAX_DOC_BYTES + 1)
-                    .read_to_string(&mut text)
+                if !is_text_resource(&resource) || length > MAX_DOC_BYTES {
+                    continue;
+                }
+                let (file, _) = root.open_regular(&resource)?;
+                let mut bytes = Vec::with_capacity(length as usize);
+                file.take(MAX_DOC_BYTES)
+                    .read_to_end(&mut bytes)
                     .map_err(map_io)?;
+                // Non-UTF-8 text files are skipped silently, never forced.
+                let Ok(text) = String::from_utf8(bytes) else {
+                    continue;
+                };
                 match make_excerpt(&text, query) {
                     Some(excerpt) => item.excerpt = Some(excerpt),
                     None => continue,
@@ -175,7 +215,10 @@ impl Handler for ListHandler {
             next_cursor,
         };
         serde_json::to_value(response).map_err(|error| {
-            CallError::new(conex_proto::ErrorCode::Internal, format!("encode response: {error}"))
+            CallError::new(
+                conex_proto::ErrorCode::Internal,
+                format!("encode response: {error}"),
+            )
         })
     }
 }
@@ -185,7 +228,8 @@ fn to_summary(item: &PageItem) -> conex_proto::ResourceSummary {
         resource_id: item.resource_id.clone(),
         title: item.title.clone(),
         mime: item.mime.clone(),
-        size_bytes: Some(item.size_bytes),
-        revision: None,
+        size_bytes: Some(item.size_bytes.to_string()),
+        revision: item.revision.clone(),
+        kind: conex_proto::EntryKind::File as i32,
     }
 }

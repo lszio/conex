@@ -70,6 +70,7 @@ pub fn attach_p1(base: Router) -> Router {
         .route("/tickets", post(tickets::issue_ticket))
         .route("/web/login", post(crate::web_auth::login))
         .route("/web/session", get(crate::web_auth::session))
+        .route("/content", get(crate::content_http::content))
         .route("/web/logout", post(crate::web_auth::logout))
         .route("/oidc/authorize", post(tickets::oidc_authorize))
         .route("/oidc/token", post(tickets::oidc_token))
@@ -92,7 +93,13 @@ async fn rpc(
         .and_then(|value| value.to_str().ok());
     let inbound = match state.auth.authenticate(authorization) {
         Ok(inbound) if inbound.role != "ui" => inbound,
-        Ok(_) => return (StatusCode::UNAUTHORIZED, "UI credentials require a web session").into_response(),
+        Ok(_) => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                "UI credentials require a web session",
+            )
+                .into_response();
+        }
         Err(_) => return (StatusCode::UNAUTHORIZED, "unauthorized").into_response(),
     };
     let message = match decode_wire(&body) {
@@ -107,7 +114,13 @@ async fn rpc(
         Some(conex_proto::message::Body::Request(request)) => {
             handle_request(&state, &inbound, request).await
         }
-        Some(conex_proto::message::Body::Success(_)) | Some(conex_proto::message::Body::Failure(_)) => {
+        Some(conex_proto::message::Body::DataChunk(_)) => (
+            StatusCode::BAD_REQUEST,
+            "data chunks require the protobuf profile",
+        )
+            .into_response(),
+        Some(conex_proto::message::Body::Success(_))
+        | Some(conex_proto::message::Body::Failure(_)) => {
             (StatusCode::BAD_REQUEST, "clients must not send responses").into_response()
         }
         None => (StatusCode::BAD_REQUEST, "empty message").into_response(),
@@ -212,6 +225,7 @@ async fn handle_request(
             input,
             deadline: tokio::time::Instant::now() + timeout,
             role: inbound.role.clone(),
+            link_id: None,
         };
         return match broker.invoke(call).await {
             Ok(value) => success(&request_id, value),
@@ -285,7 +299,10 @@ async fn handle_notification(
 
 fn parse_hello(input: &Value) -> Result<conex_proto::HelloRequest, CallError> {
     let map = input.as_object().ok_or_else(|| {
-        CallError::new(conex_proto::ErrorCode::BadRequest, "hello input must be an object")
+        CallError::new(
+            conex_proto::ErrorCode::BadRequest,
+            "hello input must be an object",
+        )
     })?;
     let profile_id = map
         .get("profileId")
@@ -295,7 +312,12 @@ fn parse_hello(input: &Value) -> Result<conex_proto::HelloRequest, CallError> {
     let plane = match map.get("plane").and_then(Value::as_str) {
         None | Some("broker") | Some("PLANE_BROKER") => conex_proto::Plane::Broker as i32,
         Some("relay") | Some("PLANE_RELAY") => conex_proto::Plane::Relay as i32,
-        Some(_) => return Err(CallError::new(conex_proto::ErrorCode::BadRequest, "unknown plane")),
+        Some(_) => {
+            return Err(CallError::new(
+                conex_proto::ErrorCode::BadRequest,
+                "unknown plane",
+            ));
+        }
     };
     Ok(conex_proto::HelloRequest {
         profile_id,
@@ -373,7 +395,29 @@ fn encode_response(message: &conex_proto::Message) -> Response {
 }
 
 pub fn pbjson_to_json(value: &pbjson_types::Value) -> Value {
-    serde_json::to_value(value).unwrap_or(Value::Null)
+    // pbjson carries every number as f64; JSON integers must stay integers or
+    // prost's strict `uint32` decode rejects `100.0` for a `limit` field.
+    normalize_numbers(serde_json::to_value(value).unwrap_or(Value::Null))
+}
+
+/// Re-tag whole-number floats as integers (the pbjson → JSON round trip).
+fn normalize_numbers(value: Value) -> Value {
+    match value {
+        Value::Number(number) => match number.as_f64() {
+            Some(float) if float.fract() == 0.0 && float.abs() < 9.007_199_254_740_992e15 => {
+                Value::Number(serde_json::Number::from(float as i64))
+            }
+            _ => Value::Number(number),
+        },
+        Value::Array(items) => Value::Array(items.into_iter().map(normalize_numbers).collect()),
+        Value::Object(fields) => Value::Object(
+            fields
+                .into_iter()
+                .map(|(key, value)| (key, normalize_numbers(value)))
+                .collect(),
+        ),
+        other => other,
+    }
 }
 
 pub fn json_to_pbjson(value: Value) -> pbjson_types::Value {

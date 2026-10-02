@@ -1,9 +1,12 @@
 {
   "name": "conex",
   "private": true,
-  "workspaces": ["sdk/typescript", "web"],
   "scripts": {
     "build:web": "bun run web/build.ts",
     "typecheck": "cd sdk/typescript && bun x tsc --noEmit && cd ../../web && bun x tsc --noEmit"
+  },
+  "workspaces": ["sdk/typescript", "web"],
+  "devDependencies": {
+    "playwright": "1.55.0"
   }
 }

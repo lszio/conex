@@ -1,6 +1,6 @@
 # Connected landing contract
 
-状态：**L01 契约冻结 + L10 连接面板契约冻结**（2026-09-21）。L10 在 `schema/conex/dashboard.proto` 新增 `ConnectionListRequest` / `ConnectionListResponse` / `UiLinkSummary` / `AgentLinkSummary`；Rust/TypeScript/JSON Schema 由 `cargo xtask generate` 生成。L02–L09 边界不变。
+状态：**L01 契约冻结 + L10 连接面板契约冻结（2026-09-21）+ M0 内容契约冻结（2026-10-02，§8）**。L10 在 `schema/conex/dashboard.proto` 新增 `ConnectionListRequest` / `ConnectionListResponse` / `UiLinkSummary` / `AgentLinkSummary`；M0 调整 `source.proto` / `chunking.proto` / `blob.proto`。Rust/TypeScript/JSON Schema 由 `cargo xtask generate` 生成。L02–L09 边界不变。
 
 ## 7. 连接面板契约（L10）
 
@@ -74,3 +74,21 @@ Agent 先验证 Host 的 TLS CA 和 server name，再使用 `role=agent` 的 bea
 ## 6. 审计与恢复边界
 
 审计可以记录主体、租户、Agent/端点、方法、范围、Link/请求 ID、阶段、结果、错误码和延迟，但不得记录 token、ticket、参数原文、凭据或内容密钥。Agent 断线时未完成的只读调用明确失败；重连须重新认证、握手和注册，不恢复旧 ticket、旧代次或旧调用。跨进程会话恢复不属于本契约。
+
+## 8. 内容契约与范围语义（M0）
+
+本节冻结多主机数据服务的统一资源语义；实现按里程碑（M1–M5）逐项贯通，类型先行。
+
+**资源定位与租户。** 资源由 `endpointId + resourceId` 唯一确定；租户始终来自认证上下文，不信任请求自报。`provider_id` 是端点的配置身份，不得代替唯一端点定位。`BlobAccess.endpointId` 为空表示 Host 本地已提交内容。
+
+**读取结果二选一。** `source/read` 返回 `text ⊕ content`：小型受支持 UTF-8 文本内联 `text`（可附已计算 `cid`）；附件与大文本返回 `content`（`BlobRef`：可选 `cid`、十进制字符串 `sizeBytes`、`mime`、`access`、可选 `revision`）。`cid` 仅当字节已按既有 CID 格式计算；远端可变文件未计算 CID 时缺省，禁止用路径或 revision 假充 CID，也不得为读取而先整文件取回再计算 hash。
+
+**blob/get 互斥目标。** 请求目标是 `committed`（已授权根下的已提交块，整块返回）或 `remote`（端点 + 资源 + 可选 revision + 字节范围）二者之一，互斥结构由 MethodContract 强制；同一 offset 不允许既解释为块内偏移又解释为文件偏移。响应中 `chunkCid` 与 `revision` 同样互斥：committed 返回块 CID；remote 返回实际服务的 revision 与 `eof`，任意 range 不冒充完整块 CID。
+
+**范围语义。** offset/length 为字节、十进制字符串（64 位安全，JS 不丢精度）；`length >= 1`，`offset+length` 溢出拒绝，非法与超配额范围拒绝（`bad_request` / `payload_too_large` / `quota_exceeded`）。remote 读取结束返回实际长度与 `eof`；请求携带 revision 且与当前不符时返回 `stale_revision`（-32013），不拼接两个版本。无法保证一致快照的 provider 必须拒绝该保证。
+
+**元数据。** `ResourceSummary` 统一包含：`title`（文件名 basename，不是路径）、`mime`、`sizeBytes`（十进制字符串）、`revision`（不透明令牌，仅等值比较；无法提供时缺省）、`kind`（目录项类型）。未知类型 MIME 固定 `application/octet-stream`；MIME 不等于允许执行内容，活动内容不得在 Host 同源内联执行。
+
+**授权覆盖面。** 目录、读取、范围读取、have、上传恢复、提交、pin/unpin、cancel 全部走同一资源授权；CID、upload ID、pin ID 都不是授权凭据，不能凭知道标识绕过租户或资源策略。物理内容按 CID 去重不合并逻辑授权。本节的强制执行在 M1（blob 所有权与资源授权）落地。
+
+**wire 调整。** `BlobGetRequest` 旧 `chunkCid/rangeOffset/rangeLength` 字段号 reserved，由 `committed/remote` oneof 取代；`ResourceSummary.sizeBytes`、`BlobRef.cid`、`BlobGetResponse` 同步调整并统一迁移 Host、Agent、SDK、页面与向量，不保留双轨契约。旧字段（`providerId`）从 wire 结构中删除。

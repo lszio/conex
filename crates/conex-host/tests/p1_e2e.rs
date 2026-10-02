@@ -76,6 +76,8 @@ async fn make_broker(
         agents: Some(side.agents.clone()),
         catalog: None,
         host_origin: Some("conex://broker.local".into()),
+        guest_principal: None,
+        remote: None,
     };
     Arc::new(Broker::new(host, deps))
 }
@@ -111,6 +113,7 @@ async fn invoke(
             input,
             deadline: deadline(),
             role: "service".into(),
+            link_id: None,
         })
         .await
         .expect("broker call")
@@ -137,7 +140,7 @@ async fn blob_upload_round_trip() {
             "declaredChunkSize": "262144",
             "expectedRoot": { "manifestCid": expected },
             "access": {
-                "providerId": "fs",
+                "endpointId": "",
                 "plane": "broker",
                 "resourceId": "notes/a.md"
             }
@@ -248,15 +251,13 @@ async fn session_lifecycle_and_binding_mismatch() {
             }),
             deadline: deadline(),
             role: "service".into(),
+            link_id: None,
         })
         .await
         .expect_err("binding mismatch must reject");
     // The broker layer reports cross-principal binding mismatches as
     // Forbidden. `Unauthorized` is reserved for missing/invalid bearer.
-    assert_eq!(
-        error.code_enum(),
-        Some(conex_proto::ErrorCode::Forbidden)
-    );
+    assert_eq!(error.code_enum(), Some(conex_proto::ErrorCode::Forbidden));
 }
 
 #[tokio::test]
@@ -348,9 +349,11 @@ async fn agent_registration_and_resolve() {
         "agent/register",
         json!({
             "agentId": "agent-1",
-            "providerIds": ["notes-local"],
-            "methods": ["source/read"],
-            "resources": ["notes/a.md"],
+            "endpoints": [{
+                "endpointId": "notes-local",
+                "root": "notes/a.md",
+                "methods": ["source/read"]
+            }],
             "hostOrigin": "conex://broker.local"
         }),
     )

@@ -50,6 +50,20 @@
           </section>
         </div>
 
+        <section id="browser-panel" class="panel browser-panel" hidden aria-labelledby="browser-title">
+          <div class="section-heading">
+            <div>
+              <h2 id="browser-title">内容浏览</h2>
+              <p id="browser-endpoint" class="muted">选择端点后浏览其公开内容</p>
+            </div>
+            <div class="browser-tools">
+              <label class="muted" for="browser-search">搜索</label>
+              <input id="browser-search" type="search" placeholder="在当前目录中搜索" autocomplete="off" />
+            </div>
+          </div>
+          <div id="browser-host" class="browser-host"></div>
+        </section>
+
         <section id="operation-panel" class="panel operations" aria-labelledby="operation-title">
           <div class="section-heading"><div><h2 id="operation-title">读取服务</h2><p id="selected-endpoint" class="muted">选择一个端点查看可用操作</p></div></div>
           <div class="operation-tabs" role="tablist" aria-label="服务操作">

@@ -161,6 +161,26 @@ fn summary(value: &Value) -> CallResult<()> {
     if !map.get("mime").is_some_and(Value::is_string) {
         return Err(bad("mime must be a string"));
     }
+    if let Some(size) = map.get("sizeBytes") {
+        if !size.is_string() || size.as_str().unwrap().parse::<u64>().is_err() {
+            return Err(bad("sizeBytes must be a decimal string"));
+        }
+    }
+    if let Some(revision) = map.get("revision") {
+        if !revision.is_string() {
+            return Err(bad("revision must be a string"));
+        }
+    }
+    let kind = map
+        .get("kind")
+        .and_then(Value::as_str)
+        .unwrap_or("ENTRY_KIND_FILE");
+    if !matches!(
+        kind,
+        "ENTRY_KIND_UNSPECIFIED" | "ENTRY_KIND_FILE" | "ENTRY_KIND_DIRECTORY"
+    ) {
+        return Err(bad("kind must be an EntryKind value"));
+    }
     Ok(())
 }
 
@@ -181,19 +201,76 @@ fn validate_list_output(value: &Value) -> CallResult<()> {
     }
 }
 
+/// BlobRef content reference on the JSON plane: cid only when computed,
+/// decimal-string size, endpoint-qualified access, optional revision.
+fn content_ref(value: &Value) -> CallResult<()> {
+    let map = value
+        .as_object()
+        .ok_or_else(|| bad("content must be an object"))?;
+    known_keys(map, &["cid", "sizeBytes", "mime", "access", "revision"])?;
+    if let Some(cid) = map.get("cid") {
+        let cid = cid.as_str().ok_or_else(|| bad("cid must be a string"))?;
+        conex_proto::cid::parse_cid(cid).map_err(|error| bad(&error.message))?;
+    }
+    let size = map
+        .get("sizeBytes")
+        .and_then(Value::as_str)
+        .ok_or_else(|| bad("sizeBytes must be a decimal string"))?;
+    if size.parse::<u64>().is_err() {
+        return Err(bad("sizeBytes must be a decimal string"));
+    }
+    if !map.get("mime").is_some_and(Value::is_string) {
+        return Err(bad("mime must be a string"));
+    }
+    let access = map
+        .get("access")
+        .ok_or_else(|| bad("access is required"))?
+        .as_object()
+        .ok_or_else(|| bad("access must be an object"))?;
+    if !access.get("resourceId").is_some_and(Value::is_string) {
+        return Err(bad("access.resourceId must be a string"));
+    }
+    match access.get("endpointId") {
+        None => {} // Host-local committed content
+        Some(endpoint_id) => {
+            if !endpoint_id.is_string() {
+                return Err(bad("access.endpointId must be a string"));
+            }
+        }
+    }
+    if let Some(revision) = map.get("revision") {
+        if !revision.is_string() {
+            return Err(bad("revision must be a string"));
+        }
+    }
+    Ok(())
+}
+
 fn validate_read_output(value: &Value) -> CallResult<()> {
     let map = value
         .as_object()
         .ok_or_else(|| bad("output must be an object"))?;
+    known_keys(map, &["resource", "text", "cid", "content"])?;
     summary(
         map.get("resource")
             .ok_or_else(|| bad("resource is required"))?,
     )?;
-    if !map.get("text").is_some_and(Value::is_string) {
-        return Err(bad("text must be a string"));
+    let text = map.get("text");
+    let content = map.get("content");
+    if text.is_some() == content.is_some() {
+        return Err(bad("exactly one of text or content is required"));
     }
-    if !map.get("cid").is_some_and(Value::is_string) {
-        return Err(bad("cid must be a string"));
+    if let Some(text) = text {
+        if !text.is_string() {
+            return Err(bad("text must be a string"));
+        }
+    }
+    if let Some(content) = content {
+        content_ref(content)?;
+    }
+    if let Some(cid) = map.get("cid") {
+        let cid = cid.as_str().ok_or_else(|| bad("cid must be a string"))?;
+        conex_proto::cid::parse_cid(cid).map_err(|error| bad(&error.message))?;
     }
     Ok(())
 }

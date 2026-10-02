@@ -35,9 +35,10 @@ pub fn factory(installation: &Installation) -> CallResult<Vec<Route>> {
     )));
 
     let mut routes = Vec::new();
+    let read_handler = Arc::new(read::ReadHandler { root: root.clone() });
     for (method, contract) in conex_source::contracts() {
         let handler: Arc<dyn Handler> = match method {
-            SOURCE_READ => Arc::new(read::ReadHandler { root: root.clone() }),
+            SOURCE_READ => read_handler.clone(),
             SOURCE_LIST => Arc::new(list::ListHandler {
                 root: root.clone(),
                 cache: cache.clone(),
@@ -53,7 +54,14 @@ pub fn factory(installation: &Installation) -> CallResult<Vec<Route>> {
                 ));
             }
         };
+        let range_reader = if method == SOURCE_READ {
+            Some(Arc::new(read::ReadHandler { root: root.clone() })
+                as Arc<dyn conex_core::RangeReader>)
+        } else {
+            None
+        };
         routes.push(Route {
+            range_reader,
             protocol: installation.factory.protocol.clone(),
             version: installation.factory.version,
             endpoint: installation.endpoint.clone(),

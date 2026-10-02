@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use conex_core::policy::is_valid_resource;
-use conex_core::{CallError, CallResult, Caller, Endpoint, Host, Policy, ResourceClaim, StaticPolicy};
+use conex_core::{
+    CallError, CallResult, Caller, Endpoint, Host, Policy, ResourceClaim, StaticPolicy,
+};
 use conex_proto;
 use serde_json::Value;
 
@@ -40,7 +42,12 @@ impl EndpointCatalog {
                 .registry()
                 .endpoint(&configured.id)
                 .cloned()
-                .ok_or_else(|| internal(format!("catalog endpoint {} is not installed", configured.id)))?;
+                .ok_or_else(|| {
+                    internal(format!(
+                        "catalog endpoint {} is not installed",
+                        configured.id
+                    ))
+                })?;
             entries.push(CatalogEntry {
                 endpoint,
                 kind: attachment_kind(configured.kind.as_str()),
@@ -63,6 +70,15 @@ impl EndpointCatalog {
             policy,
             connections: host_side.map(|side| side.connections.clone()),
         })
+    }
+
+    /// M3: the owning agent of a configured endpoint (no tenant filtering —
+    /// callers must have passed policy authorization before using this).
+    pub fn agent_for_endpoint(&self, endpoint_id: &str) -> Option<String> {
+        self.entries
+            .iter()
+            .find(|entry| entry.endpoint.id == endpoint_id)
+            .and_then(|entry| entry.agent_id.clone())
     }
 
     pub fn from_parts(
@@ -88,7 +104,7 @@ impl EndpointCatalog {
     }
 
     pub async fn list(&self, caller: &Caller, input: Value) -> CallResult<Value> {
-        let request: conex_proto::EndpointListRequest = serde_json::from_value(input)
+        let request: conex_proto::EndpointListRequest = serde_json::from_value(input.clone())
             .map_err(|error| bad(format!("invalid endpoint/list request: {error}")))?;
         let limit = request.limit.unwrap_or(DEFAULT_LIMIT);
         if !(1..=MAX_LIMIT).contains(&limit) {
@@ -149,7 +165,12 @@ impl EndpointCatalog {
         let mut authorized_scopes = Vec::new();
         let rules = self.policy.rules_for(caller, &entry.endpoint);
         for (method, action) in actions {
-            if !entry.endpoint.provides.iter().any(|provided| provided == method) {
+            if !entry
+                .endpoint
+                .provides
+                .iter()
+                .any(|provided| provided == method)
+            {
                 continue;
             }
             let mut scopes = Vec::new();
@@ -164,7 +185,11 @@ impl EndpointCatalog {
                     action: action.to_string(),
                     subtree: method != "source/read",
                 };
-                if self.policy.authorize(caller, &entry.endpoint, &claim).is_err() {
+                if self
+                    .policy
+                    .authorize(caller, &entry.endpoint, &claim)
+                    .is_err()
+                {
                     continue;
                 }
                 let scope = conex_proto::AuthorizedScope {
@@ -185,8 +210,14 @@ impl EndpointCatalog {
             return Ok(None);
         }
         let connection_state = if entry.kind == conex_proto::AttachmentKind::ReverseAgent as i32 {
+            // Ready requires the agent's current link AND that this endpoint
+            // was accepted in the current generation (plan M2).
             match (&self.connections, &entry.agent_id) {
-                (Some(connections), Some(agent_id)) if connections.is_ready(agent_id).await => {
+                (Some(connections), Some(agent_id))
+                    if connections
+                        .is_ready_endpoint(agent_id, &entry.endpoint.id)
+                        .await =>
+                {
                     conex_proto::ConnectionState::Ready as i32
                 }
                 _ => conex_proto::ConnectionState::Offline as i32,

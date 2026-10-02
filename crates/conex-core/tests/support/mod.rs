@@ -261,6 +261,7 @@ fn test_factory(installation: &Installation) -> CallResult<Vec<Route>> {
         .provides
         .iter()
         .map(|method| Route {
+            range_reader: None,
             protocol: "conex".into(),
             version: 1,
             endpoint: installation.endpoint.clone(),

@@ -146,7 +146,7 @@ function openUploadFrame(expectedRootCid: string) {
     declaredSizeBytes: String(TOTAL),
     declaredChunkSize: String(CHUNK),
     expectedRoot: { manifestCid: expectedRootCid },
-    access: { providerId: "source", plane: "broker", resourceId: "1gib.bin" },
+    access: { endpointId: "", plane: "broker", resourceId: "1gib.bin" },
   });
 }
 
@@ -232,7 +232,9 @@ maybe(
 
     const get = await rpc(
       client,
-      businessFrame("blob/get", "get-1", "blob-store", { chunkCid: leafCids[0] }),
+      businessFrame("blob/get", "get-1", "blob-store", {
+        committed: { chunkCid: leafCids[0] },
+      }),
     );
     expect(get.error ?? null, JSON.stringify(get)).toBeNull();
     const got = Buffer.from(stringField(get.result, "chunkBytes"), "base64");

@@ -310,6 +310,8 @@ async fn wss_protobuf_profile_round_trip() {
             provider_endpoint_id: "agent-mgr".into(),
             plane: conex_proto::Plane::Broker as i32,
             binding_id: None,
+            principal_id: String::new(),
+            tenant_id: String::new(),
         }),
         timeout_budget_ms: 8000,
         input: Some(fields.into()),
@@ -339,7 +341,10 @@ async fn wss_protobuf_profile_round_trip() {
     match message.body {
         Some(conex_proto::message::Body::Failure(failure)) => {
             assert_eq!(
-                failure.error.as_ref().map(|error| conex_proto::ErrorCode::try_from(error.code)),
+                failure
+                    .error
+                    .as_ref()
+                    .map(|error| conex_proto::ErrorCode::try_from(error.code)),
                 Some(Ok(conex_proto::ErrorCode::Forbidden)),
                 "service-role agent/register must be rejected: {failure:?}"
             );

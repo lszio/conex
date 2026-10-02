@@ -10,8 +10,7 @@ use serde::Deserialize;
 
 pub const SUPPORTED_KINDS: [&str; 3] = ["source-fs", "source-http-catalog", "source-remote"];
 pub const SUPPORTED_TOKEN_ROLES: [&str; 3] = ["ui", "agent", "service"];
-pub const SUPPORTED_REMOTE_METHODS: [&str; 3] =
-    ["source/list", "source/read", "source/search"];
+pub const SUPPORTED_REMOTE_METHODS: [&str; 3] = ["source/list", "source/read", "source/search"];
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -63,13 +62,49 @@ pub struct HostConfig {
     /// instead of the dev-only code/PKCE pass-through.
     #[serde(default)]
     pub oidc: Option<OidcConfig>,
-    /// Issue a shared anonymous `guest` web session when the browser has
-    /// no cookie (visit a `web_origin` URL). Only the read-only UI method
-    /// whitelist (`endpoint/list` + `connection/list` + `source/*`) is
-    /// reachable through this session; production deployments should keep
-    /// this off.
+    /// Anonymous visitor sessions for the public landing page (M1.1). When
+    /// set, browsers without a cookie get a read-only `ui` session bound to
+    /// the configured principal/tenant; only the UI method whitelist
+    /// (`endpoint/list` + `connection/list` + `source/*`) is reachable.
+    /// Absent (`None`) keeps the host closed to anonymous visitors.
     #[serde(default)]
-    pub web_guest: bool,
+    pub web_guest: Option<WebGuestConfig>,
+}
+
+/// Anonymous visitor policy. Quotas here are independent of the per-principal
+/// cap that bounds authenticated users.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WebGuestConfig {
+    /// Principal bound to every guest session. Must not collide with any
+    /// `[[tokens]]` principal.
+    #[serde(default = "default_guest_principal")]
+    pub principal_id: String,
+    /// Public display tenant. Every policy entry for the guest principal
+    /// must use this tenant; contradictions are rejected at load.
+    pub tenant_id: String,
+    /// Global bound on live anonymous sessions.
+    #[serde(default = "default_guest_max_sessions")]
+    pub max_sessions: usize,
+    /// Sliding idle expiry: each authenticated use extends the session.
+    #[serde(default = "default_guest_idle_ttl_ms")]
+    pub idle_ttl_ms: u64,
+    /// Session issuance rate limit per rolling minute.
+    #[serde(default = "default_guest_issue_per_minute")]
+    pub max_issue_per_minute: u32,
+}
+
+fn default_guest_principal() -> String {
+    "guest".to_string()
+}
+fn default_guest_max_sessions() -> usize {
+    64
+}
+fn default_guest_idle_ttl_ms() -> u64 {
+    15 * 60 * 1000
+}
+fn default_guest_issue_per_minute() -> u32 {
+    60
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -178,6 +213,41 @@ impl HostConfig {
             .listen
             .parse()
             .map_err(|_| invalid(format!("listen must be a socket address: {}", self.listen)))?;
+        if let Some(guest) = &self.web_guest {
+            if guest.principal_id.trim().is_empty() {
+                return Err(invalid("web_guest.principal_id must not be empty"));
+            }
+            if guest.tenant_id.trim().is_empty() {
+                return Err(invalid("web_guest.tenant_id must not be empty"));
+            }
+            if guest.max_sessions == 0 {
+                return Err(invalid("web_guest.max_sessions must be at least 1"));
+            }
+            if guest.idle_ttl_ms == 0 {
+                return Err(invalid("web_guest.idle_ttl_ms must be at least 1"));
+            }
+            if guest.max_issue_per_minute == 0 {
+                return Err(invalid("web_guest.max_issue_per_minute must be at least 1"));
+            }
+            if self
+                .tokens
+                .iter()
+                .any(|token| token.principal_id == guest.principal_id)
+            {
+                return Err(invalid(
+                    "web_guest.principal_id must not collide with a token principal",
+                ));
+            }
+            for policy in &self.policy {
+                if policy.principal_id == guest.principal_id && policy.tenant_id != guest.tenant_id
+                {
+                    return Err(invalid(format!(
+                        "web_guest.tenant_id {} contradicts policy tenant {} for {}",
+                        guest.tenant_id, policy.tenant_id, guest.principal_id
+                    )));
+                }
+            }
+        }
         if let Some(origin) = &self.web_origin {
             if !valid_web_origin(origin) {
                 return Err(invalid(
@@ -223,10 +293,7 @@ impl HostConfig {
                 } else {
                     "matching role=agent token"
                 };
-                return Err(invalid(format!(
-                    "agent {} requires {}",
-                    agent.id, reason
-                )));
+                return Err(invalid(format!("agent {} requires {}", agent.id, reason)));
             }
             let _ = (credential_name, credential_backend);
         }
@@ -259,11 +326,21 @@ impl HostConfig {
                 }
                 "source-remote" => {
                     let agent_id = endpoint.agent_id.as_ref().ok_or_else(|| {
-                        invalid(format!("source-remote endpoint {} requires agent_id", endpoint.id))
+                        invalid(format!(
+                            "source-remote endpoint {} requires agent_id",
+                            endpoint.id
+                        ))
                     })?;
-                    let agent = self.agents.iter().find(|agent| agent.id == *agent_id).ok_or_else(
-                        || invalid(format!("endpoint {} references unknown agent {}", endpoint.id, agent_id)),
-                    )?;
+                    let agent = self
+                        .agents
+                        .iter()
+                        .find(|agent| agent.id == *agent_id)
+                        .ok_or_else(|| {
+                            invalid(format!(
+                                "endpoint {} references unknown agent {}",
+                                endpoint.id, agent_id
+                            ))
+                        })?;
                     if agent.tenant_id != endpoint.tenant_id {
                         return Err(invalid(format!(
                             "endpoint {} and agent {} must use the same tenant",
@@ -423,8 +500,7 @@ fn valid_web_origin(origin: &str) -> bool {
     let (host, port) = authority
         .split_once(':')
         .map_or((authority, None), |(host, port)| (host, Some(port)));
-    !host.is_empty()
-        && port.map_or(true, |port| !port.is_empty() && port.parse::<u16>().is_ok())
+    !host.is_empty() && port.map_or(true, |port| !port.is_empty() && port.parse::<u16>().is_ok())
 }
 
 fn valid_credential_source(source: &str) -> bool {

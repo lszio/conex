@@ -22,6 +22,15 @@ pub struct ReceivedChunk {
     pub cid: String,
 }
 
+/// Logical ownership of uploaded/committed content (plan M1.2). Physical
+/// blocks are deduplicated by CID, but authorization is never merged across
+/// owners: every upload, commit and pin carries its own owner.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Owner {
+    pub principal_id: String,
+    pub tenant_id: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct UploadState {
     pub upload_id: String,
@@ -33,9 +42,20 @@ pub struct UploadState {
     pub received_chunks: Vec<ReceivedChunk>,
     pub started_at_ms: u64,
     pub lease_until_ms: u64,
+    /// `None` on records written before M1.2: unbound staging is never
+    /// claimed automatically and must be reaped once expired.
+    #[serde(default)]
+    pub owner: Option<Owner>,
+    #[serde(default)]
+    pub resource_id: Option<String>,
+    /// Running total of verified chunk bytes, enforced against
+    /// `declared_size_bytes` at the write path.
+    #[serde(default)]
+    pub received_bytes: u64,
 }
 
 impl UploadState {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         upload_id: String,
         format_version: u32,
@@ -44,6 +64,8 @@ impl UploadState {
         declared_root_kind: String,
         declared_root_cid: String,
         lease_ms: u64,
+        owner: Owner,
+        resource_id: String,
     ) -> Self {
         let now = now_ms();
         Self {
@@ -56,6 +78,9 @@ impl UploadState {
             received_chunks: Vec::new(),
             started_at_ms: now,
             lease_until_ms: now.saturating_add(lease_ms),
+            owner: Some(owner),
+            resource_id: Some(resource_id),
+            received_bytes: 0,
         }
     }
 
@@ -104,6 +129,10 @@ pub struct CommitRecord {
     pub committed_bytes: u64,
     pub receipt_id: String,
     pub committed_at_ms: u64,
+    /// Owning principal/tenant; `None` for pre-M1.2 records, which stay
+    /// unreadable through `blob/get` until an administrator binds them.
+    #[serde(default)]
+    pub owner: Option<Owner>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -112,4 +141,6 @@ pub struct PinRecord {
     pub root_cid: String,
     pub expires_at_ms: u64,
     pub created_at_ms: u64,
+    #[serde(default)]
+    pub owner: Option<Owner>,
 }

@@ -37,9 +37,9 @@ use conex_core::transport_ws::{
     plane_name,
 };
 use conex_core::{CallContext, CallError, CallResult, Limits, MethodContract};
-use conex_proto::cid;
 use conex_proto;
-use conex_proto::wire::{decode_wire, encode_wire, validate_message, ProtocolError};
+use conex_proto::cid;
+use conex_proto::wire::{ProtocolError, decode_wire, encode_wire, validate_message};
 use prost::Message as _; // conex_proto::Message decode/encode for protobuf frames
 
 use crate::broker::{Broker, BrokerCall, BrokerFrame};
@@ -104,9 +104,17 @@ static NEXT_GENERATION: AtomicU64 = AtomicU64::new(1);
 /// Generation-fenced response table used by outbound link calls. Request IDs
 /// are only unique within one link generation; stale responses cannot revive a
 /// later connection.
+/// Reply payloads a link can carry: JSON-plane business values and M3 binary
+/// data chunks (protobuf profile only).
+#[derive(Debug, Clone, PartialEq)]
+pub enum AgentReply {
+    Value(Value),
+    Chunk(conex_proto::DataChunk),
+}
+
 pub struct PendingRequests {
     generation: u64,
-    inner: Mutex<HashMap<(u64, String), oneshot::Sender<CallResult<Value>>>>,
+    inner: Mutex<HashMap<(u64, String), oneshot::Sender<CallResult<AgentReply>>>>,
 }
 
 impl PendingRequests {
@@ -124,7 +132,7 @@ impl PendingRequests {
     pub async fn register(
         &self,
         request_id: impl Into<String>,
-    ) -> CallResult<oneshot::Receiver<CallResult<Value>>> {
+    ) -> CallResult<oneshot::Receiver<CallResult<AgentReply>>> {
         let key = (self.generation, request_id.into());
         let mut inner = self.inner.lock().await;
         if inner.contains_key(&key) {
@@ -142,7 +150,7 @@ impl PendingRequests {
         &self,
         generation: u64,
         request_id: &str,
-        result: CallResult<Value>,
+        result: CallResult<AgentReply>,
     ) -> bool {
         let tx = self
             .inner
@@ -205,9 +213,15 @@ pub async fn ws_handler_with_state(
         let (key, value) = part.split_once('=')?;
         (key == "ticket").then_some(value)
     });
-    let authorization = headers.get(axum::http::header::AUTHORIZATION).and_then(|value| value.to_str().ok());
+    let authorization = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok());
     if ticket.is_some() && authorization.is_some() {
-        return (StatusCode::UNAUTHORIZED, "ticket and bearer authentication are mutually exclusive").into_response();
+        return (
+            StatusCode::UNAUTHORIZED,
+            "ticket and bearer authentication are mutually exclusive",
+        )
+            .into_response();
     }
     let (caller, role, capability_caps, web_session, ui_links_ref) = if let Some(ticket) = ticket {
         let Some(web) = state.web_auth.as_ref() else {
@@ -216,35 +230,74 @@ pub async fn ws_handler_with_state(
         if let Err(error) = web.check_origin(&headers) {
             return crate::web_auth::error_response(error);
         }
-        let origin = headers.get(axum::http::header::ORIGIN).and_then(|value| value.to_str().ok()).unwrap_or_default();
-        let target_host = headers.get(axum::http::header::HOST).and_then(|value| value.to_str().ok()).unwrap_or_default();
-        let entry = match state.host_side.as_ref().and_then(|side| side.tickets.consume_for(ticket, origin, target_host).ok()) {
+        let origin = headers
+            .get(axum::http::header::ORIGIN)
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or_default();
+        let target_host = headers
+            .get(axum::http::header::HOST)
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or_default();
+        let entry = match state
+            .host_side
+            .as_ref()
+            .and_then(|side| side.tickets.consume_for(ticket, origin, target_host).ok())
+        {
             Some(entry) => entry,
             None => return (StatusCode::UNAUTHORIZED, "invalid ticket").into_response(),
         };
         if entry.peer_role != "ui" {
-            return (StatusCode::UNAUTHORIZED, "ticket role is not valid for browser links").into_response();
+            return (
+                StatusCode::UNAUTHORIZED,
+                "ticket role is not valid for browser links",
+            )
+                .into_response();
         }
         let Some(session_id) = entry.session_id.as_deref() else {
-            return (StatusCode::UNAUTHORIZED, "ticket is not bound to a web session").into_response();
+            return (
+                StatusCode::UNAUTHORIZED,
+                "ticket is not bound to a web session",
+            )
+                .into_response();
         };
         let Some(session) = web.get(session_id) else {
-            return (StatusCode::UNAUTHORIZED, "web session is invalid or expired").into_response();
+            return (
+                StatusCode::UNAUTHORIZED,
+                "web session is invalid or expired",
+            )
+                .into_response();
         };
-        if session.caller.principal_id != entry.principal_id || session.caller.tenant_id != entry.tenant_id {
-
+        if session.caller.principal_id != entry.principal_id
+            || session.caller.tenant_id != entry.tenant_id
+        {
             return (StatusCode::UNAUTHORIZED, "ticket session binding mismatch").into_response();
         }
         let registry = state.ui_links.clone();
         registry.increment_tickets(&session.link_id);
-        (session.caller.clone(), session.role.clone(), entry.capability_caps, Some(session), Some(registry))
+        (
+            session.caller.clone(),
+            session.role.clone(),
+            entry.capability_caps,
+            Some(session),
+            Some(registry),
+        )
     } else {
         let inbound = match state.auth.authenticate(authorization) {
             Ok(inbound) => inbound,
-            Err(error) => return (StatusCode::UNAUTHORIZED, axum::Json(json!({ "code": error.code(), "message": error.message() }))).into_response(),
+            Err(error) => {
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    axum::Json(json!({ "code": error.code(), "message": error.message() })),
+                )
+                    .into_response();
+            }
         };
         if inbound.role == "ui" {
-            return (StatusCode::UNAUTHORIZED, "UI links require a session ticket").into_response();
+            return (
+                StatusCode::UNAUTHORIZED,
+                "UI links require a session ticket",
+            )
+                .into_response();
         }
         (inbound.caller, inbound.role, Vec::new(), None, None)
     };
@@ -253,12 +306,8 @@ pub async fn ws_handler_with_state(
     } else {
         state.p1_provides.clone()
     };
-    let mut wss_state = WssState::new_with_capabilities(
-        broker,
-        conex_core::Limits::default(),
-        caller,
-        advertised,
-    );
+    let mut wss_state =
+        WssState::new_with_capabilities(broker, conex_core::Limits::default(), caller, advertised);
     wss_state.role = role;
     wss_state.capability_caps = capability_caps;
     wss_state.host_side = state.host_side.clone();
@@ -269,7 +318,8 @@ pub async fn ws_handler_with_state(
     }
     let wss_state = Arc::new(wss_state);
     let max_frame = usize::try_from(wss_state.limits.max_frame_bytes).unwrap_or(usize::MAX);
-    ws.max_frame_size(max_frame).max_message_size(max_frame)
+    ws.max_frame_size(max_frame)
+        .max_message_size(max_frame)
         .on_upgrade(move |socket| handle_connection(socket, wss_state))
         .into_response()
 }
@@ -317,14 +367,11 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                         ));
                     }
                     Message::Ping(payload) => {
-                        sender
-                            .send(Message::Pong(payload))
-                            .await
-                            .map_err(|error| {
-                                BootstrapError::MalformedEnvelope(format!(
-                                    "websocket pong failed: {error}"
-                                ))
-                            })?;
+                        sender.send(Message::Pong(payload)).await.map_err(|error| {
+                            BootstrapError::MalformedEnvelope(format!(
+                                "websocket pong failed: {error}"
+                            ))
+                        })?;
                     }
                     Message::Close(_) => return Err(BootstrapError::Timeout),
                     Message::Pong(_) => {}
@@ -369,7 +416,11 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
     if state.role == "agent"
         && let Some(side) = &state.host_side
     {
-        side.prepare_connection(&state.caller.principal_id, remote_link).await;
+        // Staged only: the link starts serving after `agent/register`
+        // succeeds, so a failed registration leaves the healthy previous
+        // connection alone (plan M2).
+        side.stage_connection(&state.caller.principal_id, remote_link)
+            .await;
     }
     let writer_queued = queued_bytes.clone();
     let writer = tokio::spawn(async move {
@@ -488,7 +539,16 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                     .as_ref()
                                     .map(|result| serde_json::to_value(result).unwrap_or(Value::Null))
                                     .unwrap_or(Value::Null);
-                                let _ = pending.route(generation, &success.request_id, Ok(value)).await;
+                                let _ = pending.route(generation, &success.request_id, Ok(crate::ws_transport::AgentReply::Value(value))).await;
+                                continue;
+                            }
+                            Some(conex_proto::message::Body::DataChunk(chunk)) => {
+                                let _ = pending.route(
+                                    generation,
+                                    &chunk.request_id,
+                                    Ok(crate::ws_transport::AgentReply::Chunk(chunk.clone())),
+                                )
+                                .await;
                                 continue;
                             }
                             Some(conex_proto::message::Body::Failure(failure)) => {
@@ -681,7 +741,16 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                     .as_ref()
                                     .map(|result| serde_json::to_value(result).unwrap_or(Value::Null))
                                     .unwrap_or(Value::Null);
-                                let _ = pending.route(generation, &success.request_id, Ok(value)).await;
+                                let _ = pending.route(generation, &success.request_id, Ok(crate::ws_transport::AgentReply::Value(value))).await;
+                                continue;
+                            }
+                            Some(conex_proto::message::Body::DataChunk(chunk)) => {
+                                let _ = pending.route(
+                                    generation,
+                                    &chunk.request_id,
+                                    Ok(crate::ws_transport::AgentReply::Chunk(chunk.clone())),
+                                )
+                                .await;
                                 continue;
                             }
                             Some(conex_proto::message::Body::Failure(failure)) => {
@@ -874,14 +943,24 @@ fn broker_frame_from_message(message: conex_proto::Message) -> CallResult<Option
         Some(conex_proto::message::Body::Notification(notification)) => {
             (None, notification.method, notification.params)
         }
-        Some(conex_proto::message::Body::Success(_)) | Some(conex_proto::message::Body::Failure(_)) => {
+        Some(conex_proto::message::Body::Success(_))
+        | Some(conex_proto::message::Body::Failure(_)) => {
             return Err(CallError::new(
                 conex_proto::ErrorCode::BadRequest,
                 "clients must not send responses",
             ));
         }
+        Some(conex_proto::message::Body::DataChunk(_)) => {
+            return Err(CallError::new(
+                conex_proto::ErrorCode::BadRequest,
+                "data chunks require the protobuf profile",
+            ));
+        }
         None => {
-            return Err(CallError::new(conex_proto::ErrorCode::BadRequest, "empty message"));
+            return Err(CallError::new(
+                conex_proto::ErrorCode::BadRequest,
+                "empty message",
+            ));
         }
     };
     let context = call_params.as_ref().and_then(|p| p.context.clone());
@@ -925,7 +1004,11 @@ fn to_wire_error(error: &CallError) -> conex_proto::Error {
         ..Default::default()
     }
 }
-fn wire_failure(request_id: Option<String>, code: conex_proto::ErrorCode, message: impl Into<String>) -> conex_proto::Message {
+fn wire_failure(
+    request_id: Option<String>,
+    code: conex_proto::ErrorCode,
+    message: impl Into<String>,
+) -> conex_proto::Message {
     conex_proto::Message {
         body: Some(conex_proto::message::Body::Failure(conex_proto::Failure {
             request_id,
@@ -939,7 +1022,8 @@ fn wire_failure(request_id: Option<String>, code: conex_proto::ErrorCode, messag
 }
 fn protocol_error_to_call(error: ProtocolError) -> CallError {
     CallError::new(
-        conex_proto::ErrorCode::try_from(error.rpc_code).unwrap_or(conex_proto::ErrorCode::BadRequest),
+        conex_proto::ErrorCode::try_from(error.rpc_code)
+            .unwrap_or(conex_proto::ErrorCode::BadRequest),
         error.message,
     )
 }
@@ -955,8 +1039,6 @@ fn encode_json_message(message: &conex_proto::Message) -> Option<Message> {
         .map(|bytes| Message::Text(String::from_utf8_lossy(&bytes).into_owned().into()))
 }
 
-
-
 fn bootstrap_error_frame(error: BootstrapError) -> String {
     let frame = json!({
         "jsonrpc": "2.0",
@@ -967,7 +1049,8 @@ fn bootstrap_error_frame(error: BootstrapError) -> String {
     if frame.len() <= conex_core::transport_ws::MAX_BOOTSTRAP_MESSAGE_BYTES {
         frame
     } else {
-        r#"{"jsonrpc":"2.0","id":null,"error":{"code":-32000,"message":"bootstrap error"}}"#.to_owned()
+        r#"{"jsonrpc":"2.0","id":null,"error":{"code":-32000,"message":"bootstrap error"}}"#
+            .to_owned()
     }
 }
 
@@ -1014,7 +1097,10 @@ async fn dispatch_business(
     generation: u64,
 ) -> CallResult<Value> {
     if state.role == "ui"
-        && state.web_session.as_ref().is_some_and(|session| !session.is_active())
+        && state
+            .web_session
+            .as_ref()
+            .is_some_and(|session| !session.is_active())
     {
         return Err(CallError::new(
             conex_proto::ErrorCode::Unauthorized,
@@ -1035,7 +1121,9 @@ async fn dispatch_business(
         ));
     }
     let tracked_link = if state.role == "ui" {
-        if let (Some(registry), Some(link_id)) = (state.ui_links.as_ref(), state.ui_link_id.as_ref()) {
+        if let (Some(registry), Some(link_id)) =
+            (state.ui_links.as_ref(), state.ui_link_id.as_ref())
+        {
             registry.begin_call(link_id);
             Some((registry.clone(), link_id.clone()))
         } else {
@@ -1066,11 +1154,17 @@ async fn dispatch_agent(
     generation: u64,
 ) -> CallResult<Value> {
     let side = state.host_side.as_ref().ok_or_else(|| {
-        CallError::new(conex_proto::ErrorCode::Unavailable, "agent links are not configured")
+        CallError::new(
+            conex_proto::ErrorCode::Unavailable,
+            "agent links are not configured",
+        )
     })?;
     let input = frame.params.unwrap_or(Value::Null);
     let map = input.as_object().ok_or_else(|| {
-        CallError::new(conex_proto::ErrorCode::BadRequest, "agent input must be an object")
+        CallError::new(
+            conex_proto::ErrorCode::BadRequest,
+            "agent input must be an object",
+        )
     })?;
     match frame.method.as_str() {
         "agent/register" => {
@@ -1098,19 +1192,45 @@ async fn dispatch_agent(
                 agent_id,
                 principal_id: state.caller.principal_id.clone(),
                 tenant_id: state.caller.tenant_id.clone(),
-                provider_ids: crate::agent::string_list(map, "providerIds")?,
-                methods: crate::agent::string_list(map, "methods")?,
-                resources: crate::agent::string_list(map, "resources")?,
+                endpoints: crate::agent::parse_endpoints(map)?,
                 registered_at_ms: crate::agent::now_ms(),
                 last_heartbeat_at_ms: crate::agent::now_ms(),
                 host_origin,
             };
-            side.register_agent_link(registration.clone(), generation)
-                .map_err(|error| CallError::new(conex_proto::ErrorCode::Forbidden, error.to_string()))?;
-            side.activate_connection(&registration.agent_id, generation)
-                .await
-                .map_err(|error| CallError::new(conex_proto::ErrorCode::Forbidden, error.to_string()))?;
-            Ok(json!({"agentId": registration.agent_id, "generation": generation}))
+            let review = match side.register_agent_link(registration.clone(), generation) {
+                Ok(review) => review,
+                Err(error) => {
+                    // Registration failed: drop the staged link so the
+                    // healthy previous connection keeps serving (plan M2).
+                    side.discard_connection(&registration.agent_id, generation)
+                        .await;
+                    return Err(CallError::new(
+                        conex_proto::ErrorCode::Forbidden,
+                        error.to_string(),
+                    ));
+                }
+            };
+            side.activate_connection(
+                &registration.agent_id,
+                generation,
+                &review.accepted_endpoint_ids,
+            )
+            .await
+            .map_err(|error| {
+                CallError::new(conex_proto::ErrorCode::Forbidden, error.to_string())
+            })?;
+            Ok(json!({
+                "agentId": registration.agent_id,
+                "generation": generation,
+                "acceptedEndpointIds": review.accepted_endpoint_ids,
+                "rejectedCapabilities": review.rejected_capabilities
+                    .into_iter()
+                    .map(|(endpoint_id, reason)| json!({
+                        "endpointId": endpoint_id,
+                        "reason": reason,
+                    }))
+                    .collect::<Vec<_>>(),
+            }))
         }
         "agent/heartbeat" => {
             let agent_id = crate::agent::require_string(map, "agentId")?;
@@ -1122,7 +1242,9 @@ async fn dispatch_agent(
             }
             let timestamp = side
                 .heartbeat_agent(agent_id, generation)
-                .map_err(|error| CallError::new(conex_proto::ErrorCode::Forbidden, error.to_string()))?;
+                .map_err(|error| {
+                    CallError::new(conex_proto::ErrorCode::Forbidden, error.to_string())
+                })?;
             Ok(json!({"agentId": agent_id, "heartbeatAtMs": timestamp.to_string()}))
         }
         _ => Err(CallError::new(
@@ -1131,7 +1253,6 @@ async fn dispatch_agent(
         )),
     }
 }
-
 
 /// Broker RPC dispatch for a non-stream business frame. Identity comes from
 /// the authenticated upgrade, never from the frame.
@@ -1156,6 +1277,7 @@ async fn dispatch_rpc(state: &WssState, frame: BrokerFrame) -> CallResult<Value>
         input,
         deadline,
         role: state.role.clone(),
+        link_id: state.ui_link_id.clone(),
     };
     state.broker.invoke(call.clone()).await
 }
@@ -1195,7 +1317,10 @@ async fn handle_stream(
     let value = match frame.method.as_str() {
         "stream/ack" => {
             let ack: AckRequest = serde_json::from_value(input).map_err(|e| {
-                CallError::new(conex_proto::ErrorCode::BadRequest, format!("bad stream/ack: {e}"))
+                CallError::new(
+                    conex_proto::ErrorCode::BadRequest,
+                    format!("bad stream/ack: {e}"),
+                )
             })?;
             hub.check_epoch(ack.epoch).map_err(stream_error_to_call)?;
             stream_outcome_to_json(
@@ -1205,7 +1330,10 @@ async fn handle_stream(
         }
         "stream/flow" => {
             let flow: FlowRequest = serde_json::from_value(input).map_err(|e| {
-                CallError::new(conex_proto::ErrorCode::BadRequest, format!("bad stream/flow: {e}"))
+                CallError::new(
+                    conex_proto::ErrorCode::BadRequest,
+                    format!("bad stream/flow: {e}"),
+                )
             })?;
             hub.check_epoch(flow.epoch).map_err(stream_error_to_call)?;
             stream_outcome_to_json(
@@ -1219,7 +1347,10 @@ async fn handle_stream(
         }
         "stream/reset" => {
             let reset: ResetRequest = serde_json::from_value(input).map_err(|e| {
-                CallError::new(conex_proto::ErrorCode::BadRequest, format!("bad stream/reset: {e}"))
+                CallError::new(
+                    conex_proto::ErrorCode::BadRequest,
+                    format!("bad stream/reset: {e}"),
+                )
             })?;
             hub.check_epoch(reset.epoch).map_err(stream_error_to_call)?;
             stream_outcome_to_json(
@@ -1234,7 +1365,10 @@ async fn handle_stream(
         }
         "stream/frame" => {
             let stream_frame: StreamFrame = serde_json::from_value(input).map_err(|e| {
-                CallError::new(conex_proto::ErrorCode::BadRequest, format!("bad stream/frame: {e}"))
+                CallError::new(
+                    conex_proto::ErrorCode::BadRequest,
+                    format!("bad stream/frame: {e}"),
+                )
             })?;
             hub.check_epoch(stream_frame.epoch)
                 .map_err(stream_error_to_call)?;
@@ -1250,8 +1384,8 @@ async fn handle_stream(
             }
             let inner = match business_profile {
                 ProfileId::JsonRpc2Wss => {
-                    let message = decode_wire(&stream_frame.message)
-                        .map_err(protocol_error_to_call)?;
+                    let message =
+                        decode_wire(&stream_frame.message).map_err(protocol_error_to_call)?;
                     validate_message(&message).map_err(protocol_error_to_call)?;
                     broker_frame_from_message(message)?.ok_or_else(|| {
                         CallError::new(
@@ -1261,8 +1395,8 @@ async fn handle_stream(
                     })?
                 }
                 ProfileId::ProtobufWss => {
-                    let message =
-                        conex_proto::Message::decode(stream_frame.message.as_slice()).map_err(|e| {
+                    let message = conex_proto::Message::decode(stream_frame.message.as_slice())
+                        .map_err(|e| {
                             CallError::new(
                                 conex_proto::ErrorCode::BadRequest,
                                 format!("cannot decode stream frame message: {e}"),
@@ -1309,14 +1443,18 @@ fn stream_error_to_call(error: StreamError) -> CallError {
         StreamError::ZeroByteRejected => {
             CallError::new(conex_proto::ErrorCode::BadRequest, error.to_string())
         }
-        StreamError::StreamFailed(reason) => CallError::new(conex_proto::ErrorCode::BadRequest, reason),
+        StreamError::StreamFailed(reason) => {
+            CallError::new(conex_proto::ErrorCode::BadRequest, reason)
+        }
         StreamError::SlowConsumer { .. } => {
             CallError::new(conex_proto::ErrorCode::SlowConsumer, error.to_string())
         }
         StreamError::ControlQueueFull => {
             CallError::new(conex_proto::ErrorCode::QuotaExceeded, error.to_string())
         }
-        StreamError::BadRequest(message) => CallError::new(conex_proto::ErrorCode::BadRequest, message),
+        StreamError::BadRequest(message) => {
+            CallError::new(conex_proto::ErrorCode::BadRequest, message)
+        }
     }
 }
 
@@ -1451,35 +1589,59 @@ mod tests {
         let previous = PendingRequests::new(6);
         let current_rx = current.register("same-id").await.unwrap();
         let previous_rx = previous.register("same-id").await.unwrap();
-        assert!(current
-            .register("same-id")
-            .await
-            .expect_err("duplicate id must be rejected")
-            .message()
-            .contains("duplicate"));
-        assert!(!current
-            .route(6, "same-id", Ok(json!({"generation": 6})))
-            .await);
-        assert!(!current
-            .route(7, "late-id", Ok(Value::Null))
-            .await);
-        assert!(current
-            .route(7, "same-id", Ok(json!({"generation": 7})))
-            .await);
-        assert_eq!(
-            current_rx.await.unwrap().unwrap()["generation"],
-            json!(7)
+        assert!(
+            current
+                .register("same-id")
+                .await
+                .expect_err("duplicate id must be rejected")
+                .message()
+                .contains("duplicate")
         );
-        assert!(previous
-            .route(6, "same-id", Ok(json!({"generation": 6})))
-            .await);
-        assert_eq!(
-            previous_rx.await.unwrap().unwrap()["generation"],
-            json!(6)
+        assert!(
+            !current
+                .route(
+                    6,
+                    "same-id",
+                    Ok(AgentReply::Value(json!({"generation": 6})))
+                )
+                .await
         );
-        assert!(!current
-            .route(7, "same-id", Ok(Value::Null))
-            .await);
+        assert!(
+            !current
+                .route(7, "late-id", Ok(AgentReply::Value(Value::Null)))
+                .await
+        );
+        assert!(
+            current
+                .route(
+                    7,
+                    "same-id",
+                    Ok(AgentReply::Value(json!({"generation": 7})))
+                )
+                .await
+        );
+        assert_eq!(
+            current_rx.await.unwrap().unwrap(),
+            AgentReply::Value(json!({"generation": 7}))
+        );
+        assert!(
+            previous
+                .route(
+                    6,
+                    "same-id",
+                    Ok(AgentReply::Value(json!({"generation": 6})))
+                )
+                .await
+        );
+        assert_eq!(
+            previous_rx.await.unwrap().unwrap(),
+            AgentReply::Value(json!({"generation": 6}))
+        );
+        assert!(
+            !current
+                .route(7, "same-id", Ok(AgentReply::Value(Value::Null)))
+                .await
+        );
     }
 
     #[test]

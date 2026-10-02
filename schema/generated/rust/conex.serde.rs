@@ -853,7 +853,7 @@ impl serde::Serialize for BlobAccess {
     {
         use serde::ser::SerializeStruct;
         let mut len = 0;
-        if !self.provider_id.is_empty() {
+        if !self.endpoint_id.is_empty() {
             len += 1;
         }
         if !self.plane.is_empty() {
@@ -866,8 +866,8 @@ impl serde::Serialize for BlobAccess {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("conex.BlobAccess", len)?;
-        if !self.provider_id.is_empty() {
-            struct_ser.serialize_field("providerId", &self.provider_id)?;
+        if !self.endpoint_id.is_empty() {
+            struct_ser.serialize_field("endpointId", &self.endpoint_id)?;
         }
         if !self.plane.is_empty() {
             struct_ser.serialize_field("plane", &self.plane)?;
@@ -888,8 +888,8 @@ impl<'de> serde::Deserialize<'de> for BlobAccess {
         D: serde::Deserializer<'de>,
     {
         const FIELDS: &[&str] = &[
-            "provider_id",
-            "providerId",
+            "endpoint_id",
+            "endpointId",
             "plane",
             "space_id",
             "spaceId",
@@ -899,7 +899,7 @@ impl<'de> serde::Deserialize<'de> for BlobAccess {
 
         #[allow(clippy::enum_variant_names)]
         enum GeneratedField {
-            ProviderId,
+            EndpointId,
             Plane,
             SpaceId,
             ResourceId,
@@ -924,7 +924,7 @@ impl<'de> serde::Deserialize<'de> for BlobAccess {
                         E: serde::de::Error,
                     {
                         match value {
-                            "providerId" | "provider_id" => Ok(GeneratedField::ProviderId),
+                            "endpointId" | "endpoint_id" => Ok(GeneratedField::EndpointId),
                             "plane" => Ok(GeneratedField::Plane),
                             "spaceId" | "space_id" => Ok(GeneratedField::SpaceId),
                             "resourceId" | "resource_id" => Ok(GeneratedField::ResourceId),
@@ -947,17 +947,17 @@ impl<'de> serde::Deserialize<'de> for BlobAccess {
                 where
                     V: serde::de::MapAccess<'de>,
             {
-                let mut provider_id__ = None;
+                let mut endpoint_id__ = None;
                 let mut plane__ = None;
                 let mut space_id__ = None;
                 let mut resource_id__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
-                        GeneratedField::ProviderId => {
-                            if provider_id__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("providerId"));
+                        GeneratedField::EndpointId => {
+                            if endpoint_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("endpointId"));
                             }
-                            provider_id__ = Some(map_.next_value()?);
+                            endpoint_id__ = Some(map_.next_value()?);
                         }
                         GeneratedField::Plane => {
                             if plane__.is_some() {
@@ -980,7 +980,7 @@ impl<'de> serde::Deserialize<'de> for BlobAccess {
                     }
                 }
                 Ok(BlobAccess {
-                    provider_id: provider_id__.unwrap_or_default(),
+                    endpoint_id: endpoint_id__.unwrap_or_default(),
                     plane: plane__.unwrap_or_default(),
                     space_id: space_id__,
                     resource_id: resource_id__.unwrap_or_default(),
@@ -1766,28 +1766,19 @@ impl serde::Serialize for BlobGetRequest {
     {
         use serde::ser::SerializeStruct;
         let mut len = 0;
-        if !self.chunk_cid.is_empty() {
-            len += 1;
-        }
-        if self.range_offset.is_some() {
-            len += 1;
-        }
-        if self.range_length.is_some() {
+        if self.target.is_some() {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("conex.BlobGetRequest", len)?;
-        if !self.chunk_cid.is_empty() {
-            struct_ser.serialize_field("chunkCid", &self.chunk_cid)?;
-        }
-        if let Some(v) = self.range_offset.as_ref() {
-            #[allow(clippy::needless_borrow)]
-            #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("rangeOffset", ToString::to_string(&v).as_str())?;
-        }
-        if let Some(v) = self.range_length.as_ref() {
-            #[allow(clippy::needless_borrow)]
-            #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("rangeLength", ToString::to_string(&v).as_str())?;
+        if let Some(v) = self.target.as_ref() {
+            match v {
+                blob_get_request::Target::Committed(v) => {
+                    struct_ser.serialize_field("committed", v)?;
+                }
+                blob_get_request::Target::Remote(v) => {
+                    struct_ser.serialize_field("remote", v)?;
+                }
+            }
         }
         struct_ser.end()
     }
@@ -1799,19 +1790,14 @@ impl<'de> serde::Deserialize<'de> for BlobGetRequest {
         D: serde::Deserializer<'de>,
     {
         const FIELDS: &[&str] = &[
-            "chunk_cid",
-            "chunkCid",
-            "range_offset",
-            "rangeOffset",
-            "range_length",
-            "rangeLength",
+            "committed",
+            "remote",
         ];
 
         #[allow(clippy::enum_variant_names)]
         enum GeneratedField {
-            ChunkCid,
-            RangeOffset,
-            RangeLength,
+            Committed,
+            Remote,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -1833,9 +1819,8 @@ impl<'de> serde::Deserialize<'de> for BlobGetRequest {
                         E: serde::de::Error,
                     {
                         match value {
-                            "chunkCid" | "chunk_cid" => Ok(GeneratedField::ChunkCid),
-                            "rangeOffset" | "range_offset" => Ok(GeneratedField::RangeOffset),
-                            "rangeLength" | "range_length" => Ok(GeneratedField::RangeLength),
+                            "committed" => Ok(GeneratedField::Committed),
+                            "remote" => Ok(GeneratedField::Remote),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -1855,39 +1840,27 @@ impl<'de> serde::Deserialize<'de> for BlobGetRequest {
                 where
                     V: serde::de::MapAccess<'de>,
             {
-                let mut chunk_cid__ = None;
-                let mut range_offset__ = None;
-                let mut range_length__ = None;
+                let mut target__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
-                        GeneratedField::ChunkCid => {
-                            if chunk_cid__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("chunkCid"));
+                        GeneratedField::Committed => {
+                            if target__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("committed"));
                             }
-                            chunk_cid__ = Some(map_.next_value()?);
+                            target__ = map_.next_value::<::std::option::Option<_>>()?.map(blob_get_request::Target::Committed)
+;
                         }
-                        GeneratedField::RangeOffset => {
-                            if range_offset__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("rangeOffset"));
+                        GeneratedField::Remote => {
+                            if target__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("remote"));
                             }
-                            range_offset__ = 
-                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
-                            ;
-                        }
-                        GeneratedField::RangeLength => {
-                            if range_length__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("rangeLength"));
-                            }
-                            range_length__ = 
-                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
-                            ;
+                            target__ = map_.next_value::<::std::option::Option<_>>()?.map(blob_get_request::Target::Remote)
+;
                         }
                     }
                 }
                 Ok(BlobGetRequest {
-                    chunk_cid: chunk_cid__.unwrap_or_default(),
-                    range_offset: range_offset__,
-                    range_length: range_length__,
+                    target: target__,
                 })
             }
         }
@@ -1905,7 +1878,13 @@ impl serde::Serialize for BlobGetResponse {
         if !self.chunk_bytes.is_empty() {
             len += 1;
         }
-        if !self.chunk_cid.is_empty() {
+        if self.chunk_cid.is_some() {
+            len += 1;
+        }
+        if self.revision.is_some() {
+            len += 1;
+        }
+        if self.eof {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("conex.BlobGetResponse", len)?;
@@ -1914,8 +1893,14 @@ impl serde::Serialize for BlobGetResponse {
             #[allow(clippy::needless_borrows_for_generic_args)]
             struct_ser.serialize_field("chunkBytes", pbjson::private::base64::encode(&self.chunk_bytes).as_str())?;
         }
-        if !self.chunk_cid.is_empty() {
-            struct_ser.serialize_field("chunkCid", &self.chunk_cid)?;
+        if let Some(v) = self.chunk_cid.as_ref() {
+            struct_ser.serialize_field("chunkCid", v)?;
+        }
+        if let Some(v) = self.revision.as_ref() {
+            struct_ser.serialize_field("revision", v)?;
+        }
+        if self.eof {
+            struct_ser.serialize_field("eof", &self.eof)?;
         }
         struct_ser.end()
     }
@@ -1931,12 +1916,16 @@ impl<'de> serde::Deserialize<'de> for BlobGetResponse {
             "chunkBytes",
             "chunk_cid",
             "chunkCid",
+            "revision",
+            "eof",
         ];
 
         #[allow(clippy::enum_variant_names)]
         enum GeneratedField {
             ChunkBytes,
             ChunkCid,
+            Revision,
+            Eof,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -1960,6 +1949,8 @@ impl<'de> serde::Deserialize<'de> for BlobGetResponse {
                         match value {
                             "chunkBytes" | "chunk_bytes" => Ok(GeneratedField::ChunkBytes),
                             "chunkCid" | "chunk_cid" => Ok(GeneratedField::ChunkCid),
+                            "revision" => Ok(GeneratedField::Revision),
+                            "eof" => Ok(GeneratedField::Eof),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -1981,6 +1972,8 @@ impl<'de> serde::Deserialize<'de> for BlobGetResponse {
             {
                 let mut chunk_bytes__ = None;
                 let mut chunk_cid__ = None;
+                let mut revision__ = None;
+                let mut eof__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::ChunkBytes => {
@@ -1995,13 +1988,27 @@ impl<'de> serde::Deserialize<'de> for BlobGetResponse {
                             if chunk_cid__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("chunkCid"));
                             }
-                            chunk_cid__ = Some(map_.next_value()?);
+                            chunk_cid__ = map_.next_value()?;
+                        }
+                        GeneratedField::Revision => {
+                            if revision__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("revision"));
+                            }
+                            revision__ = map_.next_value()?;
+                        }
+                        GeneratedField::Eof => {
+                            if eof__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("eof"));
+                            }
+                            eof__ = Some(map_.next_value()?);
                         }
                     }
                 }
                 Ok(BlobGetResponse {
                     chunk_bytes: chunk_bytes__.unwrap_or_default(),
-                    chunk_cid: chunk_cid__.unwrap_or_default(),
+                    chunk_cid: chunk_cid__,
+                    revision: revision__,
+                    eof: eof__.unwrap_or_default(),
                 })
             }
         }
@@ -2825,7 +2832,7 @@ impl serde::Serialize for BlobRef {
     {
         use serde::ser::SerializeStruct;
         let mut len = 0;
-        if !self.cid.is_empty() {
+        if self.cid.is_some() {
             len += 1;
         }
         if !self.size_bytes.is_empty() {
@@ -2837,9 +2844,12 @@ impl serde::Serialize for BlobRef {
         if self.access.is_some() {
             len += 1;
         }
+        if self.revision.is_some() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("conex.BlobRef", len)?;
-        if !self.cid.is_empty() {
-            struct_ser.serialize_field("cid", &self.cid)?;
+        if let Some(v) = self.cid.as_ref() {
+            struct_ser.serialize_field("cid", v)?;
         }
         if !self.size_bytes.is_empty() {
             struct_ser.serialize_field("sizeBytes", &self.size_bytes)?;
@@ -2849,6 +2859,9 @@ impl serde::Serialize for BlobRef {
         }
         if let Some(v) = self.access.as_ref() {
             struct_ser.serialize_field("access", v)?;
+        }
+        if let Some(v) = self.revision.as_ref() {
+            struct_ser.serialize_field("revision", v)?;
         }
         struct_ser.end()
     }
@@ -2865,6 +2878,7 @@ impl<'de> serde::Deserialize<'de> for BlobRef {
             "sizeBytes",
             "mime",
             "access",
+            "revision",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -2873,6 +2887,7 @@ impl<'de> serde::Deserialize<'de> for BlobRef {
             SizeBytes,
             Mime,
             Access,
+            Revision,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -2898,6 +2913,7 @@ impl<'de> serde::Deserialize<'de> for BlobRef {
                             "sizeBytes" | "size_bytes" => Ok(GeneratedField::SizeBytes),
                             "mime" => Ok(GeneratedField::Mime),
                             "access" => Ok(GeneratedField::Access),
+                            "revision" => Ok(GeneratedField::Revision),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -2921,13 +2937,14 @@ impl<'de> serde::Deserialize<'de> for BlobRef {
                 let mut size_bytes__ = None;
                 let mut mime__ = None;
                 let mut access__ = None;
+                let mut revision__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::Cid => {
                             if cid__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("cid"));
                             }
-                            cid__ = Some(map_.next_value()?);
+                            cid__ = map_.next_value()?;
                         }
                         GeneratedField::SizeBytes => {
                             if size_bytes__.is_some() {
@@ -2947,13 +2964,20 @@ impl<'de> serde::Deserialize<'de> for BlobRef {
                             }
                             access__ = map_.next_value()?;
                         }
+                        GeneratedField::Revision => {
+                            if revision__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("revision"));
+                            }
+                            revision__ = map_.next_value()?;
+                        }
                     }
                 }
                 Ok(BlobRef {
-                    cid: cid__.unwrap_or_default(),
+                    cid: cid__,
                     size_bytes: size_bytes__.unwrap_or_default(),
                     mime: mime__.unwrap_or_default(),
                     access: access__,
+                    revision: revision__,
                 })
             }
         }
@@ -3510,6 +3534,98 @@ impl<'de> serde::Deserialize<'de> for ChunkManifest {
         deserializer.deserialize_struct("conex.ChunkManifest", FIELDS, GeneratedVisitor)
     }
 }
+impl serde::Serialize for CommittedTarget {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.chunk_cid.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.CommittedTarget", len)?;
+        if !self.chunk_cid.is_empty() {
+            struct_ser.serialize_field("chunkCid", &self.chunk_cid)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for CommittedTarget {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "chunk_cid",
+            "chunkCid",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            ChunkCid,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "chunkCid" | "chunk_cid" => Ok(GeneratedField::ChunkCid),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = CommittedTarget;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.CommittedTarget")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<CommittedTarget, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut chunk_cid__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::ChunkCid => {
+                            if chunk_cid__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("chunkCid"));
+                            }
+                            chunk_cid__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(CommittedTarget {
+                    chunk_cid: chunk_cid__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.CommittedTarget", FIELDS, GeneratedVisitor)
+    }
+}
 impl serde::Serialize for ConnectionListRequest {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -3875,6 +3991,153 @@ impl<'de> serde::Deserialize<'de> for ContentAddress {
             }
         }
         deserializer.deserialize_struct("conex.ContentAddress", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for DataChunk {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.request_id.is_empty() {
+            len += 1;
+        }
+        if !self.chunk.is_empty() {
+            len += 1;
+        }
+        if !self.revision.is_empty() {
+            len += 1;
+        }
+        if self.eof {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.DataChunk", len)?;
+        if !self.request_id.is_empty() {
+            struct_ser.serialize_field("requestId", &self.request_id)?;
+        }
+        if !self.chunk.is_empty() {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("chunk", pbjson::private::base64::encode(&self.chunk).as_str())?;
+        }
+        if !self.revision.is_empty() {
+            struct_ser.serialize_field("revision", &self.revision)?;
+        }
+        if self.eof {
+            struct_ser.serialize_field("eof", &self.eof)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for DataChunk {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "request_id",
+            "requestId",
+            "chunk",
+            "revision",
+            "eof",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            RequestId,
+            Chunk,
+            Revision,
+            Eof,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "requestId" | "request_id" => Ok(GeneratedField::RequestId),
+                            "chunk" => Ok(GeneratedField::Chunk),
+                            "revision" => Ok(GeneratedField::Revision),
+                            "eof" => Ok(GeneratedField::Eof),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = DataChunk;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.DataChunk")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<DataChunk, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut request_id__ = None;
+                let mut chunk__ = None;
+                let mut revision__ = None;
+                let mut eof__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::RequestId => {
+                            if request_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("requestId"));
+                            }
+                            request_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Chunk => {
+                            if chunk__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("chunk"));
+                            }
+                            chunk__ = 
+                                Some(map_.next_value::<::pbjson::private::BytesDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::Revision => {
+                            if revision__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("revision"));
+                            }
+                            revision__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Eof => {
+                            if eof__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("eof"));
+                            }
+                            eof__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(DataChunk {
+                    request_id: request_id__.unwrap_or_default(),
+                    chunk: chunk__.unwrap_or_default(),
+                    revision: revision__.unwrap_or_default(),
+                    eof: eof__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.DataChunk", FIELDS, GeneratedVisitor)
     }
 }
 impl serde::Serialize for DedupKey {
@@ -4533,6 +4796,80 @@ impl<'de> serde::Deserialize<'de> for EndpointSummary {
             }
         }
         deserializer.deserialize_struct("conex.EndpointSummary", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for EntryKind {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let variant = match self {
+            Self::Unspecified => "ENTRY_KIND_UNSPECIFIED",
+            Self::File => "ENTRY_KIND_FILE",
+            Self::Directory => "ENTRY_KIND_DIRECTORY",
+        };
+        serializer.serialize_str(variant)
+    }
+}
+impl<'de> serde::Deserialize<'de> for EntryKind {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "ENTRY_KIND_UNSPECIFIED",
+            "ENTRY_KIND_FILE",
+            "ENTRY_KIND_DIRECTORY",
+        ];
+
+        struct GeneratedVisitor;
+
+        impl serde::de::Visitor<'_> for GeneratedVisitor {
+            type Value = EntryKind;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(formatter, "expected one of: {:?}", &FIELDS)
+            }
+
+            fn visit_i64<E>(self, v: i64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Signed(v), &self)
+                    })
+            }
+
+            fn visit_u64<E>(self, v: u64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Unsigned(v), &self)
+                    })
+            }
+
+            fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                match value {
+                    "ENTRY_KIND_UNSPECIFIED" => Ok(EntryKind::Unspecified),
+                    "ENTRY_KIND_FILE" => Ok(EntryKind::File),
+                    "ENTRY_KIND_DIRECTORY" => Ok(EntryKind::Directory),
+                    _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
+                }
+            }
+        }
+        deserializer.deserialize_any(GeneratedVisitor)
     }
 }
 impl serde::Serialize for Error {
@@ -6068,6 +6405,9 @@ impl serde::Serialize for Message {
                 message::Body::Notification(v) => {
                     struct_ser.serialize_field("notification", v)?;
                 }
+                message::Body::DataChunk(v) => {
+                    struct_ser.serialize_field("dataChunk", v)?;
+                }
             }
         }
         struct_ser.end()
@@ -6084,6 +6424,8 @@ impl<'de> serde::Deserialize<'de> for Message {
             "success",
             "failure",
             "notification",
+            "data_chunk",
+            "dataChunk",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -6092,6 +6434,7 @@ impl<'de> serde::Deserialize<'de> for Message {
             Success,
             Failure,
             Notification,
+            DataChunk,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -6117,6 +6460,7 @@ impl<'de> serde::Deserialize<'de> for Message {
                             "success" => Ok(GeneratedField::Success),
                             "failure" => Ok(GeneratedField::Failure),
                             "notification" => Ok(GeneratedField::Notification),
+                            "dataChunk" | "data_chunk" => Ok(GeneratedField::DataChunk),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -6165,6 +6509,13 @@ impl<'de> serde::Deserialize<'de> for Message {
                                 return Err(serde::de::Error::duplicate_field("notification"));
                             }
                             body__ = map_.next_value::<::std::option::Option<_>>()?.map(message::Body::Notification)
+;
+                        }
+                        GeneratedField::DataChunk => {
+                            if body__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("dataChunk"));
+                            }
+                            body__ = map_.next_value::<::std::option::Option<_>>()?.map(message::Body::DataChunk)
 ;
                         }
                     }
@@ -7882,6 +8233,167 @@ impl<'de> serde::Deserialize<'de> for RejectedCapability {
         deserializer.deserialize_struct("conex.RejectedCapability", FIELDS, GeneratedVisitor)
     }
 }
+impl serde::Serialize for RemoteTarget {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.endpoint_id.is_empty() {
+            len += 1;
+        }
+        if !self.resource_id.is_empty() {
+            len += 1;
+        }
+        if self.revision.is_some() {
+            len += 1;
+        }
+        if !self.offset.is_empty() {
+            len += 1;
+        }
+        if !self.length.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.RemoteTarget", len)?;
+        if !self.endpoint_id.is_empty() {
+            struct_ser.serialize_field("endpointId", &self.endpoint_id)?;
+        }
+        if !self.resource_id.is_empty() {
+            struct_ser.serialize_field("resourceId", &self.resource_id)?;
+        }
+        if let Some(v) = self.revision.as_ref() {
+            struct_ser.serialize_field("revision", v)?;
+        }
+        if !self.offset.is_empty() {
+            struct_ser.serialize_field("offset", &self.offset)?;
+        }
+        if !self.length.is_empty() {
+            struct_ser.serialize_field("length", &self.length)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for RemoteTarget {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "endpoint_id",
+            "endpointId",
+            "resource_id",
+            "resourceId",
+            "revision",
+            "offset",
+            "length",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            EndpointId,
+            ResourceId,
+            Revision,
+            Offset,
+            Length,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "endpointId" | "endpoint_id" => Ok(GeneratedField::EndpointId),
+                            "resourceId" | "resource_id" => Ok(GeneratedField::ResourceId),
+                            "revision" => Ok(GeneratedField::Revision),
+                            "offset" => Ok(GeneratedField::Offset),
+                            "length" => Ok(GeneratedField::Length),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = RemoteTarget;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.RemoteTarget")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<RemoteTarget, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut endpoint_id__ = None;
+                let mut resource_id__ = None;
+                let mut revision__ = None;
+                let mut offset__ = None;
+                let mut length__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::EndpointId => {
+                            if endpoint_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("endpointId"));
+                            }
+                            endpoint_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ResourceId => {
+                            if resource_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("resourceId"));
+                            }
+                            resource_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Revision => {
+                            if revision__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("revision"));
+                            }
+                            revision__ = map_.next_value()?;
+                        }
+                        GeneratedField::Offset => {
+                            if offset__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("offset"));
+                            }
+                            offset__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Length => {
+                            if length__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("length"));
+                            }
+                            length__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(RemoteTarget {
+                    endpoint_id: endpoint_id__.unwrap_or_default(),
+                    resource_id: resource_id__.unwrap_or_default(),
+                    revision: revision__,
+                    offset: offset__.unwrap_or_default(),
+                    length: length__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.RemoteTarget", FIELDS, GeneratedVisitor)
+    }
+}
 impl serde::Serialize for Request {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -8025,6 +8537,12 @@ impl serde::Serialize for RequestContext {
         if self.binding_id.is_some() {
             len += 1;
         }
+        if !self.principal_id.is_empty() {
+            len += 1;
+        }
+        if !self.tenant_id.is_empty() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("conex.RequestContext", len)?;
         if !self.provider_endpoint_id.is_empty() {
             struct_ser.serialize_field("providerEndpointId", &self.provider_endpoint_id)?;
@@ -8036,6 +8554,12 @@ impl serde::Serialize for RequestContext {
         }
         if let Some(v) = self.binding_id.as_ref() {
             struct_ser.serialize_field("bindingId", v)?;
+        }
+        if !self.principal_id.is_empty() {
+            struct_ser.serialize_field("principalId", &self.principal_id)?;
+        }
+        if !self.tenant_id.is_empty() {
+            struct_ser.serialize_field("tenantId", &self.tenant_id)?;
         }
         struct_ser.end()
     }
@@ -8052,6 +8576,10 @@ impl<'de> serde::Deserialize<'de> for RequestContext {
             "plane",
             "binding_id",
             "bindingId",
+            "principal_id",
+            "principalId",
+            "tenant_id",
+            "tenantId",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -8059,6 +8587,8 @@ impl<'de> serde::Deserialize<'de> for RequestContext {
             ProviderEndpointId,
             Plane,
             BindingId,
+            PrincipalId,
+            TenantId,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -8083,6 +8613,8 @@ impl<'de> serde::Deserialize<'de> for RequestContext {
                             "providerEndpointId" | "provider_endpoint_id" => Ok(GeneratedField::ProviderEndpointId),
                             "plane" => Ok(GeneratedField::Plane),
                             "bindingId" | "binding_id" => Ok(GeneratedField::BindingId),
+                            "principalId" | "principal_id" => Ok(GeneratedField::PrincipalId),
+                            "tenantId" | "tenant_id" => Ok(GeneratedField::TenantId),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -8105,6 +8637,8 @@ impl<'de> serde::Deserialize<'de> for RequestContext {
                 let mut provider_endpoint_id__ = None;
                 let mut plane__ = None;
                 let mut binding_id__ = None;
+                let mut principal_id__ = None;
+                let mut tenant_id__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::ProviderEndpointId => {
@@ -8125,12 +8659,26 @@ impl<'de> serde::Deserialize<'de> for RequestContext {
                             }
                             binding_id__ = map_.next_value()?;
                         }
+                        GeneratedField::PrincipalId => {
+                            if principal_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("principalId"));
+                            }
+                            principal_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::TenantId => {
+                            if tenant_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("tenantId"));
+                            }
+                            tenant_id__ = Some(map_.next_value()?);
+                        }
                     }
                 }
                 Ok(RequestContext {
                     provider_endpoint_id: provider_endpoint_id__.unwrap_or_default(),
                     plane: plane__.unwrap_or_default(),
                     binding_id: binding_id__,
+                    principal_id: principal_id__.unwrap_or_default(),
+                    tenant_id: tenant_id__.unwrap_or_default(),
                 })
             }
         }
@@ -8160,6 +8708,9 @@ impl serde::Serialize for ResourceSummary {
         if self.revision.is_some() {
             len += 1;
         }
+        if self.kind != 0 {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("conex.ResourceSummary", len)?;
         if !self.resource_id.is_empty() {
             struct_ser.serialize_field("resourceId", &self.resource_id)?;
@@ -8171,12 +8722,15 @@ impl serde::Serialize for ResourceSummary {
             struct_ser.serialize_field("mime", &self.mime)?;
         }
         if let Some(v) = self.size_bytes.as_ref() {
-            #[allow(clippy::needless_borrow)]
-            #[allow(clippy::needless_borrows_for_generic_args)]
-            struct_ser.serialize_field("sizeBytes", ToString::to_string(&v).as_str())?;
+            struct_ser.serialize_field("sizeBytes", v)?;
         }
         if let Some(v) = self.revision.as_ref() {
             struct_ser.serialize_field("revision", v)?;
+        }
+        if self.kind != 0 {
+            let v = EntryKind::try_from(self.kind)
+                .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", self.kind)))?;
+            struct_ser.serialize_field("kind", &v)?;
         }
         struct_ser.end()
     }
@@ -8195,6 +8749,7 @@ impl<'de> serde::Deserialize<'de> for ResourceSummary {
             "size_bytes",
             "sizeBytes",
             "revision",
+            "kind",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -8204,6 +8759,7 @@ impl<'de> serde::Deserialize<'de> for ResourceSummary {
             Mime,
             SizeBytes,
             Revision,
+            Kind,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -8230,6 +8786,7 @@ impl<'de> serde::Deserialize<'de> for ResourceSummary {
                             "mime" => Ok(GeneratedField::Mime),
                             "sizeBytes" | "size_bytes" => Ok(GeneratedField::SizeBytes),
                             "revision" => Ok(GeneratedField::Revision),
+                            "kind" => Ok(GeneratedField::Kind),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -8254,6 +8811,7 @@ impl<'de> serde::Deserialize<'de> for ResourceSummary {
                 let mut mime__ = None;
                 let mut size_bytes__ = None;
                 let mut revision__ = None;
+                let mut kind__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::ResourceId => {
@@ -8278,15 +8836,19 @@ impl<'de> serde::Deserialize<'de> for ResourceSummary {
                             if size_bytes__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("sizeBytes"));
                             }
-                            size_bytes__ = 
-                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
-                            ;
+                            size_bytes__ = map_.next_value()?;
                         }
                         GeneratedField::Revision => {
                             if revision__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("revision"));
                             }
                             revision__ = map_.next_value()?;
+                        }
+                        GeneratedField::Kind => {
+                            if kind__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("kind"));
+                            }
+                            kind__ = Some(map_.next_value::<EntryKind>()? as i32);
                         }
                     }
                 }
@@ -8296,6 +8858,7 @@ impl<'de> serde::Deserialize<'de> for ResourceSummary {
                     mime: mime__.unwrap_or_default(),
                     size_bytes: size_bytes__,
                     revision: revision__,
+                    kind: kind__.unwrap_or_default(),
                 })
             }
         }
@@ -10266,21 +10829,27 @@ impl serde::Serialize for SourceReadResponse {
         if self.resource.is_some() {
             len += 1;
         }
-        if !self.text.is_empty() {
+        if self.text.is_some() {
             len += 1;
         }
-        if !self.cid.is_empty() {
+        if self.cid.is_some() {
+            len += 1;
+        }
+        if self.content.is_some() {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("conex.SourceReadResponse", len)?;
         if let Some(v) = self.resource.as_ref() {
             struct_ser.serialize_field("resource", v)?;
         }
-        if !self.text.is_empty() {
-            struct_ser.serialize_field("text", &self.text)?;
+        if let Some(v) = self.text.as_ref() {
+            struct_ser.serialize_field("text", v)?;
         }
-        if !self.cid.is_empty() {
-            struct_ser.serialize_field("cid", &self.cid)?;
+        if let Some(v) = self.cid.as_ref() {
+            struct_ser.serialize_field("cid", v)?;
+        }
+        if let Some(v) = self.content.as_ref() {
+            struct_ser.serialize_field("content", v)?;
         }
         struct_ser.end()
     }
@@ -10295,6 +10864,7 @@ impl<'de> serde::Deserialize<'de> for SourceReadResponse {
             "resource",
             "text",
             "cid",
+            "content",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -10302,6 +10872,7 @@ impl<'de> serde::Deserialize<'de> for SourceReadResponse {
             Resource,
             Text,
             Cid,
+            Content,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -10326,6 +10897,7 @@ impl<'de> serde::Deserialize<'de> for SourceReadResponse {
                             "resource" => Ok(GeneratedField::Resource),
                             "text" => Ok(GeneratedField::Text),
                             "cid" => Ok(GeneratedField::Cid),
+                            "content" => Ok(GeneratedField::Content),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -10348,6 +10920,7 @@ impl<'de> serde::Deserialize<'de> for SourceReadResponse {
                 let mut resource__ = None;
                 let mut text__ = None;
                 let mut cid__ = None;
+                let mut content__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::Resource => {
@@ -10360,20 +10933,27 @@ impl<'de> serde::Deserialize<'de> for SourceReadResponse {
                             if text__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("text"));
                             }
-                            text__ = Some(map_.next_value()?);
+                            text__ = map_.next_value()?;
                         }
                         GeneratedField::Cid => {
                             if cid__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("cid"));
                             }
-                            cid__ = Some(map_.next_value()?);
+                            cid__ = map_.next_value()?;
+                        }
+                        GeneratedField::Content => {
+                            if content__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("content"));
+                            }
+                            content__ = map_.next_value()?;
                         }
                     }
                 }
                 Ok(SourceReadResponse {
                     resource: resource__,
-                    text: text__.unwrap_or_default(),
-                    cid: cid__.unwrap_or_default(),
+                    text: text__,
+                    cid: cid__,
+                    content: content__,
                 })
             }
         }

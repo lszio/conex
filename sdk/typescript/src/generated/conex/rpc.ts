@@ -19,7 +19,28 @@ export interface Message {
   request?: Request | undefined;
   success?: Success | undefined;
   failure?: Failure | undefined;
-  notification?: Notification | undefined;
+  notification?:
+    | Notification
+    | undefined;
+  /**
+   * M3：有界数据帧响应（protobuf 二进制 Profile 专用），避免把原始字节
+   * 转成 base64 字符串。JSON Profile 下载 JSON 时 chunk 退化为 base64。
+   */
+  dataChunk?: DataChunk | undefined;
+}
+
+/** blob/get(remote) 的字节响应：一帧 ≤ max_frame_bytes 的原始文件切片。 */
+export interface DataChunk {
+  requestId?: string | undefined;
+  chunk?:
+    | Uint8Array
+    | undefined;
+  /**
+   * 实际服务的文件 revision；与请求携带的 revision 不符时服务端直接返回
+   * stale_revision 错误，不会出现混合版本数据。
+   */
+  revision?: string | undefined;
+  eof?: boolean | undefined;
 }
 
 export interface Request {
@@ -37,7 +58,16 @@ export interface CallParams {
 export interface RequestContext {
   providerEndpointId?: string | undefined;
   plane?: Plane | undefined;
-  bindingId?: string | undefined;
+  bindingId?:
+    | string
+    | undefined;
+  /**
+   * Authenticated caller identity forwarded by the host (plan M2); the
+   * agent uses it for snapshot binding and local claim checks. Empty on
+   * frames that carry no user identity.
+   */
+  principalId?: string | undefined;
+  tenantId?: string | undefined;
 }
 
 export interface Success {
@@ -56,7 +86,7 @@ export interface Notification {
 }
 
 function createBaseMessage(): Message {
-  return { request: undefined, success: undefined, failure: undefined, notification: undefined };
+  return { request: undefined, success: undefined, failure: undefined, notification: undefined, dataChunk: undefined };
 }
 
 export const Message: MessageFns<Message> = {
@@ -72,6 +102,9 @@ export const Message: MessageFns<Message> = {
     }
     if (message.notification !== undefined) {
       Notification.encode(message.notification, writer.uint32(34).fork()).join();
+    }
+    if (message.dataChunk !== undefined) {
+      DataChunk.encode(message.dataChunk, writer.uint32(42).fork()).join();
     }
     return writer;
   },
@@ -121,6 +154,14 @@ export const Message: MessageFns<Message> = {
             message.notification = Notification.decode(reader, reader.uint32());
             continue;
           }
+          case 5: {
+            if (tag !== 42) {
+              break;
+            }
+
+            message.dataChunk = DataChunk.decode(reader, reader.uint32());
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -139,6 +180,11 @@ export const Message: MessageFns<Message> = {
       success: isSet(object.success) ? Success.fromJSON(object.success) : undefined,
       failure: isSet(object.failure) ? Failure.fromJSON(object.failure) : undefined,
       notification: isSet(object.notification) ? Notification.fromJSON(object.notification) : undefined,
+      dataChunk: isSet(object.dataChunk)
+        ? DataChunk.fromJSON(object.dataChunk)
+        : isSet(object.data_chunk)
+        ? DataChunk.fromJSON(object.data_chunk)
+        : undefined,
     };
   },
 
@@ -155,6 +201,9 @@ export const Message: MessageFns<Message> = {
     }
     if (message.notification !== undefined) {
       obj.notification = Notification.toJSON(message.notification);
+    }
+    if (message.dataChunk !== undefined) {
+      obj.dataChunk = DataChunk.toJSON(message.dataChunk);
     }
     return obj;
   },
@@ -176,6 +225,130 @@ export const Message: MessageFns<Message> = {
     message.notification = (object.notification !== undefined && object.notification !== null)
       ? Notification.fromPartial(object.notification)
       : undefined;
+    message.dataChunk = (object.dataChunk !== undefined && object.dataChunk !== null)
+      ? DataChunk.fromPartial(object.dataChunk)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseDataChunk(): DataChunk {
+  return { requestId: "", chunk: new Uint8Array(0), revision: "", eof: false };
+}
+
+export const DataChunk: MessageFns<DataChunk> = {
+  encode(message: DataChunk, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.requestId !== undefined && message.requestId !== "") {
+      writer.uint32(10).string(message.requestId);
+    }
+    if (message.chunk !== undefined && message.chunk.length !== 0) {
+      writer.uint32(18).bytes(message.chunk);
+    }
+    if (message.revision !== undefined && message.revision !== "") {
+      writer.uint32(26).string(message.revision);
+    }
+    if (message.eof !== undefined && message.eof !== false) {
+      writer.uint32(32).bool(message.eof);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): DataChunk {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseDataChunk();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.requestId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.chunk = reader.bytes();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.revision = reader.string();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.eof = reader.bool();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): DataChunk {
+    return {
+      requestId: isSet(object.requestId)
+        ? globalThis.String(object.requestId)
+        : isSet(object.request_id)
+        ? globalThis.String(object.request_id)
+        : "",
+      chunk: isSet(object.chunk) ? bytesFromBase64(object.chunk) : new Uint8Array(0),
+      revision: isSet(object.revision) ? globalThis.String(object.revision) : "",
+      eof: isSet(object.eof) ? globalThis.Boolean(object.eof) : false,
+    };
+  },
+
+  toJSON(message: DataChunk): unknown {
+    const obj: any = {};
+    if (message.requestId !== undefined && message.requestId !== "") {
+      obj.requestId = message.requestId;
+    }
+    if (message.chunk !== undefined && message.chunk.length !== 0) {
+      obj.chunk = base64FromBytes(message.chunk);
+    }
+    if (message.revision !== undefined && message.revision !== "") {
+      obj.revision = message.revision;
+    }
+    if (message.eof !== undefined && message.eof !== false) {
+      obj.eof = message.eof;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<DataChunk>, I>>(base?: I): DataChunk {
+    return DataChunk.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<DataChunk>, I>>(object: I): DataChunk {
+    const message = createBaseDataChunk();
+    message.requestId = object.requestId ?? "";
+    message.chunk = object.chunk ?? new Uint8Array(0);
+    message.revision = object.revision ?? "";
+    message.eof = object.eof ?? false;
     return message;
   },
 };
@@ -395,7 +568,7 @@ export const CallParams: MessageFns<CallParams> = {
 };
 
 function createBaseRequestContext(): RequestContext {
-  return { providerEndpointId: "", plane: 0, bindingId: undefined };
+  return { providerEndpointId: "", plane: 0, bindingId: undefined, principalId: "", tenantId: "" };
 }
 
 export const RequestContext: MessageFns<RequestContext> = {
@@ -408,6 +581,12 @@ export const RequestContext: MessageFns<RequestContext> = {
     }
     if (message.bindingId !== undefined) {
       writer.uint32(26).string(message.bindingId);
+    }
+    if (message.principalId !== undefined && message.principalId !== "") {
+      writer.uint32(34).string(message.principalId);
+    }
+    if (message.tenantId !== undefined && message.tenantId !== "") {
+      writer.uint32(42).string(message.tenantId);
     }
     return writer;
   },
@@ -449,6 +628,22 @@ export const RequestContext: MessageFns<RequestContext> = {
             message.bindingId = reader.string();
             continue;
           }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.principalId = reader.string();
+            continue;
+          }
+          case 5: {
+            if (tag !== 42) {
+              break;
+            }
+
+            message.tenantId = reader.string();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -474,6 +669,16 @@ export const RequestContext: MessageFns<RequestContext> = {
         : isSet(object.binding_id)
         ? globalThis.String(object.binding_id)
         : undefined,
+      principalId: isSet(object.principalId)
+        ? globalThis.String(object.principalId)
+        : isSet(object.principal_id)
+        ? globalThis.String(object.principal_id)
+        : "",
+      tenantId: isSet(object.tenantId)
+        ? globalThis.String(object.tenantId)
+        : isSet(object.tenant_id)
+        ? globalThis.String(object.tenant_id)
+        : "",
     };
   },
 
@@ -488,6 +693,12 @@ export const RequestContext: MessageFns<RequestContext> = {
     if (message.bindingId !== undefined) {
       obj.bindingId = message.bindingId;
     }
+    if (message.principalId !== undefined && message.principalId !== "") {
+      obj.principalId = message.principalId;
+    }
+    if (message.tenantId !== undefined && message.tenantId !== "") {
+      obj.tenantId = message.tenantId;
+    }
     return obj;
   },
 
@@ -499,6 +710,8 @@ export const RequestContext: MessageFns<RequestContext> = {
     message.providerEndpointId = object.providerEndpointId ?? "";
     message.plane = object.plane ?? 0;
     message.bindingId = object.bindingId ?? undefined;
+    message.principalId = object.principalId ?? "";
+    message.tenantId = object.tenantId ?? "";
     return message;
   },
 };
@@ -767,6 +980,31 @@ export const Notification: MessageFns<Notification> = {
     return message;
   },
 };
+
+function bytesFromBase64(b64: string): Uint8Array {
+  if ((globalThis as any).Buffer) {
+    return Uint8Array.from((globalThis as any).Buffer.from(b64, "base64"));
+  } else {
+    const bin = globalThis.atob(b64);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; ++i) {
+      arr[i] = bin.charCodeAt(i);
+    }
+    return arr;
+  }
+}
+
+function base64FromBytes(arr: Uint8Array): string {
+  if ((globalThis as any).Buffer) {
+    return (globalThis as any).Buffer.from(arr).toString("base64");
+  } else {
+    const bin: string[] = [];
+    arr.forEach((byte) => {
+      bin.push(globalThis.String.fromCharCode(byte));
+    });
+    return globalThis.btoa(bin.join(""));
+  }
+}
 
 type Builtin = Date | Function | Uint8Array | string | number | boolean | undefined;
 

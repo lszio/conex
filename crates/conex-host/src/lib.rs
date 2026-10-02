@@ -8,6 +8,7 @@ pub mod binding;
 pub mod broker;
 pub mod catalog;
 pub mod config;
+pub mod content_http;
 pub mod credentials;
 pub mod http;
 pub mod oidc_jwt;

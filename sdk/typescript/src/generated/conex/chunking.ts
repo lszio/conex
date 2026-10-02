@@ -70,7 +70,10 @@ export interface ContentAddress {
 
 /** BlobRef：带授权定位的内容引用（设计 §5.3）。 */
 export interface BlobRef {
-  /** 内容 CID；文本表示。 */
+  /**
+   * 内容 CID；仅当字节已按 CID 格式计算。可变远端文件未计算 CID 时缺省，
+   * 禁止用路径或 revision 假充 CID。
+   */
   cid?:
     | string
     | undefined;
@@ -83,11 +86,19 @@ export interface BlobRef {
     | string
     | undefined;
   /** 资源定位信息（不是授权凭据）。 */
-  access?: BlobAccess | undefined;
+  access?:
+    | BlobAccess
+    | undefined;
+  /** 远端可变文件的读取定位 revision；不透明令牌，仅等值比较。 */
+  revision?: string | undefined;
 }
 
+/**
+ * 资源定位 = endpointId + resourceId；租户来自认证上下文，不信任请求自报。
+ * provider_id 不得代替唯一端点定位；endpoint_id 为空表示 Host 本地已提交内容。
+ */
 export interface BlobAccess {
-  providerId?: string | undefined;
+  endpointId?: string | undefined;
   plane?: string | undefined;
   spaceId?: string | undefined;
   resourceId?: string | undefined;
@@ -510,12 +521,12 @@ export const ContentAddress: MessageFns<ContentAddress> = {
 };
 
 function createBaseBlobRef(): BlobRef {
-  return { cid: "", sizeBytes: "", mime: "", access: undefined };
+  return { cid: undefined, sizeBytes: "", mime: "", access: undefined, revision: undefined };
 }
 
 export const BlobRef: MessageFns<BlobRef> = {
   encode(message: BlobRef, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.cid !== undefined && message.cid !== "") {
+    if (message.cid !== undefined) {
       writer.uint32(10).string(message.cid);
     }
     if (message.sizeBytes !== undefined && message.sizeBytes !== "") {
@@ -526,6 +537,9 @@ export const BlobRef: MessageFns<BlobRef> = {
     }
     if (message.access !== undefined) {
       BlobAccess.encode(message.access, writer.uint32(34).fork()).join();
+    }
+    if (message.revision !== undefined) {
+      writer.uint32(42).string(message.revision);
     }
     return writer;
   },
@@ -575,6 +589,14 @@ export const BlobRef: MessageFns<BlobRef> = {
             message.access = BlobAccess.decode(reader, reader.uint32());
             continue;
           }
+          case 5: {
+            if (tag !== 42) {
+              break;
+            }
+
+            message.revision = reader.string();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -589,7 +611,7 @@ export const BlobRef: MessageFns<BlobRef> = {
 
   fromJSON(object: any): BlobRef {
     return {
-      cid: isSet(object.cid) ? globalThis.String(object.cid) : "",
+      cid: isSet(object.cid) ? globalThis.String(object.cid) : undefined,
       sizeBytes: isSet(object.sizeBytes)
         ? globalThis.String(object.sizeBytes)
         : isSet(object.size_bytes)
@@ -597,12 +619,13 @@ export const BlobRef: MessageFns<BlobRef> = {
         : "",
       mime: isSet(object.mime) ? globalThis.String(object.mime) : "",
       access: isSet(object.access) ? BlobAccess.fromJSON(object.access) : undefined,
+      revision: isSet(object.revision) ? globalThis.String(object.revision) : undefined,
     };
   },
 
   toJSON(message: BlobRef): unknown {
     const obj: any = {};
-    if (message.cid !== undefined && message.cid !== "") {
+    if (message.cid !== undefined) {
       obj.cid = message.cid;
     }
     if (message.sizeBytes !== undefined && message.sizeBytes !== "") {
@@ -614,6 +637,9 @@ export const BlobRef: MessageFns<BlobRef> = {
     if (message.access !== undefined) {
       obj.access = BlobAccess.toJSON(message.access);
     }
+    if (message.revision !== undefined) {
+      obj.revision = message.revision;
+    }
     return obj;
   },
 
@@ -622,24 +648,25 @@ export const BlobRef: MessageFns<BlobRef> = {
   },
   fromPartial<I extends Exact<DeepPartial<BlobRef>, I>>(object: I): BlobRef {
     const message = createBaseBlobRef();
-    message.cid = object.cid ?? "";
+    message.cid = object.cid ?? undefined;
     message.sizeBytes = object.sizeBytes ?? "";
     message.mime = object.mime ?? "";
     message.access = (object.access !== undefined && object.access !== null)
       ? BlobAccess.fromPartial(object.access)
       : undefined;
+    message.revision = object.revision ?? undefined;
     return message;
   },
 };
 
 function createBaseBlobAccess(): BlobAccess {
-  return { providerId: "", plane: "", spaceId: undefined, resourceId: "" };
+  return { endpointId: "", plane: "", spaceId: undefined, resourceId: "" };
 }
 
 export const BlobAccess: MessageFns<BlobAccess> = {
   encode(message: BlobAccess, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.providerId !== undefined && message.providerId !== "") {
-      writer.uint32(10).string(message.providerId);
+    if (message.endpointId !== undefined && message.endpointId !== "") {
+      writer.uint32(10).string(message.endpointId);
     }
     if (message.plane !== undefined && message.plane !== "") {
       writer.uint32(18).string(message.plane);
@@ -671,7 +698,7 @@ export const BlobAccess: MessageFns<BlobAccess> = {
               break;
             }
 
-            message.providerId = reader.string();
+            message.endpointId = reader.string();
             continue;
           }
           case 2: {
@@ -712,10 +739,10 @@ export const BlobAccess: MessageFns<BlobAccess> = {
 
   fromJSON(object: any): BlobAccess {
     return {
-      providerId: isSet(object.providerId)
-        ? globalThis.String(object.providerId)
-        : isSet(object.provider_id)
-        ? globalThis.String(object.provider_id)
+      endpointId: isSet(object.endpointId)
+        ? globalThis.String(object.endpointId)
+        : isSet(object.endpoint_id)
+        ? globalThis.String(object.endpoint_id)
         : "",
       plane: isSet(object.plane) ? globalThis.String(object.plane) : "",
       spaceId: isSet(object.spaceId)
@@ -733,8 +760,8 @@ export const BlobAccess: MessageFns<BlobAccess> = {
 
   toJSON(message: BlobAccess): unknown {
     const obj: any = {};
-    if (message.providerId !== undefined && message.providerId !== "") {
-      obj.providerId = message.providerId;
+    if (message.endpointId !== undefined && message.endpointId !== "") {
+      obj.endpointId = message.endpointId;
     }
     if (message.plane !== undefined && message.plane !== "") {
       obj.plane = message.plane;
@@ -753,7 +780,7 @@ export const BlobAccess: MessageFns<BlobAccess> = {
   },
   fromPartial<I extends Exact<DeepPartial<BlobAccess>, I>>(object: I): BlobAccess {
     const message = createBaseBlobAccess();
-    message.providerId = object.providerId ?? "";
+    message.endpointId = object.endpointId ?? "";
     message.plane = object.plane ?? "";
     message.spaceId = object.spaceId ?? undefined;
     message.resourceId = object.resourceId ?? "";

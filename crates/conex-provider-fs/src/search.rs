@@ -25,10 +25,9 @@ impl Handler for SearchHandler {
         _io: ExecutionIo,
     ) -> CallResult<Value> {
         let root_resource = input.get("root").and_then(Value::as_str).unwrap_or("");
-        let query = input
-            .get("query")
-            .and_then(Value::as_str)
-            .ok_or_else(|| CallError::new(conex_proto::ErrorCode::BadRequest, "query is required"))?;
+        let query = input.get("query").and_then(Value::as_str).ok_or_else(|| {
+            CallError::new(conex_proto::ErrorCode::BadRequest, "query is required")
+        })?;
         let limit = input
             .get("limit")
             .and_then(Value::as_u64)
@@ -65,7 +64,10 @@ impl Handler for SearchHandler {
             next_cursor,
         };
         serde_json::to_value(response).map_err(|error| {
-            CallError::new(conex_proto::ErrorCode::Internal, format!("encode response: {error}"))
+            CallError::new(
+                conex_proto::ErrorCode::Internal,
+                format!("encode response: {error}"),
+            )
         })
     }
 }
@@ -75,7 +77,8 @@ fn summary(item: &PageItem) -> conex_proto::ResourceSummary {
         resource_id: item.resource_id.clone(),
         title: item.title.clone(),
         mime: item.mime.clone(),
-        size_bytes: Some(item.size_bytes),
-        revision: None,
+        size_bytes: Some(item.size_bytes.to_string()),
+        revision: item.revision.clone(),
+        kind: conex_proto::EntryKind::File as i32,
     }
 }

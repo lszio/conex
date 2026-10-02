@@ -170,16 +170,53 @@ export interface BlobHaveResponse {
   present?: boolean[] | undefined;
 }
 
-/** blob/get：拉取单块字节。 */
-export interface BlobGetRequest {
+/**
+ * blob/get 目标二选一（M0 冻结）：互斥结构避免同一个 offset 同时被解释成
+ * 块内偏移与文件偏移。
+ * - committed：读取已提交内容中被授权根覆盖的块，整块返回。
+ * - remote：按端点、资源、revision、字节范围读取远端内容（M3 接通运行路径）。
+ */
+export interface CommittedTarget {
+  /** 已提交块 CID；必须属于调用方获授权的根。 */
   chunkCid?: string | undefined;
-  rangeOffset?: string | undefined;
-  rangeLength?: string | undefined;
+}
+
+export interface RemoteTarget {
+  endpointId?: string | undefined;
+  resourceId?:
+    | string
+    | undefined;
+  /** 提供则与当前版本不符时返回 stale_revision；不拼接两个版本。 */
+  revision?:
+    | string
+    | undefined;
+  /** 字节偏移（十进制字符串 u64）。 */
+  offset?:
+    | string
+    | undefined;
+  /** 字节长度（十进制字符串 u64，>= 1）；offset+length 溢出拒绝。 */
+  length?: string | undefined;
+}
+
+export interface BlobGetRequest {
+  committed?: CommittedTarget | undefined;
+  remote?: RemoteTarget | undefined;
 }
 
 export interface BlobGetResponse {
-  chunkBytes?: Uint8Array | undefined;
-  chunkCid?: string | undefined;
+  chunkBytes?:
+    | Uint8Array
+    | undefined;
+  /** committed 路径返回该块 CID；remote 路径缺省（任意 range 不冒充完整块 CID）。 */
+  chunkCid?:
+    | string
+    | undefined;
+  /** remote 路径返回实际服务的 revision。 */
+  revision?:
+    | string
+    | undefined;
+  /** remote 路径返回是否到达文件尾；读取结束必须回传实际长度与 EOF。 */
+  eof?: boolean | undefined;
 }
 
 /** blob/cancel：主动结束 staging；不会留下 committed 资源。 */
@@ -1552,20 +1589,231 @@ export const BlobHaveResponse: MessageFns<BlobHaveResponse> = {
   },
 };
 
+function createBaseCommittedTarget(): CommittedTarget {
+  return { chunkCid: "" };
+}
+
+export const CommittedTarget: MessageFns<CommittedTarget> = {
+  encode(message: CommittedTarget, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.chunkCid !== undefined && message.chunkCid !== "") {
+      writer.uint32(10).string(message.chunkCid);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CommittedTarget {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseCommittedTarget();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.chunkCid = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): CommittedTarget {
+    return {
+      chunkCid: isSet(object.chunkCid)
+        ? globalThis.String(object.chunkCid)
+        : isSet(object.chunk_cid)
+        ? globalThis.String(object.chunk_cid)
+        : "",
+    };
+  },
+
+  toJSON(message: CommittedTarget): unknown {
+    const obj: any = {};
+    if (message.chunkCid !== undefined && message.chunkCid !== "") {
+      obj.chunkCid = message.chunkCid;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<CommittedTarget>, I>>(base?: I): CommittedTarget {
+    return CommittedTarget.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CommittedTarget>, I>>(object: I): CommittedTarget {
+    const message = createBaseCommittedTarget();
+    message.chunkCid = object.chunkCid ?? "";
+    return message;
+  },
+};
+
+function createBaseRemoteTarget(): RemoteTarget {
+  return { endpointId: "", resourceId: "", revision: undefined, offset: "", length: "" };
+}
+
+export const RemoteTarget: MessageFns<RemoteTarget> = {
+  encode(message: RemoteTarget, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.endpointId !== undefined && message.endpointId !== "") {
+      writer.uint32(10).string(message.endpointId);
+    }
+    if (message.resourceId !== undefined && message.resourceId !== "") {
+      writer.uint32(18).string(message.resourceId);
+    }
+    if (message.revision !== undefined) {
+      writer.uint32(26).string(message.revision);
+    }
+    if (message.offset !== undefined && message.offset !== "") {
+      writer.uint32(34).string(message.offset);
+    }
+    if (message.length !== undefined && message.length !== "") {
+      writer.uint32(42).string(message.length);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): RemoteTarget {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseRemoteTarget();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.endpointId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.resourceId = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.revision = reader.string();
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.offset = reader.string();
+            continue;
+          }
+          case 5: {
+            if (tag !== 42) {
+              break;
+            }
+
+            message.length = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): RemoteTarget {
+    return {
+      endpointId: isSet(object.endpointId)
+        ? globalThis.String(object.endpointId)
+        : isSet(object.endpoint_id)
+        ? globalThis.String(object.endpoint_id)
+        : "",
+      resourceId: isSet(object.resourceId)
+        ? globalThis.String(object.resourceId)
+        : isSet(object.resource_id)
+        ? globalThis.String(object.resource_id)
+        : "",
+      revision: isSet(object.revision) ? globalThis.String(object.revision) : undefined,
+      offset: isSet(object.offset) ? globalThis.String(object.offset) : "",
+      length: isSet(object.length) ? globalThis.String(object.length) : "",
+    };
+  },
+
+  toJSON(message: RemoteTarget): unknown {
+    const obj: any = {};
+    if (message.endpointId !== undefined && message.endpointId !== "") {
+      obj.endpointId = message.endpointId;
+    }
+    if (message.resourceId !== undefined && message.resourceId !== "") {
+      obj.resourceId = message.resourceId;
+    }
+    if (message.revision !== undefined) {
+      obj.revision = message.revision;
+    }
+    if (message.offset !== undefined && message.offset !== "") {
+      obj.offset = message.offset;
+    }
+    if (message.length !== undefined && message.length !== "") {
+      obj.length = message.length;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<RemoteTarget>, I>>(base?: I): RemoteTarget {
+    return RemoteTarget.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<RemoteTarget>, I>>(object: I): RemoteTarget {
+    const message = createBaseRemoteTarget();
+    message.endpointId = object.endpointId ?? "";
+    message.resourceId = object.resourceId ?? "";
+    message.revision = object.revision ?? undefined;
+    message.offset = object.offset ?? "";
+    message.length = object.length ?? "";
+    return message;
+  },
+};
+
 function createBaseBlobGetRequest(): BlobGetRequest {
-  return { chunkCid: "", rangeOffset: undefined, rangeLength: undefined };
+  return { committed: undefined, remote: undefined };
 }
 
 export const BlobGetRequest: MessageFns<BlobGetRequest> = {
   encode(message: BlobGetRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.chunkCid !== undefined && message.chunkCid !== "") {
-      writer.uint32(10).string(message.chunkCid);
+    if (message.committed !== undefined) {
+      CommittedTarget.encode(message.committed, writer.uint32(34).fork()).join();
     }
-    if (message.rangeOffset !== undefined) {
-      writer.uint32(16).uint64(message.rangeOffset);
-    }
-    if (message.rangeLength !== undefined) {
-      writer.uint32(24).uint64(message.rangeLength);
+    if (message.remote !== undefined) {
+      RemoteTarget.encode(message.remote, writer.uint32(42).fork()).join();
     }
     return writer;
   },
@@ -1583,28 +1831,20 @@ export const BlobGetRequest: MessageFns<BlobGetRequest> = {
       while (reader.pos < end) {
         const tag = reader.uint32();
         switch (tag >>> 3) {
-          case 1: {
-            if (tag !== 10) {
+          case 4: {
+            if (tag !== 34) {
               break;
             }
 
-            message.chunkCid = reader.string();
+            message.committed = CommittedTarget.decode(reader, reader.uint32());
             continue;
           }
-          case 2: {
-            if (tag !== 16) {
+          case 5: {
+            if (tag !== 42) {
               break;
             }
 
-            message.rangeOffset = reader.uint64().toString();
-            continue;
-          }
-          case 3: {
-            if (tag !== 24) {
-              break;
-            }
-
-            message.rangeLength = reader.uint64().toString();
+            message.remote = RemoteTarget.decode(reader, reader.uint32());
             continue;
           }
         }
@@ -1621,34 +1861,18 @@ export const BlobGetRequest: MessageFns<BlobGetRequest> = {
 
   fromJSON(object: any): BlobGetRequest {
     return {
-      chunkCid: isSet(object.chunkCid)
-        ? globalThis.String(object.chunkCid)
-        : isSet(object.chunk_cid)
-        ? globalThis.String(object.chunk_cid)
-        : "",
-      rangeOffset: isSet(object.rangeOffset)
-        ? globalThis.String(object.rangeOffset)
-        : isSet(object.range_offset)
-        ? globalThis.String(object.range_offset)
-        : undefined,
-      rangeLength: isSet(object.rangeLength)
-        ? globalThis.String(object.rangeLength)
-        : isSet(object.range_length)
-        ? globalThis.String(object.range_length)
-        : undefined,
+      committed: isSet(object.committed) ? CommittedTarget.fromJSON(object.committed) : undefined,
+      remote: isSet(object.remote) ? RemoteTarget.fromJSON(object.remote) : undefined,
     };
   },
 
   toJSON(message: BlobGetRequest): unknown {
     const obj: any = {};
-    if (message.chunkCid !== undefined && message.chunkCid !== "") {
-      obj.chunkCid = message.chunkCid;
+    if (message.committed !== undefined) {
+      obj.committed = CommittedTarget.toJSON(message.committed);
     }
-    if (message.rangeOffset !== undefined) {
-      obj.rangeOffset = message.rangeOffset;
-    }
-    if (message.rangeLength !== undefined) {
-      obj.rangeLength = message.rangeLength;
+    if (message.remote !== undefined) {
+      obj.remote = RemoteTarget.toJSON(message.remote);
     }
     return obj;
   },
@@ -1658,15 +1882,18 @@ export const BlobGetRequest: MessageFns<BlobGetRequest> = {
   },
   fromPartial<I extends Exact<DeepPartial<BlobGetRequest>, I>>(object: I): BlobGetRequest {
     const message = createBaseBlobGetRequest();
-    message.chunkCid = object.chunkCid ?? "";
-    message.rangeOffset = object.rangeOffset ?? undefined;
-    message.rangeLength = object.rangeLength ?? undefined;
+    message.committed = (object.committed !== undefined && object.committed !== null)
+      ? CommittedTarget.fromPartial(object.committed)
+      : undefined;
+    message.remote = (object.remote !== undefined && object.remote !== null)
+      ? RemoteTarget.fromPartial(object.remote)
+      : undefined;
     return message;
   },
 };
 
 function createBaseBlobGetResponse(): BlobGetResponse {
-  return { chunkBytes: new Uint8Array(0), chunkCid: "" };
+  return { chunkBytes: new Uint8Array(0), chunkCid: undefined, revision: undefined, eof: false };
 }
 
 export const BlobGetResponse: MessageFns<BlobGetResponse> = {
@@ -1674,8 +1901,14 @@ export const BlobGetResponse: MessageFns<BlobGetResponse> = {
     if (message.chunkBytes !== undefined && message.chunkBytes.length !== 0) {
       writer.uint32(10).bytes(message.chunkBytes);
     }
-    if (message.chunkCid !== undefined && message.chunkCid !== "") {
+    if (message.chunkCid !== undefined) {
       writer.uint32(18).string(message.chunkCid);
+    }
+    if (message.revision !== undefined) {
+      writer.uint32(26).string(message.revision);
+    }
+    if (message.eof !== undefined && message.eof !== false) {
+      writer.uint32(32).bool(message.eof);
     }
     return writer;
   },
@@ -1709,6 +1942,22 @@ export const BlobGetResponse: MessageFns<BlobGetResponse> = {
             message.chunkCid = reader.string();
             continue;
           }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.revision = reader.string();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.eof = reader.bool();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -1732,7 +1981,9 @@ export const BlobGetResponse: MessageFns<BlobGetResponse> = {
         ? globalThis.String(object.chunkCid)
         : isSet(object.chunk_cid)
         ? globalThis.String(object.chunk_cid)
-        : "",
+        : undefined,
+      revision: isSet(object.revision) ? globalThis.String(object.revision) : undefined,
+      eof: isSet(object.eof) ? globalThis.Boolean(object.eof) : false,
     };
   },
 
@@ -1741,8 +1992,14 @@ export const BlobGetResponse: MessageFns<BlobGetResponse> = {
     if (message.chunkBytes !== undefined && message.chunkBytes.length !== 0) {
       obj.chunkBytes = base64FromBytes(message.chunkBytes);
     }
-    if (message.chunkCid !== undefined && message.chunkCid !== "") {
+    if (message.chunkCid !== undefined) {
       obj.chunkCid = message.chunkCid;
+    }
+    if (message.revision !== undefined) {
+      obj.revision = message.revision;
+    }
+    if (message.eof !== undefined && message.eof !== false) {
+      obj.eof = message.eof;
     }
     return obj;
   },
@@ -1753,7 +2010,9 @@ export const BlobGetResponse: MessageFns<BlobGetResponse> = {
   fromPartial<I extends Exact<DeepPartial<BlobGetResponse>, I>>(object: I): BlobGetResponse {
     const message = createBaseBlobGetResponse();
     message.chunkBytes = object.chunkBytes ?? new Uint8Array(0);
-    message.chunkCid = object.chunkCid ?? "";
+    message.chunkCid = object.chunkCid ?? undefined;
+    message.revision = object.revision ?? undefined;
+    message.eof = object.eof ?? false;
     return message;
   },
 };

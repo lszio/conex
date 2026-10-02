@@ -94,6 +94,9 @@ pub(crate) struct Refs {
     commits: HashMap<String, CommitRecord>,
     pins: HashMap<String, PinRecord>,
     pub(crate) uploads: HashMap<String, UploadState>,
+    /// Leaf CIDs reachable from each committed root; the ownership proof set
+    /// for `blob/get` and `blob/have` (plan M1.2).
+    pub(crate) blocks_by_root: HashMap<String, std::collections::HashSet<String>>,
 }
 /// Validate a CID text form through the single protocol implementation
 /// (`conex_proto::cid::parse_cid`, design §5.3).
@@ -192,6 +195,7 @@ impl LocalBlockStore {
                                 .unwrap_or_else(|| CommitRecord {
                                     commit_id: format!("commit-{root_cid}"),
                                     root_cid: root_cid.clone(),
+                                    owner: None,
                                     root_kind: if objects.len() == 1 {
                                         "raw".into()
                                     } else {
@@ -203,7 +207,11 @@ impl LocalBlockStore {
                                 });
                             self.with_refs(|r| {
                                 for object in objects {
-                                    *r.counts.entry(object).or_insert(0) += 1;
+                                    *r.counts.entry(object.clone()).or_insert(0) += 1;
+                                    r.blocks_by_root
+                                        .entry(root_cid.clone())
+                                        .or_default()
+                                        .insert(object);
                                 }
                                 r.commits.insert(root_cid.clone(), record);
                             });
@@ -302,6 +310,7 @@ impl LocalBlockStore {
     /// with zero progress (design §5.5 "distributed resume").
     pub fn find_active_upload_by_root(
         &self,
+        owner: &crate::receipt::Owner,
         format_version: u32,
         chunk_size: u32,
         declared_size_bytes: u64,
@@ -312,6 +321,7 @@ impl LocalBlockStore {
                 .values()
                 .find(|u| {
                     !u.is_expired()
+                        && u.owner.as_ref() == Some(owner)
                         && u.format_version == format_version
                         && u.chunk_size == chunk_size
                         && u.declared_size_bytes == declared_size_bytes
@@ -321,7 +331,13 @@ impl LocalBlockStore {
         })
     }
 
-    pub fn record_chunk(&self, upload_id: &str, index: u32, cid: &str) -> Result<(), ContentError> {
+    pub fn record_chunk(
+        &self,
+        upload_id: &str,
+        index: u32,
+        cid: &str,
+        byte_len: usize,
+    ) -> Result<(), ContentError> {
         verify_cid(cid)?;
         self.with_refs(|r| {
             let upload = r
@@ -331,7 +347,17 @@ impl LocalBlockStore {
             if upload.is_expired() {
                 return Err(ContentError::UploadExpired);
             }
+            // Cumulative write cap: verified bytes must stay within the
+            // declared size (plan M1.2 "入口和累计写入处强制...上限").
+            let new_total = upload.received_bytes + byte_len as u64;
+            if new_total > upload.declared_size_bytes {
+                return Err(ContentError::TooLarge {
+                    limit: upload.declared_size_bytes,
+                    actual: new_total,
+                });
+            }
             upload.insert_chunk(index, cid)?;
+            upload.received_bytes = new_total;
             Ok(())
         })?;
         // Persist the updated receipt so a crash recovers the same state.
@@ -392,7 +418,9 @@ impl LocalBlockStore {
             });
         }
 
-        // Every leaf must be present with its exact logical length.
+        // Every leaf must be present with its exact logical length; the
+        // summed real length must equal the declared size (plan M1.2).
+        let mut actual_total: u64 = 0;
         for (index, leaf) in leaves.iter().enumerate() {
             if !self.has_block(leaf)? {
                 return Err(ContentError::MissingChunks(vec![leaf.clone()]));
@@ -406,6 +434,13 @@ impl LocalBlockStore {
                     actual,
                 });
             }
+            actual_total += actual;
+        }
+        if actual_total != upload.declared_size_bytes {
+            return Err(ContentError::DeclaredSizeMismatch {
+                declared: upload.declared_size_bytes,
+                actual: actual_total,
+            });
         }
         // Manifest objects are derived content; store them so `blob/get` and GC
         // see the whole reachable set.
@@ -426,6 +461,7 @@ impl LocalBlockStore {
             committed_bytes: total_bytes,
             receipt_id: format!("rcpt-{root_cid}"),
             committed_at_ms: now_ms(),
+            owner: upload.owner.clone(),
         };
         // Write `.blocks` and the record first; `.committed` is the commit point.
         Self::atomic_write(&blocks_path, serde_json::to_string(&objects)?.as_bytes())?;
@@ -439,6 +475,10 @@ impl LocalBlockStore {
             for object in &objects {
                 *r.counts.entry(object.clone()).or_insert(0) += 1;
             }
+            r.blocks_by_root
+                .entry(root_cid.clone())
+                .or_default()
+                .extend(objects.iter().cloned());
             r.commits.insert(root_cid.clone(), record.clone());
             r.uploads.remove(upload_id);
         });
@@ -451,6 +491,60 @@ impl LocalBlockStore {
         self.with_refs(|r| r.commits.contains_key(root_cid))
     }
 
+    /// The caller may read a chunk only when it belongs to the reachable set
+    /// of a root the caller owns (plan M1.2: a bare valid CID is not a
+    /// credential).
+    pub fn chunk_owned_by(&self, chunk_cid: &str, owner: &crate::receipt::Owner) -> bool {
+        self.with_refs(|r| {
+            r.commits
+                .values()
+                .filter(|commit| commit.owner.as_ref() == Some(owner))
+                .any(|commit| {
+                    r.blocks_by_root
+                        .get(&commit.root_cid)
+                        .is_some_and(|blocks| blocks.contains(chunk_cid))
+                })
+        })
+    }
+
+    /// Whether any of the caller's own content (committed roots or in-flight
+    /// staging) contains the chunk; backs `blob/have` without leaking other
+    /// principals' content existence (plan M1.2).
+    pub fn chunk_known_to_owner(&self, chunk_cid: &str, owner: &crate::receipt::Owner) -> bool {
+        self.chunk_owned_by(chunk_cid, owner)
+            || self.with_refs(|r| {
+                r.uploads.values().any(|upload| {
+                    upload.owner.as_ref() == Some(owner)
+                        && upload
+                            .received_chunks
+                            .iter()
+                            .any(|chunk| chunk.cid == chunk_cid)
+                })
+            })
+    }
+
+    /// Drop expired staging uploads (receipt + bytes). Pre-M1.2 unbound
+    /// staging is never claimed; it is reaped here once its lease lapses.
+    pub fn purge_expired_uploads(&self) -> usize {
+        let now = now_ms();
+        let expired: Vec<String> = self.with_refs(|r| {
+            let expired: Vec<String> = r
+                .uploads
+                .values()
+                .filter(|upload| upload.lease_until_ms <= now)
+                .map(|upload| upload.upload_id.clone())
+                .collect();
+            for upload_id in &expired {
+                r.uploads.remove(upload_id);
+            }
+            expired
+        });
+        for upload_id in &expired {
+            let _ = fs::remove_dir_all(self.join(Path::new("staging").join(upload_id).as_path()));
+        }
+        expired.len()
+    }
+
     pub fn get_commit(&self, root_cid: &str) -> Option<CommitRecord> {
         self.with_refs(|r| r.commits.get(root_cid).cloned())
     }
@@ -460,12 +554,24 @@ impl LocalBlockStore {
         root_cid: &str,
         pin_id: &str,
         expires_at_ms: u64,
+        owner: &crate::receipt::Owner,
     ) -> Result<PinRecord, ContentError> {
+        // Pinning protects content from GC; only the owner of a committed
+        // root may pin it (plan M1.2 "pin/unpin 检查引用归属").
+        let owned = self.with_refs(|r| {
+            r.commits
+                .get(root_cid)
+                .is_some_and(|commit| commit.owner.as_ref() == Some(owner))
+        });
+        if !owned {
+            return Err(ContentError::Forbidden);
+        }
         let record = PinRecord {
             pin_id: pin_id.to_string(),
             root_cid: root_cid.to_string(),
             expires_at_ms,
             created_at_ms: now_ms(),
+            owner: Some(owner.clone()),
         };
         let path = self.join(Path::new("pins").join(format!("{pin_id}.json")).as_path());
         let json = serde_json::to_string_pretty(&record)?;
@@ -476,9 +582,20 @@ impl LocalBlockStore {
         Ok(record)
     }
 
-    pub fn unpin(&self, pin_id: &str) -> Result<(), ContentError> {
-        let existed = self.with_refs(|r| r.pins.remove(pin_id).is_some());
-        if !existed {
+    pub fn unpin(&self, pin_id: &str, owner: &crate::receipt::Owner) -> Result<(), ContentError> {
+        let removed = self.with_refs(|r| {
+            if r.pins
+                .get(pin_id)
+                .is_some_and(|pin| pin.owner.as_ref() == Some(owner))
+            {
+                r.pins.remove(pin_id).is_some()
+            } else {
+                false
+            }
+        });
+        if !removed {
+            // Unknown and foreign pins are indistinguishable to the caller:
+            // neither existence nor ownership leaks (plan M1.2).
             return Err(ContentError::UnknownPin(pin_id.to_string()));
         }
         let path = self.join(Path::new("pins").join(format!("{pin_id}.json")).as_path());
