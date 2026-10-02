@@ -64,7 +64,7 @@
 
 - **M4 未开始**：Notez 接入需要真实 Notez 仓库与运行实例（计划禁止以 mock 或导出目录冒充）。
 - **M6 套件未注册**：`multi-host-content`、`public-content-security` 两条 e2e 场景尚未在 xtask 注册（部分场景证据已在 M2/M5 中以单测+e2e 形式存在）；1 GiB 远端读取、20 并发访客、跨主机 TLS 验证未执行。
-- **fmt/clippy 全仓债**：分支 `refactor/arch` 存在约 60 个历史文件的 rustfmt/clippy 偏差（style_edition 2024 工具链差异），`cargo xtask check` 的 fmt/clippy 门禁在 M0 之前即红；M0–M5 触碰的文件均已单独 rustfmt/clippy 干净。修复需全仓 `cargo fmt` 单独提交，不混入功能 diff。
+- **fmt/clippy 债已清零**：分支 `refactor/arch` 原有约 60 个历史文件的 rustfmt（style_edition 2024）与 clippy 偏差，`cargo xtask check` 在 M0 之前即红。本 PR 附带 `fix(ci)` 提交完成全仓 `cargo fmt` 与 clippy（`-D warnings`，含 CI 侧 clippy 1.99 的 `ptr_arg`）清理；另修复 1 GiB 测试在慢速 CI 上因 60s staging 租约不足而失败（改用 1h），以及 5 处测试硬编码作者本机二进制路径（改用 `CARGO_BIN_EXE_conex-host`）。
 - 1 GiB blob 的 `p1-stream-1gib` 旧能力回归保留，但不替代 M6 的远端 1 GiB 验证。
 - 本机 loopback 证据不作为跨主机 TLS 证据（M6 项）。
 
