@@ -103,7 +103,12 @@ pub async fn issue_ticket(
 ) -> Response {
     let side = match state.host_side.as_ref() {
         Some(side) => side,
-        None => return call_error_data_to_response(CallError::new(conex_proto::ErrorCode::Unavailable, "ticket backend is not configured")),
+        None => {
+            return call_error_data_to_response(CallError::new(
+                conex_proto::ErrorCode::Unavailable,
+                "ticket backend is not configured",
+            ));
+        }
     };
     if let Some(web) = state.web_auth.as_ref() {
         if headers.get(axum::http::header::COOKIE).is_some() {
@@ -187,7 +192,8 @@ fn ticket_response(ticket: crate::agent::WebTicket) -> Response {
             "issuedAtMs": ticket.issued_at_ms.to_string(),
             "expiresAtMs": ticket.expires_at_ms.to_string(),
         })),
-    ).into_response()
+    )
+        .into_response()
 }
 
 #[derive(Debug, Deserialize)]

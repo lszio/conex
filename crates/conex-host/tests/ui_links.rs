@@ -9,8 +9,8 @@ use reqwest::header::{COOKIE, ORIGIN, SET_COOKIE};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use tempfile::TempDir;
-use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 
 fn sha256_hex(input: &str) -> String {
     hex::encode(Sha256::digest(input.as_bytes()))
@@ -74,7 +74,10 @@ impl HostHandle {
             .expect("spawn host");
         let addr: SocketAddr = format!("127.0.0.1:{port}").parse().unwrap();
         for _ in 0..100 {
-            if tokio::net::TcpStream::connect(("127.0.0.1", port)).await.is_ok() {
+            if tokio::net::TcpStream::connect(("127.0.0.1", port))
+                .await
+                .is_ok()
+            {
                 break;
             }
             tokio::time::sleep(Duration::from_millis(20)).await;
@@ -149,7 +152,11 @@ async fn fetch_ticket(addr: SocketAddr, origin: &str, session: &WebSession) -> S
         .send()
         .await
         .expect("ticket");
-    assert!(resp.status().is_success(), "ticket status {}", resp.status());
+    assert!(
+        resp.status().is_success(),
+        "ticket status {}",
+        resp.status()
+    );
     let body: Value = resp.json().await.expect("ticket body");
     body.get("ticket")
         .and_then(Value::as_str)
@@ -198,7 +205,12 @@ async fn bootstrap(
     ))
     .await
     .expect("hello");
-    let hello: Value = match ws.next().await.expect("hello response").expect("hello frame") {
+    let hello: Value = match ws
+        .next()
+        .await
+        .expect("hello response")
+        .expect("hello frame")
+    {
         Message::Text(text) => serde_json::from_str(&text).expect("hello json"),
         other => panic!("expected JSON hello, got {other:?}"),
     };
@@ -425,8 +437,13 @@ async fn ui_source_read_increments_calls_total() {
                 }
             }
         }
-    }).await.expect("source/read response timeout");
-    assert!(read_resp.get("result").is_some() || read_resp.get("error").is_some(), "source/read must return a JSON-RPC body: {read_resp}");
+    })
+    .await
+    .expect("source/read response timeout");
+    assert!(
+        read_resp.get("result").is_some() || read_resp.get("error").is_some(),
+        "source/read must return a JSON-RPC body: {read_resp}"
+    );
 
     let after = wss_connection_list(&mut ws).await;
     let calls_total_after: u64 = after["browserLinks"][0]["callsTotal"]
@@ -477,7 +494,11 @@ async fn registry_lifecycle_counts_calls_and_skips_after_remove() {
     let other = registry.register("bob", "tenant-a");
     let bob_id = other.link_id.clone();
     let principal_view = registry.list_for_principal(Some("alice"));
-    assert!(principal_view.iter().all(|link| link.principal_id == "alice"));
+    assert!(
+        principal_view
+            .iter()
+            .all(|link| link.principal_id == "alice")
+    );
     let all = registry.list_for_principal(None);
     assert!(all.iter().any(|link| link.principal_id == "bob"));
     registry.remove(&bob_id);

@@ -10,8 +10,8 @@ use multihash::Multihash;
 use prost::Message;
 use sha2::{Digest, Sha256};
 
-use crate::{ChunkEntry, ChunkManifest, ManifestEntries};
 use crate::wire::ProtocolError;
+use crate::{ChunkEntry, ChunkManifest, ManifestEntries};
 
 /// multicodec: raw
 pub const RAW_CODEC: u64 = 0x55;

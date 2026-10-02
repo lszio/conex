@@ -92,7 +92,6 @@ pub enum BootstrapError {
     #[error("plane mismatch: client said {client}, server expected {server}")]
     PlaneMismatch { client: String, server: String },
 }
- 
 
 pub fn plane_name(plane: conex_proto::Plane) -> &'static str {
     match plane {
@@ -108,8 +107,6 @@ fn plane_from_str(s: &str) -> Option<conex_proto::Plane> {
         _ => None,
     }
 }
-
-
 
 /// Generated control type used for both JSON ready projection and protobuf
 /// mapping. JSON uses explicit lowercase field/plane mapping below because
@@ -200,24 +197,23 @@ fn limits_from_json(value: &serde_json::Value) -> Result<conex_proto::Limits, Bo
     })
 }
 
-fn string_list(
-    value: &serde_json::Value,
-    field: &str,
-) -> Result<Vec<String>, BootstrapError> {
+fn string_list(value: &serde_json::Value, field: &str) -> Result<Vec<String>, BootstrapError> {
     value
         .get(field)
         .and_then(serde_json::Value::as_array)
         .ok_or_else(|| BootstrapError::MalformedEnvelope(format!("missing {field}")))?
         .iter()
         .map(|item| {
-            item.as_str()
-                .map(str::to_owned)
-                .ok_or_else(|| BootstrapError::MalformedEnvelope(format!("{field} must be strings")))
+            item.as_str().map(str::to_owned).ok_or_else(|| {
+                BootstrapError::MalformedEnvelope(format!("{field} must be strings"))
+            })
         })
         .collect()
 }
 
-fn hello_request_from_json(value: &serde_json::Value) -> Result<conex_proto::HelloRequest, BootstrapError> {
+fn hello_request_from_json(
+    value: &serde_json::Value,
+) -> Result<conex_proto::HelloRequest, BootstrapError> {
     let profile_id = value
         .get("profileId")
         .and_then(serde_json::Value::as_str)
@@ -235,7 +231,9 @@ fn hello_request_from_json(value: &serde_json::Value) -> Result<conex_proto::Hel
         requires: string_list(value, "requires")?,
     })
 }
-fn ready_request_from_json(value: &serde_json::Value) -> Result<conex_proto::ReadyRequest, BootstrapError> {
+fn ready_request_from_json(
+    value: &serde_json::Value,
+) -> Result<conex_proto::ReadyRequest, BootstrapError> {
     let negotiation_id = value
         .get("negotiationId")
         .and_then(serde_json::Value::as_str)
@@ -251,10 +249,7 @@ fn ready_request_from_json(value: &serde_json::Value) -> Result<conex_proto::Rea
         .and_then(serde_json::Value::as_str)
         .and_then(plane_from_str)
         .ok_or_else(|| BootstrapError::MalformedEnvelope("missing or invalid plane".into()))?;
-    let limits = value
-        .get("limits")
-        .map(limits_from_json)
-        .transpose()?;
+    let limits = value.get("limits").map(limits_from_json).transpose()?;
     Ok(conex_proto::ReadyRequest {
         negotiation_id,
         profile_id,
@@ -285,7 +280,10 @@ impl ServerHandshake {
 
     /// The server may accept more than one profile (design §4.4). The first
     /// entry is the default advertised when the client does not pin one.
-    pub fn new_with_profiles(server_profiles: &[ProfileId], server_plane: conex_proto::Plane) -> Self {
+    pub fn new_with_profiles(
+        server_profiles: &[ProfileId],
+        server_plane: conex_proto::Plane,
+    ) -> Self {
         Self::new_with_profiles_and_capabilities(
             server_profiles,
             server_plane,
@@ -369,8 +367,8 @@ impl ServerHandshake {
             .find(|p| p.as_str() == req.profile_id)
             .copied()
             .ok_or_else(|| BootstrapError::UnsupportedProfile(req.profile_id.clone()))?;
-        let req_plane = conex_proto::Plane::try_from(req.plane)
-            .unwrap_or(conex_proto::Plane::Unspecified);
+        let req_plane =
+            conex_proto::Plane::try_from(req.plane).unwrap_or(conex_proto::Plane::Unspecified);
         if req_plane != self.server_plane {
             return Err(BootstrapError::PlaneMismatch {
                 client: plane_name(req_plane).to_string(),
@@ -477,8 +475,8 @@ impl ServerHandshake {
         if req.negotiation_id != self.negotiation_id {
             return Err(BootstrapError::NegotiationIdMismatch);
         }
-        let req_plane = conex_proto::Plane::try_from(req.plane)
-            .unwrap_or(conex_proto::Plane::Unspecified);
+        let req_plane =
+            conex_proto::Plane::try_from(req.plane).unwrap_or(conex_proto::Plane::Unspecified);
         if req_plane != self.server_plane {
             return Err(BootstrapError::PlaneMismatch {
                 client: plane_name(req_plane).to_string(),
@@ -651,8 +649,9 @@ impl ClientHandshake {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| BootstrapError::MalformedEnvelope("missing plane".into()))?
                     .to_string();
-                let plane = plane_from_str(&plane_str)
-                    .ok_or_else(|| BootstrapError::MalformedEnvelope(format!("unknown plane: {plane_str}")))?;
+                let plane = plane_from_str(&plane_str).ok_or_else(|| {
+                    BootstrapError::MalformedEnvelope(format!("unknown plane: {plane_str}"))
+                })?;
                 let provides_values = result
                     .get("provides")
                     .and_then(serde_json::Value::as_array)
@@ -664,8 +663,7 @@ impl ClientHandshake {
                         })
                     })
                     .collect::<Result<Vec<_>, _>>()?;
-                let provides: HashSet<&str> =
-                    provides_values.iter().map(String::as_str).collect();
+                let provides: HashSet<&str> = provides_values.iter().map(String::as_str).collect();
                 if let Some(missing) = self
                     .client_requires
                     .iter()
@@ -700,7 +698,9 @@ impl ClientHandshake {
                 let negotiation_id = result
                     .get("negotiationId")
                     .and_then(serde_json::Value::as_str)
-                    .ok_or_else(|| BootstrapError::MalformedEnvelope("missing negotiationId".into()))?
+                    .ok_or_else(|| {
+                        BootstrapError::MalformedEnvelope("missing negotiationId".into())
+                    })?
                     .to_owned();
                 if negotiation_id != self.expected_negotiation_id {
                     return Err(BootstrapError::NegotiationIdMismatch);
@@ -740,9 +740,7 @@ impl ClientHandshake {
                         "ready result capability set mismatch".into(),
                     ));
                 }
-                let limits_value = result
-                    .get("limits")
-                    .ok_or(BootstrapError::LimitsMismatch)?;
+                let limits_value = result.get("limits").ok_or(BootstrapError::LimitsMismatch)?;
                 let limits = limits_from_json(limits_value)?;
                 let expected_limits = limits_from_json(
                     self.server_limits
@@ -887,7 +885,12 @@ mod tests {
         let mut server = ServerHandshake::new(ProfileId::JsonRpc2Wss, conex_proto::Plane::Broker);
         let mut client = ClientHandshake::new();
         let hello = client
-            .build_hello(ProfileId::JsonRpc2Wss, conex_proto::Plane::Broker, vec![], vec![])
+            .build_hello(
+                ProfileId::JsonRpc2Wss,
+                conex_proto::Plane::Broker,
+                vec![],
+                vec![],
+            )
             .unwrap();
         let _ = server.ingest(hello.clone()).unwrap();
         let second = server.ingest(hello);
@@ -899,7 +902,12 @@ mod tests {
         let mut server = ServerHandshake::new(ProfileId::JsonRpc2Wss, conex_proto::Plane::Broker);
         let mut client = ClientHandshake::new();
         let hello = client
-            .build_hello(ProfileId::JsonRpc2Wss, conex_proto::Plane::Broker, vec![], vec![])
+            .build_hello(
+                ProfileId::JsonRpc2Wss,
+                conex_proto::Plane::Broker,
+                vec![],
+                vec![],
+            )
             .unwrap();
         let hello_result = server.ingest(hello).unwrap();
         let ready = client.ingest(hello_result).unwrap();
@@ -922,7 +930,12 @@ mod tests {
         let mut server = ServerHandshake::new(ProfileId::JsonRpc2Wss, conex_proto::Plane::Broker);
         let mut client = ClientHandshake::new();
         let hello = client
-            .build_hello(ProfileId::JsonRpc2Wss, conex_proto::Plane::Broker, vec![], vec![])
+            .build_hello(
+                ProfileId::JsonRpc2Wss,
+                conex_proto::Plane::Broker,
+                vec![],
+                vec![],
+            )
             .unwrap();
         let hello_result = server.ingest(hello).unwrap();
         let _ = client.ingest(hello_result).unwrap();
@@ -954,7 +967,12 @@ mod tests {
         let mut server = ServerHandshake::new(ProfileId::JsonRpc2Wss, conex_proto::Plane::Broker);
         let mut client = ClientHandshake::new();
         let hello = client
-            .build_hello(ProfileId::JsonRpc2Wss, conex_proto::Plane::Broker, vec![], vec![])
+            .build_hello(
+                ProfileId::JsonRpc2Wss,
+                conex_proto::Plane::Broker,
+                vec![],
+                vec![],
+            )
             .unwrap();
         let hello_result = server.ingest(hello).unwrap();
         let ready = client.ingest(hello_result).unwrap();
@@ -1003,7 +1021,7 @@ mod tests {
         let ready = client.ingest(hello_result).unwrap();
         assert_eq!(ready.profile_id, "conex-protobuf-wss");
     }
- 
+
     #[test]
     fn server_advertises_own_capabilities_and_rejects_hard_requires() {
         let mut server = ServerHandshake::new_with_profiles_and_capabilities(
@@ -1023,7 +1041,10 @@ mod tests {
             .unwrap();
         let response = server.ingest(hello).unwrap();
         let value: serde_json::Value = serde_json::from_str(&response.json).unwrap();
-        assert_eq!(value["result"]["provides"], serde_json::json!(["source/read"]));
+        assert_eq!(
+            value["result"]["provides"],
+            serde_json::json!(["source/read"])
+        );
         assert_ne!(value["result"]["provides"], serde_json::json!(["ui/probe"]));
 
         let mut rejecting = ServerHandshake::new_with_profiles_and_capabilities(
@@ -1096,7 +1117,9 @@ mod tests {
             .unwrap();
         let hello_result = server.ingest(hello).unwrap();
         let ready = client.ingest(hello_result).unwrap();
-        let ready_result = server.ingest(client.build_ready_frame(&ready).unwrap()).unwrap();
+        let ready_result = server
+            .ingest(client.build_ready_frame(&ready).unwrap())
+            .unwrap();
         let mut value: serde_json::Value = serde_json::from_str(&ready_result.json).unwrap();
         value["result"]["provides"] = serde_json::json!([]);
         assert!(matches!(

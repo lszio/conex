@@ -54,12 +54,9 @@ mod support {
     impl SecretReader for CountingReader {
         async fn read_env(&self, name: &str) -> CallResult<String> {
             self.reads.fetch_add(1, Ordering::SeqCst);
-            self.env
-                .lock()
-                .unwrap()
-                .get(name)
-                .cloned()
-                .ok_or_else(|| CallError::new(conex_proto::ErrorCode::Forbidden, "missing env secret"))
+            self.env.lock().unwrap().get(name).cloned().ok_or_else(|| {
+                CallError::new(conex_proto::ErrorCode::Forbidden, "missing env secret")
+            })
         }
 
         async fn read_file(&self, path: &Path) -> CallResult<String> {
@@ -69,7 +66,9 @@ mod support {
                 .unwrap()
                 .get(path)
                 .cloned()
-                .ok_or_else(|| CallError::new(conex_proto::ErrorCode::Forbidden, "missing file secret"))
+                .ok_or_else(|| {
+                    CallError::new(conex_proto::ErrorCode::Forbidden, "missing file secret")
+                })
         }
     }
 

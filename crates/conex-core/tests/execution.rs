@@ -199,7 +199,10 @@ async fn unknown_provider_and_method_are_distinct() {
         )
         .await
         .unwrap_err();
-    assert_eq!(provider.code_enum(), Some(conex_proto::ErrorCode::UnknownProvider));
+    assert_eq!(
+        provider.code_enum(),
+        Some(conex_proto::ErrorCode::UnknownProvider)
+    );
     let method = rig
         .host
         .invoke(
@@ -211,5 +214,8 @@ async fn unknown_provider_and_method_are_distinct() {
         )
         .await
         .unwrap_err();
-    assert_eq!(method.code_enum(), Some(conex_proto::ErrorCode::UnknownMethod));
+    assert_eq!(
+        method.code_enum(),
+        Some(conex_proto::ErrorCode::UnknownMethod)
+    );
 }

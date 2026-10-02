@@ -274,7 +274,10 @@ root = \"{notes_root}\"\n",
         .json()
         .await
         .expect("register json");
-    assert_eq!(register["error"]["data"]["code"].as_str(), Some("forbidden"));
+    assert_eq!(
+        register["error"]["data"]["code"].as_str(),
+        Some("forbidden")
+    );
 
     // 4b. agent/register with mismatched hostOrigin must be rejected.
     let bad_origin: Value = reqwest::Client::new()

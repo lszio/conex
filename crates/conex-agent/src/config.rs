@@ -69,8 +69,7 @@ impl AgentConfig {
         let Some(scheme) = scheme else {
             return Err("host_url must use wss://, except explicit loopback ws://".into());
         };
-        if scheme == "ws://" && !(self.allow_loopback_ws && loopback_ws_authority(&self.host_url))
-        {
+        if scheme == "ws://" && !(self.allow_loopback_ws && loopback_ws_authority(&self.host_url)) {
             return Err("host_url ws:// is allowed only for explicit loopback".into());
         }
         let mut ids = HashSet::new();
@@ -85,22 +84,32 @@ impl AgentConfig {
                 return Err(format!("endpoint {} requires root", endpoint.endpoint_id));
             }
             if endpoint.methods.is_empty() {
-                return Err(format!("endpoint {} must declare methods", endpoint.endpoint_id));
+                return Err(format!(
+                    "endpoint {} must declare methods",
+                    endpoint.endpoint_id
+                ));
             }
             if endpoint
                 .methods
                 .iter()
                 .any(|method| !SUPPORTED_METHODS.contains(&method.as_str()))
             {
-                return Err(format!("unsupported method on endpoint {}", endpoint.endpoint_id));
+                return Err(format!(
+                    "unsupported method on endpoint {}",
+                    endpoint.endpoint_id
+                ));
             }
             if endpoint.resources.is_empty()
-                || endpoint
-                    .resources
-                    .iter()
-                    .any(|resource| resource != "*" && (resource.starts_with('/') || resource.split('/').any(|part| part == "..")))
+                || endpoint.resources.iter().any(|resource| {
+                    resource != "*"
+                        && (resource.starts_with('/')
+                            || resource.split('/').any(|part| part == ".."))
+                })
             {
-                return Err(format!("endpoint {} has invalid resources", endpoint.endpoint_id));
+                return Err(format!(
+                    "endpoint {} has invalid resources",
+                    endpoint.endpoint_id
+                ));
             }
         }
         Ok(())

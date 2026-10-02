@@ -30,7 +30,10 @@ impl WebAssets {
             .canonicalize()
             .map_err(|error| invalid(format!("web_root {}: {error}", root.display())))?;
         if !root.is_dir() {
-            return Err(invalid(format!("web_root is not a directory: {}", root.display())));
+            return Err(invalid(format!(
+                "web_root is not a directory: {}",
+                root.display()
+            )));
         }
         Ok(Self {
             index: Arc::new(read_asset(&root, "index.html")?),
@@ -76,12 +79,21 @@ fn asset_response(bytes: &[u8], content_type: &'static str, html: bool) -> Respo
     let mut response = (StatusCode::OK, Body::from(bytes.to_vec())).into_response();
     let headers = response.headers_mut();
     headers.insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type));
-    headers.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
+    headers.insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
     headers.insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
-    headers.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static(CSP));
+    headers.insert(
+        header::CONTENT_SECURITY_POLICY,
+        HeaderValue::from_static(CSP),
+    );
     headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     if html {
-        headers.insert(header::REFERRER_POLICY, HeaderValue::from_static("no-referrer"));
+        headers.insert(
+            header::REFERRER_POLICY,
+            HeaderValue::from_static("no-referrer"),
+        );
     }
     response
 }
