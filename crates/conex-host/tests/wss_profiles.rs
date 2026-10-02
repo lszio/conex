@@ -89,7 +89,7 @@ root = \"{notes_root}\"\n",
     std::fs::write(&cfg_path, &config).expect("write config");
 
     let binary = std::env::var("CONEX_HOST_BIN")
-        .unwrap_or_else(|_| "/home/lszio/Projects/conex/target/debug/conex-host".to_string());
+        .unwrap_or_else(|_| env!("CARGO_BIN_EXE_conex-host").to_string());
     let child = std::process::Command::new(&binary)
         .arg(&cfg_path)
         .current_dir(env!("CARGO_MANIFEST_DIR"))
