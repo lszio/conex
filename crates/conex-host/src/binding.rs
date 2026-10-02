@@ -151,7 +151,10 @@ impl BindingStore {
         let mut inner = self.inner.lock().expect("binding lock poisoned");
         purge(&mut inner);
         let binding = inner.records.get(binding_id).cloned().ok_or_else(|| {
-            CallError::new(conex_proto::ErrorCode::Unauthorized, "unknown or expired binding")
+            CallError::new(
+                conex_proto::ErrorCode::Unauthorized,
+                "unknown or expired binding",
+            )
         })?;
         if binding.principal_id != caller.principal_id || binding.tenant_id != caller.tenant_id {
             return Err(CallError::new(

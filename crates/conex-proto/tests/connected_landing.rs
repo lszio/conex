@@ -1,4 +1,7 @@
-use conex_proto::{self, AgentEndpoint, AgentRegisterRequest, EndpointListRequest, EndpointListResult, EndpointSummary};
+use conex_proto::{
+    self, AgentEndpoint, AgentRegisterRequest, EndpointListRequest, EndpointListResult,
+    EndpointSummary,
+};
 use prost::Message;
 
 #[test]
@@ -27,13 +30,19 @@ fn endpoint_catalog_round_trips_and_preserves_optional_cursor() {
         conex_proto::AttachmentKind::try_from(decoded.endpoints[0].attachment_kind),
         Ok(conex_proto::AttachmentKind::ReverseAgent)
     );
-    assert_eq!(decoded.next_after_endpoint_id.as_deref(), Some("notes-remote"));
+    assert_eq!(
+        decoded.next_after_endpoint_id.as_deref(),
+        Some("notes-remote")
+    );
 
     let request = EndpointListRequest {
         limit: Some(50),
         after_endpoint_id: None,
     };
-    assert_eq!(EndpointListRequest::decode(request.encode_to_vec().as_slice()).expect("decode"), request);
+    assert_eq!(
+        EndpointListRequest::decode(request.encode_to_vec().as_slice()).expect("decode"),
+        request
+    );
 }
 
 #[test]
@@ -106,11 +115,14 @@ fn registration_vectors_keep_missing_identity_and_duplicate_endpoints_visible() 
         provides: vec!["source/read".into()],
         host_origin: None,
     };
-    let decoded =
-        AgentRegisterRequest::decode(value.encode_to_vec().as_slice()).expect("decode registration");
+    let decoded = AgentRegisterRequest::decode(value.encode_to_vec().as_slice())
+        .expect("decode registration");
     assert!(decoded.agent_id.is_empty());
     assert_eq!(decoded.endpoints.len(), 2);
-    assert_eq!(decoded.endpoints[0].endpoint_id, decoded.endpoints[1].endpoint_id);
+    assert_eq!(
+        decoded.endpoints[0].endpoint_id,
+        decoded.endpoints[1].endpoint_id
+    );
 }
 
 #[test]
@@ -120,7 +132,8 @@ fn partial_scope_and_control_negotiation_round_trip() {
         root: "team".into(),
         subtree: false,
     };
-    let decoded = conex_proto::AuthorizedScope::decode(scope.encode_to_vec().as_slice()).expect("decode");
+    let decoded =
+        conex_proto::AuthorizedScope::decode(scope.encode_to_vec().as_slice()).expect("decode");
     assert_eq!(decoded, scope);
 
     let capabilities = conex_proto::NegotiatedCapabilities {
@@ -133,7 +146,8 @@ fn partial_scope_and_control_negotiation_round_trip() {
         }],
     };
     let decoded =
-        conex_proto::NegotiatedCapabilities::decode(capabilities.encode_to_vec().as_slice()).expect("decode");
+        conex_proto::NegotiatedCapabilities::decode(capabilities.encode_to_vec().as_slice())
+            .expect("decode");
     assert_eq!(decoded, capabilities);
 
     let identity = conex_proto::LinkIdentity {

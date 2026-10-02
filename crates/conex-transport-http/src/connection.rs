@@ -50,14 +50,20 @@ impl Connection for HttpConnection {
             .uri(&path)
             .body(Full::new(body))
             .map_err(|error| {
-                CallError::new(conex_proto::ErrorCode::BadRequest, format!("build request: {error}"))
+                CallError::new(
+                    conex_proto::ErrorCode::BadRequest,
+                    format!("build request: {error}"),
+                )
             })?;
         *built.headers_mut() = headers;
 
         let response = timeout_at(deadline, self.sender.send_request(built))
             .await
             .map_err(|_| {
-                CallError::new(conex_proto::ErrorCode::Timeout, "http request exceeded the deadline")
+                CallError::new(
+                    conex_proto::ErrorCode::Timeout,
+                    "http request exceeded the deadline",
+                )
             })?
             .map_err(|error| {
                 CallError::new(

@@ -161,8 +161,10 @@ impl Host {
             );
 
             if self.policy.version() != grant.policy_version {
-                let error =
-                    CallError::new(conex_proto::ErrorCode::Forbidden, "policy changed during handshake");
+                let error = CallError::new(
+                    conex_proto::ErrorCode::Forbidden,
+                    "policy changed during handshake",
+                );
                 self.deny(
                     caller,
                     &endpoint,

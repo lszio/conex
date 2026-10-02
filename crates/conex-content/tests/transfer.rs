@@ -221,6 +221,8 @@ fn one_gib_payload_roundtrips() {
     let total_bytes = (leaves_expected * CHUNK) as u64;
     let manifest_cid =
         conex_proto::cid::content_cid_for_parts(CHUNK as u32, total_bytes, &leaf_cids).unwrap();
+    // CI runners are slow: a 1 GiB upload can exceed a 60 s lease, so the
+    // test requests the same 1 h lease the broker grants by default.
     let upload = s
         .begin_upload(
             1,
@@ -228,7 +230,7 @@ fn one_gib_payload_roundtrips() {
             total as u64,
             "manifest",
             &manifest_cid,
-            Some(60_000),
+            Some(3_600_000),
             owner(),
             "notes/test",
         )

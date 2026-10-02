@@ -1,7 +1,7 @@
 //! Shared wire vectors: envelope classification, error codes and rejection.
 #![allow(clippy::collapsible_if)]
 
-use conex_proto::{wire};
+use conex_proto::wire;
 use serde_json::Value;
 
 fn vectors() -> Value {

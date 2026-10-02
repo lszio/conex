@@ -3,8 +3,8 @@ mod additivity;
 mod check;
 mod conformance;
 mod e2e;
-mod landing_demo;
 mod generate;
+mod landing_demo;
 mod schema;
 
 use std::process::ExitCode;
@@ -42,7 +42,10 @@ fn main() -> ExitCode {
             conformance::run(vectors)
         }
         "landing-demo" => {
-            if args.iter().any(|arg| matches!(arg.as_str(), "--help" | "-h")) {
+            if args
+                .iter()
+                .any(|arg| matches!(arg.as_str(), "--help" | "-h"))
+            {
                 eprintln!("usage: cargo xtask landing-demo");
                 Ok(())
             } else {

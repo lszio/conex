@@ -213,9 +213,12 @@ impl AuditSink for TestAudit {
 }
 
 fn prepare_test_read(value: &Value) -> CallResult<PreparedInput> {
-    let map = value
-        .as_object()
-        .ok_or_else(|| CallError::new(conex_proto::ErrorCode::BadRequest, "input must be an object"))?;
+    let map = value.as_object().ok_or_else(|| {
+        CallError::new(
+            conex_proto::ErrorCode::BadRequest,
+            "input must be an object",
+        )
+    })?;
     for key in map.keys() {
         if key != "resourceId" {
             return Err(CallError::new(

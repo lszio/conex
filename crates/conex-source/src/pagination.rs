@@ -120,8 +120,7 @@ impl SnapshotCache {
             match oldest {
                 Some(id) => {
                     self.snapshots.remove(&id);
-                    self.cursors
-                        .retain(|_, cursor| cursor.snapshot_id != id);
+                    self.cursors.retain(|_, cursor| cursor.snapshot_id != id);
                 }
                 None => {
                     return Err(CallError::new(

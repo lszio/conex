@@ -200,7 +200,11 @@ fn manually_built_routes_use_install_validation() {
             make_routes(&first, &["source/read"]).unwrap(),
         )
         .unwrap();
-    assert!(registry.route("remote", "conex", 1, "source/read").is_some());
+    assert!(
+        registry
+            .route("remote", "conex", 1, "source/read")
+            .is_some()
+    );
 
     let mut second = Registry::new();
     let second_installation = installation("remote", "tenant", &["source/read"]);

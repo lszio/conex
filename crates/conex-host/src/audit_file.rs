@@ -42,7 +42,10 @@ impl FileAuditSink {
             options.mode(0o600);
         }
         let file = options.open(path).map_err(|error| {
-            CallError::new(conex_proto::ErrorCode::Internal, format!("open audit file: {error}"))
+            CallError::new(
+                conex_proto::ErrorCode::Internal,
+                format!("open audit file: {error}"),
+            )
         })?;
         Ok(Self {
             file: Arc::new(Mutex::new(file)),

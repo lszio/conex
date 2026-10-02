@@ -74,7 +74,6 @@ impl StaticPolicy {
             .cloned()
             .collect()
     }
-
 }
 
 impl Policy for StaticPolicy {

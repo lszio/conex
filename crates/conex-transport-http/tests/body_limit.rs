@@ -35,7 +35,10 @@ async fn oversized_response_is_rejected() {
         .request(request("/"), Instant::now() + Duration::from_secs(2))
         .await
         .unwrap_err();
-    assert_eq!(error.code_enum(), Some(conex_proto::ErrorCode::PayloadTooLarge));
+    assert_eq!(
+        error.code_enum(),
+        Some(conex_proto::ErrorCode::PayloadTooLarge)
+    );
 }
 
 #[tokio::test]

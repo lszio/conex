@@ -26,10 +26,9 @@ impl IdentityMap {
     /// Resolve a fully qualified identity key. There is no default principal and
     /// no caching by subject: the whole key must match.
     pub fn resolve(&self, key: &IdentityKey, actor_peer_id: &str) -> CallResult<Caller> {
-        let binding = self
-            .bindings
-            .get(key)
-            .ok_or_else(|| CallError::new(conex_proto::ErrorCode::Unauthorized, "unknown identity"))?;
+        let binding = self.bindings.get(key).ok_or_else(|| {
+            CallError::new(conex_proto::ErrorCode::Unauthorized, "unknown identity")
+        })?;
         Ok(Caller {
             principal_id: binding.principal_id.clone(),
             tenant_id: binding.tenant_id.clone(),

@@ -5,9 +5,9 @@ use std::time::Duration;
 use futures::{SinkExt, StreamExt};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tempfile::TempDir;
 use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -72,7 +72,9 @@ root = \"{}\"\n",
 }
 
 async fn ready(
-    ws: &mut tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
+    ws: &mut tokio_tungstenite::WebSocketStream<
+        tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+    >,
 ) {
     ws.send(Message::Text(
         json!({
@@ -123,15 +125,16 @@ async fn ready(
 async fn websocket_reader_keeps_processing_while_requests_run() {
     let (port, mut child, _keepalive) = spawn_host();
     for _ in 0..100 {
-        if tokio::net::TcpStream::connect(("127.0.0.1", port)).await.is_ok() {
+        if tokio::net::TcpStream::connect(("127.0.0.1", port))
+            .await
+            .is_ok()
+        {
             break;
         }
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
     let request = format!("ws://127.0.0.1:{port}/wss");
-    let mut request = request
-        .into_client_request()
-        .expect("client request");
+    let mut request = request.into_client_request().expect("client request");
     request.headers_mut().insert(
         "Authorization",
         "Bearer e2e-token".parse().expect("authorization"),
@@ -170,10 +173,16 @@ async fn websocket_reader_keeps_processing_while_requests_run() {
         };
         let value: Value = serde_json::from_str(&text).expect("response json");
         seen.push(value["id"].as_str().unwrap_or_default().to_owned());
-        assert!(value.get("result").is_some(), "business call failed: {value}");
+        assert!(
+            value.get("result").is_some(),
+            "business call failed: {value}"
+        );
     }
     seen.sort();
-    assert_eq!(seen, ["01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW"]);
+    assert_eq!(
+        seen,
+        ["01ARZ3NDEKTSV4RRFFQ69G5FAV", "01ARZ3NDEKTSV4RRFFQ69G5FAW"]
+    );
     let _ = child.kill();
     let _ = child.wait();
 }
