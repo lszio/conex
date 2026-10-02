@@ -4,9 +4,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+use crate::landing_demo;
 use anyhow::{Context, Result, bail};
 use sha2::{Digest, Sha256};
-use crate::landing_demo;
 
 pub fn run(suite: &str) -> Result<()> {
     match suite {
@@ -192,7 +192,7 @@ fn run_connected_landing() -> Result<()> {
         bail!("cargo build -p conex-host -p conex-agent failed");
     }
     let fixture = landing_demo::prepare(&root, free_port()?, false)?;
-    let _processes = landing_demo::spawn(&root, &fixture, true)?;
+    let mut processes = landing_demo::spawn(&root, &fixture, true)?;
     if !landing_demo::wait_ready(fixture.port, Duration::from_secs(10)) {
         bail!("conex-host did not become ready on port {}", fixture.port);
     }
@@ -254,7 +254,52 @@ fn run_connected_landing() -> Result<()> {
     if !b_probe.success() {
         bail!("connected landing isolation probe failed");
     }
-    println!("connected-landing: real Host + two Agent processes, routing and A/B isolation passed");
+
+    // M2 lifecycle acceptance: REALLY stop agent A's process, then agent B
+    // must still serve while A's endpoint reports unavailable.
+    let agent_a = processes
+        .agents
+        .get_mut(0)
+        .and_then(|slot| slot.as_mut())
+        .ok_or_else(|| anyhow::anyhow!("agent A process missing"))?;
+    let _ = agent_a.kill();
+    let _ = agent_a.wait();
+    std::thread::sleep(Duration::from_secs(2));
+    let after_stop = Command::new("bun")
+        .args(["-e", r#"
+            import { ConexClient } from "./sdk/typescript/src/client.ts";
+            const client = await ConexClient.connect({
+              url: `http://127.0.0.1:${process.env.CONEX_LANDING_PORT}/rpc`,
+              tokenProvider: async () => process.env.CONEX_LANDING_TOKEN,
+              requires: ["source/read"],
+            });
+            // B is untouched by A's death.
+            const body = await client.read("notes-b", { resourceId: "team/shared.md" });
+            if (body.text !== "connected landing agent B\n") throw new Error(`agent B failed after A stop: ${body.text}`);
+            // A's endpoint now reports unavailable instead of stale content.
+            let aFailed = false;
+            try {
+                await client.read("notes-a", { resourceId: "team/shared.md" });
+            } catch (error) {
+                aFailed = true;
+            }
+            if (!aFailed) throw new Error("agent A still served after its process was stopped");
+            client.close();
+        "#])
+        .current_dir(&root)
+        .env("CONEX_LANDING_PORT", fixture.port.to_string())
+        .env("CONEX_LANDING_TOKEN", &fixture.service_token)
+        .status()
+        .context("run connected landing lifecycle probe")?;
+    if !after_stop.success() {
+        bail!("connected landing lifecycle probe failed (stop A, B still serves)");
+    }
+    println!(
+        "connected-landing: real Host + two Agent processes, routing and A/B isolation passed"
+    );
+    println!(
+        "connected-landing: agent A process stopped for real; B kept serving; A endpoint unavailable (M2 lifecycle)"
+    );
     Ok(())
 }
 
@@ -398,7 +443,9 @@ fn run_connected_landing_web() -> Result<()> {
     if !probe.success() {
         bail!("connected landing-web probe failed");
     }
-    println!("connected-landing-web: real Host + two Agent processes, login/session/list+read via HTTP and WSS passed");
+    println!(
+        "connected-landing-web: real Host + two Agent processes, login/session/list+read via HTTP and WSS passed"
+    );
     Ok(())
 }
 
@@ -538,6 +585,8 @@ fn run_connected_landing_connections() -> Result<()> {
     if !probe.success() {
         bail!("connected landing-connections probe failed");
     }
-    println!("connected-landing-connections: real Host + two Agent processes, connection/list stale + dispatch counters passed");
+    println!(
+        "connected-landing-connections: real Host + two Agent processes, connection/list stale + dispatch counters passed"
+    );
     Ok(())
 }

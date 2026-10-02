@@ -18,6 +18,23 @@ pub trait Handler: Send + Sync {
     ) -> CallResult<serde_json::Value>;
 }
 
+/// M3: bounded byte-range reader. Providers that can serve raw slices
+/// implement it so the same `/content` path works for local and remote
+/// endpoints: the Host prefers the reverse-agent link and falls back to the
+/// provider itself.
+#[async_trait]
+pub trait RangeReader: Send + Sync {
+    /// Read `[offset, offset + length)` bound to `expected_revision`; a moved
+    /// revision returns `stale_revision` rather than mixed-version bytes.
+    async fn read_range(
+        &self,
+        ctx: &CallContext,
+        offset: u64,
+        length: usize,
+        expected_revision: Option<&str>,
+    ) -> CallResult<(Vec<u8>, String, bool)>;
+}
+
 #[async_trait]
 pub trait Resolver: Send + Sync {
     async fn resolve(

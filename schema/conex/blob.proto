@@ -102,16 +102,42 @@ message BlobHaveResponse {
   repeated bool present = 1;
 }
 
-// blob/get：拉取单块字节。
-message BlobGetRequest {
+// blob/get 目标二选一（M0 冻结）：互斥结构避免同一个 offset 同时被解释成
+// 块内偏移与文件偏移。
+// - committed：读取已提交内容中被授权根覆盖的块，整块返回。
+// - remote：按端点、资源、revision、字节范围读取远端内容（M3 接通运行路径）。
+message CommittedTarget {
+  // 已提交块 CID；必须属于调用方获授权的根。
   string chunk_cid = 1;
-  optional uint64 range_offset = 2;
-  optional uint64 range_length = 3;
+}
+
+message RemoteTarget {
+  string endpoint_id = 1;
+  string resource_id = 2;
+  // 提供则与当前版本不符时返回 stale_revision；不拼接两个版本。
+  optional string revision = 3;
+  // 字节偏移（十进制字符串 u64）。
+  string offset = 4;
+  // 字节长度（十进制字符串 u64，>= 1）；offset+length 溢出拒绝。
+  string length = 5;
+}
+
+message BlobGetRequest {
+  reserved 1, 2, 3;
+  oneof target {
+    CommittedTarget committed = 4;
+    RemoteTarget remote = 5;
+  }
 }
 
 message BlobGetResponse {
   bytes chunk_bytes = 1;
-  string chunk_cid = 2;
+  // committed 路径返回该块 CID；remote 路径缺省（任意 range 不冒充完整块 CID）。
+  optional string chunk_cid = 2;
+  // remote 路径返回实际服务的 revision。
+  optional string revision = 3;
+  // remote 路径返回是否到达文件尾；读取结束必须回传实际长度与 EOF。
+  bool eof = 4;
 }
 
 // blob/cancel：主动结束 staging；不会留下 committed 资源。

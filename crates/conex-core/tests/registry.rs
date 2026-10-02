@@ -64,6 +64,7 @@ fn endpoint(id: &str, tenant: &str, provides: &[&str]) -> Endpoint {
 
 fn route(endpoint: &Endpoint, method: &str) -> Route {
     Route {
+        range_reader: None,
         protocol: "conex".into(),
         version: 1,
         endpoint: endpoint.clone(),

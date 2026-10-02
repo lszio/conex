@@ -22,52 +22,146 @@ use crate::remote::{RemoteConnections, RemoteLink};
 
 const TICKET_TTL_MS: u64 = 30_000;
 
+/// Per-endpoint registration claim (plan M2): the agent declares each
+/// endpoint it serves; the host validates each claim against its own config.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct EndpointRegistration {
+    pub endpoint_id: String,
+    /// Resource root the agent claims to serve; `*` serves the whole
+    /// authorized root. The host's configured root always wins.
+    pub root: String,
+    pub methods: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentRegistration {
     pub agent_id: String,
     pub principal_id: String,
     pub tenant_id: String,
-    pub provider_ids: Vec<String>,
-    pub methods: Vec<String>,
-    pub resources: Vec<String>,
+    /// Accepted endpoints of the current generation, validated against the
+    /// host-side authorization.
+    pub endpoints: Vec<EndpointRegistration>,
     pub registered_at_ms: u64,
     pub last_heartbeat_at_ms: u64,
     pub host_origin: String, // expected host binding (anti-spoof)
+}
+
+impl AgentRegistration {
+    /// Flat views kept for resolve and the connection panel projection.
+    pub fn provider_ids(&self) -> Vec<String> {
+        self.endpoints
+            .iter()
+            .map(|e| e.endpoint_id.clone())
+            .collect()
+    }
+
+    pub fn methods(&self) -> Vec<String> {
+        let mut methods: Vec<String> = self
+            .endpoints
+            .iter()
+            .flat_map(|e| e.methods.iter().cloned())
+            .collect();
+        methods.sort();
+        methods.dedup();
+        methods
+    }
+
+    pub fn resources(&self) -> Vec<String> {
+        let mut roots: Vec<String> = self.endpoints.iter().map(|e| e.root.clone()).collect();
+        roots.sort();
+        roots.dedup();
+        roots
+    }
+
+    pub fn accepts_endpoint(&self, endpoint_id: &str) -> bool {
+        self.endpoints.iter().any(|e| e.endpoint_id == endpoint_id)
+    }
+}
+
+/// Host-configured authorization for one agent endpoint (plan M2): the
+/// endpoint id must exist in config, the configured root scopes it, and
+/// claimed methods must be a subset.
+#[derive(Debug, Clone)]
+pub struct AuthorizedEndpoint {
+    pub endpoint_id: String,
+    pub root: String,
+    pub methods: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
 pub struct AgentAuthorization {
     pub agent_id: String,
     pub tenant_id: String,
-    pub provider_ids: Vec<String>,
-    pub methods: Vec<String>,
-    pub resources: Vec<String>,
+    pub endpoints: Vec<AuthorizedEndpoint>,
 }
 
 impl AgentAuthorization {
-    fn allows(&self, registration: &AgentRegistration) -> bool {
-        self.agent_id == registration.agent_id
-            && self.tenant_id == registration.tenant_id
-            && !registration.provider_ids.is_empty()
-            && !registration.methods.is_empty()
-            && !registration.resources.is_empty()
-            && registration
-                .provider_ids
+    /// Per-endpoint review (plan M2): every claimed endpoint is validated
+    /// against the host config independently; invalid ones are rejected and
+    /// reported while valid ones are accepted. The host's configured root
+    /// always wins over the agent's claim.
+    fn review(
+        &self,
+        registration: &AgentRegistration,
+    ) -> (Vec<EndpointRegistration>, Vec<(String, &'static str)>) {
+        if self.agent_id != registration.agent_id || self.tenant_id != registration.tenant_id {
+            return (Vec::new(), Vec::new());
+        }
+        let mut accepted = Vec::new();
+        let mut rejected = Vec::new();
+        for claimed in &registration.endpoints {
+            let Some(authorized) = self
+                .endpoints
                 .iter()
-                .all(|id| self.provider_ids.iter().any(|allowed| allowed == id))
-            && registration
-                .methods
-                .iter()
-                .all(|method| self.methods.iter().any(|allowed| allowed == method))
-            && registration.resources.iter().all(|resource| {
-                resource == "*"
-                    || self.resources.iter().any(|root| {
-                        root == "*"
-                            || root.is_empty()
-                            || resource == root
-                            || resource.strip_prefix(root).is_some_and(|rest| rest.starts_with('/'))
-                    })
-            })
+                .find(|authorized| authorized.endpoint_id == claimed.endpoint_id)
+            else {
+                rejected.push((
+                    claimed.endpoint_id.clone(),
+                    "endpoint is not configured for this agent",
+                ));
+                continue;
+            };
+            if claimed.methods.is_empty()
+                || claimed
+                    .methods
+                    .iter()
+                    .any(|method| !authorized.methods.contains(method))
+            {
+                rejected.push((
+                    claimed.endpoint_id.clone(),
+                    "method outside the authorized set",
+                ));
+                continue;
+            }
+            let root_ok = claimed.root == "*"
+                || authorized.root.is_empty()
+                || authorized.root == claimed.root
+                || claimed
+                    .root
+                    .strip_prefix(&authorized.root)
+                    .is_some_and(|rest| rest.starts_with('/'));
+            if !root_ok {
+                rejected.push((
+                    claimed.endpoint_id.clone(),
+                    "claimed root escapes the authorized root",
+                ));
+                continue;
+            }
+            let mut methods = claimed.methods.clone();
+            methods.sort();
+            methods.dedup();
+            accepted.push(EndpointRegistration {
+                endpoint_id: claimed.endpoint_id.clone(),
+                root: if claimed.root == "*" || authorized.root.is_empty() {
+                    authorized.root.clone()
+                } else {
+                    claimed.root.clone()
+                },
+                methods,
+            });
+        }
+        accepted.sort_by(|a, b| a.endpoint_id.cmp(&b.endpoint_id));
+        (accepted, rejected)
     }
 }
 
@@ -94,7 +188,11 @@ impl AgentRegistry {
         {
             return Err(AgentError::InvalidIdentifier);
         }
-        if agent.methods.is_empty() {
+        if agent.endpoints.is_empty()
+            || agent.endpoints.iter().any(|endpoint| {
+                !is_safe_component(&endpoint.endpoint_id) || endpoint.methods.is_empty()
+            })
+        {
             return Err(AgentError::NoCapabilities);
         }
         if agent.host_origin.is_empty() || !agent.host_origin.starts_with("conex://") {
@@ -113,14 +211,20 @@ impl AgentRegistry {
         Ok(())
     }
 
+    /// Fenced registration (plan M2): each claimed endpoint is validated
+    /// independently; endpoints that fail land in the rejected list of the
+    /// response. Only when at least one endpoint is accepted does the new
+    /// generation replace the old connection — a fully-rejected registration
+    /// errors out and leaves the healthy old link untouched.
     pub fn register_link(
         &self,
         agent: AgentRegistration,
         generation: u64,
         authorization: &AgentAuthorization,
-    ) -> Result<(), AgentError> {
+    ) -> Result<EndpointReview, AgentError> {
         Self::validate_registration(&agent)?;
-        if !authorization.allows(&agent) {
+        let (accepted, rejected) = authorization.review(&agent);
+        if accepted.is_empty() {
             return Err(AgentError::NotAuthorized);
         }
         let mut state = self.state.lock().expect("agent registry poisoned");
@@ -131,16 +235,32 @@ impl AgentRegistry {
         {
             return Err(AgentError::StaleGeneration);
         }
-        state.generations.insert(agent.agent_id.clone(), generation);
-        state.registrations.insert(agent.agent_id.clone(), agent);
-        Ok(())
+        let accepted_ids: Vec<String> = accepted.iter().map(|e| e.endpoint_id.clone()).collect();
+        let mut registered = agent;
+        registered.endpoints = accepted;
+        state
+            .generations
+            .insert(registered.agent_id.clone(), generation);
+        state
+            .registrations
+            .insert(registered.agent_id.clone(), registered);
+        Ok(EndpointReview {
+            accepted_endpoint_ids: accepted_ids,
+            rejected_capabilities: rejected,
+        })
     }
 
-    pub fn heartbeat_generation(
-        &self,
-        agent_id: &str,
-        generation: u64,
-    ) -> Result<u64, AgentError> {
+    /// Whether the agent's current generation accepted this endpoint; drives
+    /// the per-endpoint ready projection (plan M2).
+    pub fn accepts_endpoint(&self, agent_id: &str, endpoint_id: &str) -> bool {
+        let state = self.state.lock().expect("agent registry poisoned");
+        state
+            .registrations
+            .get(agent_id)
+            .is_some_and(|registration| registration.accepts_endpoint(endpoint_id))
+    }
+
+    pub fn heartbeat_generation(&self, agent_id: &str, generation: u64) -> Result<u64, AgentError> {
         let mut state = self.state.lock().expect("agent registry poisoned");
         if state.generations.get(agent_id).copied() != Some(generation) {
             return Err(AgentError::StaleGeneration);
@@ -202,17 +322,23 @@ impl AgentRegistry {
             .registrations
             .values()
             .filter(|agent| {
-                agent.provider_ids.iter().any(|id| id == provider_id)
+                agent.provider_ids().iter().any(|id| id == provider_id)
                     && (resource_id == "*"
                         || agent
-                            .resources
+                            .resources()
                             .iter()
                             .any(|id| id == resource_id || id == "*"))
-                    && agent.methods.iter().any(|id| id == method)
+                    && agent.methods().iter().any(|id| id == method)
             })
             .cloned()
             .collect()
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct EndpointReview {
+    pub accepted_endpoint_ids: Vec<String>,
+    pub rejected_capabilities: Vec<(String, &'static str)>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -241,7 +367,6 @@ impl AgentError {
         CallError::new(code, self.to_string())
     }
 }
-
 
 #[derive(Debug, Clone)]
 pub struct WebTicket {
@@ -320,7 +445,12 @@ impl TicketRegistry {
             ));
         }
         if let Some(session_id) = ticket.session_id.as_deref() {
-            if guard.values().filter(|entry| entry.session_id.as_deref() == Some(session_id)).count() >= 8 {
+            if guard
+                .values()
+                .filter(|entry| entry.session_id.as_deref() == Some(session_id))
+                .count()
+                >= 8
+            {
                 return Err(CallError::new(
                     conex_proto::ErrorCode::QuotaExceeded,
                     "session ticket capacity exceeded",
@@ -358,25 +488,34 @@ impl TicketRegistry {
     pub fn consume(&self, ticket: &str) -> Result<WebTicket, CallError> {
         let mut guard = self.inner.lock().expect("ticket registry poisoned");
         let entry = guard.remove(ticket).ok_or_else(|| {
-            CallError::new(conex_proto::ErrorCode::Unauthorized, "ticket is unknown or already consumed")
+            CallError::new(
+                conex_proto::ErrorCode::Unauthorized,
+                "ticket is unknown or already consumed",
+            )
         })?;
         if entry.expires_at_ms <= now_ms() {
-            return Err(CallError::new(conex_proto::ErrorCode::Unauthorized, "ticket has expired"));
+            return Err(CallError::new(
+                conex_proto::ErrorCode::Unauthorized,
+                "ticket has expired",
+            ));
         }
         Ok(entry)
     }
 
     pub fn revoke_session(&self, session_id: &str) {
-        self.inner.lock().expect("ticket registry poisoned").retain(|_, entry| {
-            entry.session_id.as_deref() != Some(session_id)
-        });
+        self.inner
+            .lock()
+            .expect("ticket registry poisoned")
+            .retain(|_, entry| entry.session_id.as_deref() != Some(session_id));
     }
 }
 
 fn random_token() -> String {
     use ring::rand::{SecureRandom, SystemRandom};
     let mut bytes = [0u8; 32];
-    SystemRandom::new().fill(&mut bytes).expect("system random source unavailable");
+    SystemRandom::new()
+        .fill(&mut bytes)
+        .expect("system random source unavailable");
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes)
 }
 
@@ -519,15 +658,21 @@ pub fn is_safe_component(value: &str) -> bool {
 }
 
 pub fn object(input: &Value) -> Result<&Map<String, Value>, CallError> {
-    input
-        .as_object()
-        .ok_or_else(|| CallError::new(conex_proto::ErrorCode::BadRequest, "input must be an object"))
+    input.as_object().ok_or_else(|| {
+        CallError::new(
+            conex_proto::ErrorCode::BadRequest,
+            "input must be an object",
+        )
+    })
 }
 
 pub fn require_string<'a>(map: &'a Map<String, Value>, key: &str) -> Result<&'a str, CallError> {
-    map.get(key)
-        .and_then(Value::as_str)
-        .ok_or_else(|| CallError::new(conex_proto::ErrorCode::BadRequest, format!("{key} required")))
+    map.get(key).and_then(Value::as_str).ok_or_else(|| {
+        CallError::new(
+            conex_proto::ErrorCode::BadRequest,
+            format!("{key} required"),
+        )
+    })
 }
 
 pub fn optional_string<'a>(
@@ -545,10 +690,12 @@ pub fn optional_string<'a>(
 }
 
 pub fn string_list(map: &Map<String, Value>, key: &str) -> Result<Vec<String>, CallError> {
-    let arr = map
-        .get(key)
-        .and_then(Value::as_array)
-        .ok_or_else(|| CallError::new(conex_proto::ErrorCode::BadRequest, format!("{key} required")))?;
+    let arr = map.get(key).and_then(Value::as_array).ok_or_else(|| {
+        CallError::new(
+            conex_proto::ErrorCode::BadRequest,
+            format!("{key} required"),
+        )
+    })?;
     arr.iter()
         .map(|value| {
             value.as_str().map(str::to_string).ok_or_else(|| {
@@ -556,6 +703,34 @@ pub fn string_list(map: &Map<String, Value>, key: &str) -> Result<Vec<String>, C
                     conex_proto::ErrorCode::BadRequest,
                     format!("{key} entries must be strings"),
                 )
+            })
+        })
+        .collect()
+}
+
+/// Parse the per-endpoint registration list (plan M2):
+/// `endpoints: [{endpointId, root, methods}]`.
+pub fn parse_endpoints(map: &Map<String, Value>) -> Result<Vec<EndpointRegistration>, CallError> {
+    let arr = map
+        .get("endpoints")
+        .and_then(Value::as_array)
+        .ok_or_else(|| CallError::new(conex_proto::ErrorCode::BadRequest, "endpoints required"))?;
+    arr.iter()
+        .map(|entry| {
+            let map = entry.as_object().ok_or_else(|| {
+                CallError::new(
+                    conex_proto::ErrorCode::BadRequest,
+                    "endpoints entries must be objects",
+                )
+            })?;
+            Ok(EndpointRegistration {
+                endpoint_id: require_string(map, "endpointId")?.to_string(),
+                root: map
+                    .get("root")
+                    .and_then(Value::as_str)
+                    .unwrap_or("*")
+                    .to_string(),
+                methods: string_list(map, "methods")?,
             })
         })
         .collect()
@@ -594,9 +769,7 @@ pub async fn handle(broker: &Broker, call: BrokerCall) -> Result<Value, CallErro
                 agent_id: require_string(map, "agentId")?.to_string(),
                 principal_id: call.caller.principal_id.clone(),
                 tenant_id: call.caller.tenant_id.clone(),
-                provider_ids: string_list(map, "providerIds")?,
-                methods: string_list(map, "methods")?,
-                resources: string_list(map, "resources")?,
+                endpoints: parse_endpoints(map)?,
                 registered_at_ms: now_ms(),
                 last_heartbeat_at_ms: now_ms(),
                 host_origin,
@@ -669,23 +842,32 @@ impl HostSide {
         }
     }
 
-    pub async fn prepare_connection(&self, agent_id: &str, link: RemoteLink) {
-        self.connections.prepare(agent_id, link).await;
+    pub async fn stage_connection(&self, agent_id: &str, link: RemoteLink) {
+        self.connections
+            .stage(agent_id, link.generation, link)
+            .await;
+    }
+
+    pub async fn discard_connection(&self, agent_id: &str, generation: u64) {
+        self.connections.discard(agent_id, generation).await;
     }
 
     pub async fn activate_connection(
         &self,
         agent_id: &str,
         generation: u64,
+        accepted_endpoints: &[String],
     ) -> Result<(), AgentError> {
-        self.connections.activate(agent_id, generation).await
+        self.connections
+            .activate(agent_id, generation, accepted_endpoints)
+            .await
     }
 
     pub fn register_agent_link(
         &self,
         registration: AgentRegistration,
         generation: u64,
-    ) -> Result<(), AgentError> {
+    ) -> Result<EndpointReview, AgentError> {
         let authorization = self
             .authorizations
             .get(&registration.agent_id)
@@ -693,14 +875,21 @@ impl HostSide {
         if registration.principal_id != registration.agent_id {
             return Err(AgentError::NotAuthorized);
         }
-        self.agents.register_link(registration, generation, authorization)
+        self.agents
+            .register_link(registration, generation, authorization)
     }
 
     pub fn heartbeat_agent(&self, agent_id: &str, generation: u64) -> Result<u64, AgentError> {
         self.agents.heartbeat_generation(agent_id, generation)
     }
-    pub fn agent_heartbeat_expired(&self, agent_id: &str, generation: u64, max_age_ms: u64) -> bool {
-        self.agents.heartbeat_expired(agent_id, generation, max_age_ms)
+    pub fn agent_heartbeat_expired(
+        &self,
+        agent_id: &str,
+        generation: u64,
+        max_age_ms: u64,
+    ) -> bool {
+        self.agents
+            .heartbeat_expired(agent_id, generation, max_age_ms)
     }
 
     pub fn disconnect_agent(&self, agent_id: &str, generation: u64) {

@@ -19,6 +19,7 @@ fn kind(message: &conex_proto::Message) -> &'static str {
         Some(conex_proto::message::Body::Success(_)) => "success",
         Some(conex_proto::message::Body::Failure(_)) => "failure",
         Some(conex_proto::message::Body::Notification(_)) => "notification",
+        Some(conex_proto::message::Body::DataChunk(_)) => "data_chunk",
         None => "none",
     }
 }

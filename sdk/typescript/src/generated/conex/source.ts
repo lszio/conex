@@ -6,19 +6,66 @@
 
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
+import { BlobRef } from "./chunking";
 
 export const protobufPackage = "conex";
 
 /**
  * P0 只读 source 方法。ResourceId 是 UTF-8、斜杠分段、无空段/./../NUL/反斜杠的
  * 相对资源名；根目录用空字符串，仅允许出现在 list/search 的 root。
+ * M0 元数据规则（docs/contracts/connected-landing.md §8）：
+ * - title 是文件名（basename），不是路径；resource_id 才是定位。
+ * - mime 未知时必须填 application/octet-stream；MIME 不等于允许执行内容。
+ * - size_bytes / 长度一律十进制字符串，避免 JS Number 丢精度。
+ * - revision 是不透明定位令牌，只做等值比较；provider 无法提供时缺省。
+ * - kind 描述目录项类型；本轮 list 只产出常规文件。
  */
+export enum EntryKind {
+  ENTRY_KIND_UNSPECIFIED = 0,
+  ENTRY_KIND_FILE = 1,
+  ENTRY_KIND_DIRECTORY = 2,
+  UNRECOGNIZED = -1,
+}
+
+export function entryKindFromJSON(object: any): EntryKind {
+  switch (object) {
+    case 0:
+    case "ENTRY_KIND_UNSPECIFIED":
+      return EntryKind.ENTRY_KIND_UNSPECIFIED;
+    case 1:
+    case "ENTRY_KIND_FILE":
+      return EntryKind.ENTRY_KIND_FILE;
+    case 2:
+    case "ENTRY_KIND_DIRECTORY":
+      return EntryKind.ENTRY_KIND_DIRECTORY;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return EntryKind.UNRECOGNIZED;
+  }
+}
+
+export function entryKindToJSON(object: EntryKind): string {
+  switch (object) {
+    case EntryKind.ENTRY_KIND_UNSPECIFIED:
+      return "ENTRY_KIND_UNSPECIFIED";
+    case EntryKind.ENTRY_KIND_FILE:
+      return "ENTRY_KIND_FILE";
+    case EntryKind.ENTRY_KIND_DIRECTORY:
+      return "ENTRY_KIND_DIRECTORY";
+    case EntryKind.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
 export interface ResourceSummary {
   resourceId?: string | undefined;
   title?: string | undefined;
   mime?: string | undefined;
   sizeBytes?: string | undefined;
   revision?: string | undefined;
+  kind?: EntryKind | undefined;
 }
 
 export interface SourceListRequest {
@@ -36,10 +83,17 @@ export interface SourceReadRequest {
   resourceId?: string | undefined;
 }
 
+/**
+ * M0：读取结果二选一。
+ * - 小型受支持 UTF-8 文本：内联 text（可附已计算 cid）。
+ * - 附件与大文本：content 引用（BlobRef），不读入整文件、不伪造 cid。
+ * text 与 content 互斥；cid 仅在字节已按 CID 格式计算时出现，可变远端文件缺省。
+ */
 export interface SourceReadResponse {
   resource?: ResourceSummary | undefined;
   text?: string | undefined;
   cid?: string | undefined;
+  content?: BlobRef | undefined;
 }
 
 export interface SearchHit {
@@ -60,7 +114,7 @@ export interface SourceSearchResponse {
 }
 
 function createBaseResourceSummary(): ResourceSummary {
-  return { resourceId: "", title: "", mime: "", sizeBytes: undefined, revision: undefined };
+  return { resourceId: "", title: "", mime: "", sizeBytes: undefined, revision: undefined, kind: 0 };
 }
 
 export const ResourceSummary: MessageFns<ResourceSummary> = {
@@ -75,10 +129,13 @@ export const ResourceSummary: MessageFns<ResourceSummary> = {
       writer.uint32(26).string(message.mime);
     }
     if (message.sizeBytes !== undefined) {
-      writer.uint32(32).uint64(message.sizeBytes);
+      writer.uint32(34).string(message.sizeBytes);
     }
     if (message.revision !== undefined) {
       writer.uint32(42).string(message.revision);
+    }
+    if (message.kind !== undefined && message.kind !== 0) {
+      writer.uint32(48).int32(message.kind);
     }
     return writer;
   },
@@ -121,11 +178,11 @@ export const ResourceSummary: MessageFns<ResourceSummary> = {
             continue;
           }
           case 4: {
-            if (tag !== 32) {
+            if (tag !== 34) {
               break;
             }
 
-            message.sizeBytes = reader.uint64().toString();
+            message.sizeBytes = reader.string();
             continue;
           }
           case 5: {
@@ -134,6 +191,14 @@ export const ResourceSummary: MessageFns<ResourceSummary> = {
             }
 
             message.revision = reader.string();
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.kind = reader.int32() as any;
             continue;
           }
         }
@@ -163,6 +228,7 @@ export const ResourceSummary: MessageFns<ResourceSummary> = {
         ? globalThis.String(object.size_bytes)
         : undefined,
       revision: isSet(object.revision) ? globalThis.String(object.revision) : undefined,
+      kind: isSet(object.kind) ? entryKindFromJSON(object.kind) : 0,
     };
   },
 
@@ -183,6 +249,9 @@ export const ResourceSummary: MessageFns<ResourceSummary> = {
     if (message.revision !== undefined) {
       obj.revision = message.revision;
     }
+    if (message.kind !== undefined && message.kind !== 0) {
+      obj.kind = entryKindToJSON(message.kind);
+    }
     return obj;
   },
 
@@ -196,6 +265,7 @@ export const ResourceSummary: MessageFns<ResourceSummary> = {
     message.mime = object.mime ?? "";
     message.sizeBytes = object.sizeBytes ?? undefined;
     message.revision = object.revision ?? undefined;
+    message.kind = object.kind ?? 0;
     return message;
   },
 };
@@ -469,7 +539,7 @@ export const SourceReadRequest: MessageFns<SourceReadRequest> = {
 };
 
 function createBaseSourceReadResponse(): SourceReadResponse {
-  return { resource: undefined, text: "", cid: "" };
+  return { resource: undefined, text: undefined, cid: undefined, content: undefined };
 }
 
 export const SourceReadResponse: MessageFns<SourceReadResponse> = {
@@ -477,11 +547,14 @@ export const SourceReadResponse: MessageFns<SourceReadResponse> = {
     if (message.resource !== undefined) {
       ResourceSummary.encode(message.resource, writer.uint32(10).fork()).join();
     }
-    if (message.text !== undefined && message.text !== "") {
+    if (message.text !== undefined) {
       writer.uint32(18).string(message.text);
     }
-    if (message.cid !== undefined && message.cid !== "") {
+    if (message.cid !== undefined) {
       writer.uint32(26).string(message.cid);
+    }
+    if (message.content !== undefined) {
+      BlobRef.encode(message.content, writer.uint32(34).fork()).join();
     }
     return writer;
   },
@@ -523,6 +596,14 @@ export const SourceReadResponse: MessageFns<SourceReadResponse> = {
             message.cid = reader.string();
             continue;
           }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.content = BlobRef.decode(reader, reader.uint32());
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -538,8 +619,9 @@ export const SourceReadResponse: MessageFns<SourceReadResponse> = {
   fromJSON(object: any): SourceReadResponse {
     return {
       resource: isSet(object.resource) ? ResourceSummary.fromJSON(object.resource) : undefined,
-      text: isSet(object.text) ? globalThis.String(object.text) : "",
-      cid: isSet(object.cid) ? globalThis.String(object.cid) : "",
+      text: isSet(object.text) ? globalThis.String(object.text) : undefined,
+      cid: isSet(object.cid) ? globalThis.String(object.cid) : undefined,
+      content: isSet(object.content) ? BlobRef.fromJSON(object.content) : undefined,
     };
   },
 
@@ -548,11 +630,14 @@ export const SourceReadResponse: MessageFns<SourceReadResponse> = {
     if (message.resource !== undefined) {
       obj.resource = ResourceSummary.toJSON(message.resource);
     }
-    if (message.text !== undefined && message.text !== "") {
+    if (message.text !== undefined) {
       obj.text = message.text;
     }
-    if (message.cid !== undefined && message.cid !== "") {
+    if (message.cid !== undefined) {
       obj.cid = message.cid;
+    }
+    if (message.content !== undefined) {
+      obj.content = BlobRef.toJSON(message.content);
     }
     return obj;
   },
@@ -565,8 +650,11 @@ export const SourceReadResponse: MessageFns<SourceReadResponse> = {
     message.resource = (object.resource !== undefined && object.resource !== null)
       ? ResourceSummary.fromPartial(object.resource)
       : undefined;
-    message.text = object.text ?? "";
-    message.cid = object.cid ?? "";
+    message.text = object.text ?? undefined;
+    message.cid = object.cid ?? undefined;
+    message.content = (object.content !== undefined && object.content !== null)
+      ? BlobRef.fromPartial(object.content)
+      : undefined;
     return message;
   },
 };

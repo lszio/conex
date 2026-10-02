@@ -65,7 +65,10 @@ fn invalid_token_role_is_rejected() {
 
 #[test]
 fn duplicate_agent_id_is_rejected() {
-    let body = format!("{}\n[[agents]]\nid = \"agent-a\"\ntenant_id = \"tenant-a\"\n", base());
+    let body = format!(
+        "{}\n[[agents]]\nid = \"agent-a\"\ntenant_id = \"tenant-a\"\n",
+        base()
+    );
     let (_dir, path) = write_config(&body);
     let error = HostConfig::load(&path).expect_err("duplicate agent must fail");
     assert!(error.message().contains("duplicate agent"));
@@ -78,7 +81,10 @@ fn remote_endpoint_requires_supported_method_and_authorized_agent() {
     let error = HostConfig::load(&path).expect_err("source/write must fail");
     assert!(error.message().contains("unsupported remote method"));
 
-    let cross_tenant = base().replace("tenant_id = \"tenant-a\"\ncredential_name", "tenant_id = \"tenant-b\"\ncredential_name");
+    let cross_tenant = base().replace(
+        "tenant_id = \"tenant-a\"\ncredential_name",
+        "tenant_id = \"tenant-b\"\ncredential_name",
+    );
     let (_dir, path) = write_config(&cross_tenant);
     let error = HostConfig::load(&path).expect_err("cross-tenant binding must fail");
     assert!(error.message().contains("tenant"));
@@ -108,7 +114,6 @@ fn policy_must_reference_a_known_endpoint() {
     assert!(error.message().contains("unknown endpoint"));
 }
 
-
 #[test]
 fn preauthorized_agent_requires_credentials_and_matching_agent_token() {
     let token = r#"[[tokens]]
@@ -122,10 +127,45 @@ role = "agent"
     let error = HostConfig::load(&path).expect_err("agent token is required");
     assert!(error.message().contains("matching role=agent token"));
 
-    let (_dir, path) = write_config(&base().replace("credential_backend = \"env:CONEX_AGENT_A_TOKEN\"\n", ""));
+    let (_dir, path) =
+        write_config(&base().replace("credential_backend = \"env:CONEX_AGENT_A_TOKEN\"\n", ""));
     let error = HostConfig::load(&path).expect_err("agent credential backend is required");
     assert!(error.message().contains("credential_backend"));
 }
+#[test]
+fn web_guest_config_validates_identity_and_tenant_coherence() {
+    // A coherent guest section parses and carries the configured identity.
+    let ok = format!(
+        "{}\n[web_guest]\nprincipal_id = \"visitor\"\ntenant_id = \"tenant-a\"\nmax_sessions = 16\nidle_ttl_ms = 300000\nmax_issue_per_minute = 30\n\n[[policy]]\nprincipal_id = \"visitor\"\ntenant_id = \"tenant-a\"\nendpoint_id = \"notes-remote\"\nactions = [\"read\"]\n",
+        base()
+    );
+    let (_dir, path) = write_config(&ok);
+    let config = HostConfig::load(&path).expect("coherent guest config parses");
+    let guest = config.web_guest.as_ref().expect("guest section");
+    assert_eq!(guest.principal_id, "visitor");
+    assert_eq!(guest.tenant_id, "tenant-a");
+    assert_eq!(guest.max_sessions, 16);
+
+    // Guest tenant contradicting a policy entry for the same principal is
+    // rejected at load (plan M1.1): the policy still binds tenant-a.
+    let contradictory = ok.replace(
+        "principal_id = \"visitor\"\ntenant_id = \"tenant-a\"\nmax_sessions",
+        "principal_id = \"visitor\"\ntenant_id = \"tenant-b\"\nmax_sessions",
+    );
+    let (_dir, path) = write_config(&contradictory);
+    let error = HostConfig::load(&path).expect_err("guest tenant contradiction must fail");
+    assert!(error.message().contains("contradicts policy tenant"));
+
+    // The anonymous principal must not collide with a token principal.
+    let colliding = format!(
+        "{}\n[web_guest]\nprincipal_id = \"alice\"\ntenant_id = \"tenant-a\"\n",
+        base()
+    );
+    let (_dir, path) = write_config(&colliding);
+    let error = HostConfig::load(&path).expect_err("guest principal collision must fail");
+    assert!(error.message().contains("must not collide"));
+}
+
 #[test]
 fn web_origin_must_be_a_bare_origin_without_userinfo_path_query_or_slash() {
     for invalid in [
@@ -138,6 +178,9 @@ fn web_origin_must_be_a_bare_origin_without_userinfo_path_query_or_slash() {
         let body = base().replace("http://127.0.0.1:8787", invalid);
         let (_dir, path) = write_config(&body);
         let error = HostConfig::load(&path).expect_err("invalid web origin must fail");
-        assert!(error.message().contains("web_origin"), "{invalid}: {error:?}");
+        assert!(
+            error.message().contains("web_origin"),
+            "{invalid}: {error:?}"
+        );
     }
 }

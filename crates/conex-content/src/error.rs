@@ -48,6 +48,12 @@ pub enum ContentError {
     UnknownBlock(String),
     #[error("capability path traversal blocked: {0}")]
     PathTraversal(String),
+    #[error("content is owned by another principal")]
+    Forbidden,
+    #[error("payload exceeds limit: {actual} > {limit}")]
+    TooLarge { limit: u64, actual: u64 },
+    #[error("declared size {declared} != committed {actual}")]
+    DeclaredSizeMismatch { declared: u64, actual: u64 },
 }
 
 impl ContentError {
@@ -68,6 +74,9 @@ impl ContentError {
             ContentError::UnknownUpload(_)
             | ContentError::UnknownBlock(_)
             | ContentError::UnknownPin(_) => ErrorCode::UnknownProvider as i32,
+            ContentError::Forbidden => ErrorCode::Forbidden as i32,
+            ContentError::TooLarge { .. } => ErrorCode::PayloadTooLarge as i32,
+            ContentError::DeclaredSizeMismatch { .. } => ErrorCode::BadBlob as i32,
             ContentError::UploadExpired => ErrorCode::Timeout as i32,
             ContentError::UnsupportedPersistence(_) => ErrorCode::Unavailable as i32,
             ContentError::Io(_) | ContentError::Json(_) => ErrorCode::Internal as i32,

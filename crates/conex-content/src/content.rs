@@ -36,7 +36,9 @@ impl ContentStore {
         &self.inner
     }
 
-    /// Begin a new upload; the returned `Upload` handles the rest.
+    /// Begin a new upload; the returned `Upload` handles the rest. The caller
+    /// identity comes from the authenticated broker context, never the wire.
+    #[allow(clippy::too_many_arguments)]
     pub fn begin_upload(
         &self,
         format_version: u32,
@@ -45,12 +47,16 @@ impl ContentStore {
         declared_root_kind: &str,
         declared_root_cid: &str,
         lease_ms: Option<u64>,
+        owner: crate::receipt::Owner,
+        resource_id: &str,
     ) -> Result<Upload, ContentError> {
         let lease_ms = lease_ms.unwrap_or(self.default_lease_ms);
         // Resume an active staging upload with the same content identity so a
         // reconnecting consumer continues from its received chunks instead of
         // restarting (design §5.5; wire: blob/put returns alreadyHaveChunkCids).
+        // Resume-by-root never crosses owners (plan M1.2).
         if let Some(existing) = self.inner.find_active_upload_by_root(
+            &owner,
             format_version,
             chunk_size,
             declared_size_bytes,
@@ -70,6 +76,8 @@ impl ContentStore {
             declared_root_kind.to_string(),
             declared_root_cid.to_string(),
             lease_ms,
+            owner,
+            resource_id.to_string(),
         );
         self.inner.record_upload(state.clone())?;
         Ok(Upload {
@@ -78,15 +86,32 @@ impl ContentStore {
         })
     }
 
-    pub fn resume_upload(&self, upload_id: &str) -> Result<Upload, ContentError> {
+    /// Resume by upload id; the stored owner must match the caller. Unbound
+    /// (pre-M1.2) staging is never claimed (plan M1.2).
+    pub fn resume_upload(
+        &self,
+        upload_id: &str,
+        owner: &crate::receipt::Owner,
+    ) -> Result<Upload, ContentError> {
         let state = self.inner.get_upload(upload_id)?;
+        if state.owner.as_ref() != Some(owner) {
+            return Err(ContentError::Forbidden);
+        }
         Ok(Upload {
             store: self.inner.clone(),
             state,
         })
     }
 
-    pub fn cancel_upload(&self, upload_id: &str) -> Result<(), ContentError> {
+    pub fn cancel_upload(
+        &self,
+        upload_id: &str,
+        owner: &crate::receipt::Owner,
+    ) -> Result<(), ContentError> {
+        let state = self.inner.get_upload(upload_id)?;
+        if state.owner.as_ref() != Some(owner) {
+            return Err(ContentError::Forbidden);
+        }
         let path = self
             .inner
             .content_root()
@@ -108,8 +133,12 @@ impl ContentStore {
         upload_id: &str,
         declared_root_cid: &str,
         declared_root_kind: &str,
+        owner: &crate::receipt::Owner,
     ) -> Result<CommitRecord, ContentError> {
         let upload = self.inner.get_upload(upload_id)?;
+        if upload.owner.as_ref() != Some(owner) {
+            return Err(ContentError::Forbidden);
+        }
         if upload.declared_root_cid != declared_root_cid
             || upload.declared_root_kind != declared_root_kind
         {
@@ -126,28 +155,48 @@ impl ContentStore {
         root_cid: &str,
         pin_id: &str,
         expires_at_ms: u64,
+        owner: &crate::receipt::Owner,
     ) -> Result<PinRecord, ContentError> {
-        self.inner.pin(root_cid, pin_id, expires_at_ms)
+        self.inner.pin(root_cid, pin_id, expires_at_ms, owner)
     }
 
-    pub fn unpin(&self, pin_id: &str) -> Result<(), ContentError> {
-        self.inner.unpin(pin_id)
+    pub fn unpin(&self, pin_id: &str, owner: &crate::receipt::Owner) -> Result<(), ContentError> {
+        self.inner.unpin(pin_id, owner)
     }
 
     pub fn has_block(&self, cid: &str) -> Result<bool, ContentError> {
         self.inner.has_block(cid)
     }
 
-    pub fn has(&self, cids: &[String]) -> Result<Vec<bool>, ContentError> {
-        cids.iter().map(|c| self.inner.has_block(c)).collect()
+    /// `blob/have`: presence is only reported for the caller's own content;
+    /// foreign CIDs read as absent so nothing leaks (plan M1.2).
+    pub fn has(
+        &self,
+        cids: &[String],
+        owner: &crate::receipt::Owner,
+    ) -> Result<Vec<bool>, ContentError> {
+        cids.iter()
+            .map(
+                |cid| Ok(self.inner.has_block(cid)? && self.inner.chunk_known_to_owner(cid, owner)),
+            )
+            .collect()
     }
 
-    pub fn get(&self, cid: &str) -> Result<Bytes, ContentError> {
+    /// `blob/get`: a bare valid CID is not a credential — the chunk must sit
+    /// in the reachable set of a root this caller owns (plan M1.2).
+    pub fn get(&self, cid: &str, owner: &crate::receipt::Owner) -> Result<Bytes, ContentError> {
+        if !self.inner.chunk_owned_by(cid, owner) {
+            return Err(ContentError::Forbidden);
+        }
         self.inner.read_block(cid)
     }
 
     pub fn collect_garbage(&self) -> Result<usize, ContentError> {
         self.inner.collect_garbage()
+    }
+
+    pub fn purge_expired_uploads(&self) -> usize {
+        self.inner.purge_expired_uploads()
     }
 
     pub fn has_commit(&self, root_cid: &str) -> bool {
@@ -188,7 +237,7 @@ impl Upload {
         let computed = conex_proto::cid::cid_for_raw(bytes);
         self.store.put_block(&computed, bytes)?;
         self.store
-            .record_chunk(&self.state.upload_id, index, &computed)?;
+            .record_chunk(&self.state.upload_id, index, &computed, bytes.len())?;
         Ok(computed)
     }
 

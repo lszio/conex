@@ -21,8 +21,8 @@ use conex_core::session::{RecoveryLevel, SessionBinding, SessionError, SessionSt
 use conex_core::{
     CallError, CallResult, Caller, Host as CoreHost, MethodContract, PreparedInput, ResourceClaim,
 };
-use conex_proto::cid;
 use conex_proto;
+use conex_proto::cid;
 
 #[derive(Debug, Clone)]
 pub struct BrokerCall {
@@ -32,6 +32,9 @@ pub struct BrokerCall {
     pub input: Value,
     pub deadline: Instant,
     pub role: String,
+    /// Web session link of the caller when the transport knows it; lets
+    /// `connection/list` isolate anonymous visitors (plan M1.1).
+    pub link_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -64,6 +67,12 @@ pub struct BrokerDeps {
     /// Expected `hostOrigin` string that `agent/register` must advertise.
     /// Required when `agents` is set.
     pub host_origin: Option<String>,
+    /// Anonymous visitor principal (plan M1.1); `connection/list` isolates
+    /// these callers to their own browser link and hides agent declarations.
+    pub guest_principal: Option<String>,
+    /// M3: reverse-agent links used to fetch remote content slices after the
+    /// policy-authorized probe.
+    pub remote: Option<Arc<crate::remote::RemoteConnections>>,
 }
 
 pub struct Broker {
@@ -90,10 +99,7 @@ impl Broker {
     }
 
     pub fn attach_ui_links(&self, registry: Arc<crate::ui_links::UiLinkRegistry>) {
-        *self
-            .ui_links
-            .lock()
-            .expect("broker ui_links slot poisoned") = Some(registry);
+        *self.ui_links.lock().expect("broker ui_links slot poisoned") = Some(registry);
     }
 
     fn ui_links(&self) -> Option<Arc<crate::ui_links::UiLinkRegistry>> {
@@ -171,17 +177,21 @@ impl Broker {
         // bound to the bearer's tenant. `ResourceClaim` does not carry a
         // tenant, so the comparison is `caller.tenant_id` only.
         let _ = claim;
+        let owner = conex_content::Owner {
+            principal_id: call.caller.principal_id.clone(),
+            tenant_id: call.caller.tenant_id.clone(),
+        };
         let content = content.clone();
         let method = call.method.clone();
         let value = match method.as_str() {
-            "blob/put" => blob_put(&content, &canonical).await?,
-            "blob/chunk" => blob_chunk(&content, &canonical).await?,
-            "blob/commit" => blob_commit(&content, &canonical).await?,
-            "blob/pin" => blob_pin(&content, &canonical).await?,
-            "blob/unpin" => blob_unpin(&content, &canonical).await?,
-            "blob/have" => blob_have(&content, &canonical).await?,
-            "blob/get" => blob_get(&content, &canonical).await?,
-            "blob/cancel" => blob_cancel(&content, &canonical).await?,
+            "blob/put" => blob_put(&content, &canonical, &owner).await?,
+            "blob/chunk" => blob_chunk(&content, &canonical, &owner).await?,
+            "blob/commit" => blob_commit(&content, &canonical, &owner).await?,
+            "blob/pin" => blob_pin(&content, &canonical, &owner).await?,
+            "blob/unpin" => blob_unpin(&content, &canonical, &owner).await?,
+            "blob/have" => blob_have(&content, &canonical, &owner).await?,
+            "blob/get" => blob_get(self, &content, &canonical, &owner, &call.caller).await?,
+            "blob/cancel" => blob_cancel(&content, &canonical, &owner).await?,
             other => {
                 return Err(CallError::new(
                     conex_proto::ErrorCode::UnknownMethod,
@@ -253,6 +263,89 @@ impl Broker {
         Ok(value)
     }
 
+    /// M3: fetch one bounded slice of a resource with raw bytes.
+    ///
+    /// Authorization is the ordinary source/read path: the same route
+    /// lookup, contract decode, tenant check and policy probe the browser
+    /// WSS/`/rpc` calls use. The URL never becomes a filesystem path here.
+    /// Reverse-agent endpoints stream over the binary link; local endpoints
+    /// read through the provider's [`RangeReader`] with the same revision
+    /// binding, so one `/content` path serves both.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn content_range_bytes(
+        &self,
+        caller: &Caller,
+        endpoint_id: &str,
+        resource_id: &str,
+        revision: Option<&str>,
+        offset: u64,
+        length: usize,
+        timeout: std::time::Duration,
+    ) -> CallResult<conex_proto::DataChunk> {
+        // Authorization + resource existence probe: same enforced path as
+        // `source/read` (no second, weaker gate for content).
+        self.host
+            .invoke(
+                caller,
+                endpoint_id,
+                "source/read",
+                json!({ "resourceId": resource_id }),
+                timeout,
+            )
+            .await?;
+        let agent_id = self
+            .deps
+            .catalog
+            .as_ref()
+            .and_then(|catalog| catalog.agent_for_endpoint(endpoint_id));
+        if let (Some(agent_id), Some(connections)) = (agent_id, self.deps.remote.as_ref()) {
+            let mut remote = json!({
+                "endpointId": endpoint_id,
+                "resourceId": resource_id,
+                "offset": offset.to_string(),
+                "length": length.to_string(),
+            });
+            if let Some(revision) = revision {
+                remote["revision"] = json!(revision);
+            }
+            let input = json!({ "remote": remote });
+            return connections
+                .request_chunk(
+                    &agent_id,
+                    endpoint_id,
+                    caller,
+                    input,
+                    tokio::time::Instant::now() + timeout,
+                )
+                .await;
+        }
+        // Local endpoint: read the bounded slice through the provider.
+        let claim = conex_source::resource::read_claim(resource_id)?;
+        let ctx = conex_core::CallContext {
+            caller: caller.clone(),
+            endpoint_id: endpoint_id.to_string(),
+            plane: conex_proto::Plane::Broker,
+            method: "source/read".to_string(),
+            claim,
+            policy_version: 0,
+            deadline: tokio::time::Instant::now() + timeout,
+        };
+        let reader = self
+            .host
+            .registry()
+            .routes_for_endpoint(endpoint_id)
+            .into_iter()
+            .find_map(|route| route.range_reader.clone())
+            .ok_or_else(|| unavailable("endpoint cannot serve byte ranges"))?;
+        let (bytes, revision, eof) = reader.read_range(&ctx, offset, length, revision).await?;
+        Ok(conex_proto::DataChunk {
+            request_id: String::new(),
+            chunk: bytes.into(),
+            revision,
+            eof,
+        })
+    }
+
     async fn dispatch_connection_list(&self, call: &BrokerCall) -> CallResult<Value> {
         if call.role != "ui" {
             return Err(CallError::new(
@@ -262,23 +355,33 @@ impl Broker {
         }
         let _ = object(&call.input)?;
         let principal_id = call.caller.principal_id.clone();
-        let browser_links = self
+        let is_guest = self.deps.guest_principal.as_deref() == Some(principal_id.as_str());
+        let mut browser_links: Vec<Value> = self
             .ui_links()
             .ok_or_else(|| unavailable("ui link registry is not configured"))?
             .list_for_principal(Some(&principal_id))
             .into_iter()
             .map(ui_link_to_json)
             .collect::<Vec<_>>();
+        // Anonymous visitors share one principal: each sees only its own
+        // session activity, never another visitor's (plan M1.1).
+        if is_guest {
+            browser_links
+                .retain(|row| call.link_id.as_deref() == row.get("linkId").and_then(Value::as_str));
+            return Ok(json!({
+                "browserLinks": browser_links,
+                // Agent resource declarations are management data; guests
+                // already see tenant-filtered endpoint state via endpoint/list.
+                "agentLinks": [],
+            }));
+        }
         let agent_links = self
             .deps
             .agents
             .as_ref()
             .map(|agents| {
-                let mut rows: Vec<Value> = agents
-                    .list()
-                    .into_iter()
-                    .map(agent_link_to_json)
-                    .collect();
+                let mut rows: Vec<Value> =
+                    agents.list().into_iter().map(agent_link_to_json).collect();
                 rows.sort_by(|a, b| {
                     a.get("agentId")
                         .and_then(Value::as_str)
@@ -373,7 +476,11 @@ fn expect_cid(value: &str) -> CallResult<()> {
 
 // -------------------- blob handlers --------------------
 
-async fn blob_put(store: &ContentStore, input: &Value) -> CallResult<Value> {
+async fn blob_put(
+    store: &ContentStore,
+    input: &Value,
+    owner: &conex_content::Owner,
+) -> CallResult<Value> {
     let map = object(input)?;
     let format_version = require_u64(map, "formatVersion")? as u32;
     if format_version != 1 {
@@ -383,19 +490,36 @@ async fn blob_put(store: &ContentStore, input: &Value) -> CallResult<Value> {
         ));
     }
     let declared_size_bytes = require_u64(map, "declaredSizeBytes")?;
+    const MAX_BLOB_BYTES: u64 = 1_073_741_824;
+    if declared_size_bytes > MAX_BLOB_BYTES {
+        return Err(content_to_call(conex_content::ContentError::TooLarge {
+            limit: MAX_BLOB_BYTES,
+            actual: declared_size_bytes,
+        }));
+    }
     let declared_chunk_size = require_u64(map, "declaredChunkSize")? as u32;
-    if declared_chunk_size == 0 {
-        return Err(bad_req("declaredChunkSize must be > 0"));
+    if declared_chunk_size != conex_proto::cid::CHUNK_SIZE as u32 {
+        return Err(bad_req(&format!(
+            "declaredChunkSize must be {}",
+            conex_proto::cid::CHUNK_SIZE
+        )));
+    }
+    const MAX_LEASE_MS: u64 = 24 * 60 * 60 * 1000;
+    let requested_lease_ms = map
+        .get("requestedLeaseMs")
+        .and_then(Value::as_str)
+        .and_then(|raw| raw.parse::<u64>().ok());
+    if requested_lease_ms.is_some_and(|lease| lease > MAX_LEASE_MS) {
+        return Err(bad_req("requestedLeaseMs must not exceed 24h"));
     }
     let expected_root = require_string(map, "expectedRootCid")?.to_string();
     expect_cid(&expected_root)?;
     let access = object(map.get("access").ok_or_else(|| missing("access"))?)?;
     let resource_id = require_string(access, "resourceId")?.to_string();
     expect_resource_id("resourceId", &resource_id)?;
-    let requested_lease_ms = map
-        .get("requestedLeaseMs")
-        .and_then(Value::as_str)
-        .and_then(|raw| raw.parse::<u64>().ok());
+    // Opportunistic staging reaping; expired pre-M1.2 unbound staging is
+    // never claimed, just dropped (plan M1.2).
+    store.purge_expired_uploads();
     let upload = store
         .begin_upload(
             format_version,
@@ -404,6 +528,8 @@ async fn blob_put(store: &ContentStore, input: &Value) -> CallResult<Value> {
             root_kind_for(&expected_root, declared_size_bytes, declared_chunk_size),
             &expected_root,
             requested_lease_ms,
+            owner.clone(),
+            &resource_id,
         )
         .map_err(content_to_call)?;
     // On resume the upload carries the chunks already received; report them
@@ -425,7 +551,11 @@ async fn blob_put(store: &ContentStore, input: &Value) -> CallResult<Value> {
     }))
 }
 
-async fn blob_chunk(store: &ContentStore, input: &Value) -> CallResult<Value> {
+async fn blob_chunk(
+    store: &ContentStore,
+    input: &Value,
+    owner: &conex_content::Owner,
+) -> CallResult<Value> {
     let map = object(input)?;
     let upload_id = require_string(map, "uploadId")?.to_string();
     let chunk_index = require_u64(map, "chunkIndex")? as u32;
@@ -460,7 +590,9 @@ async fn blob_chunk(store: &ContentStore, input: &Value) -> CallResult<Value> {
             format!("chunk cid mismatch: declared {chunk_cid}, recomputed {recomputed}"),
         ));
     }
-    let upload = store.resume_upload(&upload_id).map_err(content_to_call)?;
+    let upload = store
+        .resume_upload(&upload_id, owner)
+        .map_err(content_to_call)?;
     upload
         .put_chunk(chunk_index, &bytes)
         .map_err(content_to_call)?;
@@ -471,7 +603,11 @@ async fn blob_chunk(store: &ContentStore, input: &Value) -> CallResult<Value> {
     }))
 }
 
-async fn blob_commit(store: &ContentStore, input: &Value) -> CallResult<Value> {
+async fn blob_commit(
+    store: &ContentStore,
+    input: &Value,
+    owner: &conex_content::Owner,
+) -> CallResult<Value> {
     let map = object(input)?;
     let upload_id = require_string(map, "uploadId")?.to_string();
     let declared_root = require_string(map, "declaredRootCid")?.to_string();
@@ -483,15 +619,15 @@ async fn blob_commit(store: &ContentStore, input: &Value) -> CallResult<Value> {
             format!("persistence {persistence} not supported by local broker"),
         ));
     }
+    // The root kind was recorded at blob/put; deriving it from the upload
+    // (owner-verified) instead of guessing avoids rejecting raw commits whose
+    // first probe mismatches on kind.
+    let upload = store
+        .resume_upload(&upload_id, owner)
+        .map_err(content_to_call)?;
+    let kind = upload.state().declared_root_kind.clone();
     let commit = store
-        .commit(&upload_id, &declared_root, "manifest")
-        .or_else(|error| {
-            if let conex_content::ContentError::UnsupportedRootKind(_) = error {
-                store.commit(&upload_id, &declared_root, "raw")
-            } else {
-                Err(error)
-            }
-        })
+        .commit(&upload_id, &declared_root, &kind, owner)
         .map_err(content_to_call)?;
     Ok(json!({
         "resourceRootCid": commit.root_cid,
@@ -501,7 +637,11 @@ async fn blob_commit(store: &ContentStore, input: &Value) -> CallResult<Value> {
     }))
 }
 
-async fn blob_pin(store: &ContentStore, input: &Value) -> CallResult<Value> {
+async fn blob_pin(
+    store: &ContentStore,
+    input: &Value,
+    owner: &conex_content::Owner,
+) -> CallResult<Value> {
     let map = object(input)?;
     let root = require_string(map, "rootCid")?.to_string();
     expect_cid(&root)?;
@@ -511,7 +651,7 @@ async fn blob_pin(store: &ContentStore, input: &Value) -> CallResult<Value> {
         .and_then(|raw| raw.parse::<u64>().ok())
         .unwrap_or_else(now_ms);
     let pin = store
-        .pin(&root, &format!("pin-{root}"), expires_at_ms)
+        .pin(&root, &format!("pin-{root}"), expires_at_ms, owner)
         .map_err(content_to_call)?;
     Ok(json!({
         "pinId": pin.pin_id,
@@ -519,14 +659,22 @@ async fn blob_pin(store: &ContentStore, input: &Value) -> CallResult<Value> {
     }))
 }
 
-async fn blob_unpin(store: &ContentStore, input: &Value) -> CallResult<Value> {
+async fn blob_unpin(
+    store: &ContentStore,
+    input: &Value,
+    owner: &conex_content::Owner,
+) -> CallResult<Value> {
     let map = object(input)?;
     let pin_id = require_string(map, "pinId")?.to_string();
-    store.unpin(&pin_id).map_err(content_to_call)?;
+    store.unpin(&pin_id, owner).map_err(content_to_call)?;
     Ok(json!({}))
 }
 
-async fn blob_have(store: &ContentStore, input: &Value) -> CallResult<Value> {
+async fn blob_have(
+    store: &ContentStore,
+    input: &Value,
+    owner: &conex_content::Owner,
+) -> CallResult<Value> {
     let map = object(input)?;
     let cids = map
         .get("chunkCids")
@@ -541,26 +689,81 @@ async fn blob_have(store: &ContentStore, input: &Value) -> CallResult<Value> {
                 .ok_or_else(|| bad_req("chunkCids must be strings"))
         })
         .collect::<CallResult<Vec<_>>>()?;
-    let present = store.has(&owned).map_err(content_to_call)?;
+    let present = store.has(&owned, owner).map_err(content_to_call)?;
     Ok(json!({ "present": present }))
 }
 
-async fn blob_get(store: &ContentStore, input: &Value) -> CallResult<Value> {
+async fn blob_get(
+    broker: &Broker,
+    store: &ContentStore,
+    input: &Value,
+    owner: &conex_content::Owner,
+    caller: &Caller,
+) -> CallResult<Value> {
     let map = object(input)?;
-    let chunk_cid = require_string(map, "chunkCid")?.to_string();
-    expect_cid(&chunk_cid)?;
-    let bytes = store.get(&chunk_cid).map_err(content_to_call)?;
-    let encoded = base64::engine::general_purpose::STANDARD.encode(bytes.as_ref());
-    Ok(json!({
-        "chunkBytes": encoded,
-        "chunkCid": chunk_cid,
-    }))
+    let committed = map.get("committed");
+    let remote_target = map.get("remote");
+    match (committed, remote_target) {
+        (Some(target), None) => {
+            let target = object(target)?;
+            let chunk_cid = require_string(target, "chunkCid")?.to_string();
+            expect_cid(&chunk_cid)?;
+            let bytes = store.get(&chunk_cid, owner).map_err(content_to_call)?;
+            let encoded = base64::engine::general_purpose::STANDARD.encode(bytes.as_ref());
+            Ok(json!({
+                "chunkBytes": encoded,
+                "chunkCid": chunk_cid,
+            }))
+        }
+        // M3: remote target fetches one bounded slice through the same
+        // authorized path `/content` uses. The JSON plane reply carries
+        // base64 because JSON has no native bytes; `/content` streams the
+        // raw bytes straight off the binary link.
+        (None, Some(target)) => {
+            let target = object(target)?;
+            let endpoint_id = require_string(target, "endpointId")?.to_string();
+            let resource_id = require_string(target, "resourceId")?.to_string();
+            let revision = target
+                .get("revision")
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            let offset: u64 = require_u64(target, "offset")?;
+            let length: u64 = require_u64(target, "length")?;
+            let chunk = broker
+                .content_range_bytes(
+                    caller,
+                    &endpoint_id,
+                    &resource_id,
+                    revision.as_deref(),
+                    offset,
+                    length.min(conex_proto::cid::CHUNK_SIZE as u64) as usize,
+                    std::time::Duration::from_secs(30),
+                )
+                .await?;
+            let encoded = base64::engine::general_purpose::STANDARD.encode(chunk.chunk.as_ref());
+            Ok(json!({
+                "chunkBytes": encoded,
+                "revision": chunk.revision,
+                "eof": chunk.eof,
+            }))
+        }
+        _ => Err(CallError::new(
+            conex_proto::ErrorCode::Internal,
+            "blob/get reached handler without a contract-valid target",
+        )),
+    }
 }
 
-async fn blob_cancel(store: &ContentStore, input: &Value) -> CallResult<Value> {
+async fn blob_cancel(
+    store: &ContentStore,
+    input: &Value,
+    owner: &conex_content::Owner,
+) -> CallResult<Value> {
     let map = object(input)?;
     let upload_id = require_string(map, "uploadId")?.to_string();
-    store.cancel_upload(&upload_id).map_err(content_to_call)?;
+    store
+        .cancel_upload(&upload_id, owner)
+        .map_err(content_to_call)?;
     Ok(json!({}))
 }
 
@@ -831,6 +1034,9 @@ fn error_code_for_content(code: i32) -> conex_proto::ErrorCode {
         c if c == E::Timeout as i32 => E::Timeout,
         c if c == E::Unavailable as i32 => E::Unavailable,
         c if c == E::BadRequest as i32 => E::BadRequest,
+        c if c == E::Forbidden as i32 => E::Forbidden,
+        c if c == E::PayloadTooLarge as i32 => E::PayloadTooLarge,
+        c if c == E::UnknownProvider as i32 => E::UnknownProvider,
         c if c == E::Internal as i32 => E::Internal,
         _ => E::Internal,
     }
@@ -890,8 +1096,13 @@ fn agent_link_to_json(agent: crate::agent::AgentRegistration) -> Value {
         "tenantId": agent.tenant_id,
         "registeredAtMs": agent.registered_at_ms.to_string(),
         "lastHeartbeatAtMs": agent.last_heartbeat_at_ms.to_string(),
-        "methods": agent.methods,
-        "resources": agent.resources,
+        "methods": agent.methods(),
+        "resources": agent.resources(),
+        "endpoints": agent.endpoints.iter().map(|endpoint| json!({
+            "endpointId": endpoint.endpoint_id,
+            "root": endpoint.root,
+            "methods": endpoint.methods,
+        })).collect::<Vec<_>>(),
     })
 }
 

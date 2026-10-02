@@ -15,7 +15,6 @@ use serde::Deserialize;
 use serde::de::{self, MapAccess, Visitor};
 use serde_json::{Map, Value};
 
-
 const EXECUTION_VALUES: [&str; 3] = ["not_started", "completed", "unknown"];
 const RETRY_VALUES: [&str; 3] = ["never", "safe", "with_operation_id"];
 
@@ -264,6 +263,14 @@ pub fn encode_wire(message: &crate::Message) -> Result<Vec<u8>, ProtocolError> {
             out.insert("method".into(), Value::String(n.method.clone()));
             out.insert("params".into(), call_params_to_json(n.params.as_ref())?);
         }
+        crate::message::Body::DataChunk(_) => {
+            // JSON Profile 不承载数据帧（与 validate 对称）；字节走
+            // protobuf 二进制 Profile。
+            return Err(ProtocolError::bad_request(
+                None,
+                "data chunks require the protobuf profile",
+            ));
+        }
     }
     serde_json::to_vec(&Value::Object(out)).map_err(|e| {
         ProtocolError::new(
@@ -339,6 +346,13 @@ pub fn validate_message(message: &crate::Message) -> Result<(), ProtocolError> {
                 .ok_or_else(|| ProtocolError::bad_request(None, "notification requires params"))?;
             validate_params(params, None)?;
         }
+        crate::message::Body::DataChunk(_) => {
+            // JSON Profile 不承载数据帧；字节走 protobuf 二进制 Profile。
+            return Err(ProtocolError::bad_request(
+                None,
+                "data chunks require the protobuf profile",
+            ));
+        }
     }
     Ok(())
 }
@@ -385,6 +399,10 @@ struct RawContext {
     plane: String,
     #[serde(rename = "bindingId", default)]
     binding_id: Option<String>,
+    #[serde(rename = "principalId", default)]
+    principal_id: Option<String>,
+    #[serde(rename = "tenantId", default)]
+    tenant_id: Option<String>,
 }
 
 fn parse_call_params(
@@ -416,6 +434,8 @@ fn parse_call_params(
             provider_endpoint_id: raw.context.provider_endpoint_id,
             plane,
             binding_id: raw.context.binding_id,
+            principal_id: raw.context.principal_id.unwrap_or_default(),
+            tenant_id: raw.context.tenant_id.unwrap_or_default(),
         }),
         timeout_budget_ms: raw.timeout_budget_ms,
         input,
@@ -501,6 +521,15 @@ fn call_params_to_json(params: Option<&crate::CallParams>) -> Result<Value, Prot
     );
     if let Some(binding) = &context.binding_id {
         ctx.insert("bindingId".into(), Value::String(binding.clone()));
+    }
+    if !context.principal_id.is_empty() {
+        ctx.insert(
+            "principalId".into(),
+            Value::String(context.principal_id.clone()),
+        );
+    }
+    if !context.tenant_id.is_empty() {
+        ctx.insert("tenantId".into(), Value::String(context.tenant_id.clone()));
     }
     let mut out = Map::new();
     out.insert("context".into(), Value::Object(ctx));

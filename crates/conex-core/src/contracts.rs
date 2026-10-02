@@ -108,13 +108,13 @@ fn content_address(value: &Value) -> CallResult<String> {
 
 fn blob_access(value: &Value) -> CallResult<conex_proto::BlobAccess> {
     let map = object(value)?;
-    known_keys(map, &["providerId", "plane", "spaceId", "resourceId"])?;
-    let provider_id = required_string(map, "providerId")?.to_string();
+    known_keys(map, &["endpointId", "plane", "spaceId", "resourceId"])?;
+    let endpoint_id = required_string(map, "endpointId")?.to_string();
     let plane = required_string(map, "plane")?.to_string();
     let space_id = optional_string(map, "spaceId")?.map(str::to_string);
     let resource_id = required_string(map, "resourceId")?.to_string();
     Ok(conex_proto::BlobAccess {
-        provider_id,
+        endpoint_id,
         plane,
         space_id,
         resource_id,
@@ -292,7 +292,7 @@ pub fn prepare_blob_put(input: &Value) -> CallResult<PreparedInput> {
         "declaredChunkSize": declared_chunk_size.to_string(),
         "expectedRootCid": expected_root_cid,
         "access": {
-            "providerId": access.provider_id,
+            "endpointId": access.endpoint_id,
             "plane": access.plane,
             "spaceId": access.space_id,
             "resourceId": access.resource_id,
@@ -472,39 +472,78 @@ pub fn prepare_blob_have(input: &Value) -> CallResult<PreparedInput> {
 
 pub fn prepare_blob_get(input: &Value) -> CallResult<PreparedInput> {
     let map = object(input)?;
-    known_keys(map, &["chunkCid", "rangeOffset", "rangeLength"])?;
-    let chunk_cid = required_string(map, "chunkCid")?.to_string();
-    cid::parse_cid(&chunk_cid).map_err(|error| bad(error.message))?;
-    let range_offset = map
-        .get("rangeOffset")
-        .and_then(Value::as_str)
-        .map(|raw| {
-            raw.parse::<u64>()
-                .map_err(|_| bad("rangeOffset is not a valid decimal"))
-        })
-        .transpose()?;
-    let range_length = map
-        .get("rangeLength")
-        .and_then(Value::as_str)
-        .map(|raw| {
-            raw.parse::<u64>()
-                .map_err(|_| bad("rangeLength is not a valid decimal"))
-        })
-        .transpose()?;
-    let canonical = json!({
-        "chunkCid": chunk_cid,
-        "rangeOffset": range_offset.map(|n| n.to_string()),
-        "rangeLength": range_length.map(|n| n.to_string()),
-    });
+    known_keys(map, &["committed", "remote"])?;
+    let committed = map.get("committed");
+    let remote = map.get("remote");
+    if committed.is_some() == remote.is_some() {
+        return Err(bad("exactly one of committed or remote is required"));
+    }
+    if let Some(value) = committed {
+        let target = object(value)?;
+        known_keys(target, &["chunkCid"])?;
+        let chunk_cid = required_string(target, "chunkCid")?.to_string();
+        cid::parse_cid(&chunk_cid).map_err(|error| bad(error.message))?;
+        return Ok(PreparedInput {
+            canonical: json!({"committed": {"chunkCid": chunk_cid}}),
+            claim: crate::types::ResourceClaim {
+                resource_id: chunk_cid,
+                action: "blob.get".into(),
+                subtree: false,
+            },
+            binding: crate::types::PrincipalTenant::default(),
+        });
+    }
+    let target = object(remote.expect("exactly-one check above"))?;
+    known_keys(
+        target,
+        &["endpointId", "resourceId", "revision", "offset", "length"],
+    )?;
+    let endpoint_id = required_string(target, "endpointId")?.to_string();
+    if endpoint_id.is_empty() {
+        return Err(bad("endpointId must not be empty"));
+    }
+    let resource_id = required_string(target, "resourceId")?;
+    if resource_id.is_empty() || !crate::policy::is_valid_resource(resource_id) {
+        return Err(bad("invalid resourceId"));
+    }
+    let revision = optional_string(target, "revision")?.map(str::to_string);
+    let offset = decimal_u64(target, "offset")?;
+    let length = decimal_u64(target, "length")?;
+    if length == 0 {
+        return Err(bad("length must be at least 1"));
+    }
+    offset
+        .checked_add(length)
+        .ok_or_else(|| bad("offset+length overflows 64-bit range"))?;
     Ok(PreparedInput {
-        canonical,
+        canonical: json!({
+            "remote": {
+                "endpointId": endpoint_id,
+                "resourceId": resource_id,
+                "revision": revision,
+                "offset": offset.to_string(),
+                "length": length.to_string(),
+            }
+        }),
         claim: crate::types::ResourceClaim {
-            resource_id: chunk_cid.clone(),
-            action: "blob.get".into(),
+            resource_id: resource_id.to_string(),
+            action: "read".into(),
             subtree: false,
         },
         binding: crate::types::PrincipalTenant::default(),
     })
+}
+
+/// Range offsets/lengths are decimal strings on the JSON plane (64-bit safe).
+fn decimal_u64(map: &Map<String, Value>, key: &str) -> CallResult<u64> {
+    map.get(key)
+        .and_then(Value::as_str)
+        .map(|raw| {
+            raw.parse::<u64>()
+                .map_err(|_| bad(format!("{key} is not a valid decimal")))
+        })
+        .transpose()?
+        .ok_or_else(|| bad(format!("{key} is required")))
 }
 
 pub fn prepare_blob_cancel(input: &Value) -> CallResult<PreparedInput> {
@@ -829,9 +868,25 @@ fn validate_blob_have_output(value: &Value) -> CallResult<()> {
 
 fn validate_blob_get_output(value: &Value) -> CallResult<()> {
     let map = object(value)?;
-    known_keys(map, &["chunkBytes", "chunkCid"])?;
-    let _ = required_string(map, "chunkCid")?;
+    known_keys(map, &["chunkBytes", "chunkCid", "revision", "eof"])?;
     let _ = required_string(map, "chunkBytes")?;
+    let chunk_cid = map.get("chunkCid");
+    let revision = map.get("revision");
+    if chunk_cid.is_some() == revision.is_some() {
+        return Err(bad("exactly one of chunkCid or revision is required"));
+    }
+    if let Some(cid) = chunk_cid {
+        let cid = cid
+            .as_str()
+            .ok_or_else(|| bad("chunkCid must be a string"))?;
+        cid::parse_cid(cid).map_err(|error| bad(error.message))?;
+    }
+    if revision.filter(|value| !value.is_string()).is_some() {
+        return Err(bad("revision must be a string"));
+    }
+    if map.get("eof").is_some_and(|value| !value.is_boolean()) {
+        return Err(bad("eof must be a boolean"));
+    }
     Ok(())
 }
 

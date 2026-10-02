@@ -46,6 +46,7 @@ fn item(id: &str) -> PageItem {
         title: id.into(),
         mime: "text/markdown".into(),
         size_bytes: 1,
+        revision: None,
         excerpt: None,
     }
 }
@@ -95,11 +96,12 @@ fn per_principal_snapshot_limit_is_enforced() {
     for _ in 0..4 {
         cache.create(k.clone(), vec![]).unwrap();
     }
-    let error = cache.create(k.clone(), vec![]).unwrap_err();
-    assert_eq!(
-        error.code_enum(),
-        Some(conex_proto::ErrorCode::QuotaExceeded)
-    );
+    // Same-key re-lists replace the oldest snapshot (directory navigation is
+    // always re-entrant, plan M5) — the principal still never exceeds 4.
+    let fifth = cache.create(k.clone(), vec![]).unwrap();
+    let sixth = cache.create(k.clone(), vec![]).unwrap();
+    assert_ne!(fifth, sixth);
+    // A different principal gets its own budget.
     assert!(cache.create(key("bob", ""), vec![]).is_ok());
 }
 
@@ -114,4 +116,36 @@ fn item_budget_is_enforced() {
     let mut cache = SnapshotCache::new(clock, limits);
     let items: Vec<PageItem> = (0..3).map(|i| item(&format!("f{i}.md"))).collect();
     assert!(cache.create(key("alice", ""), items).is_err());
+}
+
+/// Plan M2 acceptance: 151 resources paginate completely, in order, with no
+/// duplicates, and the cursor retires at the end of the snapshot.
+#[test]
+fn one_hundred_fifty_one_items_page_without_duplicates() {
+    let clock = Arc::new(ManualClock::new());
+    let mut cache = SnapshotCache::new(clock, SnapshotLimits::default());
+    let k = key("alice", "");
+    let items: Vec<PageItem> = (0..151)
+        .map(|index| PageItem {
+            resource_id: format!("team/file-{index:03}.txt"),
+            title: format!("file-{index:03}.txt"),
+            mime: "text/plain".into(),
+            size_bytes: index,
+            excerpt: None,
+            revision: None,
+        })
+        .collect();
+    let mut cursor = Some(cache.create(k.clone(), items).expect("create"));
+    let mut seen: Vec<String> = Vec::new();
+    while let Some(token) = cursor {
+        let (page, next) = cache.page(&token, &k, 100).expect("page");
+        seen.extend(page.iter().map(|item| item.resource_id.clone()));
+        cursor = next;
+    }
+    assert_eq!(seen.len(), 151, "every item appears exactly once");
+    let unique: std::collections::HashSet<&String> = seen.iter().collect();
+    assert_eq!(unique.len(), 151, "no duplicates across pages");
+    let mut sorted = seen.clone();
+    sorted.sort();
+    assert_eq!(seen, sorted, "pages follow the snapshot order");
 }

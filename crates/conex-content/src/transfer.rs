@@ -18,8 +18,8 @@ use std::path::Path;
 use crate::error::ContentError;
 use crate::store::{ContentRoot, LocalBlockStore};
 use bytes::Bytes;
-use conex_proto::cid::{cid_for_raw, content_cid_for_parts, leaf_cids_for};
 use conex_proto;
+use conex_proto::cid::{cid_for_raw, content_cid_for_parts, leaf_cids_for};
 
 /// Default inline threshold (设计 §5.6).
 pub const DEFAULT_INLINE_THRESHOLD_BYTES: u32 = 65_536;
@@ -125,20 +125,21 @@ pub fn inline_payload(bytes: &[u8]) -> Bytes {
 pub fn blob_ref_for(
     root_cid: &str,
     size_bytes: u64,
-    provider_id: &str,
+    endpoint_id: &str,
     plane: &str,
     resource_id: &str,
 ) -> conex_proto::BlobRef {
     conex_proto::BlobRef {
-        cid: root_cid.to_string(),
+        cid: Some(root_cid.to_string()),
         size_bytes: size_bytes.to_string(),
         mime: "application/octet-stream".to_string(),
         access: Some(conex_proto::BlobAccess {
-            provider_id: provider_id.to_string(),
+            endpoint_id: endpoint_id.to_string(),
             plane: plane.to_string(),
             space_id: None,
             resource_id: resource_id.to_string(),
         }),
+        revision: None,
     }
 }
 

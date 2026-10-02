@@ -330,9 +330,10 @@ pub mod content_address {
 /// BlobRef：带授权定位的内容引用（设计 §5.3）。
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct BlobRef {
-    /// 内容 CID；文本表示。
-    #[prost(string, tag = "1")]
-    pub cid: ::prost::alloc::string::String,
+    /// 内容 CID；仅当字节已按 CID 格式计算。可变远端文件未计算 CID 时缺省，
+    /// 禁止用路径或 revision 假充 CID。
+    #[prost(string, optional, tag = "1")]
+    pub cid: ::core::option::Option<::prost::alloc::string::String>,
     /// 字节数（十进制字符串）。
     #[prost(string, tag = "2")]
     pub size_bytes: ::prost::alloc::string::String,
@@ -342,11 +343,16 @@ pub struct BlobRef {
     /// 资源定位信息（不是授权凭据）。
     #[prost(message, optional, tag = "4")]
     pub access: ::core::option::Option<BlobAccess>,
+    /// 远端可变文件的读取定位 revision；不透明令牌，仅等值比较。
+    #[prost(string, optional, tag = "5")]
+    pub revision: ::core::option::Option<::prost::alloc::string::String>,
 }
+/// 资源定位 = endpointId + resourceId；租户来自认证上下文，不信任请求自报。
+/// provider_id 不得代替唯一端点定位；endpoint_id 为空表示 Host 本地已提交内容。
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct BlobAccess {
     #[prost(string, tag = "1")]
-    pub provider_id: ::prost::alloc::string::String,
+    pub endpoint_id: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
     pub plane: ::prost::alloc::string::String,
     #[prost(string, optional, tag = "3")]
@@ -484,22 +490,60 @@ pub struct BlobHaveResponse {
     #[prost(bool, repeated, tag = "1")]
     pub present: ::prost::alloc::vec::Vec<bool>,
 }
-/// blob/get：拉取单块字节。
+/// blob/get 目标二选一（M0 冻结）：互斥结构避免同一个 offset 同时被解释成
+/// 块内偏移与文件偏移。
+/// - committed：读取已提交内容中被授权根覆盖的块，整块返回。
+/// - remote：按端点、资源、revision、字节范围读取远端内容（M3 接通运行路径）。
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BlobGetRequest {
+pub struct CommittedTarget {
+    /// 已提交块 CID；必须属于调用方获授权的根。
     #[prost(string, tag = "1")]
     pub chunk_cid: ::prost::alloc::string::String,
-    #[prost(uint64, optional, tag = "2")]
-    pub range_offset: ::core::option::Option<u64>,
-    #[prost(uint64, optional, tag = "3")]
-    pub range_length: ::core::option::Option<u64>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct RemoteTarget {
+    #[prost(string, tag = "1")]
+    pub endpoint_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub resource_id: ::prost::alloc::string::String,
+    /// 提供则与当前版本不符时返回 stale_revision；不拼接两个版本。
+    #[prost(string, optional, tag = "3")]
+    pub revision: ::core::option::Option<::prost::alloc::string::String>,
+    /// 字节偏移（十进制字符串 u64）。
+    #[prost(string, tag = "4")]
+    pub offset: ::prost::alloc::string::String,
+    /// 字节长度（十进制字符串 u64，>= 1）；offset+length 溢出拒绝。
+    #[prost(string, tag = "5")]
+    pub length: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct BlobGetRequest {
+    #[prost(oneof = "blob_get_request::Target", tags = "4, 5")]
+    pub target: ::core::option::Option<blob_get_request::Target>,
+}
+/// Nested message and enum types in `BlobGetRequest`.
+pub mod blob_get_request {
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
+    pub enum Target {
+        #[prost(message, tag = "4")]
+        Committed(super::CommittedTarget),
+        #[prost(message, tag = "5")]
+        Remote(super::RemoteTarget),
+    }
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct BlobGetResponse {
     #[prost(bytes = "bytes", tag = "1")]
     pub chunk_bytes: ::prost::bytes::Bytes,
-    #[prost(string, tag = "2")]
-    pub chunk_cid: ::prost::alloc::string::String,
+    /// committed 路径返回该块 CID；remote 路径缺省（任意 range 不冒充完整块 CID）。
+    #[prost(string, optional, tag = "2")]
+    pub chunk_cid: ::core::option::Option<::prost::alloc::string::String>,
+    /// remote 路径返回实际服务的 revision。
+    #[prost(string, optional, tag = "3")]
+    pub revision: ::core::option::Option<::prost::alloc::string::String>,
+    /// remote 路径返回是否到达文件尾；读取结束必须回传实际长度与 EOF。
+    #[prost(bool, tag = "4")]
+    pub eof: bool,
 }
 /// blob/cancel：主动结束 staging；不会留下 committed 资源。
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -897,7 +941,7 @@ impl OperationState {
 /// 具体方法与 typed input/output 由方法注册绑定并在 prepare 处严格解码。
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Message {
-    #[prost(oneof = "message::Body", tags = "1, 2, 3, 4")]
+    #[prost(oneof = "message::Body", tags = "1, 2, 3, 4, 5")]
     pub body: ::core::option::Option<message::Body>,
 }
 /// Nested message and enum types in `Message`.
@@ -912,7 +956,25 @@ pub mod message {
         Failure(super::Failure),
         #[prost(message, tag = "4")]
         Notification(super::Notification),
+        /// M3：有界数据帧响应（protobuf 二进制 Profile 专用），避免把原始字节
+        /// 转成 base64 字符串。JSON Profile 下载 JSON 时 chunk 退化为 base64。
+        #[prost(message, tag = "5")]
+        DataChunk(super::DataChunk),
     }
+}
+/// blob/get(remote) 的字节响应：一帧 ≤ max_frame_bytes 的原始文件切片。
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct DataChunk {
+    #[prost(string, tag = "1")]
+    pub request_id: ::prost::alloc::string::String,
+    #[prost(bytes = "bytes", tag = "2")]
+    pub chunk: ::prost::bytes::Bytes,
+    /// 实际服务的文件 revision；与请求携带的 revision 不符时服务端直接返回
+    /// stale_revision 错误，不会出现混合版本数据。
+    #[prost(string, tag = "3")]
+    pub revision: ::prost::alloc::string::String,
+    #[prost(bool, tag = "4")]
+    pub eof: bool,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Request {
@@ -940,6 +1002,13 @@ pub struct RequestContext {
     pub plane: i32,
     #[prost(string, optional, tag = "3")]
     pub binding_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// Authenticated caller identity forwarded by the host (plan M2); the
+    /// agent uses it for snapshot binding and local claim checks. Empty on
+    /// frames that carry no user identity.
+    #[prost(string, tag = "4")]
+    pub principal_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub tenant_id: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Success {
@@ -1133,8 +1202,6 @@ pub struct WebTicket {
     #[prost(uint64, tag = "10")]
     pub expires_at_ms: u64,
 }
-/// P0 只读 source 方法。ResourceId 是 UTF-8、斜杠分段、无空段/./../NUL/反斜杠的
-/// 相对资源名；根目录用空字符串，仅允许出现在 list/search 的 root。
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ResourceSummary {
     #[prost(string, tag = "1")]
@@ -1143,10 +1210,12 @@ pub struct ResourceSummary {
     pub title: ::prost::alloc::string::String,
     #[prost(string, tag = "3")]
     pub mime: ::prost::alloc::string::String,
-    #[prost(uint64, optional, tag = "4")]
-    pub size_bytes: ::core::option::Option<u64>,
+    #[prost(string, optional, tag = "4")]
+    pub size_bytes: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "5")]
     pub revision: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(enumeration = "EntryKind", tag = "6")]
+    pub kind: i32,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct SourceListRequest {
@@ -1169,14 +1238,20 @@ pub struct SourceReadRequest {
     #[prost(string, tag = "1")]
     pub resource_id: ::prost::alloc::string::String,
 }
+/// M0：读取结果二选一。
+/// - 小型受支持 UTF-8 文本：内联 text（可附已计算 cid）。
+/// - 附件与大文本：content 引用（BlobRef），不读入整文件、不伪造 cid。
+/// text 与 content 互斥；cid 仅在字节已按 CID 格式计算时出现，可变远端文件缺省。
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct SourceReadResponse {
     #[prost(message, optional, tag = "1")]
     pub resource: ::core::option::Option<ResourceSummary>,
-    #[prost(string, tag = "2")]
-    pub text: ::prost::alloc::string::String,
-    #[prost(string, tag = "3")]
-    pub cid: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "2")]
+    pub text: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "3")]
+    pub cid: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(message, optional, tag = "4")]
+    pub content: ::core::option::Option<BlobRef>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct SearchHit {
@@ -1202,6 +1277,43 @@ pub struct SourceSearchResponse {
     pub items: ::prost::alloc::vec::Vec<SearchHit>,
     #[prost(string, optional, tag = "2")]
     pub next_cursor: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// P0 只读 source 方法。ResourceId 是 UTF-8、斜杠分段、无空段/./../NUL/反斜杠的
+/// 相对资源名；根目录用空字符串，仅允许出现在 list/search 的 root。
+/// M0 元数据规则（docs/contracts/connected-landing.md §8）：
+/// - title 是文件名（basename），不是路径；resource_id 才是定位。
+/// - mime 未知时必须填 application/octet-stream；MIME 不等于允许执行内容。
+/// - size_bytes / 长度一律十进制字符串，避免 JS Number 丢精度。
+/// - revision 是不透明定位令牌，只做等值比较；provider 无法提供时缺省。
+/// - kind 描述目录项类型；本轮 list 只产出常规文件。
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum EntryKind {
+    Unspecified = 0,
+    File = 1,
+    Directory = 2,
+}
+impl EntryKind {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "ENTRY_KIND_UNSPECIFIED",
+            Self::File => "ENTRY_KIND_FILE",
+            Self::Directory => "ENTRY_KIND_DIRECTORY",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "ENTRY_KIND_UNSPECIFIED" => Some(Self::Unspecified),
+            "ENTRY_KIND_FILE" => Some(Self::File),
+            "ENTRY_KIND_DIRECTORY" => Some(Self::Directory),
+            _ => None,
+        }
+    }
 }
 /// 单方向流的元数据；在 stream/open 响应中返回，session/resume 也回填一份。
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]

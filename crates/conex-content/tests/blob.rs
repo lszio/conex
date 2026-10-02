@@ -1,10 +1,17 @@
 //! P1-06 blob storage lifecycle tests.
 use std::fs;
 
-use conex_content::{ContentError, ContentStore, DEFAULT_CHUNK_SIZE, DEFAULT_LEASE_MS};
+use conex_content::{ContentError, ContentStore, DEFAULT_CHUNK_SIZE, DEFAULT_LEASE_MS, Owner};
 use conex_proto::cid::{cid_for_raw, content_cid};
 use serde_json::Value;
 use tempfile::TempDir;
+
+fn owner() -> Owner {
+    Owner {
+        principal_id: "alice".into(),
+        tenant_id: "tenant-a".into(),
+    }
+}
 
 fn load_vectors() -> Value {
     let path = concat!(
@@ -87,11 +94,15 @@ fn single_chunk_upload_commits_as_raw() {
             "raw",
             &expected_cid,
             Some(60_000),
+            owner(),
+            "notes/test",
         )
         .unwrap();
     let cid = upload.put_chunk(0, payload).unwrap();
     assert_eq!(cid, expected_cid);
-    let commit = s.commit(upload.upload_id(), &expected_cid, "raw").unwrap();
+    let commit = s
+        .commit(upload.upload_id(), &expected_cid, "raw", &owner())
+        .unwrap();
     assert_eq!(commit.root_kind, "raw");
     assert_eq!(commit.committed_bytes, payload.len() as u64);
     check_persistence_level("local").unwrap();
@@ -116,6 +127,8 @@ fn two_chunk_upload_commits_as_manifest() {
             "manifest",
             &golden,
             Some(60_000),
+            owner(),
+            "notes/test",
         )
         .unwrap();
     let leaf_a = upload
@@ -124,11 +137,18 @@ fn two_chunk_upload_commits_as_manifest() {
     let leaf_b = upload
         .put_chunk(1, &payload[DEFAULT_CHUNK_SIZE as usize..])
         .unwrap();
-    let commit = s.commit(upload.upload_id(), &golden, "manifest").unwrap();
+    let commit = s
+        .commit(upload.upload_id(), &golden, "manifest", &owner())
+        .unwrap();
     assert_eq!(commit.root_kind, "manifest");
     assert_eq!(commit.root_cid, golden);
     assert_eq!(commit.committed_bytes, payload.len() as u64);
-    assert!(s.has(&[leaf_a, leaf_b]).unwrap().iter().all(|p| *p));
+    assert!(
+        s.has(&[leaf_a, leaf_b], &owner())
+            .unwrap()
+            .iter()
+            .all(|p| *p)
+    );
     // The manifest object of the canonical tree is stored and referenced, so
     // the reachable set is complete for blob/get and GC.
     assert!(s.has_block(&golden).unwrap());
@@ -152,6 +172,8 @@ fn bad_chunk_rejects_upload_keeps_receivable_blocks() {
             "raw",
             &cid_for_raw(&payload),
             Some(60_000),
+            owner(),
+            "notes/test",
         )
         .unwrap();
     let good_cid = upload.put_chunk(0, &payload).unwrap();
@@ -178,10 +200,17 @@ fn commit_declared_root_mismatch_rejected() {
             "raw",
             &cid_for_raw(b"declared"),
             Some(60_000),
+            owner(),
+            "notes/test",
         )
         .unwrap();
     upload.put_chunk(0, &payload).unwrap();
-    let bad = s.commit(upload.upload_id(), &cid_for_raw(b"declared"), "raw");
+    let bad = s.commit(
+        upload.upload_id(),
+        &cid_for_raw(b"declared"),
+        "raw",
+        &owner(),
+    );
     assert!(matches!(
         bad,
         Err(ContentError::DeclaredRootMismatch { .. })
@@ -196,10 +225,17 @@ fn commit_declared_root_mismatch_rejected() {
             "raw",
             &cid_for_raw(&payload),
             Some(60_000),
+            owner(),
+            "notes/test",
         )
         .unwrap();
     upload.put_chunk(0, &payload).unwrap();
-    let bad = s.commit(upload.upload_id(), &cid_for_raw(b"different"), "raw");
+    let bad = s.commit(
+        upload.upload_id(),
+        &cid_for_raw(b"different"),
+        "raw",
+        &owner(),
+    );
     assert!(matches!(
         bad,
         Err(ContentError::DeclaredRootMismatch { .. })
@@ -219,10 +255,17 @@ fn commit_rejects_root_kind_that_contradicts_the_size() {
             "manifest",
             &cid_for_raw(&payload),
             Some(60_000),
+            owner(),
+            "notes/test",
         )
         .unwrap();
     upload.put_chunk(0, &payload).unwrap();
-    let bad = s.commit(upload.upload_id(), &cid_for_raw(&payload), "manifest");
+    let bad = s.commit(
+        upload.upload_id(),
+        &cid_for_raw(&payload),
+        "manifest",
+        &owner(),
+    );
     assert!(matches!(bad, Err(ContentError::UnsupportedRootKind(_))));
 }
 
@@ -240,6 +283,8 @@ fn commit_rejects_block_whose_length_was_tampered_with() {
             "raw",
             &leaf,
             Some(60_000),
+            owner(),
+            "notes/test",
         )
         .unwrap();
     upload.put_chunk(0, &payload).unwrap();
@@ -256,7 +301,7 @@ fn commit_rejects_block_whose_length_was_tampered_with() {
         .unwrap();
     file.set_len(payload.len() as u64 - 1).unwrap();
     drop(file);
-    let bad = s.commit(upload.upload_id(), &leaf, "raw");
+    let bad = s.commit(upload.upload_id(), &leaf, "raw", &owner());
     assert!(matches!(bad, Err(ContentError::BlockLengthMismatch { .. })));
 }
 
@@ -274,6 +319,8 @@ fn missing_blocks_on_commit_rejected_with_cid_list() {
             "manifest",
             &root,
             Some(60_000),
+            owner(),
+            "notes/test",
         )
         .unwrap();
     let leaf_a = upload
@@ -290,7 +337,7 @@ fn missing_blocks_on_commit_rejected_with_cid_list() {
         &leaf_a[11..]
     )))
     .unwrap();
-    match s.commit(upload.upload_id(), &root, "manifest") {
+    match s.commit(upload.upload_id(), &root, "manifest", &owner()) {
         Err(ContentError::MissingChunks(cids)) => assert_eq!(cids, vec![leaf_a]),
         other => panic!("expected MissingChunks, got {other:?}"),
     }
@@ -310,12 +357,14 @@ fn commit_without_all_chunks_reports_the_missing_index() {
             "manifest",
             &root,
             Some(60_000),
+            owner(),
+            "notes/test",
         )
         .unwrap();
     upload
         .put_chunk(0, &payload[..DEFAULT_CHUNK_SIZE as usize])
         .unwrap();
-    match s.commit(upload.upload_id(), &root, "manifest") {
+    match s.commit(upload.upload_id(), &root, "manifest", &owner()) {
         Err(ContentError::MissingChunkIndex(index)) => assert_eq!(index, 1),
         other => panic!("expected MissingChunkIndex, got {other:?}"),
     }
@@ -341,12 +390,14 @@ fn commit_after_chunk_crash_recovers_idempotent() {
             "raw",
             &expected_cid,
             Some(60_000),
+            owner(),
+            "notes/test",
         )
         .unwrap();
     let cid = upload.put_chunk(0, &payload).unwrap();
     drop(s);
     let s2 = store(&tmp);
-    let upload2 = s2.resume_upload(upload.upload_id()).unwrap();
+    let upload2 = s2.resume_upload(upload.upload_id(), &owner()).unwrap();
     assert!(
         upload2
             .state()
@@ -355,10 +406,10 @@ fn commit_after_chunk_crash_recovers_idempotent() {
             .any(|chunk| chunk.index == 0 && chunk.cid == cid)
     );
     let commit = s2
-        .commit(upload2.upload_id(), &expected_cid, "raw")
+        .commit(upload2.upload_id(), &expected_cid, "raw", &owner())
         .unwrap();
     assert_eq!(commit.root_cid, expected_cid);
-    assert!(s2.has(std::slice::from_ref(&cid)).unwrap()[0]);
+    assert!(s2.has(std::slice::from_ref(&cid), &owner()).unwrap()[0]);
 }
 
 #[test]
@@ -368,7 +419,16 @@ fn staging_lease_expires_without_commit() {
     let payload = b"abc".to_vec();
     let cid = cid_for_raw(&payload);
     let upload = s
-        .begin_upload(1, DEFAULT_CHUNK_SIZE, 3, "raw", &cid, Some(10))
+        .begin_upload(
+            1,
+            DEFAULT_CHUNK_SIZE,
+            3,
+            "raw",
+            &cid,
+            Some(10),
+            owner(),
+            "notes/test",
+        )
         .unwrap();
     upload.put_chunk(0, &payload).unwrap();
     conex_content::store::sleep_ms(20);
@@ -383,16 +443,26 @@ fn pin_returns_id_and_expiry_and_unpin_releases() {
     let payload = b"pinned".to_vec();
     let cid = cid_for_raw(&payload);
     let upload = s
-        .begin_upload(1, DEFAULT_CHUNK_SIZE, 6, "raw", &cid, Some(60_000))
+        .begin_upload(
+            1,
+            DEFAULT_CHUNK_SIZE,
+            6,
+            "raw",
+            &cid,
+            Some(60_000),
+            owner(),
+            "notes/test",
+        )
         .unwrap();
     upload.put_chunk(0, &payload).unwrap();
-    let commit = s.commit(upload.upload_id(), &cid, "raw").unwrap();
+    let commit = s.commit(upload.upload_id(), &cid, "raw", &owner()).unwrap();
     let pin_id = "pin-1";
     let pin = s
         .pin(
             &commit.root_cid,
             pin_id,
             conex_content::receipt::now_ms() + 60_000,
+            &owner(),
         )
         .unwrap();
     assert_eq!(pin.pin_id, pin_id);
@@ -402,7 +472,7 @@ fn pin_returns_id_and_expiry_and_unpin_releases() {
             .iter()
             .any(|p| p.pin_id == pin_id)
     );
-    s.unpin(pin_id).unwrap();
+    s.unpin(pin_id, &owner()).unwrap();
     assert!(s.block_store().list_active_pins().is_empty());
 }
 
@@ -413,11 +483,20 @@ fn gc_skips_committed_blocks() {
     let payload = b"keep".to_vec();
     let cid = cid_for_raw(&payload);
     let upload = s
-        .begin_upload(1, DEFAULT_CHUNK_SIZE, 4, "raw", &cid, Some(60_000))
+        .begin_upload(
+            1,
+            DEFAULT_CHUNK_SIZE,
+            4,
+            "raw",
+            &cid,
+            Some(60_000),
+            owner(),
+            "notes/test",
+        )
         .unwrap();
     upload.put_chunk(0, &payload).unwrap();
-    s.commit(upload.upload_id(), &cid, "raw").unwrap();
+    s.commit(upload.upload_id(), &cid, "raw", &owner()).unwrap();
     let dropped = s.collect_garbage().unwrap();
     assert_eq!(dropped, 0);
-    assert!(s.has(std::slice::from_ref(&cid)).unwrap()[0]);
+    assert!(s.has(std::slice::from_ref(&cid), &owner()).unwrap()[0]);
 }

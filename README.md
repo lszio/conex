@@ -2,7 +2,7 @@
 
 conex（connect + nexus）是一个可嵌入的双向能力路由内核及可选独立进程；工作协议名 `conex`。
 
-**当前状态（2026-09-18）：** P0 已交付（`e649ded`）；**P1 已交付**（`f6f8edc`/`4d5ff73`）：两条 WSS Profile（JSON text 与 protobuf 二进制）经真实握手可达；`/wss`、`/tickets`、`/oidc/authorize`、`/oidc/token` 挂入 host，hello 广告 P1 方法；`blob/*`、`session/*`、`operation/*`、`agent/*` 经 broker 派发并强制 bearer 主体/租户绑定；P1-04 Stream（ACK/逐字节信用/重放/reset/slow_consumer）有真实实现与行为向量测试；1 GiB 经 Stream 的弱网续传（含坏块拒绝与断线续传）通过 `cargo xtask e2e --suite p1-stream-1gib`；配置 `[oidc]` 后 `/oidc/token` 做真实 RS256 id_token 验签（issuer pin + aud + nonce + JWKS）。逐包证据与已知缺口：[P1 验证记录](docs/verification/p1.md)；运行手册 [docs/runbooks/p1.md](docs/runbooks/p1.md)；下一步 [P2](docs/plans/2026-09-15-conex-roadmap.md)（ACP/MCP）。
+**当前状态（2026-10-03）：** P0、P1、Connected landing 已交付；**多主机内容 M0–M5 已交付**（分支 `refactor/arch`，未提交）：内容契约冻结（endpointId+revision 定位、blob/get 互斥目标、protobuf 二进制 DataChunk 通道）、访客会话与 blob 所有权授权、逐端点 Agent 注册生命周期（staged 链接/逐端点 review）、同源 `/content`（Range/ETag/防注入/流式取消）、公共浏览页面（文本/图片/视频/DOCX/ZIP 受限预览，1440/390 双视口 38 项浏览器检查全过）。逐项证据：[多主机内容验证记录](docs/verification/multi-host-content.md)；剩余 M4（Notez 接入）与 M6（验收收口）见计划。历史：P0（`e649ded`）、P1（`f6f8edc`/`4d5ff73`）交付记录见 [P1 验证记录](docs/verification/p1.md)。
 
 ## 文档
 
@@ -10,7 +10,10 @@ conex（connect + nexus）是一个可嵌入的双向能力路由内核及可选
 
 - 设计（权威）：[docs/design/2026-09-14-conex-design.md](docs/design/2026-09-14-conex-design.md)
 - 路线图：[docs/plans/2026-09-15-conex-roadmap.md](docs/plans/2026-09-15-conex-roadmap.md)
-- P1 执行计划（下一步）：[docs/plans/2026-09-15-conex-p1.md](docs/plans/2026-09-15-conex-p1.md)
+- 多主机内容计划（当前）：[docs/plans/2026-10-01-conex-multi-host-content.md](docs/plans/2026-10-01-conex-multi-host-content.md)
+- 多主机内容验证记录（当前）：[docs/verification/multi-host-content.md](docs/verification/multi-host-content.md)
+- Connected landing 契约：[docs/contracts/connected-landing.md](docs/contracts/connected-landing.md)
+- P1 执行计划（归档）：[docs/plans/2026-09-15-conex-p1.md](docs/plans/2026-09-15-conex-p1.md)
 - P0 执行计划（归档）：[docs/plans/archive/2026-09-15-conex-p0.md](docs/plans/archive/2026-09-15-conex-p0.md)
 - P0 wire 契约：[docs/contracts/p0-wire.md](docs/contracts/p0-wire.md)
 - P0 运行手册：[docs/runbooks/p0.md](docs/runbooks/p0.md)
@@ -27,9 +30,16 @@ broker 平面只读数据连接，经同一 Registry/授权/审计路径：
 - SDK：`@conex/sdk` typed consumer（list/read/search、searchMany 部分结果、错误映射）。
 - 验证：跨语言共享向量、additivity 检查、真实 Rust host + Bun 的 fs E2E（catalog 由 provider 集成/授权测试覆盖）；逐项结果见 [P0 验证记录](docs/verification/p0.md)。
 
-## 下一步（P1）
+## 多主机内容已交付（M0–M5）
 
-P1 在 P0 主干上增加两个 WSS Profile、conex-agent 反连、有界 blob 分块/持久提交/GC、Stream 与网络恢复、浏览器 ticket、Session/operation 状态与条件写。入口是 [P1 执行计划](docs/plans/2026-09-15-conex-p1.md) 的 P1-01 契约冻结；P0 遗留的 TLS pin、SIGTERM 排空与双 provider SDK E2E 缺口也一并排入。
+- 契约：`endpointId + resourceId` 定位 + revision；`source/read` 返回 `text ⊕ content`；`blob/get` 互斥目标（committed 块 / remote 范围）；长度一律十进制字符串（JS 安全）。
+- 安全：`[web_guest]` 访客配额（会话数/空闲过期/签发限速）；blob 所有权（Owner 持久化、可达集证明、逐方法归属校验）；访客连接面板隔离。
+- 传输：Agent 链 protobuf 二进制（`DataChunk` 原始字节，无 base64）；Host 授权探针 + 反向链路逐 256 KiB 切片；同源 `/content`（Range/206/416/ETag/If-Range/nosniff/attachment 策略/流式取消）。
+- 页面：主机分组目录、文本/图片/视频原生展示、DOCX（mammoth）与 ZIP（fflate）受限预览、二进制元数据下载；错误八类分示；1440/390 双视口 38 项浏览器检查全过。
+
+## 下一步
+
+多主机内容计划的剩余工作：**M4**（接入真实 Notez 服务，需要真实 Notez 仓库与运行实例）与 **M6**（验收收口：multi-host-content / public-content-security e2e 套件注册、容量门槛、跨主机 TLS 验证）。入口：[多主机内容计划](docs/plans/2026-10-01-conex-multi-host-content.md)。
 
 ## 快速开始
 

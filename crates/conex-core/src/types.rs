@@ -295,6 +295,9 @@ pub struct Route {
     pub handler: Arc<dyn Handler>,
     pub target: Option<Target>,
     pub credential: Option<CredentialKey>,
+    /// M3: bounded byte-range reader when the provider can serve raw slices
+    /// (`/content`); `None` for methods that only answer JSON.
+    pub range_reader: Option<Arc<dyn crate::ports::RangeReader>>,
 }
 
 impl fmt::Debug for Route {

@@ -148,10 +148,10 @@
     "conex.BlobAccess": {
       "additionalProperties": false,
       "properties": {
-        "plane": {
+        "endpointId": {
           "type": "string"
         },
-        "providerId": {
+        "plane": {
           "type": "string"
         },
         "resourceId": {
@@ -162,7 +162,7 @@
         }
       },
       "required": [
-        "providerId",
+        "endpointId",
         "plane",
         "resourceId"
       ],
@@ -293,24 +293,64 @@
     },
     "conex.BlobGetRequest": {
       "additionalProperties": false,
+      "allOf": [
+        {
+          "anyOf": [
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "committed"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "remote"
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "remote"
+                    ]
+                  }
+                ]
+              },
+              "required": [
+                "committed"
+              ]
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "committed"
+                    ]
+                  }
+                ]
+              },
+              "required": [
+                "remote"
+              ]
+            }
+          ]
+        }
+      ],
       "properties": {
-        "chunkCid": {
-          "type": "string"
+        "committed": {
+          "$ref": "#/$defs/conex.CommittedTarget"
         },
-        "rangeLength": {
-          "format": "uint64",
-          "pattern": "^[0-9]+$",
-          "type": "string"
-        },
-        "rangeOffset": {
-          "format": "uint64",
-          "pattern": "^[0-9]+$",
-          "type": "string"
+        "remote": {
+          "$ref": "#/$defs/conex.RemoteTarget"
         }
       },
-      "required": [
-        "chunkCid"
-      ],
       "type": "object"
     },
     "conex.BlobGetResponse": {
@@ -322,11 +362,17 @@
         },
         "chunkCid": {
           "type": "string"
+        },
+        "eof": {
+          "type": "boolean"
+        },
+        "revision": {
+          "type": "string"
         }
       },
       "required": [
         "chunkBytes",
-        "chunkCid"
+        "eof"
       ],
       "type": "object"
     },
@@ -477,12 +523,14 @@
         "mime": {
           "type": "string"
         },
+        "revision": {
+          "type": "string"
+        },
         "sizeBytes": {
           "type": "string"
         }
       },
       "required": [
-        "cid",
         "sizeBytes",
         "mime"
       ],
@@ -563,6 +611,18 @@
         "formatVersion",
         "chunkSize",
         "contentLength"
+      ],
+      "type": "object"
+    },
+    "conex.CommittedTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "chunkCid": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "chunkCid"
       ],
       "type": "object"
     },
@@ -649,6 +709,31 @@
           "type": "string"
         }
       },
+      "type": "object"
+    },
+    "conex.DataChunk": {
+      "additionalProperties": false,
+      "properties": {
+        "chunk": {
+          "format": "byte",
+          "type": "string"
+        },
+        "eof": {
+          "type": "boolean"
+        },
+        "requestId": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "requestId",
+        "chunk",
+        "revision",
+        "eof"
+      ],
       "type": "object"
     },
     "conex.DedupKey": {
@@ -1079,6 +1164,11 @@
                     "required": [
                       "notification"
                     ]
+                  },
+                  {
+                    "required": [
+                      "dataChunk"
+                    ]
                   }
                 ]
               }
@@ -1099,6 +1189,11 @@
                   {
                     "required": [
                       "notification"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "dataChunk"
                     ]
                   }
                 ]
@@ -1124,6 +1219,11 @@
                     "required": [
                       "notification"
                     ]
+                  },
+                  {
+                    "required": [
+                      "dataChunk"
+                    ]
                   }
                 ]
               },
@@ -1147,6 +1247,11 @@
                   {
                     "required": [
                       "notification"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "dataChunk"
                     ]
                   }
                 ]
@@ -1172,17 +1277,54 @@
                     "required": [
                       "failure"
                     ]
+                  },
+                  {
+                    "required": [
+                      "dataChunk"
+                    ]
                   }
                 ]
               },
               "required": [
                 "notification"
               ]
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "request"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "success"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "failure"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "notification"
+                    ]
+                  }
+                ]
+              },
+              "required": [
+                "dataChunk"
+              ]
             }
           ]
         }
       ],
       "properties": {
+        "dataChunk": {
+          "$ref": "#/$defs/conex.DataChunk"
+        },
         "failure": {
           "$ref": "#/$defs/conex.Failure"
         },
@@ -1490,6 +1632,33 @@
       ],
       "type": "object"
     },
+    "conex.RemoteTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "endpointId": {
+          "type": "string"
+        },
+        "length": {
+          "type": "string"
+        },
+        "offset": {
+          "type": "string"
+        },
+        "resourceId": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "endpointId",
+        "resourceId",
+        "offset",
+        "length"
+      ],
+      "type": "object"
+    },
     "conex.Request": {
       "additionalProperties": false,
       "properties": {
@@ -1523,19 +1692,35 @@
           ],
           "type": "string"
         },
+        "principalId": {
+          "type": "string"
+        },
         "providerEndpointId": {
+          "type": "string"
+        },
+        "tenantId": {
           "type": "string"
         }
       },
       "required": [
         "providerEndpointId",
-        "plane"
+        "plane",
+        "principalId",
+        "tenantId"
       ],
       "type": "object"
     },
     "conex.ResourceSummary": {
       "additionalProperties": false,
       "properties": {
+        "kind": {
+          "enum": [
+            "ENTRY_KIND_UNSPECIFIED",
+            "ENTRY_KIND_FILE",
+            "ENTRY_KIND_DIRECTORY"
+          ],
+          "type": "string"
+        },
         "mime": {
           "type": "string"
         },
@@ -1546,8 +1731,6 @@
           "type": "string"
         },
         "sizeBytes": {
-          "format": "uint64",
-          "pattern": "^[0-9]+$",
           "type": "string"
         },
         "title": {
@@ -1557,7 +1740,8 @@
       "required": [
         "resourceId",
         "title",
-        "mime"
+        "mime",
+        "kind"
       ],
       "type": "object"
     },
@@ -1909,6 +2093,9 @@
         "cid": {
           "type": "string"
         },
+        "content": {
+          "$ref": "#/$defs/conex.BlobRef"
+        },
         "resource": {
           "$ref": "#/$defs/conex.ResourceSummary"
         },
@@ -1916,10 +2103,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "text",
-        "cid"
-      ],
       "type": "object"
     },
     "conex.SourceSearchRequest": {

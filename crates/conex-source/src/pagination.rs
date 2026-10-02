@@ -51,6 +51,7 @@ pub struct PageItem {
     pub title: String,
     pub mime: String,
     pub size_bytes: u64,
+    pub revision: Option<String>,
     pub excerpt: Option<String>,
 }
 
@@ -103,10 +104,32 @@ impl SnapshotCache {
             })
             .count();
         if open >= self.limits.max_snapshots_per_principal {
-            return Err(CallError::new(
-                conex_proto::ErrorCode::QuotaExceeded,
-                "too many open pagination snapshots",
-            ));
+            // Directory navigation re-lists the same (principal, endpoint,
+            // root) repeatedly: a fresh listing for an identical key replaces
+            // the oldest one instead of exhausting the budget (plan M5 — the
+            // user can always navigate deeper).
+            let oldest = self
+                .snapshots
+                .iter()
+                .filter(|(_, snapshot)| {
+                    snapshot.key.principal_id == key.principal_id
+                        && snapshot.key.endpoint_id == key.endpoint_id
+                })
+                .min_by_key(|(_, snapshot)| snapshot.expires_at)
+                .map(|(id, _)| id.clone());
+            match oldest {
+                Some(id) => {
+                    self.snapshots.remove(&id);
+                    self.cursors
+                        .retain(|_, cursor| cursor.snapshot_id != id);
+                }
+                None => {
+                    return Err(CallError::new(
+                        conex_proto::ErrorCode::QuotaExceeded,
+                        "too many open pagination snapshots",
+                    ));
+                }
+            }
         }
         let snapshot_id = self.alloc("snap");
         let expires_at = self.clock.now() + self.limits.lease;

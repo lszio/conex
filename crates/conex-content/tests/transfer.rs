@@ -29,6 +29,13 @@ fn golden_root(vector_name: &str) -> String {
         .to_string()
 }
 
+fn owner() -> conex_content::Owner {
+    conex_content::Owner {
+        principal_id: "alice".into(),
+        tenant_id: "tenant-a".into(),
+    }
+}
+
 fn store(tmp: &TempDir) -> ContentStore {
     ContentStore::open(tmp.path(), DEFAULT_LEASE_MS).expect("open content store")
 }
@@ -48,6 +55,8 @@ fn write_and_commit(store: &ContentStore, payload: &[u8]) -> String {
             kind,
             &declared,
             Some(60_000),
+            owner(),
+            "notes/test",
         )
         .unwrap();
     for (i, chunk) in chunk_payload(payload, DEFAULT_CHUNK_SIZE)
@@ -61,7 +70,7 @@ fn write_and_commit(store: &ContentStore, payload: &[u8]) -> String {
         assert_eq!(&cid, chunk, "chunk {i} cid");
     }
     store
-        .commit(upload.upload_id(), &declared, kind)
+        .commit(upload.upload_id(), &declared, kind, &owner())
         .unwrap()
         .root_cid
 }
@@ -177,11 +186,17 @@ fn inline_eligibility_boundary() {
 
 #[test]
 fn blob_ref_carries_access_and_size() {
-    let r = blob_ref_for("bafkreixxx", 4096, "source-fs", "broker", "notes/hello.md");
+    let r = blob_ref_for(
+        "bafkreixxx",
+        4096,
+        "fs-endpoint",
+        "broker",
+        "notes/hello.md",
+    );
     let access = r.access.unwrap();
-    assert_eq!(r.cid, "bafkreixxx");
+    assert_eq!(r.cid, Some("bafkreixxx".to_string()));
     assert_eq!(r.size_bytes, "4096");
-    assert_eq!(access.provider_id, "source-fs");
+    assert_eq!(access.endpoint_id, "fs-endpoint");
     assert_eq!(access.plane, "broker");
     assert_eq!(access.resource_id, "notes/hello.md");
 }
@@ -214,6 +229,8 @@ fn one_gib_payload_roundtrips() {
             "manifest",
             &manifest_cid,
             Some(60_000),
+            owner(),
+            "notes/test",
         )
         .unwrap();
     for (i, expected_cid) in leaf_cids.iter().enumerate() {
@@ -223,7 +240,7 @@ fn one_gib_payload_roundtrips() {
         assert_eq!(actual, *expected_cid);
     }
     let commit = s
-        .commit(upload.upload_id(), &manifest_cid, "manifest")
+        .commit(upload.upload_id(), &manifest_cid, "manifest", &owner())
         .unwrap();
     assert_eq!(commit.root_cid, manifest_cid);
     assert_eq!(commit.committed_bytes, total_bytes);

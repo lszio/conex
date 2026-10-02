@@ -13,7 +13,20 @@ message Message {
     Success success = 2;
     Failure failure = 3;
     Notification notification = 4;
+    // M3：有界数据帧响应（protobuf 二进制 Profile 专用），避免把原始字节
+    // 转成 base64 字符串。JSON Profile 下载 JSON 时 chunk 退化为 base64。
+    DataChunk data_chunk = 5;
   }
+}
+
+// blob/get(remote) 的字节响应：一帧 ≤ max_frame_bytes 的原始文件切片。
+message DataChunk {
+  string request_id = 1;
+  bytes chunk = 2;
+  // 实际服务的文件 revision；与请求携带的 revision 不符时服务端直接返回
+  // stale_revision 错误，不会出现混合版本数据。
+  string revision = 3;
+  bool eof = 4;
 }
 
 message Request {
@@ -35,6 +48,11 @@ message RequestContext {
   string provider_endpoint_id = 1;
   Plane plane = 2;
   optional string binding_id = 3;
+  // Authenticated caller identity forwarded by the host (plan M2); the
+  // agent uses it for snapshot binding and local claim checks. Empty on
+  // frames that carry no user identity.
+  string principal_id = 4;
+  string tenant_id = 5;
 }
 
 message Success {

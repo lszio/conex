@@ -24,7 +24,7 @@ blob/put(open) → uploading → verified → blob/commit → committed
 3. 服务端按 `conex_proto::cid::addressing_for_parts(chunk_size, content_length, leaves)` 重算根 CID，必须等于 `declared_root`；不等即 `bad_blob`，不建立任何持久引用。
 4. 每个叶子块必须存在，且其持久字节长度等于推导长度 `min(chunk_size, content_length - i*chunk_size)`；块被截断/篡改即 `bad_blob`。
 5. 规范化 manifest 树的每个节点（含分层 `child_manifest_cids`）作为对象持久保存，并与其叶子一起写入 `refs/<root>.blocks`，使可达集完整（`blob/get` 与 GC 都以此为准）。
-6. 当前策略对 `BlobAccess` 授权（`providerEndpoint / plane / spaceId? / resourceId`）。
+6. 当前策略对 `BlobAccess` 授权（`endpointId / plane / spaceId? / resourceId`）。
 7. 持久性等级 `persistence` 被后端支持；不支持就拒绝，不允许降级后返回成功。
 
 写入顺序为 `refs/<root>.blocks` → `refs/<root>.record.json` → `refs/<root>.committed`（**commit 点**），随后才更新内存引用计数并清除 staging。

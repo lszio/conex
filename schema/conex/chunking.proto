@@ -53,18 +53,23 @@ message ContentAddress {
 
 // BlobRef：带授权定位的内容引用（设计 §5.3）。
 message BlobRef {
-  // 内容 CID；文本表示。
-  string cid = 1;
+  // 内容 CID；仅当字节已按 CID 格式计算。可变远端文件未计算 CID 时缺省，
+  // 禁止用路径或 revision 假充 CID。
+  optional string cid = 1;
   // 字节数（十进制字符串）。
   string size_bytes = 2;
   // MIME；缺省为 application/octet-stream。
   string mime = 3;
   // 资源定位信息（不是授权凭据）。
   BlobAccess access = 4;
+  // 远端可变文件的读取定位 revision；不透明令牌，仅等值比较。
+  optional string revision = 5;
 }
 
+// 资源定位 = endpointId + resourceId；租户来自认证上下文，不信任请求自报。
+// provider_id 不得代替唯一端点定位；endpoint_id 为空表示 Host 本地已提交内容。
 message BlobAccess {
-  string provider_id = 1;
+  string endpoint_id = 1;
   string plane = 2;
   optional string space_id = 3;
   string resource_id = 4;

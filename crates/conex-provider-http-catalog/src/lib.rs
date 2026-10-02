@@ -72,6 +72,7 @@ pub fn factory(installation: &Installation) -> CallResult<Vec<Route>> {
             }
         };
         routes.push(Route {
+            range_reader: None,
             protocol: installation.factory.protocol.clone(),
             version: installation.factory.version,
             endpoint: installation.endpoint.clone(),
@@ -113,13 +114,15 @@ impl Handler for CatalogReadHandler {
             resource_id: entry.resource_id.clone(),
             title: entry.title.clone(),
             mime: entry.mime.clone(),
-            size_bytes: Some(entry.text.len() as u64),
+            size_bytes: Some((entry.text.len() as u64).to_string()),
             revision: None,
+            kind: conex_proto::EntryKind::File as i32,
         };
         to_value(conex_proto::SourceReadResponse {
             resource: Some(summary),
-            text: entry.text.clone(),
-            cid,
+            text: Some(entry.text.clone()),
+            cid: Some(cid),
+            content: None,
         })
     }
 }
@@ -295,6 +298,7 @@ fn to_page_item(entry: &CatalogEntry) -> PageItem {
         title: entry.title.clone(),
         mime: entry.mime.clone(),
         size_bytes: entry.text.len() as u64,
+        revision: None,
         excerpt: None,
     }
 }
@@ -304,8 +308,9 @@ fn to_summary(item: &PageItem) -> conex_proto::ResourceSummary {
         resource_id: item.resource_id.clone(),
         title: item.title.clone(),
         mime: item.mime.clone(),
-        size_bytes: Some(item.size_bytes),
+        size_bytes: Some(item.size_bytes.to_string()),
         revision: None,
+        kind: conex_proto::EntryKind::File as i32,
     }
 }
 
@@ -332,7 +337,10 @@ fn ceil_char_boundary(text: &str, mut index: usize) -> usize {
 
 fn to_value<T: serde::Serialize>(value: T) -> CallResult<Value> {
     serde_json::to_value(value).map_err(|error| {
-        CallError::new(conex_proto::ErrorCode::Internal, format!("encode response: {error}"))
+        CallError::new(
+            conex_proto::ErrorCode::Internal,
+            format!("encode response: {error}"),
+        )
     })
 }
 

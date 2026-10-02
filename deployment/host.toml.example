@@ -25,18 +25,26 @@ host_origin = "conex://host.example.internal"
 web_origin = "https://landing.example.com"
 # Static UI root baked into the runtime image at /opt/conex/web.
 web_root = "/opt/conex/web"
-# Open the landing page to anonymous visitors. Visitors are bound to
-# the `guest` principal with the read-only UI method whitelist; the
-# broker enforces endpoint/list + connection/list + source/* only.
-# Switch to false for deployments that require a UI bearer token.
-web_guest = true
-
 # Persistent roots. Dokploy creates the named volumes
 # (conex-content / conex-session / conex-operation); the compose file
 # mounts them read-write under /var/lib/conex.
 content_root = "/var/lib/conex/content"
 session_root = "/var/lib/conex/session"
 operation_root = "/var/lib/conex/operation"
+
+# Anonymous visitors: bound to the `guest` principal with the read-only UI
+# method whitelist (endpoint/list + connection/list + source/*). Quotas are
+# independent from authenticated users' per-principal cap. Remove the whole
+# section for deployments that require a UI bearer token.
+[web_guest]
+principal_id = "guest"
+tenant_id = "production"
+# Global bound on live anonymous sessions (default 64).
+max_sessions = 64
+# Sliding idle expiry, extended on each authenticated use (default 15 min).
+idle_ttl_ms = 900000
+# Session issuance rate limit per rolling minute (default 60).
+max_issue_per_minute = 60
 
 # Token registry. Each token's `token_hash` is sha256(<plaintext>); the
 # plaintext lives only in Dokploy secrets and never in this file. The

@@ -377,6 +377,7 @@ dependencies = [
  "conex-source",
  "futures",
  "http",
+ "prost",
  "rustls",
  "rustls-pemfile",
  "serde",
@@ -500,6 +501,7 @@ dependencies = [
  "conex-source",
  "serde_json",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]

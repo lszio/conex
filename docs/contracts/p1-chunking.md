@@ -68,7 +68,7 @@ contentCid(bytes, chunkSize = 262144 /* 256 KiB */) =
 
 ## 5. BlobRef 与访问授权
 
-- `BlobRef.cid` 是字节完整性地址；`access` 是定位信息（`providerId / plane / spaceId? / resourceId`），**不是**授权凭据。
+- `BlobRef.cid` 是字节完整性地址；`access` 是定位信息（`endpointId / plane / spaceId? / resourceId`；`endpointId` 为空表示 Host 本地已提交内容），**不是**授权凭据。
 - 接收侧用资源元数据或授权句柄证明资源与 CID 的关联（设计 §5.3）；`blob/get` / `blob/have` / `blob/pin` 都经过资源级策略。
 - 跨空间相同 CID **不**继承权限。
 
