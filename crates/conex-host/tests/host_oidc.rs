@@ -90,8 +90,10 @@ root = \"{notes_root}\"\n",
     let cfg_path = content_root.parent().unwrap().join("host.toml");
     std::fs::write(&cfg_path, &config).expect("write config");
 
+    // CARGO_BIN_EXE_* is set by cargo for the package's own bin target, so
+    // this works on any machine (and in CI) without a hardcoded path.
     let binary = std::env::var("CONEX_HOST_BIN")
-        .unwrap_or_else(|_| "/home/lszio/Projects/conex/target/debug/conex-host".to_string());
+        .unwrap_or_else(|_| env!("CARGO_BIN_EXE_conex-host").to_string());
     let mut child = std::process::Command::new(&binary)
         .arg(&cfg_path)
         .current_dir(env!("CARGO_MANIFEST_DIR"))
