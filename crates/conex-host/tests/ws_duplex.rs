@@ -61,7 +61,7 @@ root = \"{}\"\n",
     let config_path = content.path().parent().unwrap().join("host.toml");
     std::fs::write(&config_path, config).expect("write config");
     let binary = std::env::var("CONEX_HOST_BIN")
-        .unwrap_or_else(|_| format!("{}/target/debug/conex-host", repo_root().display()));
+        .unwrap_or_else(|_| env!("CARGO_BIN_EXE_conex-host").to_string());
     let child = std::process::Command::new(binary)
         .arg(config_path)
         .stdout(std::process::Stdio::null())
