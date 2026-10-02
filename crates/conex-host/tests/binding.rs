@@ -3,7 +3,6 @@ use std::collections::HashMap;
 
 use conex_core::{Caller, Limits};
 use conex_host::{BindingStore, PROFILE_ID};
-use conex_proto;
 
 fn store() -> BindingStore {
     let mut capabilities = HashMap::new();

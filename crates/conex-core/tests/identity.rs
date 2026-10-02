@@ -1,6 +1,5 @@
 //! Identity keys are namespaced by source; sub alone never merges identities.
 use conex_core::{IdentityBinding, IdentityKey, IdentityMap};
-use conex_proto;
 
 fn oidc(issuer: &str, subject: &str, principal: &str, tenant: &str) -> IdentityBinding {
     IdentityBinding {

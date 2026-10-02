@@ -112,9 +112,11 @@ pub enum AgentReply {
     Chunk(conex_proto::DataChunk),
 }
 
+type PendingResult = oneshot::Sender<CallResult<AgentReply>>;
+
 pub struct PendingRequests {
     generation: u64,
-    inner: Mutex<HashMap<(u64, String), oneshot::Sender<CallResult<AgentReply>>>>,
+    inner: Mutex<HashMap<(u64, String), PendingResult>>,
 }
 
 impl PendingRequests {
@@ -464,8 +466,8 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                             ))),
                         })),
                     };
-                    if let Ok(bytes) = encode_wire(&failure) {
-                        if !enqueue_message(
+                    if let Ok(bytes) = encode_wire(&failure)
+                        && !enqueue_message(
                             &out_tx,
                             &queued_bytes,
                             max_queued,
@@ -473,7 +475,6 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                         ) {
                             break;
                         }
-                    }
                     break;
                 }
                 match message {
@@ -484,8 +485,8 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                 conex_proto::ErrorCode::BadRequest,
                                 "text business frames require the JSON profile",
                             );
-                            if let Some(bytes) = encode_proto_message(&failure) {
-                                if !enqueue_message(
+                            if let Some(bytes) = encode_proto_message(&failure)
+                                && !enqueue_message(
                                     &out_tx,
                                     &queued_bytes,
                                     max_queued,
@@ -493,7 +494,6 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                 ) {
                                     break;
                                 }
-                            }
                             continue;
                         }
                         let message = match decode_wire(text.as_bytes()) {
@@ -505,8 +505,8 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                         .unwrap_or(conex_proto::ErrorCode::ParseError),
                                     error.message,
                                 );
-                                if let Some(reply) = encode_json_message(&failure) {
-                                    if !enqueue_message(
+                                if let Some(reply) = encode_json_message(&failure)
+                                    && !enqueue_message(
                                         &out_tx,
                                         &queued_bytes,
                                         max_queued,
@@ -514,7 +514,6 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                     ) {
                                         break;
                                     }
-                                }
                                 continue;
                             }
                         };
@@ -525,11 +524,10 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                     .unwrap_or(conex_proto::ErrorCode::BadRequest),
                                 error.message,
                             );
-                            if let Some(reply) = encode_json_message(&failure) {
-                                if !enqueue_message(&out_tx, &queued_bytes, max_queued, reply) {
+                            if let Some(reply) = encode_json_message(&failure)
+                                && !enqueue_message(&out_tx, &queued_bytes, max_queued, reply) {
                                     break;
                                 }
-                            }
                             continue;
                         }
                         match message.body.as_ref() {
@@ -585,8 +583,8 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                         request_id: None,
                                         error: Some(to_wire_error(&error)),
                                     })),
-                                }) {
-                                    if !enqueue_message(
+                                })
+                                    && !enqueue_message(
                                         &out_tx,
                                         &queued_bytes,
                                         max_queued,
@@ -594,15 +592,13 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                     ) {
                                         break;
                                     }
-                                }
                                 continue;
                             }
                         };
-                        if let Some(session) = &state.web_session {
-                            if !session.is_active() {
+                        if let Some(session) = &state.web_session
+                            && !session.is_active() {
                                 break;
                             }
-                        }
                         if state.role == "ui"
                             && (!crate::web_auth::allowed_ui_method(&frame.method)
                                 || !state.capability_caps.iter().any(|cap| cap == &frame.method))
@@ -612,11 +608,10 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                 conex_proto::ErrorCode::Forbidden,
                                 "method is not allowed on UI links",
                             );
-                            if let Some(reply) = encode_json_message(&failure) {
-                                if !enqueue_message(&out_tx, &queued_bytes, max_queued, reply) {
+                            if let Some(reply) = encode_json_message(&failure)
+                                && !enqueue_message(&out_tx, &queued_bytes, max_queued, reply) {
                                     break;
                                 }
-                            }
                             continue;
                         }
                         let request_id = frame.request_id.clone();
@@ -632,8 +627,8 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                         ))),
                                     })),
                                 };
-                                if let Ok(bytes) = encode_wire(&failure) {
-                                    if !enqueue_message(
+                                if let Ok(bytes) = encode_wire(&failure)
+                                    && !enqueue_message(
                                         &out_tx,
                                         &queued_bytes,
                                         max_queued,
@@ -641,7 +636,6 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                     ) {
                                         break;
                                     }
-                                }
                                 continue;
                             }
                         };
@@ -687,11 +681,10 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                 conex_proto::ErrorCode::BadRequest,
                                 "binary business frames require the protobuf profile",
                             );
-                            if let Some(reply) = encode_json_message(&failure) {
-                                if !enqueue_message(&out_tx, &queued_bytes, max_queued, reply) {
+                            if let Some(reply) = encode_json_message(&failure)
+                                && !enqueue_message(&out_tx, &queued_bytes, max_queued, reply) {
                                     break;
                                 }
-                            }
                             continue;
                         }
                         let message = match conex_proto::Message::decode(bytes.as_ref()) {
@@ -702,8 +695,8 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                     conex_proto::ErrorCode::ParseError,
                                     format!("cannot decode protobuf frame: {error}"),
                                 );
-                                if let Some(bytes) = encode_proto_message(&failure) {
-                                    if !enqueue_message(
+                                if let Some(bytes) = encode_proto_message(&failure)
+                                    && !enqueue_message(
                                         &out_tx,
                                         &queued_bytes,
                                         max_queued,
@@ -711,7 +704,6 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                     ) {
                                         break;
                                     }
-                                }
                                 continue;
                             }
                         };
@@ -722,8 +714,8 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                     .unwrap_or(conex_proto::ErrorCode::BadRequest),
                                 error.message,
                             );
-                            if let Some(bytes) = encode_proto_message(&failure) {
-                                if !enqueue_message(
+                            if let Some(bytes) = encode_proto_message(&failure)
+                                && !enqueue_message(
                                     &out_tx,
                                     &queued_bytes,
                                     max_queued,
@@ -731,7 +723,6 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                 ) {
                                     break;
                                 }
-                            }
                             continue;
                         }
                         match message.body.as_ref() {
@@ -787,8 +778,8 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                         .unwrap_or(conex_proto::ErrorCode::BadRequest),
                                     error.message(),
                                 );
-                                if let Some(buf) = encode_proto_message(&failure) {
-                                    if !enqueue_message(
+                                if let Some(buf) = encode_proto_message(&failure)
+                                    && !enqueue_message(
                                         &out_tx,
                                         &queued_bytes,
                                         max_queued,
@@ -796,15 +787,13 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                     ) {
                                         break;
                                     }
-                                }
                                 continue;
                             }
                         };
-                        if let Some(session) = &state.web_session {
-                            if !session.is_active() {
+                        if let Some(session) = &state.web_session
+                            && !session.is_active() {
                                 break;
                             }
-                        }
                         if state.role == "ui"
                             && (!crate::web_auth::allowed_ui_method(&frame.method)
                                 || !state.capability_caps.iter().any(|cap| cap == &frame.method))
@@ -814,11 +803,10 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                 conex_proto::ErrorCode::Forbidden,
                                 "method is not allowed on UI links",
                             );
-                            if let Some(buf) = encode_proto_message(&failure) {
-                                if !enqueue_message(&out_tx, &queued_bytes, max_queued, Message::Binary(buf.into())) {
+                            if let Some(buf) = encode_proto_message(&failure)
+                                && !enqueue_message(&out_tx, &queued_bytes, max_queued, Message::Binary(buf.into())) {
                                     break;
                                 }
-                            }
                             continue;
                         }
                         let request_id = frame.request_id.clone();
@@ -899,11 +887,10 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                 {
                     break;
                 }
-                if let Some(session) = &state.web_session {
-                    if !session.is_active() {
+                if let Some(session) = &state.web_session
+                    && !session.is_active() {
                         break;
                     }
-                }
                 if !enqueue_message(&out_tx, &queued_bytes, max_queued, Message::Ping(Vec::new().into())) {
                     break;
                 }
@@ -916,13 +903,13 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
     while dispatch_tasks.join_next().await.is_some() {}
     drop(out_tx);
     writer.abort();
-    if state.role == "agent" {
-        if let Some(side) = &state.host_side {
-            side.disconnect_agent(&state.caller.principal_id, generation);
-            side.connections
-                .remove(&state.caller.principal_id, generation)
-                .await;
-        }
+    if state.role == "agent"
+        && let Some(side) = &state.host_side
+    {
+        side.disconnect_agent(&state.caller.principal_id, generation);
+        side.connections
+            .remove(&state.caller.principal_id, generation)
+            .await;
     }
     let _ = writer.await;
     pending.fail_all().await;

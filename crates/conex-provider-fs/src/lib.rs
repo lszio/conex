@@ -10,7 +10,6 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use conex_core::{CallError, CallResult, Handler, Installation, Route};
-use conex_proto;
 use conex_source::contracts::{SOURCE_LIST, SOURCE_READ, SOURCE_SEARCH};
 use conex_source::pagination::{Clock, SnapshotCache, SnapshotLimits, SystemClock};
 

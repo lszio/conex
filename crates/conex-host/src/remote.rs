@@ -7,7 +7,6 @@ use async_trait::async_trait;
 use axum::extract::ws::Message;
 use conex_core::{CallContext, CallError, CallResult, ExecutionIo, Handler, Installation, Route};
 use conex_proto;
-use conex_proto::wire::encode_wire;
 use serde_json::Value;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;

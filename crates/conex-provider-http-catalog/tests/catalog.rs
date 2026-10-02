@@ -3,7 +3,6 @@ mod support;
 
 use std::time::Duration;
 
-use conex_proto;
 use conex_provider_http_catalog::Catalog;
 use serde_json::json;
 

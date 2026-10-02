@@ -5,7 +5,6 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use conex_core::{Connector, OutboundRequest};
-use conex_proto;
 use conex_transport_http::{HttpConnector, TlsTrustConfig};
 use tokio::time::Instant;
 

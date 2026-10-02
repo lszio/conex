@@ -11,7 +11,6 @@ use bytes::Bytes;
 use conex_core::{
     CallContext, CallError, CallResult, ExecutionIo, Handler, Installation, OutboundRequest, Route,
 };
-use conex_proto;
 use conex_source::contracts::{DEFAULT_PAGE, SOURCE_LIST, SOURCE_READ, SOURCE_SEARCH};
 use conex_source::pagination::{
     Clock, PageItem, SnapshotCache, SnapshotKey, SnapshotLimits, SystemClock,

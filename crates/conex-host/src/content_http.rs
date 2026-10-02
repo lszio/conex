@@ -255,10 +255,10 @@ pub async fn content(Extension(state): Extension<Arc<HttpState>>, request: Reque
         HeaderValue::from_str(&disposition)
             .unwrap_or_else(|_| HeaderValue::from_static("attachment")),
     );
-    if let Some(etag) = etag {
-        if let Ok(value) = HeaderValue::from_str(&etag) {
-            headers.insert(header::ETAG, value);
-        }
+    if let Some(etag) = etag
+        && let Ok(value) = HeaderValue::from_str(&etag)
+    {
+        headers.insert(header::ETAG, value);
     }
     if partial {
         headers.insert(

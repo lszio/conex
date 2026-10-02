@@ -4,7 +4,6 @@ mod support;
 use std::time::Duration;
 
 use conex_core::{AggregateResult, TargetCall};
-use conex_proto;
 use serde_json::json;
 
 use support::TestRig;

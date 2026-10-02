@@ -5,7 +5,6 @@ use std::time::Duration;
 use conex_core::session::{
     RecoveryLevel, SessionBinding, SessionError, SessionStore, read_session_file,
 };
-use conex_proto;
 
 fn binding() -> SessionBinding {
     SessionBinding {

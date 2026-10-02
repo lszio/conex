@@ -6,7 +6,6 @@ use conex_core::{
     CallContext, CallError, CallResult, Endpoint, ExecutionIo, FactoryKey, Handler, Installation,
     Limits, MethodContract, PreparedInput, Registry, RegistryError, ResourceClaim, Route,
 };
-use conex_proto;
 use serde_json::Value;
 
 const METHODS: [&str; 3] = ["source/list", "source/read", "source/search"];

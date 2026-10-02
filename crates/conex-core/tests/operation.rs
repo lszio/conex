@@ -6,7 +6,6 @@ use conex_core::operation::{
     DEFAULT_TTL_HOURS, DedupKey, ExecutionClass, ExecutionState, OperationError, OperationState,
     OperationStore, RetryPolicy, read_record_file,
 };
-use conex_proto;
 use tempfile::TempDir;
 
 fn tmp_store(tmp: &TempDir) -> OperationStore {

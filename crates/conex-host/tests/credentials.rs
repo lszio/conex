@@ -11,7 +11,6 @@ use conex_core::{
 use conex_host::{
     CredentialBackend, CredentialBinding, EnvFileStore, SecretReader, SystemSecretReader,
 };
-use conex_proto;
 
 mod support {
     use super::*;

@@ -1,7 +1,6 @@
 //! Authorization: default deny, segment boundaries, subtree claims, versions.
 use conex_core::policy::{Policy, PolicyRule, StaticPolicy, resource_within};
 use conex_core::{Caller, Endpoint, Limits, ResourceClaim};
-use conex_proto;
 use serde_json::Value;
 
 fn caller(principal: &str, tenant: &str) -> Caller {

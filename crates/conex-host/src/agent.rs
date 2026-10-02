@@ -444,18 +444,17 @@ impl TicketRegistry {
                 "ticket registry capacity exceeded",
             ));
         }
-        if let Some(session_id) = ticket.session_id.as_deref() {
-            if guard
+        if let Some(session_id) = ticket.session_id.as_deref()
+            && guard
                 .values()
                 .filter(|entry| entry.session_id.as_deref() == Some(session_id))
                 .count()
                 >= 8
-            {
-                return Err(CallError::new(
-                    conex_proto::ErrorCode::QuotaExceeded,
-                    "session ticket capacity exceeded",
-                ));
-            }
+        {
+            return Err(CallError::new(
+                conex_proto::ErrorCode::QuotaExceeded,
+                "session ticket capacity exceeded",
+            ));
         }
         guard.insert(ticket.ticket.clone(), ticket.clone());
         Ok(ticket)
