@@ -1,5 +1,5 @@
 use std::net::{SocketAddr, TcpListener};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use conex_host::agent::now_ms;
@@ -24,7 +24,7 @@ fn repo_root() -> PathBuf {
         .to_path_buf()
 }
 
-fn host_config(notes_root: &PathBuf, port: u16, ui_hash: &str, service_hash: &str) -> String {
+fn host_config(notes_root: &Path, port: u16, ui_hash: &str, service_hash: &str) -> String {
     let tmp = TempDir::new().expect("tempdir");
     let content = tmp.path().join("content");
     let session = tmp.path().join("session");
