@@ -63,7 +63,7 @@ impl HostHandle {
         )
         .expect("write config");
         let binary = std::env::var("CONEX_HOST_BIN")
-            .unwrap_or_else(|_| format!("{}/target/debug/conex-host", repo_root().display()));
+            .unwrap_or_else(|_| env!("CARGO_BIN_EXE_conex-host").to_string());
         let stderr_path = cfg_tmp.path().join("host.stderr.log");
         let stderr_file = std::fs::File::create(&stderr_path).expect("stderr file");
         let child = std::process::Command::new(binary)
