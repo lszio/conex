@@ -1,0 +1,12 @@
+{
+  "extends": "../sdk/typescript/tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM"],
+    "noEmit": true,
+    "strict": true,
+    "types": ["bun"]
+  },
+  "include": ["src/**/*.ts", "build.ts"]
+}

@@ -1,0 +1,14 @@
+[
+  {
+    "name": "hello",
+    "input_utf8": "hello",
+    "cid": "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44yegnrjhc4yeq",
+    "bytes_hex": "015512202cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+  },
+  {
+    "name": "hello_conex_newline",
+    "input_utf8": "hello conex\n",
+    "cid": "bafkreicnbk2gkwoowxiq3loyrlyfdd42wwhcyvv67ny33drroaybh4qvxy",
+    "bytes_hex": "015512204d0ab46559ceb5d10dadd88af0518f9ab58e2c56befb71bd8e31703013f215be"
+  }
+]

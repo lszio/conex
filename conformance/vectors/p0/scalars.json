@@ -1,0 +1,7 @@
+[
+  {"name": "max_u64_and_false", "input": {"count": "18446744073709551615", "enabled": false}, "accept": true},
+  {"name": "empty_presence", "input": {}, "accept": true},
+  {"name": "number_not_string", "input": {"count": 18446744073709551615}, "accept": false},
+  {"name": "overflow", "input": {"count": "18446744073709551616"}, "accept": false},
+  {"name": "null_rejected", "input": {"enabled": null}, "accept": false}
+]
