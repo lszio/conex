@@ -2,7 +2,6 @@ use conex_core::Caller;
 use conex_host::broker::BrokerCall;
 use conex_host::config::{AgentConfig, EndpointConfig, HostConfig, PolicyConfig, TokenConfig};
 use conex_host::serve::build;
-use conex_proto;
 use serde_json::json;
 use std::path::PathBuf;
 use std::sync::Arc;

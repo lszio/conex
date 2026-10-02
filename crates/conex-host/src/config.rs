@@ -248,12 +248,12 @@ impl HostConfig {
                 }
             }
         }
-        if let Some(origin) = &self.web_origin {
-            if !valid_web_origin(origin) {
-                return Err(invalid(
-                    "web_origin must be a bare http:// or https:// origin without path, query, userinfo, or trailing slash",
-                ));
-            }
+        if let Some(origin) = &self.web_origin
+            && !valid_web_origin(origin)
+        {
+            return Err(invalid(
+                "web_origin must be a bare http:// or https:// origin without path, query, userinfo, or trailing slash",
+            ));
         }
         let mut agent_ids = HashSet::new();
         for agent in &self.agents {
@@ -500,7 +500,7 @@ fn valid_web_origin(origin: &str) -> bool {
     let (host, port) = authority
         .split_once(':')
         .map_or((authority, None), |(host, port)| (host, Some(port)));
-    !host.is_empty() && port.map_or(true, |port| !port.is_empty() && port.parse::<u16>().is_ok())
+    !host.is_empty() && port.is_none_or(|port| !port.is_empty() && port.parse::<u16>().is_ok())
 }
 
 fn valid_credential_source(source: &str) -> bool {

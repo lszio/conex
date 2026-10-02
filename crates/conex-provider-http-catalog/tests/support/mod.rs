@@ -13,7 +13,6 @@ use conex_core::{
     StaticPolicy, Target, TargetPolicy, TlsTrust,
 };
 use conex_host::{CredentialBackend, CredentialBinding, EnvFileStore, SecretReader};
-use conex_proto;
 use conex_transport_http::{HttpConnector, TlsTrustConfig};
 use rcgen::{BasicConstraints, CertificateParams, CertifiedIssuer, DnType, IsCa, KeyPair};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};

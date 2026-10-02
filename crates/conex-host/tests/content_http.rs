@@ -118,7 +118,7 @@ fn content_url(fixture: &Fixture, resource: &str) -> String {
     )
 }
 
-fn header<'a>(headers: &'a HeaderMap, name: &str) -> Option<String> {
+fn header(headers: &HeaderMap, name: &str) -> Option<String> {
     headers
         .get(name)
         .and_then(|value: &HeaderValue| value.to_str().ok())

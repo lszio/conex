@@ -8,7 +8,6 @@ use conex_host::serve::{BuiltHost, build};
 use conex_host::{
     AgentConfig, EndpointConfig, HostConfig, PendingRequests, PolicyConfig, RemoteLink, TokenConfig,
 };
-use conex_proto;
 use conex_proto::wire::decode_wire;
 use prost::Message as _;
 use serde_json::json;

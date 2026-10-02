@@ -161,15 +161,18 @@ fn summary(value: &Value) -> CallResult<()> {
     if !map.get("mime").is_some_and(Value::is_string) {
         return Err(bad("mime must be a string"));
     }
-    if let Some(size) = map.get("sizeBytes") {
-        if !size.is_string() || size.as_str().unwrap().parse::<u64>().is_err() {
-            return Err(bad("sizeBytes must be a decimal string"));
-        }
+    if let Some(size) = map
+        .get("sizeBytes")
+        .filter(|size| !size.is_string() || size.as_str().unwrap().parse::<u64>().is_err())
+    {
+        let _ = size;
+        return Err(bad("sizeBytes must be a decimal string"));
     }
-    if let Some(revision) = map.get("revision") {
-        if !revision.is_string() {
-            return Err(bad("revision must be a string"));
-        }
+    if map
+        .get("revision")
+        .is_some_and(|revision| !revision.is_string())
+    {
+        return Err(bad("revision must be a string"));
     }
     let kind = map
         .get("kind")
@@ -230,18 +233,17 @@ fn content_ref(value: &Value) -> CallResult<()> {
     if !access.get("resourceId").is_some_and(Value::is_string) {
         return Err(bad("access.resourceId must be a string"));
     }
-    match access.get("endpointId") {
-        None => {} // Host-local committed content
-        Some(endpoint_id) => {
-            if !endpoint_id.is_string() {
-                return Err(bad("access.endpointId must be a string"));
-            }
-        }
+    if access
+        .get("endpointId")
+        .is_some_and(|endpoint_id| !endpoint_id.is_string())
+    {
+        return Err(bad("access.endpointId must be a string"));
     }
-    if let Some(revision) = map.get("revision") {
-        if !revision.is_string() {
-            return Err(bad("revision must be a string"));
-        }
+    if map
+        .get("revision")
+        .is_some_and(|revision| !revision.is_string())
+    {
+        return Err(bad("revision must be a string"));
     }
     Ok(())
 }
@@ -260,10 +262,8 @@ fn validate_read_output(value: &Value) -> CallResult<()> {
     if text.is_some() == content.is_some() {
         return Err(bad("exactly one of text or content is required"));
     }
-    if let Some(text) = text {
-        if !text.is_string() {
-            return Err(bad("text must be a string"));
-        }
+    if text.is_some_and(|text| !text.is_string()) {
+        return Err(bad("text must be a string"));
     }
     if let Some(content) = content {
         content_ref(content)?;

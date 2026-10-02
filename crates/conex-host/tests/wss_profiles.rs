@@ -13,7 +13,6 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use tokio_tungstenite::tungstenite::Message;
 
-use conex_proto;
 use prost::Message as ProstMessage;
 
 fn tmp(name: &str) -> (tempfile::TempDir, PathBuf) {

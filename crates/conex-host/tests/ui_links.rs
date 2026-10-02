@@ -95,10 +95,10 @@ impl Drop for HostHandle {
     fn drop(&mut self) {
         let _ = self.child.kill();
         let _ = self.child.wait();
-        if std::thread::panicking() {
-            if let Ok(text) = std::fs::read_to_string(&self.stderr_path) {
-                eprintln!("--- host stderr ({} bytes) ---\n{}", text.len(), text);
-            }
+        if std::thread::panicking()
+            && let Ok(text) = std::fs::read_to_string(&self.stderr_path)
+        {
+            eprintln!("--- host stderr ({} bytes) ---\n{}", text.len(), text);
         }
     }
 }

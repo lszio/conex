@@ -110,47 +110,40 @@ pub async fn issue_ticket(
             ));
         }
     };
-    if let Some(web) = state.web_auth.as_ref() {
-        if headers.get(axum::http::header::COOKIE).is_some() {
-            let session = match web.check_mutation(&headers) {
-                Ok(session) => session,
-                Err(error) => return call_error_to_response(error),
-            };
-            let target_host = headers
-                .get(axum::http::header::HOST)
-                .and_then(|value| value.to_str().ok())
-                .unwrap_or_default();
-            let capabilities: Vec<String> = if session.caller.principal_id == "guest" {
-                vec![
-                    "endpoint/list".into(),
-                    "connection/list".into(),
-                    "source/list".into(),
-                    "source/read".into(),
-                    "source/search".into(),
-                ]
-            } else {
-                vec![
-                    "endpoint/list".into(),
-                    "connection/list".into(),
-                    "source/list".into(),
-                    "source/read".into(),
-                    "source/search".into(),
-                ]
-            };
-            let ticket = match side.tickets.issue(
-                &session.caller.principal_id,
-                &session.caller.tenant_id,
-                web.origin(),
-                target_host,
-                "ui",
-                capabilities,
-                Some(session.id.clone()),
-            ) {
-                Ok(ticket) => ticket,
-                Err(error) => return call_error_data_to_response(error),
-            };
-            return ticket_response(ticket);
-        }
+    if let Some(web) = state.web_auth.as_ref()
+        && headers.get(axum::http::header::COOKIE).is_some()
+    {
+        let session = match web.check_mutation(&headers) {
+            Ok(session) => session,
+            Err(error) => return call_error_to_response(error),
+        };
+        let target_host = headers
+            .get(axum::http::header::HOST)
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or_default();
+        // UI tickets (guest and authenticated alike) grant the same
+        // read-only capability set; per-visitor isolation happens in
+        // connection/list and per-resource policy, not here.
+        let capabilities: Vec<String> = vec![
+            "endpoint/list".into(),
+            "connection/list".into(),
+            "source/list".into(),
+            "source/read".into(),
+            "source/search".into(),
+        ];
+        let ticket = match side.tickets.issue(
+            &session.caller.principal_id,
+            &session.caller.tenant_id,
+            web.origin(),
+            target_host,
+            "ui",
+            capabilities,
+            Some(session.id.clone()),
+        ) {
+            Ok(ticket) => ticket,
+            Err(error) => return call_error_data_to_response(error),
+        };
+        return ticket_response(ticket);
     }
     let caller = match principal_from_auth(&state, &headers) {
         Ok(caller) => caller,

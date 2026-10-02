@@ -15,7 +15,6 @@ use conex_core::{
     Resolver, ResourceClaim, Route, Secret, StaticPolicy, Target, TargetPolicy, TlsTrust,
     VerifiedPeer,
 };
-use conex_proto;
 use serde_json::{Value, json};
 use tokio::time::Instant;
 

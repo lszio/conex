@@ -571,13 +571,13 @@ async fn dispatch_chunk(
     let read_len = length.min(conex_proto::cid::CHUNK_SIZE as u64) as usize;
     let (chunk, total, mtime_ns) = provider.root.read_range(resource, offset, read_len)?;
     let revision = mtime_ns.to_string();
-    if let Some(expected) = requested_revision {
-        if expected != revision {
-            return Err(conex_core::CallError::new(
-                conex_proto::ErrorCode::StaleRevision,
-                format!("resource revision moved: requested {expected}, current {revision}"),
-            ));
-        }
+    if let Some(expected) = requested_revision
+        && expected != revision
+    {
+        return Err(conex_core::CallError::new(
+            conex_proto::ErrorCode::StaleRevision,
+            format!("resource revision moved: requested {expected}, current {revision}"),
+        ));
     }
     let eof = offset + chunk.len() as u64 >= total;
     Ok(conex_proto::DataChunk {

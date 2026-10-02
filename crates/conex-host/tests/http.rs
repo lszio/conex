@@ -15,7 +15,6 @@ use conex_host::{
     BindingStore, HttpState, PROFILE_ID, StaticBearerAuth, TokenRecord, attach_state,
     build_router as build_p0_router,
 };
-use conex_proto;
 use serde_json::Value;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};

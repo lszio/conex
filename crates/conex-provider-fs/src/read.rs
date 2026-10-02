@@ -279,13 +279,13 @@ impl conex_core::RangeReader for ReadHandler {
         }
         let (_total, mtime_ns) = self.root.stat(resource)?;
         let revision = mtime_ns.to_string();
-        if let Some(expected) = expected_revision {
-            if expected != revision {
-                return Err(CallError::new(
-                    conex_proto::ErrorCode::StaleRevision,
-                    format!("resource revision moved: requested {expected}, current {revision}"),
-                ));
-            }
+        if let Some(expected) = expected_revision
+            && expected != revision
+        {
+            return Err(CallError::new(
+                conex_proto::ErrorCode::StaleRevision,
+                format!("resource revision moved: requested {expected}, current {revision}"),
+            ));
         }
         let (bytes, total, mtime_ns) = self.root.read_range(resource, offset, length)?;
         let eof = offset + bytes.len() as u64 >= total;

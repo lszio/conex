@@ -32,7 +32,7 @@ async fn local_read_routes_through_provider_handlers() {
     .await
     .expect("read");
     assert_eq!(value["text"].as_str(), Some("hello agent"));
-    assert_eq!(value["resource"]["revision"].as_str().is_some(), true);
+    assert!(value["resource"]["revision"].as_str().is_some());
 }
 
 #[tokio::test]
