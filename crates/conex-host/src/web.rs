@@ -20,6 +20,9 @@ pub struct WebAssets {
     index: Arc<Vec<u8>>,
     app: Arc<Vec<u8>>,
     style: Arc<Vec<u8>>,
+    /// Machine-readable site summary for LLM crawlers. Optional: a build
+    /// without it must still serve the human page.
+    llms: Option<Arc<Vec<u8>>>,
 }
 
 impl WebAssets {
@@ -39,15 +42,24 @@ impl WebAssets {
             index: Arc::new(read_asset(&root, "index.html")?),
             app: Arc::new(read_asset(&root, "app.js")?),
             style: Arc::new(read_asset(&root, "style.css")?),
+            llms: read_asset(&root, "llms.txt").ok().map(Arc::new),
         })
     }
 
     pub fn router(self) -> Router {
-        Router::new()
+        let llms = self.llms.clone();
+        let mut router = Router::new()
             .route("/", get(index))
             .route("/app.js", get(app))
-            .route("/style.css", get(style))
-            .layer(Extension(self))
+            .route("/style.css", get(style));
+        if llms.is_some() {
+            // llms.txt is the llmstxt.org convention; /llm.txt is the older
+            // spelling and both must resolve for crawlers that use either.
+            router = router
+                .route("/llms.txt", get(llms_txt))
+                .route("/llm.txt", get(llms_txt));
+        }
+        router.layer(Extension(self))
     }
 }
 
@@ -73,6 +85,13 @@ async fn app(Extension(assets): Extension<WebAssets>) -> Response {
 
 async fn style(Extension(assets): Extension<WebAssets>) -> Response {
     asset_response(&assets.style, "text/css; charset=utf-8", false)
+}
+
+async fn llms_txt(Extension(assets): Extension<WebAssets>) -> Response {
+    // The route only exists when the file loaded, so the missing arm cannot
+    // fire; serving an empty body is still safer than an HTML fallback.
+    let bytes: &[u8] = assets.llms.as_deref().map(|b| b.as_slice()).unwrap_or(&[]);
+    asset_response(bytes, "text/plain; charset=utf-8", false)
 }
 
 fn asset_response(bytes: &[u8], content_type: &'static str, html: bool) -> Response {
@@ -105,7 +124,10 @@ fn invalid(message: impl std::fmt::Display) -> CallError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::body::Body;
+    use axum::http::Request;
     use tempfile::tempdir;
+    use tower::ServiceExt;
 
     #[test]
     fn rejects_missing_fixed_asset() {
@@ -124,5 +146,67 @@ mod tests {
         assert_eq!(&*assets.index, b"index.html");
         assert_eq!(&*assets.app, b"app.js");
         assert_eq!(&*assets.style, b"style.css");
+    }
+
+    #[tokio::test]
+    async fn llms_txt_is_served_under_both_spellings_when_present() {
+        let dir = tempdir().unwrap();
+        for name in ["index.html", "app.js", "style.css"] {
+            std::fs::write(dir.path().join(name), name).unwrap();
+        }
+        std::fs::write(dir.path().join("llms.txt"), "# conex\n\nsummary").unwrap();
+        let app = WebAssets::load(dir.path()).unwrap().router();
+        for path in ["/llms.txt", "/llm.txt"] {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .uri(path)
+                        .body(Body::empty())
+                        .expect("request"),
+                )
+                .await
+                .expect("response");
+            assert_eq!(response.status(), StatusCode::OK, "{path}");
+            assert_eq!(
+                response.headers()[header::CONTENT_TYPE],
+                "text/plain; charset=utf-8"
+            );
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .expect("body");
+            assert_eq!(body.as_ref(), b"# conex\n\nsummary");
+        }
+    }
+
+    #[tokio::test]
+    async fn missing_llms_txt_does_not_break_the_page() {
+        let dir = tempdir().unwrap();
+        for name in ["index.html", "app.js", "style.css"] {
+            std::fs::write(dir.path().join(name), name).unwrap();
+        }
+        let app = WebAssets::load(dir.path()).unwrap().router();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(response.status(), StatusCode::OK);
+        // No file means no route: /llms.txt must 404, not serve HTML.
+        let app = WebAssets::load(dir.path()).unwrap().router();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/llms.txt")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 }

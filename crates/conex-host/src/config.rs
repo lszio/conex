@@ -18,6 +18,13 @@ pub struct HostConfig {
     pub listen: String,
     #[serde(default)]
     pub allow_loopback_http: bool,
+    /// Plaintext listener on a non-loopback address, for a container whose
+    /// port is only reachable from a TLS-terminating reverse proxy. Separate
+    /// from `allow_loopback_http`, which means "plaintext never leaves this
+    /// machine"; inside a container that assumption is false, so the
+    /// exposure has to be acknowledged explicitly.
+    #[serde(default)]
+    pub allow_plaintext_bind: bool,
     #[serde(default)]
     pub audience: Option<String>,
     #[serde(default)]
@@ -403,8 +410,10 @@ impl HostConfig {
                 return Err(invalid("token_hash must be 64 hex characters"));
             }
         }
-        if self.tls.is_none() && !self.allow_loopback_http {
-            return Err(invalid("plaintext requires allow_loopback_http = true"));
+        if self.tls.is_none() && !self.allow_loopback_http && !self.allow_plaintext_bind {
+            return Err(invalid(
+                "plaintext requires allow_loopback_http = true or allow_plaintext_bind = true",
+            ));
         }
         if self.allow_loopback_http && !address.ip().is_loopback() {
             return Err(invalid(

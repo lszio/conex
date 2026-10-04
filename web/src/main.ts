@@ -16,6 +16,7 @@ import {
   type Operation,
 } from "./view";
 import { Browser, connectionLabel, type DirectoryPage, type ListingRow } from "./browser";
+import { renderWalkthrough } from "./walkthrough";
 
 let csrfToken = "";
 let client: ConexWsClient | undefined;
@@ -299,6 +300,14 @@ document.addEventListener("visibilitychange", () => {
     startPolling();
   }
 });
+
+// The walkthrough is static storytelling: it must render even when the session
+// check below fails, so a visitor without a working connection still sees what
+// the system does.
+const walkthroughHost = document.querySelector<HTMLElement>("#walkthrough");
+if (walkthroughHost) {
+  renderWalkthrough(walkthroughHost, document.querySelector<HTMLButtonElement>("#replay") ?? undefined);
+}
 
 void session().then((active) => {
   if (active) { showApp(); return connect().catch((error) => showLogin(error instanceof Error ? error.message : "连接失败")); }
