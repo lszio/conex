@@ -2,7 +2,7 @@
 
 conex（connect + nexus）是一个可嵌入的双向能力路由内核及可选独立进程；工作协议名 `conex`。
 
-**当前状态（2026-10-04）：** P0、P1、Connected landing、多主机内容 M0–M5 已交付；**公开落地页已部署**到 <https://conex.lszio.space>（分支 `landing`，提交 `a9d3034`/`af47b3d`）：产品叙事、请求链路演示、免凭据访客只读控制台、`/llms.txt`。本轮修复两个真实缺陷：容器反代后的明文监听被配置校验拒绝（新增 `allow_plaintext_bind`）、`/content` 缺 `Content-Length` 导致视频无法拖动。逐项证据：[落地页验证记录](docs/verification/landing-page.md)。历史：多主机内容 M0–M5（[验证记录](docs/verification/multi-host-content.md)）；剩余 M4（Notez 接入）与 M6（验收收口）见计划。
+**当前状态（2026-10-04）：** 公开落地页已上线 <https://conex.lszio.space>（分支 `landing`）：产品叙事、请求链路演示、免凭据访客只读控制台、`/llms.txt`，访客打开即用。P0、P1、Connected landing、多主机内容 M0–M5 已交付。本轮修复三个真实缺陷：容器反代后的明文监听被配置校验拒绝（新增 `allow_plaintext_bind`）、`/content` 缺 `Content-Length` 导致视频无法拖动、基础镜像浮动 tag 拉取卡死导致部署永久挂起（改为 digest 固定）。逐项证据：[落地页验证记录](docs/verification/landing-page.md)。历史：多主机内容 M0–M5（[验证记录](docs/verification/multi-host-content.md)）；剩余 M4（Notez 接入）与 M6（验收收口）见计划。
 
 ## 文档
 

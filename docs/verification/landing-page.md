@@ -176,17 +176,72 @@ $ docker build -t conex:landing .        # 成功
 
 `cargo xtask check` 未在本轮运行（集成门禁，见下）。
 
-## 10. Dokploy 部署
+## 10. Dokploy 部署（已上线）
 
 应用 `fEKm9C8gzoKBXN94LAFq4`（App/production）原本跟踪已删除的分支
-`refactor/arch`，每次自动部署必然失败。已改指 `landing` 分支并手动触发部署；
-域名 `conex.lszio.space`（Let's Encrypt → 反代 → 容器 8787）已创建。
+`refactor/arch`，每次自动部署必然失败。已改指 `landing` 分支；域名
+`conex.lszio.space`（Let's Encrypt → 反代 → 容器 8787）已创建。
+
+**第三次阻塞：基础镜像 tag 拉取卡死。** 首次部署在
+`#2 [internal] load metadata for docker.io/library/rust:1-bookworm` 停了约 40 分钟，
+日志字节数冻结在 19577 不再增长，且没有任何报错；Dokploy 在旧部署仍为
+`running` 时拒绝启动新部署，因此站点一直 502。根因是浮动 tag 必须在构建期
+经 registry 解析 manifest，拉取卡住就整体挂起。
+
+修复：三个基础镜像全部按 digest 固定。重新部署后该行耗时
+`#2 DONE 0.3s`（原为无限等待），构建正常完成。
+
+## 11. 线上验收（https://conex.lszio.space）
+
+```console
+$ curl -sS -o /dev/null -w '%{http_code}\n' $O/          # 200 text/html; charset=utf-8
+$ curl -sS -o /dev/null -w '%{http_code}\n' $O/llms.txt  # 200 text/plain; charset=utf-8
+$ curl -sS -o /dev/null -w '%{http_code}\n' $O/llm.txt   # 200（别名）
+$ curl -sS -o /dev/null -w '%{http_code}\n' $O/not-found # 404（不回退 HTML）
+
+$ curl -sSi $O/ | grep -iE 'content-security|nosniff|x-frame|cache-control|referrer'
+content-security-policy: default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' ws: wss:; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'
+x-content-type-options: nosniff
+x-frame-options: DENY
+cache-control: no-store
+referrer-policy: no-referrer
+
+$ curl -sSi $O/web/session | grep -iE '^HTTP|set-cookie'
+HTTP/2 200
+set-cookie: conex_web_session=…; Path=/; HttpOnly; SameSite=Strict; Secure
+{"csrf":"…","principalId":"guest","role":"ui","tenantId":"demo","expiresAtMs":"…"}
+
+$ curl -sS -o /dev/null -w '%{http_code}\n' "$O/content?endpointId=docs&resourceId=readme.md"   # 401（无会话不泄露）
+```
+
+真实 HTTPS 下 cookie 带 `Secure`，与 `allow_plaintext_bind`（不影响 cookie 策略）一致。
+
+**生产镜像作为容器运行**（`docker run conex:final-pin`，健康检查 `healthy`）：
+四个路由全部正确、访客会话自动签发；把 `web_origin` 覆写为本地地址后，
+容器内页面通过全部预览检查（Markdown、图片、ZIP 4 条目、DOCX 0 脚本、二进制元数据、
+0 页面错误），WebM 拖动到 4.0s 正常。
+
+注意：直接用 `http://127.0.0.1:<port>` 访问容器**会失败**，因为镜像内
+`web_origin = "https://conex.lszio.space"`，Origin 校验按设计拒绝。这不是缺陷，
+本地验证需要覆写 `web_origin`。
+
+**真实浏览器对线上站**（headless Chromium，1440px）：
+
+```console
+markdownText: "# conex 落地页演示内容…"
+imageOk: true      zipEntries: 4      docxHasText: true      docxScripts: 0
+binaryMeta: true   page errors: none
+video src: https://conex.lszio.space/content?endpointId=media&resourceId=clip.mp4&revision=…
+seek: {"ok":true,"t":4}
+walkthrough: 结束态 active 0 / done 7；点击「重新播放」回到第 1 步
+prefers-reduced-motion: done 7 / active 0（无动画）
+```
 
 ## 未验证项
 
-- **线上 `https://conex.lszio.space` 的端到端验收**：镜像在 Dokploy 构建期间本记录
-  收尾，线上仅观测到 502（构建未完成）。§2–§9 的全部实测均在本地同一镜像
-  配置（`docker/host.toml` + `docker/demo`）下完成，线上仍需复跑 §5 的 curl 清单。
-- `cargo xtask check` 全量门禁（含 fmt/clippy 债务检查）。
+- `cargo xtask check` 全量门禁（含 fmt/clippy 债务检查）未在本轮运行。
 - 跨主机真实反连、真实证书 pin、真实 OIDC：沿用既有缺口，本轮未涉及。
 - 移动端真机（仅 390px 视口模拟，无触屏设备实测）。
+- `clip.mp4` 未在有专有编解码器的浏览器上实测（headless 环境无 H.264）；
+  同一容器的 `clip.webm` 播放与拖动已实测通过。
+- 多访客并发、大文件（1 GiB）线上读取：未执行。

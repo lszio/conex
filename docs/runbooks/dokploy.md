@@ -97,4 +97,5 @@ curl -sSi $ORIGIN/web/session | head -3                           # 200 + Set-Co
 | 页面能开但全部调用 401 | `web_origin` 与真实 origin 不一致 | 同步后重新构建（§4） |
 | `/llms.txt` 404 | `web_root` 缺该文件 | `bun run build:web` 现在缺文件即失败 |
 | 视频能播但拖不动 | 响应缺 `Content-Length` | 已修（`content_http.rs`）；旧镜像需重建 |
+| 部署一直 `running`、日志不增长、站点 502 | 基础镜像浮动 tag 的 manifest 拉取卡死；Dokploy 不允许并发起第二次部署 | 已把三个基础镜像固定为 digest；卡死后先 `application.stop` 再 redeploy |
 | Agent `Connection refused` 持续 | host 未就绪或网络不通 | 启动握手前那两行属正常；持续出现查 `depends_on` 与网络 |

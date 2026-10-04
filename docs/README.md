@@ -9,7 +9,7 @@ conex 的文档按「规范 / 契约 / 计划 / 证据 / 操作」分层，每�
 - **Connected landing 已交付**：中心 Host + 反连 Agent + 浏览器会话/ticket + 端点目录 + 连接面板；三条 e2e 套件（landing / landing-web / landing-connections，含真停 Agent 进程的生命周期场景）。见 [验证记录](verification/connected-landing.md)、[运行手册](runbooks/connected-landing.md)。
 - **多主机内容 M0–M5 已交付**（分支 `refactor/arch`，未提交）：内容契约冻结（endpointId+revision 定位、blob/get 互斥目标、二进制 DataChunk 通道）、访客会话与 blob 所有权授权、逐端点注册生命周期、Agent 复用 provider 机制、同源 `/content`（Range/ETag/防注入/流式取消）、公共浏览页面（文本/图片/视频/DOCX/ZIP 受限预览，1440/390 双视口 38 项浏览器检查全过）。逐项证据见 [多主机内容验证记录](verification/multi-host-content.md)。
 - **下一步**：M4（Notez 接入，需真实 Notez 仓库与实例）与 M6（验收收口），见 [多主机内容计划](plans/2026-10-01-conex-multi-host-content.md)。
-- **公开落地页已部署（2026-10-04）**：产品叙事 + 请求链路演示 + 免凭据访客控制台 + `llms.txt`；Dokploy 单容器 guest-only 栈部署到 `https://conex.lszio.space`。同时修复两个真实缺陷：容器反代后明文监听被配置校验拒绝（新增 `allow_plaintext_bind`），以及 `/content` 缺 `Content-Length` 导致视频无法拖动。见 [落地页验证记录](verification/landing-page.md)、[Dokploy 部署运行手册](runbooks/dokploy.md)。
+- **公开落地页已上线（2026-10-04）**：<https://conex.lszio.space>，产品叙事 + 请求链路演示 + 免凭据访客控制台 + `llms.txt`；Dokploy 单容器 guest-only 栈。同时修复三个真实缺陷：容器反代后的明文监听被配置校验拒绝（新增 `allow_plaintext_bind`）、`/content` 缺 `Content-Length` 导致视频无法拖动、基础镜像浮动 tag 拉取卡死使部署永久挂起（改为 digest 固定）。见 [落地页验证记录](verification/landing-page.md)、[Dokploy 部署运行手册](runbooks/dokploy.md)。
 - 完成状态与证据以各 [验证记录](verification/) 为准。
 
 ## 文档地图
