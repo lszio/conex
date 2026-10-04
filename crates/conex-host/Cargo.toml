@@ -49,3 +49,6 @@ conex-provider-fs = { path = "../conex-provider-fs" }
 conex-proto = { path = "../conex-proto" }
 tempfile.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time", "test-util", "net", "io-util", "signal"] }
+# Router tests drive the axum Router with oneshot; axum re-exports the
+# traits via tower, and no other host test needs them.
+tower = { version = "0.5", features = ["util"] }
