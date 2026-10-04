@@ -635,3 +635,56 @@ fn a_malformed_additional_origin_fails_config_load() {
         error.message()
     );
 }
+
+/// A cookie minted by a *previous* process — after a restart or redeploy the
+/// registry is empty while every visitor's cookie is still in their jar. Before
+/// this was fixed the visitor was refused with 401 forever, because the id had
+/// no tombstone to classify it as a guest session.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_cookie_from_a_previous_process_becomes_a_fresh_guest_session() {
+    let root = tempfile::tempdir().expect("tempdir");
+    // Guest access is what a returning visitor has; without `[web_guest]` the
+    // first request is refused and there is no cookie to carry over.
+    let config = config_text_with(
+        root.path(),
+        &sha256_hex("ui-secret"),
+        &sha256_hex("svc-secret"),
+        "[web_guest]\nprincipal_id = \"guest\"\ntenant_id = \"tenant-a\"\nmax_sessions = 16\n",
+        "",
+    );
+    // First process: issue a real guest session and keep the cookie.
+    let (addr, task) = spawn_host(&config, root.path()).await;
+    let origin = format!("http://{addr}");
+    let client = reqwest::Client::new();
+    let first = client
+        .get(format!("{origin}/web/session"))
+        .header("origin", &origin)
+        .send()
+        .await
+        .expect("first session");
+    assert_eq!(first.status(), StatusCode::OK);
+    let stale_cookie = cookie_pair(&first);
+    task.abort();
+
+    // A second process. It takes a new port — a restarted host is reached at
+    // whatever address the deployment gives it — and the cookie is now from a
+    // process that no longer exists, so nothing in memory recognises it.
+    let (addr, task) = spawn_host(&config, root.path()).await;
+    let origin = format!("http://{addr}");
+    let reissued = client
+        .get(format!("{origin}/web/session"))
+        .header("origin", &origin)
+        .header("cookie", &stale_cookie)
+        .send()
+        .await
+        .expect("second session");
+    assert_eq!(
+        reissued.status(),
+        StatusCode::OK,
+        "a returning visitor must not be locked out by a restart"
+    );
+    let body: Value = reissued.json().await.expect("json");
+    assert_eq!(body["principalId"].as_str(), Some("guest"));
+    assert!(body["csrf"].as_str().is_some_and(|csrf| !csrf.is_empty()));
+    task.abort();
+}

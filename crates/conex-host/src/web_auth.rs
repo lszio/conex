@@ -311,16 +311,36 @@ impl WebAuth {
         );
     }
 
-    /// A stale cookie may silently become a fresh anonymous session only when
-    /// it belonged to a guest session and guest access is configured.
+    /// Whether a dead session id may become a fresh anonymous session.
+    ///
+    /// True for a recorded guest tombstone, and also for an id this process
+    /// never issued at all: after a restart or a redeploy the in-memory
+    /// registry is empty while every visitor's cookie is still in their jar, and
+    /// refusing those would lock out every returning visitor permanently. The
+    /// id cannot belong to an authenticated principal here, because the only
+    /// path that mints a `ui` session for a real principal is
+    /// [`WebAuth::login`], which records a tombstone when that session dies.
     pub fn can_reissue_guest(&self, id: &str) -> bool {
-        self.guest.is_some()
-            && self
-                .tombstones
-                .lock()
-                .expect("session tombstones poisoned")
-                .get(id)
-                .is_some_and(|tombstone| tombstone.was_guest)
+        if self.guest.is_none() {
+            return false;
+        }
+        if self
+            .tombstones
+            .lock()
+            .expect("session tombstones poisoned")
+            .get(id)
+            .is_some_and(|tombstone| tombstone.was_guest)
+        {
+            return true;
+        }
+        // A tombstone that says "not a guest" is an authenticated session, and
+        // must keep surfacing the auth error. Anything with no tombstone at all
+        // predates this process, so it cannot be classified either way.
+        !self
+            .tombstones
+            .lock()
+            .expect("session tombstones poisoned")
+            .contains_key(id)
     }
 
     pub fn get(&self, id: &str) -> Option<Arc<WebSession>> {
