@@ -83,10 +83,30 @@ page errors: none
 
 **关于 `<1 ms`**：Host 侧测得的首个 pong 约 40 ms，其后为 0–1 ms。经交叉验证，
 这是 **Bun `WebSocket` 进程内一次性惰性初始化**（换一个目标客户端，它的第一个
-pong 同样是 0 ms），不是网络 RTT，也不是每次发送的固定开销。真实浏览器下该
-现象不出现。页面在亚毫秒时显示 `<1 ms` 而不是 `0 ms`，避免把有效数字读成零。
+pong 同样是 0 ms），不是网络 RTT，也不是每次发送的固定开销。线上真实浏览器
+实测为 19–20 ms（§5），该现象不出现。页面在亚毫秒时显示 `<1 ms` 而不是
+`0 ms`，避免把有效数字读成零。
 
-## 5. 门禁
+## 5. 线上验收（https://conex.lszio.space）
+
+两个独立浏览器 context（两套 cookie = 两个访客），无任何凭据：
+
+```console
+both connected (no credential)
+A sees: [ 'bob', 'alice' ]
+B sees: [ 'bob', 'alice' ]
+A→B: → bob：20 ms，回复「pong」
+B got: ← 收到 hello：hello alice
+B→A: → alice：19 ms，回复「pong」
+A sees after B hides: [ 'alice' ]
+page errors: none
+```
+
+即：互相可见、互相 greet、隐藏后从对方列表消失、零页面错误。
+线上实测往返 **19–20 ms**；本地 Bun 下出现的 0–1 ms 确认为其一次性惰性初始化，
+真实浏览器不出现（见 §4）。
+
+## 6. 门禁
 
 ```console
 $ cargo test --workspace --offline      # 67 个套件全 ok，0 失败（跑两遍一致）
@@ -101,13 +121,11 @@ $ cargo test -p conex-host --lib client_pong # 2/2
 `cargo xtask check` 未在本轮运行；其子项（fmt / generate / clippy / 全量测试）
 已分别验证通过。
 
-## 6. 未验证项
+## 7. 未验证项
 
-- **线上 `https://conex.lszio.space` 的 hello 验收**：镜像重建期间本记录收尾，
-  §4 的全部实测在本地同一配置（`docker/host.toml`，无端点、无凭据）下完成。
-  线上仍需复跑：两页互见、互发 hello、隐藏生效。
 - 多访客高并发（>50）下的广播与回收行为。
-- 真实移动端浏览器（仅 1280px 视口模拟）。
+- 真实移动端浏览器（仅桌面视口模拟）。
+- 跨主机反连、真实证书 pin、真实 OIDC：沿用既有缺口，本轮未涉及。
 
 ## 附：上一版内容浏览页面的部署故障根因（2026-10-04 上午）
 
