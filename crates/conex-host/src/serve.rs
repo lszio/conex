@@ -320,9 +320,14 @@ pub fn build_router(config: &HostConfig) -> Result<Router, CallError> {
     let built = build(config)?;
     let ui_links = Arc::new(crate::ui_links::UiLinkRegistry::new());
     let web_auth = built.host_side.as_ref().and_then(|side| {
-        config.web_origin.as_ref().map(|origin| {
+        // The accepted-origin set: the primary plus any additional configured
+        // ones, so one image works under production and preview domains.
+        let mut origins: Vec<String> = config.web_origin.iter().cloned().collect();
+        origins.extend(config.web_origins.iter().cloned());
+        origins.dedup();
+        (!origins.is_empty()).then(|| {
             Arc::new(crate::web_auth::WebAuth::with_guest(
-                origin.clone(),
+                origins,
                 !config.allow_loopback_http,
                 side.tickets.clone(),
                 ui_links.clone(),

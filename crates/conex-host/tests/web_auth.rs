@@ -548,3 +548,90 @@ async fn stale_guest_cookie_reissues_but_authenticated_does_not_downgrade() {
     );
     task.abort();
 }
+
+/// One image is served under several domains (production plus one preview
+/// domain per pull request). The Origin gate must accept every configured
+/// origin and refuse anything else — this is what keeps a preview deployment
+/// from loading the page and then failing every call.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_additional_configured_origin_is_accepted_and_others_are_not() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let base = config_text(
+        root.path(),
+        &sha256_hex("ui-secret"),
+        &sha256_hex("svc-secret"),
+    );
+    let (addr, task) = spawn_host(&base, root.path()).await;
+    let primary = format!("http://{addr}");
+    let client = reqwest::Client::new();
+
+    // A domain that is not configured is refused even with a valid token.
+    let refused = client
+        .post(format!("{primary}/web/login"))
+        .header("origin", "https://evil.example")
+        .header("authorization", "Bearer ui-secret")
+        .send()
+        .await
+        .expect("login request");
+    assert_eq!(refused.status(), StatusCode::UNAUTHORIZED);
+
+    drop(task);
+
+    // Same host, but the second origin is now configured. The key has to go in
+    // the top-level table: appending it to the file would land it inside the
+    // trailing `[[endpoints]]` table.
+    let multi = base.replacen(
+        "web_origin = \"http://127.0.0.1:0\"",
+        "web_origin = \"http://127.0.0.1:0\"\nweb_origins = [\"https://preview-conex.lszio.space\"]",
+        1,
+    );
+    let (addr, task) = spawn_host(&multi, root.path()).await;
+    let primary = format!("http://{addr}");
+    let accepted = client
+        .post(format!("{primary}/web/login"))
+        .header("origin", "https://preview-conex.lszio.space")
+        .header("authorization", "Bearer ui-secret")
+        .send()
+        .await
+        .expect("login request");
+    assert_eq!(
+        accepted.status(),
+        StatusCode::OK,
+        "a configured secondary origin must be able to log in"
+    );
+
+    let refused = client
+        .post(format!("{primary}/web/login"))
+        .header("origin", "https://still-not-configured.example")
+        .header("authorization", "Bearer ui-secret")
+        .send()
+        .await
+        .expect("login request");
+    assert_eq!(refused.status(), StatusCode::UNAUTHORIZED);
+    task.abort();
+}
+
+/// A malformed additional origin fails at load, not at the first request: a
+/// preview build must not come up with an origin it can never match.
+#[test]
+fn a_malformed_additional_origin_fails_config_load() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let base = config_text(
+        root.path(),
+        &sha256_hex("ui-secret"),
+        &sha256_hex("svc-secret"),
+    );
+    let path = root.path().join("host.toml");
+    let broken = base.replacen(
+        "web_origin = \"http://127.0.0.1:0\"",
+        "web_origin = \"http://127.0.0.1:0\"\nweb_origins = [\"preview.example/with/path\"]",
+        1,
+    );
+    std::fs::write(&path, broken).expect("write");
+    let error = conex_host::config::HostConfig::load(&path).expect_err("must not load");
+    assert!(
+        error.message().contains("web_origins"),
+        "the error must name the offending field: {}",
+        error.message()
+    );
+}

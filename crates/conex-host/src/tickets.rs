@@ -138,7 +138,10 @@ pub async fn issue_ticket(
         let ticket = match side.tickets.issue(
             &session.caller.principal_id,
             &session.caller.tenant_id,
-            web.origin(),
+            // Bound to the origin the session was created on, not the
+            // configured primary: the WSS upgrade re-checks this string, so a
+            // preview-domain session must be bound to its own domain.
+            &session.origin,
             target_host,
             "ui",
             capabilities,

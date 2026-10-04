@@ -42,6 +42,12 @@ pub struct HostConfig {
     /// Same-origin browser origin for the connected landing page.
     #[serde(default)]
     pub web_origin: Option<String>,
+    /// Additional accepted browser origins. A single image is deployed under
+    /// several domains (production plus one preview domain per pull request),
+    /// and every Origin/CSRF check compares against this set, so the preview
+    /// build does not need a different config than production.
+    #[serde(default)]
+    pub web_origins: Vec<String>,
     /// Static UI root for the connected landing page.
     #[serde(default)]
     pub web_root: Option<PathBuf>,
@@ -261,6 +267,13 @@ impl HostConfig {
             return Err(invalid(
                 "web_origin must be a bare http:// or https:// origin without path, query, userinfo, or trailing slash",
             ));
+        }
+        for origin in &self.web_origins {
+            if !valid_web_origin(origin) {
+                return Err(invalid(format!(
+                    "web_origins entry {origin} must be a bare http:// or https:// origin without path, query, userinfo, or trailing slash"
+                )));
+            }
         }
         let mut agent_ids = HashSet::new();
         for agent in &self.agents {

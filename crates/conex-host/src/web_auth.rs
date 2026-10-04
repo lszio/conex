@@ -98,7 +98,11 @@ struct Tombstone {
 }
 
 pub struct WebAuth {
-    origin: String,
+    /// Every accepted browser origin. One image is served under several
+    /// domains (production plus one preview domain per pull request), so this
+    /// is a set rather than a single string: a request is same-origin when its
+    /// Origin is *one of* these.
+    origins: Vec<String>,
     secure_cookie: bool,
     tickets: Arc<TicketRegistry>,
     ui_links: Arc<UiLinkRegistry>,
@@ -118,18 +122,18 @@ impl WebAuth {
         tickets: Arc<TicketRegistry>,
         ui_links: Arc<UiLinkRegistry>,
     ) -> Self {
-        Self::with_guest(origin, secure_cookie, tickets, ui_links, None)
+        Self::with_guest(vec![origin.into()], secure_cookie, tickets, ui_links, None)
     }
 
     pub fn with_guest(
-        origin: impl Into<String>,
+        origins: Vec<String>,
         secure_cookie: bool,
         tickets: Arc<TicketRegistry>,
         ui_links: Arc<UiLinkRegistry>,
         guest: Option<GuestPolicy>,
     ) -> Self {
         Self {
-            origin: origin.into(),
+            origins,
             secure_cookie,
             tickets,
             ui_links,
@@ -151,7 +155,11 @@ impl WebAuth {
     /// Issue a read-only anonymous session from the configured policy.
     /// Capacity and issuance rate are independent from the authenticated
     /// per-principal cap (plan M1.1).
-    pub fn login_guest(&self) -> Result<Arc<WebSession>, CallError> {
+    ///
+    /// `observed_origin` is the Origin the request actually carried. It is
+    /// recorded on the session and used for later ticket binding, so a guest
+    /// arriving on a preview domain is not pinned to the production one.
+    pub fn login_guest(&self, observed_origin: &str) -> Result<Arc<WebSession>, CallError> {
         let guest = self
             .guest
             .as_ref()
@@ -194,7 +202,13 @@ impl WebAuth {
                 actor_peer_id: String::new(),
             },
             role: "ui".into(),
-            origin: self.origin.clone(),
+            // Only an accepted origin is recorded; anything else falls back to
+            // the primary, and the later Origin check still refuses it.
+            origin: if self.accepts_origin(observed_origin) {
+                observed_origin.to_string()
+            } else {
+                request_origin(&self.origins).to_string()
+            },
             expires_at_ms: std::sync::atomic::AtomicU64::new(now + guest.idle_ttl_ms),
             idle_ttl_ms: Some(guest.idle_ttl_ms),
             link_id: link.link_id.clone(),
@@ -209,11 +223,22 @@ impl WebAuth {
         &self.ui_links
     }
 
+    /// The origin a ticket is bound to. A session created on another accepted
+    /// origin must keep its own, so the caller passes it through; this is the
+    /// fallback for callers that have no session context.
     pub fn origin(&self) -> &str {
-        &self.origin
+        self.origins.first().map_or("", String::as_str)
     }
 
-    pub fn login(&self, inbound: InboundCaller) -> Result<Arc<WebSession>, CallError> {
+    pub fn accepts_origin(&self, origin: &str) -> bool {
+        self.origins.iter().any(|allowed| allowed == origin)
+    }
+
+    pub fn login(
+        &self,
+        inbound: InboundCaller,
+        observed_origin: &str,
+    ) -> Result<Arc<WebSession>, CallError> {
         if inbound.role != "ui" {
             return Err(CallError::new(
                 conex_proto::ErrorCode::Unauthorized,
@@ -251,7 +276,11 @@ impl WebAuth {
             csrf: random_token(),
             caller: inbound.caller,
             role: inbound.role,
-            origin: self.origin.clone(),
+            origin: if self.accepts_origin(observed_origin) {
+                observed_origin.to_string()
+            } else {
+                request_origin(&self.origins).to_string()
+            },
             expires_at_ms: std::sync::atomic::AtomicU64::new(now + SESSION_TTL_MS),
             idle_ttl_ms: None,
             link_id: link.link_id.clone(),
@@ -344,8 +373,10 @@ impl WebAuth {
         let origin = headers
             .get(header::ORIGIN)
             .and_then(|value| value.to_str().ok());
-        if origin != Some(self.origin.as_str()) {
-            return Err(unauthorized("Origin does not match configured web origin"));
+        if !origin.is_some_and(|origin| self.accepts_origin(origin)) {
+            return Err(unauthorized(
+                "Origin does not match a configured web origin",
+            ));
         }
         Ok(())
     }
@@ -390,7 +421,11 @@ pub async fn login(Extension(state): Extension<Arc<HttpState>>, headers: HeaderM
         Ok(inbound) => inbound,
         Err(error) => return error_response(error),
     };
-    let session = match web.login(inbound) {
+    let observed = headers
+        .get(header::ORIGIN)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default();
+    let session = match web.login(inbound, observed) {
         Ok(session) => session,
         Err(error) => return error_response(error),
     };
@@ -430,7 +465,11 @@ pub async fn session(Extension(state): Extension<Arc<HttpState>>, headers: Heade
                 "web session cookie required",
             ));
         }
-        let session = match web.login_guest() {
+        let observed = headers
+            .get(header::ORIGIN)
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or_default();
+        let session = match web.login_guest(observed) {
             Ok(session) => session,
             Err(error) => return error_response(error),
         };
@@ -465,7 +504,11 @@ pub async fn session(Extension(state): Extension<Arc<HttpState>>, headers: Heade
             if !reissue {
                 return error_response(error);
             }
-            match web.login_guest() {
+            let observed = headers
+                .get(header::ORIGIN)
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or_default();
+            match web.login_guest(observed) {
                 Ok(session) => session,
                 Err(error) => return error_response(error),
             }
@@ -506,6 +549,14 @@ pub async fn logout(Extension(state): Extension<Arc<HttpState>>, headers: Header
         .headers_mut()
         .insert(header::SET_COOKIE, web.clear_cookie());
     response
+}
+
+/// The origin to record on a session that was not issued through a checked
+/// request. Guest issuance happens before the Origin header is verified, so it
+/// cannot know the real one; the primary origin is the only safe answer and
+/// `check_origin` still gates every later request.
+fn request_origin(origins: &[String]) -> &str {
+    origins.first().map_or("", String::as_str)
 }
 
 pub fn allowed_ui_method(method: &str) -> bool {
