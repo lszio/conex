@@ -1,30 +1,90 @@
-# CONEX
+# conex
 
-> **Cross-Platform Nexus** — 以 Anytype 为数据主锚点，向 Apple 生态（Reminders / Calendar / Notes）同步的轻量桥接层。
+conex（connect + nexus）是一个可嵌入的双向能力路由内核及可选独立进程；工作协议名 `conex`。
 
-CONEX 是 Labry 生态下的一个模块，定位为**个人知识/任务/日程的跨平台连接器**。
+**当前状态（2026-10-03）：** P0、P1、Connected landing 已交付；**多主机内容 M0–M5 已交付**（分支 `refactor/arch`，未提交）：内容契约冻结（endpointId+revision 定位、blob/get 互斥目标、protobuf 二进制 DataChunk 通道）、访客会话与 blob 所有权授权、逐端点 Agent 注册生命周期（staged 链接/逐端点 review）、同源 `/content`（Range/ETag/防注入/流式取消）、公共浏览页面（文本/图片/视频/DOCX/ZIP 受限预览，1440/390 双视口 38 项浏览器检查全过）。逐项证据：[多主机内容验证记录](docs/verification/multi-host-content.md)；剩余 M4（Notez 接入）与 M6（验收收口）见计划。历史：P0（`e649ded`）、P1（`f6f8edc`/`4d5ff73`）交付记录见 [P1 验证记录](docs/verification/p1.md)。
 
-## 核心原则
+## 文档
 
-- **Anytype 是 Source of Truth** — 你的数据在 Anytype 里最有语义（类型、关系、上下文）
-- **Apple 是操作面** — Reminders 提提醒、Calendar 看日程、Notes 记灵感
-- **CONEX 是转换层** — 只做格式映射、状态追踪、冲突处理，不存业务数据
+完整地图与阅读顺序见 [docs/README.md](docs/README.md)。
+
+- 设计（权威）：[docs/design/2026-09-14-conex-design.md](docs/design/2026-09-14-conex-design.md)
+- 路线图：[docs/plans/2026-09-15-conex-roadmap.md](docs/plans/2026-09-15-conex-roadmap.md)
+- 多主机内容计划（当前）：[docs/plans/2026-10-01-conex-multi-host-content.md](docs/plans/2026-10-01-conex-multi-host-content.md)
+- 多主机内容验证记录（当前）：[docs/verification/multi-host-content.md](docs/verification/multi-host-content.md)
+- Connected landing 契约：[docs/contracts/connected-landing.md](docs/contracts/connected-landing.md)
+- P1 执行计划（归档）：[docs/plans/2026-09-15-conex-p1.md](docs/plans/2026-09-15-conex-p1.md)
+- P0 执行计划（归档）：[docs/plans/archive/2026-09-15-conex-p0.md](docs/plans/archive/2026-09-15-conex-p0.md)
+- P0 wire 契约：[docs/contracts/p0-wire.md](docs/contracts/p0-wire.md)
+- P0 运行手册：[docs/runbooks/p0.md](docs/runbooks/p0.md)
+- P0 验证记录：[docs/verification/p0.md](docs/verification/p0.md)
+
+## P0 已交付
+
+broker 平面只读数据连接，经同一 Registry/授权/审计路径：
+
+- 协议：`.proto` 单一类型源 → Rust/TS/JSON Schema；冻结 ErrorCode 数值表；CIDv1 raw/SHA-256。
+- 核心：Registry + MethodContract、身份映射、资源策略、目标准入、统一执行与审计、限额与部分结果。
+- provider：受限 fs（cap-std）与 HTTP catalog（整分区授权、真实 TLS）。
+- 入口：静态 bearer + 60 秒 binding 的 JSON-RPC/HTTP；TLS 或显式 loopback 明文；env/file 凭据。
+- SDK：`@conex/sdk` typed consumer（list/read/search、searchMany 部分结果、错误映射）。
+- 验证：跨语言共享向量、additivity 检查、真实 Rust host + Bun 的 fs E2E（catalog 由 provider 集成/授权测试覆盖）；逐项结果见 [P0 验证记录](docs/verification/p0.md)。
+
+## 多主机内容已交付（M0–M5）
+
+- 契约：`endpointId + resourceId` 定位 + revision；`source/read` 返回 `text ⊕ content`；`blob/get` 互斥目标（committed 块 / remote 范围）；长度一律十进制字符串（JS 安全）。
+- 安全：`[web_guest]` 访客配额（会话数/空闲过期/签发限速）；blob 所有权（Owner 持久化、可达集证明、逐方法归属校验）；访客连接面板隔离。
+- 传输：Agent 链 protobuf 二进制（`DataChunk` 原始字节，无 base64）；Host 授权探针 + 反向链路逐 256 KiB 切片；同源 `/content`（Range/206/416/ETag/If-Range/nosniff/attachment 策略/流式取消）。
+- 页面：主机分组目录、文本/图片/视频原生展示、DOCX（mammoth）与 ZIP（fflate）受限预览、二进制元数据下载；错误八类分示；1440/390 双视口 38 项浏览器检查全过。
+
+## 下一步
+
+多主机内容计划的剩余工作：**M4**（接入真实 Notez 服务，需要真实 Notez 仓库与运行实例）与 **M6**（验收收口：multi-host-content / public-content-security e2e 套件注册、容量门槛、跨主机 TLS 验证）。入口：[多主机内容计划](docs/plans/2026-10-01-conex-multi-host-content.md)。
 
 ## 快速开始
 
 ```bash
-cd modules/conex
+./scripts/bootstrap-toolchain.sh
+source .toolchain/env.sh
 bun install
-bun run dev          # 交互式调试
+cargo xtask generate
+cargo test --workspace
+bun test sdk/typescript/tests
+cargo xtask check          # 完整 P0 门禁
 ```
 
-## 开发状态
+## 三个例子
 
-| 里程碑 | 状态 | 说明 |
-|--------|------|------|
-| Phase 0: 骨架 + 验证 | ✅ 已完成 | 项目骨架 + Anytype API 验证 + AppleScript 验证 |
-| **Phase 1: 单向同步** | **✅ 已完成** | **55 个 Anytype Task → Apple Reminders (零错误)** |
-| Phase 2: 多适配器 | 🔜 计划中 | Calendar / Notes / 双向同步 |
-| Phase 3: 生产化 | 📅 未来 | Swift CLI / MCP Server / 守护模式 |
+成功读取（inproc 或 HTTP 语义一致）：
 
-详见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+```ts
+const read = await client.read("notes-local", { resourceId: "hello.md" });
+// read.text === "hello conex\n"；read.cid 与共享 CID 向量一致
+```
+
+拒绝（未授权路径在业务目标拨号/凭据解析前返回 forbidden；catalog 单文件权限不触发上游 GET）：
+
+```ts
+try { await client.read("notes-local", { resourceId: "../escape.md" }); }
+catch (error) { /* error.code === -32002 */ }
+```
+
+部分失败（一个 provider 超时/不可用不影响其他结果）：
+
+```ts
+const results = await client.searchMany([
+  { endpointId: "notes-local", input: { root: "", query: "conex" } },
+  { endpointId: "catalog-work", input: { root: "", query: "conex" } },
+]);
+// 成功项带 result，失败项带 error，顺序与输入一致
+```
+
+## 单一类型源
+
+`schema/conex/*.proto` 与 `conformance/schema/*.proto` 是唯一结构类型源；`cargo xtask generate`
+派生 Rust 类型（prost/pbjson）、JSON Schema 与 TypeScript 类型（ts-proto）。生成产物入库、禁止手改；
+权威严格解码点是 `MethodContract.prepare`/`validate_output`。版本 pin 见 `tools/codegen.lock.json`。
+
+## 工具链
+
+Rust 与 protoc 不随仓库提供，安装在 gitignored 的 `.toolchain/`（见 `scripts/bootstrap-toolchain.sh`）。

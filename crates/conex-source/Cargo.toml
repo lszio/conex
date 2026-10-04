@@ -1,0 +1,10 @@
+[package]
+name = "conex-source"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+conex-core = { path = "../conex-core" }
+conex-proto = { path = "../conex-proto" }
+serde.workspace = true
+serde_json.workspace = true

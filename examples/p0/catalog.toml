@@ -1,0 +1,33 @@
+# HTTP catalog provider. Production hosts must set [tls] with cert/key;
+# allow_loopback_http is only for local development against a loopback fixture.
+listen = "127.0.0.1:8789"
+allow_loopback_http = true
+audience = "host.local"
+
+[tls]
+# cert = "tls/host.crt"
+# key = "tls/host.key"
+
+[[tokens]]
+token_hash = "0000000000000000000000000000000000000000000000000000000000000000"
+principal_id = "alice"
+tenant_id = "tenant-a"
+audience = "host.local"
+
+[[policy]]
+principal_id = "alice"
+tenant_id = "tenant-a"
+endpoint_id = "catalog-work"
+actions = ["list", "read", "search"]
+root = ""
+subtree = true
+
+[[endpoints]]
+id = "catalog-work"
+tenant_id = "tenant-a"
+provider_id = "catalog"
+kind = "source-http-catalog"
+provides = ["source/list", "source/read", "source/search"]
+origin = "https://catalog.example"
+fixed_path = "/catalog.json"
+expected_server_name = "catalog.example"

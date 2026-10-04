@@ -1,0 +1,12 @@
+[package]
+name = "conex-assembly"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+conex-core = { path = "../conex-core" }
+conex-provider-fs = { path = "../conex-provider-fs" }
+conex-provider-http-catalog = { path = "../conex-provider-http-catalog" }
+
+[dev-dependencies]
+conex-proto = { path = "../conex-proto" }

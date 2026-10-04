@@ -1,0 +1,382 @@
+//! HTTP layer for P1 ticket issuance + OIDC code/PKCE.
+//!
+//! All three routes pull state from the shared `Arc<HttpState>`. The
+//! handlers do no real cryptographic verification — that lives behind a
+//! future feature flag. Today they:
+//!
+//! - Issue a 30 s ticket bound to `{principal, tenant, origin, host}`.
+//! - Issue/consume OIDC codes with `S256` PKCE verification.
+//! - Forward ticket consumption as a `Broker` call that returns a fresh
+//!   session id when the request body asks for one (it doesn't today —
+//!   the broker layer rejects unknown sub-commands cleanly).
+
+use std::sync::Arc;
+
+use axum::Json;
+use axum::extract::Extension;
+use axum::http::{HeaderMap, StatusCode};
+use axum::response::{IntoResponse, Response};
+use base64::Engine;
+use conex_core::CallError;
+use conex_proto;
+use serde::Deserialize;
+use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
+
+use crate::agent::{HostSide, OidcRegistry, TicketRegistry};
+use crate::broker::Broker;
+use crate::http::HttpState;
+
+pub struct TicketsState {
+    pub tickets: Arc<TicketRegistry>,
+    pub broker: Arc<Broker>,
+}
+
+pub struct OidcState {
+    pub oidc: Arc<OidcRegistry>,
+}
+
+fn call_error_to_response(error: CallError) -> Response {
+    let code = error.code();
+    let status = if code == conex_proto::ErrorCode::Unauthorized as i32 {
+        StatusCode::UNAUTHORIZED
+    } else if code == conex_proto::ErrorCode::BadRequest as i32 {
+        StatusCode::BAD_REQUEST
+    } else if code == conex_proto::ErrorCode::Forbidden as i32 {
+        StatusCode::FORBIDDEN
+    } else if code == conex_proto::ErrorCode::QuotaExceeded as i32 {
+        StatusCode::TOO_MANY_REQUESTS
+    } else {
+        StatusCode::INTERNAL_SERVER_ERROR
+    };
+    (
+        status,
+        Json(json!({
+            "code": code,
+            "message": error.message(),
+        })),
+    )
+        .into_response()
+}
+
+fn call_error_data_to_response(error: CallError) -> Response {
+    call_error_to_response(error)
+}
+
+fn principal_from_auth(
+    state: &HttpState,
+    headers: &HeaderMap,
+) -> Result<conex_core::Caller, Box<CallError>> {
+    let authorization = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok());
+    state
+        .auth
+        .authenticate(authorization)
+        .map(|inbound| inbound.caller)
+        .map_err(Box::new)
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TicketRequest {
+    #[serde(default)]
+    pub principal_id: String,
+    #[serde(default)]
+    pub tenant_id: String,
+    #[serde(default)]
+    pub origin: String,
+    #[serde(default)]
+    pub target_host: String,
+    #[serde(default)]
+    pub peer_role: String,
+    #[serde(default)]
+    pub capability_caps: Vec<String>,
+    #[serde(default)]
+    pub session_id: Option<String>,
+}
+
+pub async fn issue_ticket(
+    Extension(state): Extension<Arc<HttpState>>,
+    headers: HeaderMap,
+    Json(request): Json<TicketRequest>,
+) -> Response {
+    let side = match state.host_side.as_ref() {
+        Some(side) => side,
+        None => {
+            return call_error_data_to_response(CallError::new(
+                conex_proto::ErrorCode::Unavailable,
+                "ticket backend is not configured",
+            ));
+        }
+    };
+    if let Some(web) = state.web_auth.as_ref()
+        && headers.get(axum::http::header::COOKIE).is_some()
+    {
+        let session = match web.check_mutation(&headers) {
+            Ok(session) => session,
+            Err(error) => return call_error_to_response(error),
+        };
+        let target_host = headers
+            .get(axum::http::header::HOST)
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or_default();
+        // UI tickets (guest and authenticated alike) grant the same
+        // read-only capability set; per-visitor isolation happens in
+        // connection/list and per-resource policy, not here.
+        let capabilities: Vec<String> = vec![
+            "endpoint/list".into(),
+            "connection/list".into(),
+            "source/list".into(),
+            "source/read".into(),
+            "source/search".into(),
+        ];
+        let ticket = match side.tickets.issue(
+            &session.caller.principal_id,
+            &session.caller.tenant_id,
+            web.origin(),
+            target_host,
+            "ui",
+            capabilities,
+            Some(session.id.clone()),
+        ) {
+            Ok(ticket) => ticket,
+            Err(error) => return call_error_data_to_response(error),
+        };
+        return ticket_response(ticket);
+    }
+    let caller = match principal_from_auth(&state, &headers) {
+        Ok(caller) => caller,
+        Err(error) => return call_error_to_response(*error),
+    };
+    // Legacy bearer `/tickets` remains identity-bound for non-browser P1
+    // callers; browser UI issuance always takes the session branch above.
+    if caller.principal_id != request.principal_id || caller.tenant_id != request.tenant_id {
+        return call_error_data_to_response(CallError::new(
+            conex_proto::ErrorCode::Forbidden,
+            "ticket principal/tenant does not match the bearer",
+        ));
+    }
+    match side.tickets.issue(
+        &request.principal_id,
+        &request.tenant_id,
+        &request.origin,
+        &request.target_host,
+        &request.peer_role,
+        request.capability_caps,
+        request.session_id,
+    ) {
+        Ok(ticket) => ticket_response(ticket),
+        Err(error) => call_error_data_to_response(error),
+    }
+}
+
+fn ticket_response(ticket: crate::agent::WebTicket) -> Response {
+    (
+        StatusCode::CREATED,
+        Json(json!({
+            "ticket": ticket.ticket,
+            "principalId": ticket.principal_id,
+            "tenantId": ticket.tenant_id,
+            "origin": ticket.origin,
+            "targetHost": ticket.target_host,
+            "peerRole": ticket.peer_role,
+            "capabilityCaps": ticket.capability_caps,
+            "issuedAtMs": ticket.issued_at_ms.to_string(),
+            "expiresAtMs": ticket.expires_at_ms.to_string(),
+        })),
+    )
+        .into_response()
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OidcAuthorizeRequest {
+    pub principal_id: String,
+    pub tenant_id: String,
+    pub origin: String,
+    pub audience: String,
+    pub code_challenge: String,
+    pub code_challenge_method: String,
+}
+
+pub async fn oidc_authorize(
+    Extension(state): Extension<Arc<HttpState>>,
+    headers: HeaderMap,
+    Json(request): Json<OidcAuthorizeRequest>,
+) -> Response {
+    let side = match state.host_side.as_ref() {
+        Some(side) => side,
+        None => {
+            return call_error_data_to_response(CallError::new(
+                conex_proto::ErrorCode::Unavailable,
+                "oidc backend is not configured",
+            ));
+        }
+    };
+    let caller = match principal_from_auth(&state, &headers) {
+        Ok(caller) => caller,
+        Err(error) => return call_error_to_response(*error),
+    };
+    if caller.principal_id != request.principal_id || caller.tenant_id != request.tenant_id {
+        return call_error_data_to_response(CallError::new(
+            conex_proto::ErrorCode::Forbidden,
+            "oidc principal/tenant does not match the bearer",
+        ));
+    }
+    match side.oidc.issue(
+        &request.principal_id,
+        &request.tenant_id,
+        &request.audience,
+        &request.origin,
+        &request.code_challenge,
+        &request.code_challenge_method,
+    ) {
+        Ok(code) => (
+            StatusCode::CREATED,
+            Json(json!({
+                "code": code.code,
+                "principalId": code.principal_id,
+                "tenantId": code.tenant_id,
+                "audience": code.audience,
+                "origin": code.origin,
+                "expiresAtMs": code.expires_at_ms.to_string(),
+            })),
+        )
+            .into_response(),
+        Err(error) => call_error_data_to_response(error),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OidcTokenRequest {
+    #[serde(default)]
+    pub code: String,
+    #[serde(default)]
+    pub code_verifier: String,
+    #[serde(default)]
+    pub origin: String,
+    /// Verified-mode: RS256 id_token from the pinned issuer.
+    #[serde(default)]
+    pub id_token: Option<String>,
+}
+
+pub async fn oidc_token(
+    Extension(state): Extension<Arc<HttpState>>,
+    Json(request): Json<OidcTokenRequest>,
+) -> Response {
+    let side = match state.host_side.as_ref() {
+        Some(side) => side,
+        None => {
+            return call_error_data_to_response(CallError::new(
+                conex_proto::ErrorCode::Unavailable,
+                "oidc backend is not configured",
+            ));
+        }
+    };
+    // Real verification mode: `[oidc]` configured ⇒ the client presents an
+    // idToken signed by the pinned issuer; the dev code/PKCE path is off.
+    if let Some(verifier) = &side.verifier {
+        return match &request.id_token {
+            Some(id_token) => match verifier.verify(id_token) {
+                Ok(claims) => {
+                    let principal_id = claims.subject;
+                    let tenant_id = "oidc".to_string();
+                    let mut seed = Vec::new();
+                    seed.extend_from_slice(principal_id.as_bytes());
+                    seed.push(b':');
+                    seed.extend_from_slice(tenant_id.as_bytes());
+                    seed.push(b':');
+                    seed.extend_from_slice(claims.issuer.as_bytes());
+                    seed.push(b':');
+                    seed.extend_from_slice(b"web");
+                    seed.push(b':');
+                    seed.extend_from_slice(b"verified");
+                    let ticket_value = base64::engine::general_purpose::URL_SAFE_NO_PAD
+                        .encode(Sha256::digest(&seed));
+                    (
+                        StatusCode::OK,
+                        Json(json!({
+                            "principalId": principal_id,
+                            "tenantId": tenant_id,
+                            "issuer": claims.issuer,
+                            "ticket": ticket_value,
+                        })),
+                    )
+                        .into_response()
+                }
+                Err(error) => call_error_data_to_response(CallError::new(
+                    conex_proto::ErrorCode::Unauthorized,
+                    format!("id_token verification failed: {error}"),
+                )),
+            },
+            None => call_error_data_to_response(CallError::new(
+                conex_proto::ErrorCode::BadRequest,
+                "idToken is required when [oidc] is configured",
+            )),
+        };
+    }
+    match side
+        .oidc
+        .exchange(&request.code, &request.code_verifier, &request.origin)
+    {
+        Ok(code) => {
+            let mut ticket_seed = Vec::new();
+            ticket_seed.extend_from_slice(code.principal_id.as_bytes());
+            ticket_seed.push(b':');
+            ticket_seed.extend_from_slice(code.tenant_id.as_bytes());
+            ticket_seed.push(b':');
+            ticket_seed.extend_from_slice(code.origin.as_bytes());
+            ticket_seed.push(b':');
+            ticket_seed.extend_from_slice(b"web");
+            ticket_seed.push(b':');
+            ticket_seed.extend_from_slice(code.code.as_bytes());
+            let ticket_value = base64::engine::general_purpose::URL_SAFE_NO_PAD
+                .encode(Sha256::digest(&ticket_seed));
+            (
+                StatusCode::OK,
+                Json(json!({
+                    "principalId": code.principal_id,
+                    "tenantId": code.tenant_id,
+                    "audience": code.audience,
+                    "origin": code.origin,
+                    "ticket": ticket_value,
+                })),
+            )
+                .into_response()
+        }
+        Err(error) => call_error_data_to_response(error),
+    }
+}
+
+/// Marker trait so route handlers can share a typed `State` extractor.
+pub trait TicketsContext {
+    fn tickets(&self) -> Option<Arc<TicketRegistry>>;
+    fn broker(&self) -> Option<Arc<Broker>>;
+    fn oidc(&self) -> Option<Arc<OidcRegistry>>;
+}
+
+impl TicketsContext for HttpState {
+    fn tickets(&self) -> Option<Arc<TicketRegistry>> {
+        self.host_side.as_ref().map(|side| side.tickets.clone())
+    }
+    fn broker(&self) -> Option<Arc<Broker>> {
+        self.broker.clone()
+    }
+    fn oidc(&self) -> Option<Arc<OidcRegistry>> {
+        self.host_side.as_ref().map(|side| side.oidc.clone())
+    }
+}
+
+/// Ensure `HostSide` is reachable from this module.
+pub fn _host_side_marker(_: &HostSide) -> &HostSide {
+    unreachable!()
+}
+
+/// Decode a base64-or-utf8 helper used by ticket/OIDC tests.
+pub fn decode_payload(value: &Value) -> Option<Vec<u8>> {
+    value
+        .as_str()
+        .and_then(|raw| base64::engine::general_purpose::STANDARD.decode(raw).ok())
+}
