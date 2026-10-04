@@ -18,6 +18,13 @@ pub struct HostConfig {
     pub listen: String,
     #[serde(default)]
     pub allow_loopback_http: bool,
+    /// Plaintext listener on a non-loopback address, for a container whose
+    /// port is only reachable from a TLS-terminating reverse proxy. Separate
+    /// from `allow_loopback_http`, which means "plaintext never leaves this
+    /// machine"; inside a container that assumption is false, so the
+    /// exposure has to be acknowledged explicitly.
+    #[serde(default)]
+    pub allow_plaintext_bind: bool,
     #[serde(default)]
     pub audience: Option<String>,
     #[serde(default)]
@@ -35,6 +42,12 @@ pub struct HostConfig {
     /// Same-origin browser origin for the connected landing page.
     #[serde(default)]
     pub web_origin: Option<String>,
+    /// Additional accepted browser origins. A single image is deployed under
+    /// several domains (production plus one preview domain per pull request),
+    /// and every Origin/CSRF check compares against this set, so the preview
+    /// build does not need a different config than production.
+    #[serde(default)]
+    pub web_origins: Vec<String>,
     /// Static UI root for the connected landing page.
     #[serde(default)]
     pub web_root: Option<PathBuf>,
@@ -255,6 +268,13 @@ impl HostConfig {
                 "web_origin must be a bare http:// or https:// origin without path, query, userinfo, or trailing slash",
             ));
         }
+        for origin in &self.web_origins {
+            if !valid_web_origin(origin) {
+                return Err(invalid(format!(
+                    "web_origins entry {origin} must be a bare http:// or https:// origin without path, query, userinfo, or trailing slash"
+                )));
+            }
+        }
         let mut agent_ids = HashSet::new();
         for agent in &self.agents {
             if agent.id.trim().is_empty() {
@@ -403,8 +423,10 @@ impl HostConfig {
                 return Err(invalid("token_hash must be 64 hex characters"));
             }
         }
-        if self.tls.is_none() && !self.allow_loopback_http {
-            return Err(invalid("plaintext requires allow_loopback_http = true"));
+        if self.tls.is_none() && !self.allow_loopback_http && !self.allow_plaintext_bind {
+            return Err(invalid(
+                "plaintext requires allow_loopback_http = true or allow_plaintext_bind = true",
+            ));
         }
         if self.allow_loopback_http && !address.ip().is_loopback() {
             return Err(invalid(

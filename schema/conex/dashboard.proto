@@ -32,3 +32,97 @@ message ConnectionListResponse {
   repeated UiLinkSummary browser_links = 1;
   repeated AgentLinkSummary agent_links = 2;
 }
+
+// Client panel messages. A "client" is a browser visitor: one UI link with a
+// self-declared name, group and visibility. Callers may only see clients that
+// have `visible` set; hidden clients are not listed to anyone, not even to
+// themselves as rows (their own row is still addressable by linkId).
+message ClientListRequest {}
+
+message ClientProfile {
+  // Self-declared, session-scoped. Never authenticated, never reused as an
+  // identity: two clients may pick the same name.
+  string display_name = 1;
+  // Optional free-form bucket the visitor can use to sort their own view.
+  string group = 2;
+  // When false the client disappears from every other client's list.
+  bool visible = 3;
+}
+
+message ClientSummary {
+  string link_id = 1;
+  string principal_id = 2;
+  string tenant_id = 3;
+  ClientProfile profile = 4;
+  uint64 connected_at_ms = 5;
+  uint64 last_seen_at_ms = 6;
+  // Self-reported by the client's own page; never trusted for access.
+  string user_agent = 7;
+  // Host-derived hash of `profile.group`. The group text is a self-declared
+  // label; this hash is the isolation key, so two clients are peers only when
+  // their keys match.
+  string group_key = 8;
+  // Last round trip this client was measured on, in milliseconds. 0 means no
+  // hello has been exchanged with it yet.
+  uint64 last_round_trip_ms = 9;
+}
+
+message ClientListResponse {
+  repeated ClientSummary clients = 1;
+}
+
+message ClientProfileRequest {
+  ClientProfile profile = 1;
+}
+
+message ClientProfileResponse {
+  ClientSummary self = 1;
+}
+
+// Sends a greeting to one online client. The host pushes
+// `conex/client-hello` to the target link; the target replies with
+// `conex/client-pong`, which the host reports back to the sender together
+// with the measured round-trip time. An offline or hidden target fails with
+// `unavailable` rather than being silently dropped.
+message ClientHelloRequest {
+  string target_link_id = 1;
+  string text = 2;
+}
+
+message ClientHelloResult {
+  string target_link_id = 1;
+  // Round-trip milliseconds measured by the host, from handing the frame to
+  // the target's socket until its pong is read back.
+  uint64 round_trip_ms = 2;
+  string reply = 3;
+}
+
+// `client/status`: what the host sees right now. Aggregate counters plus one
+// row per group, so a page can show "N clients, M groups" and the measured
+// latency of every group without polling anything else.
+//
+// Latency is only ever a real measurement: `lastRoundTripMs` and
+// `avgRoundTripMs` are 0 until a hello has completed, and 0 in the JSON plane
+// is rendered as "<1 ms", never as a fabricated number.
+message ClientStatusRequest {}
+
+message GroupStatus {
+  // Host-derived isolation key; the group text itself is a display label the
+  // visitor chose and is not part of the key.
+  string group_key = 1;
+  // The group's own label when every member declared the same one, empty when
+  // members differ.
+  string label = 2;
+  uint32 clients_online = 3;
+  uint64 last_round_trip_ms = 4;
+  uint64 avg_round_trip_ms = 5;
+  uint32 round_trips = 6;
+  uint32 files_shared = 7;
+  uint64 shared_bytes = 8;
+}
+
+message ClientStatusResponse {
+  uint32 clients_online = 1;
+  uint32 groups_online = 2;
+  repeated GroupStatus groups = 3;
+}

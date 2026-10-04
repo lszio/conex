@@ -272,7 +272,14 @@ pub async fn content(Extension(state): Extension<Arc<HttpState>>, request: Reque
     } else {
         StatusCode::OK
     };
-    let _ = length; // framing is implicit in the streamed body
+    // The body streams, but the slice length is known up front. Declaring it
+    // lets a media element treat the response as seekable: without a total
+    // length, `<video>`/`<audio>` clamp `currentTime` to 0 even though
+    // `accept-ranges: bytes` is advertised. The stream still cancels
+    // upstream when the browser stops reading.
+    if let Ok(value) = HeaderValue::from_str(&length.to_string()) {
+        response.headers_mut().insert(header::CONTENT_LENGTH, value);
+    }
     response
 }
 

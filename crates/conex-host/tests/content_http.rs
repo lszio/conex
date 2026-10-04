@@ -174,6 +174,14 @@ async fn full_body_matches_source_bytes_exactly() {
     );
     let etag = header(response.headers(), "etag").expect("etag");
     assert_eq!(etag, format!("\"rev-{}\"", fixture.revision));
+    // A media element only seeks when the total length is declared; without
+    // it `<video>` clamps currentTime to 0 despite accept-ranges.
+    let expected_length = payload.len().to_string();
+    assert_eq!(
+        header(response.headers(), "content-length").as_deref(),
+        Some(expected_length.as_str()),
+        "a full answer declares its length so media stays seekable"
+    );
     assert_eq!(
         body_bytes(response).await,
         payload,
@@ -199,6 +207,12 @@ async fn single_range_slices_are_exact_and_bounded() {
     assert_eq!(
         header(response.headers(), "content-range").as_deref(),
         Some(format!("bytes 100-199/{}", payload.len()).as_str())
+    );
+    // A 206 declares the slice length, not the whole resource: the browser
+    // must not think 100 bytes is the entire file.
+    assert_eq!(
+        header(response.headers(), "content-length").as_deref(),
+        Some("100")
     );
     assert_eq!(body_bytes(response).await, payload[100..200].to_vec());
 

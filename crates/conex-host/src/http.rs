@@ -43,6 +43,12 @@ pub struct HttpState {
     pub p1_provides: Vec<String>,
     pub web_auth: Option<Arc<crate::web_auth::WebAuth>>,
     pub ui_links: Arc<crate::ui_links::UiLinkRegistry>,
+    /// Visitor client registry. The broker lists and addresses clients; the
+    /// WSS loop registers each link's writer and resolves pongs.
+    pub clients: Arc<crate::clients::ClientRegistry>,
+    /// Group-scoped file sharing for the landing page's file scene. Bytes
+    /// live only while the owner is connected.
+    pub shares: Arc<crate::share::ShareStore>,
 }
 
 /// Build the P0 `/rpc` router without any shared state attached. Callers
@@ -71,6 +77,14 @@ pub fn attach_p1(base: Router) -> Router {
         .route("/web/login", post(crate::web_auth::login))
         .route("/web/session", get(crate::web_auth::session))
         .route("/content", get(crate::content_http::content))
+        .route("/web/files", get(crate::share_http::list_files))
+        .route(
+            "/web/files",
+            post(crate::share_http::upload_file)
+                .layer(DefaultBodyLimit::max(crate::share_http::UPLOAD_BODY_LIMIT)),
+        )
+        .route("/web/files/download", get(crate::share_http::download_file))
+        .route("/web/files/remove", post(crate::share_http::remove_file))
         .route("/web/logout", post(crate::web_auth::logout))
         .route("/oidc/authorize", post(tickets::oidc_authorize))
         .route("/oidc/token", post(tickets::oidc_token))

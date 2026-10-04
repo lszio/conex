@@ -1,12 +1,53 @@
-# Dokploy runtime config for conex-host.
-# Bind 0.0.0.0 so the container port is reachable; token hash = sha256(bearer).
-listen = "0.0.0.0:8787"
-allow_loopback_http = true
-audience = "host.dokploy"
-audit_file = "/tmp/conex-audit.jsonl"
+# Runtime config for the public conex hello page (baked into the image).
+#
+# READ-ONLY DEMO: visitors connect, see each other, and exchange hellos.
+# There is no content browsing, no write path and no credential here.
 
-[[tokens]]
-token_hash = "ca154d5eb83c0ff5690e126efc0058f957c7da9786e6c94a8db59ed7f7ed6177"
-principal_id = "admin"
-tenant_id = "default"
-audience = "host.dokploy"
+# Bind inside the container. TLS terminates at the Dokploy reverse proxy, so
+# the listener is plaintext on a non-loopback address — that requires the
+# explicit `allow_plaintext_bind`, not `allow_loopback_http` (which asserts
+# the plaintext never leaves this machine, and is false in a container).
+listen = "0.0.0.0:8787"
+allow_plaintext_bind = true
+
+audience = "conex.landing"
+host_origin = "conex://landing"
+
+# Public origin the page is served from. Session cookies, CSRF and the ticket
+# Origin check all compare against this exact value, so changing the domain
+# means changing this line and rebuilding.
+web_origin = "https://conex.lszio.space"
+web_root = "/opt/conex/web"
+
+# Additional accepted origins. One image is served under several domains: the
+# production host plus one preview domain per pull request
+# (`<previewWildcard>.lszio.space`). Without this a preview deployment loads the
+# page and then fails every call, because the Origin check would only accept
+# the production domain.
+#
+# The wildcard is expanded here, not templated, so the shipped file stays a
+# plain, auditable config. Add a line per preview domain pattern you use.
+web_origins = [
+  "https://preview-conex.lszio.space",
+]
+
+# P1 persistent roots (sessions back the UI links; the others are required for
+# the P1 backends to be considered complete).
+content_root = "/var/lib/conex/content"
+session_root = "/var/lib/conex/session"
+operation_root = "/var/lib/conex/operation"
+
+# Anonymous read-only visitors. Without this section every visitor would get a
+# 401 and the page would have nothing to show; quotas are independent of
+# authenticated users.
+[web_guest]
+principal_id = "guest"
+tenant_id = "demo"
+max_sessions = 256
+idle_ttl_ms = 1800000
+max_issue_per_minute = 120
+
+# No [[tokens]] and no [[endpoints]]: this demo is guest-only and serves no
+# data. Service credentials and data endpoints belong in
+# deployment/host.toml.example, whose token_hash values are sha256 digests of
+# secrets that never enter the repository.

@@ -1,6 +1,6 @@
 # Connected landing contract
 
-状态：**L01 契约冻结 + L10 连接面板契约冻结（2026-09-21）+ M0 内容契约冻结（2026-10-02，§8）**。L10 在 `schema/conex/dashboard.proto` 新增 `ConnectionListRequest` / `ConnectionListResponse` / `UiLinkSummary` / `AgentLinkSummary`；M0 调整 `source.proto` / `chunking.proto` / `blob.proto`。Rust/TypeScript/JSON Schema 由 `cargo xtask generate` 生成。L02–L09 边界不变。
+状态：**L01 契约冻结 + L10 连接面板契约冻结（2026-09-21）+ M0 内容契约冻结（2026-10-02，§8）+ L11 客户端 hello 契约冻结（2026-10-04，§9）**。L10 在 `schema/conex/dashboard.proto` 新增 `ConnectionListRequest` / `ConnectionListResponse` / `UiLinkSummary` / `AgentLinkSummary`；L11 新增 `ClientProfile` / `ClientSummary` / `ClientList*` / `ClientHello*`。Rust/TypeScript/JSON Schema 由 `cargo xtask generate` 生成。L02–L09 边界不变。
 
 ## 7. 连接面板契约（L10）
 
@@ -92,3 +92,94 @@ Agent 先验证 Host 的 TLS CA 和 server name，再使用 `role=agent` 的 bea
 **授权覆盖面。** 目录、读取、范围读取、have、上传恢复、提交、pin/unpin、cancel 全部走同一资源授权；CID、upload ID、pin ID 都不是授权凭据，不能凭知道标识绕过租户或资源策略。物理内容按 CID 去重不合并逻辑授权。本节的强制执行在 M1（blob 所有权与资源授权）落地。
 
 **wire 调整。** `BlobGetRequest` 旧 `chunkCid/rangeOffset/rangeLength` 字段号 reserved，由 `committed/remote` oneof 取代；`ResourceSummary.sizeBytes`、`BlobRef.cid`、`BlobGetResponse` 同步调整并统一迁移 Host、Agent、SDK、页面与向量，不保留双轨契约。旧字段（`providerId`）从 wire 结构中删除。
+
+
+## 9. 客户端 hello 契约（L11）
+
+落地页收敛为「hello」：连上即列出在线客户端，逐个发送 hello，每个访客自述名称／组／可见性。契约类型在 `schema/conex/dashboard.proto`。
+
+**客户端的定义。** 一个客户端就是一条浏览器 UI 链接，加上它自述的 `ClientProfile`。访客仍共享 `web_guest.principal_id`；会话级显示名不是身份，不参与授权，也不唯一。
+
+**资料是自述的。** `displayName` ≤ 40 字符、`group` ≤ 24 字符，入库前去除控制字符并截断；`visible` 默认 `true`。资料不授予任何能力，Host 不得因名称或分组改变授权结果。列表中的 `displayName` 为空时由 linkId 前 6 位回退（`client-xxxxxx`），不伪造身份。
+
+**显示名全局唯一。** 名称是读者区分客户端的唯一依据，因此同名必须可区分：Host 在
+`client/profile` 落库前，用**其他**在线客户端的显示名集合把 `displayName` 去重，冲突时
+依次追加 `-2`、`-3`……（上限 999，超出则保留原名并让列表显示冲突）。去重在注册表锁内
+完成，两个客户端并发抢同一个名字不会都拿到它。调用方**排除自身**：重连时页面会重发同一份
+资料，若不排除自己，`alice` → `alice-2` → `alice-3` 会无限增长。名字为空时回退到
+`client-<linkId 前 6 位>`，天然唯一，不参与去重。
+
+**可见性是隐私开关。** `visible = false` 的客户端不进入任何 `client/list` 结果，且 `client/hello` 对其返回 `unavailable`——隐藏即不可寻址，不是仅隐藏标签。
+
+**列表只含可寻址的链接。** `client/list` 只返回已挂上出站通道（handshake 完成）的链接。握手前崩溃或未 clean close 的死链会留下无 writer 的条目，必须既不出现在列表里，也按 60s 宽限后回收，避免注册表无界增长。
+
+**hello 往返。** `client/hello` 携带 `targetLinkId` 与 ≤ 200 字符文本；Host 经目标链接既有的出站通道推送 `conex/client-hello`（JSON-RPC notification），目标回 `conex/client-pong`。Host 测量从入队到收到 pong 的往返毫秒数并返回 `roundTripMs`。目标离线、隐藏或 10s 未答均返回 `unavailable`，不静默丢弃。pong 以 notification 形式抵达，Host 必须在 broker 帧路径之前处理（无 id 的 notification 会被该路径丢弃）。
+
+**收方看到的是名字，不是 linkId。** 推送帧除 `from`（发送方 linkId）外还带
+`fromName`：由 Host 用注册表把 linkId 解析为发送方当前的显示名。页面不把自己的名字拼进
+`text`，否则未设名的客户端会以 `client-xxxxxx` 的形式向所有人问好。
+
+**方法白名单。** `client/list`、`client/profile`、`client/hello` 加入 UI 角色白名单（`allowed_ui_method`）与 UI ticket 的 capability caps。页面不再提供 shell、写文件、blob 提交、Agent 注册或任意命令入口。
+
+**推送与字节预算。** Host 主动下发的帧必须与 WSS writer 使用同一出站字节计数器；绕过计数会让 writer 的 `fetch_sub` 下溢 `usize`，其后所有预算检查失败并关闭该 socket。
+
+## 10. 分组隔离、状态与文件共享契约（L12）
+
+落地页从「hello 单场景」扩展为项目介绍 + 两个场景 + 状态。契约类型在
+`schema/conex/dashboard.proto`（`ClientSummary.groupKey`、`ClientSummary.lastRoundTripMs`、
+`ClientStatusRequest`/`GroupStatus`/`ClientStatusResponse`）。
+
+**分组是隔离键，不是排序桶。** 访客填写的 `group` 是标签；Host 用 SHA-256 前 8 字节
+（16 位十六进制小写）派生 `groupKey`，隔离一律按 key 比较：
+
+- `client/list` 只返回**同组**客户端；`client/profile` 每次写入都重算 key，改名组后
+  客户端立即离开原分组，不留在旧 key 下
+- `client/hello` 跨组返回 `Forbidden`（-32003），且该检查在 `ClientRegistry::send_hello`
+  内部，不能由调用方绕过
+- 「未分组」是 key `e3b0c44298fc1c14`（空串的哈希），是一个真实分组而不是与所有组匹配的空值
+
+**延迟只有在真测过时存在。** `record_round_trip` 在一次 hello 完成时把实测毫秒记到
+**双方**（往返是这对客户端之间的属性），并累计总和与次数。`lastRoundTripMs` /
+`avgRoundTripMs` / `roundTrips` 在没有任何完成的 hello 时为 0，页面渲染为「尚未测量」，
+不显示 0 ms——把缺测量渲染成 0 会让状态页谎报连接速度。亚毫秒往返截断为 0，页面显示
+`<1 ms` 而不是四舍五入成一个没人等过的毫秒数。
+
+**`client/status` 只投影计数与延迟。** `clientsOnline` / `groupsOnline` 是全 Host 计数
+（回答「这台 Host 上有多少客户端与分组」这个进程级事实），每组一行 `GroupStatus`：
+key、标签（组内标签不一致时清空而不是任选其一）、在线数、最近与平均延迟、往返次数、
+共享文件数与字节。**不投影任何个人行**：不含 linkId、名称或文件明细，因此它不泄露
+`client/list` 的组隔离之外的信息。同组内标签不一致时 `label` 为空字符串。
+
+**文件共享是同组临时内容。** 四个同源路由共用 web 会话 cookie：
+
+| 路由 | 方法 | 授权 | 用途 |
+|---|---|---|---|
+| `/web/files` | GET | cookie | 列出本组文件 |
+| `/web/files` | POST | cookie + Origin + CSRF | 共享一个文件（原始字节） |
+| `/web/files/download` | GET | cookie | 读取文件字节 |
+| `/web/files/remove` | POST | cookie + Origin + CSRF | 撤回自己提供的文件 |
+
+读方法与 `/web/session`、`/content` 同规则（GET 是安全方法）；写方法是状态变更，
+必须校验精确匹配的 `web_origin` 与 CSRF nonce，与 `POST /web/logout` 一致。
+
+**文件 id 不是访问凭据。** `ShareStore::get` 以调用方 groupKey 过滤，跨组与不存在都
+返回 `None`，下载路由因此对两者都答 404——可区分的 403 会确认该 id 存在。上传路由的
+body 上限单独设为 8 MiB（`UPLOAD_BODY_LIMIT`），不放宽其他端点继承的 1 MiB JSON 上限。
+
+**配额在存入前检查。** 单文件 ≤ 8 MiB、单组累计 ≤ 32 MiB、单客户端 ≤ 32 个文件。
+组的当前用量是新文件的计量基准，因此两个客户端竞争最后一段配额时不会都成功。
+
+**提供者断开即回收。** WSS 循环在 `detach_writer` 之后调用 `ShareStore::remove_owner`：
+断开的客户端不再能提供文件，字节随之释放、组配额归还。`remove` 先校验归属再删除——
+先删后校验会让任何组内成员销毁别人的上传。
+
+**内联预览是 Host 的判定。** 只有不带活动内容的类型可内联（`text/plain`、
+`text/markdown`、`text/csv`、`application/json`、`application/pdf`、常见位图）；
+`text/html`、`image/svg+xml` 等一律 `attachment`，避免在他人会话里执行脚本。文本响应的
+`Content-Type` 必须带 `; charset=utf-8`，否则浏览器按默认编码解码，UTF-8 中文变乱码。
+文件名与 MIME 进响应头前必须过滤控制字符、引号、斜杠与 CR/LF；文件名按
+`filename="ascii"` + `filename*=UTF-8''pct` 双写。
+
+**页面定位。** 首屏说明 conex 是什么（可嵌入的双向能力路由内核），hello 与文件是它做的
+两件事而非产品本身。`hello` 场景把问候渲染为消息泡泡（发出方带实测往返，未回应时显示
+「等待回应…」）；`状态` 页显示客户端数、分组数与每组延迟。默认标签是 hello 场景。
