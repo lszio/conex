@@ -102,11 +102,22 @@ Agent 先验证 Host 的 TLS CA 和 server name，再使用 `role=agent` 的 bea
 
 **资料是自述的。** `displayName` ≤ 40 字符、`group` ≤ 24 字符，入库前去除控制字符并截断；`visible` 默认 `true`。资料不授予任何能力，Host 不得因名称或分组改变授权结果。列表中的 `displayName` 为空时由 linkId 前 6 位回退（`client-xxxxxx`），不伪造身份。
 
+**显示名全局唯一。** 名称是读者区分客户端的唯一依据，因此同名必须可区分：Host 在
+`client/profile` 落库前，用**其他**在线客户端的显示名集合把 `displayName` 去重，冲突时
+依次追加 `-2`、`-3`……（上限 999，超出则保留原名并让列表显示冲突）。去重在注册表锁内
+完成，两个客户端并发抢同一个名字不会都拿到它。调用方**排除自身**：重连时页面会重发同一份
+资料，若不排除自己，`alice` → `alice-2` → `alice-3` 会无限增长。名字为空时回退到
+`client-<linkId 前 6 位>`，天然唯一，不参与去重。
+
 **可见性是隐私开关。** `visible = false` 的客户端不进入任何 `client/list` 结果，且 `client/hello` 对其返回 `unavailable`——隐藏即不可寻址，不是仅隐藏标签。
 
 **列表只含可寻址的链接。** `client/list` 只返回已挂上出站通道（handshake 完成）的链接。握手前崩溃或未 clean close 的死链会留下无 writer 的条目，必须既不出现在列表里，也按 60s 宽限后回收，避免注册表无界增长。
 
 **hello 往返。** `client/hello` 携带 `targetLinkId` 与 ≤ 200 字符文本；Host 经目标链接既有的出站通道推送 `conex/client-hello`（JSON-RPC notification），目标回 `conex/client-pong`。Host 测量从入队到收到 pong 的往返毫秒数并返回 `roundTripMs`。目标离线、隐藏或 10s 未答均返回 `unavailable`，不静默丢弃。pong 以 notification 形式抵达，Host 必须在 broker 帧路径之前处理（无 id 的 notification 会被该路径丢弃）。
+
+**收方看到的是名字，不是 linkId。** 推送帧除 `from`（发送方 linkId）外还带
+`fromName`：由 Host 用注册表把 linkId 解析为发送方当前的显示名。页面不把自己的名字拼进
+`text`，否则未设名的客户端会以 `client-xxxxxx` 的形式向所有人问好。
 
 **方法白名单。** `client/list`、`client/profile`、`client/hello` 加入 UI 角色白名单（`allowed_ui_method`）与 UI ticket 的 capability caps。页面不再提供 shell、写文件、blob 提交、Agent 注册或任意命令入口。
 

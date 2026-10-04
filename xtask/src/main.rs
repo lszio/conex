@@ -1,5 +1,6 @@
 //! conex build/verification tasks: `cargo xtask <command>`.
 mod additivity;
+mod bench;
 mod check;
 mod conformance;
 mod e2e;
@@ -53,6 +54,20 @@ fn main() -> ExitCode {
             }
         }
         "check" => check::run(),
+        "bench" => {
+            let suite = args
+                .iter()
+                .position(|a| a == "--suite")
+                .and_then(|index| args.get(index + 1))
+                .map(String::as_str)
+                .unwrap_or("hello");
+            let rounds = args
+                .iter()
+                .position(|a| a == "--rounds")
+                .and_then(|index| args.get(index + 1))
+                .and_then(|value| value.parse().ok());
+            bench::run(suite, rounds)
+        }
         "" | "help" | "--help" | "-h" => {
             eprintln!("usage: cargo xtask <generate [--check]>");
             eprintln!("       cargo xtask landing-demo");

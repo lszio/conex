@@ -284,14 +284,14 @@ test("a pushed client hello is answered with a pong before listeners run", async
   await connecting;
 
   const seen: string[] = [];
-  client.onHello((hello) => seen.push(hello.text));
+  client.onHello((hello) => seen.push(hello.fromName || "(no name)"));
 
   const before = socket.sent.length;
   // A server-initiated frame carries no id: it is a notification.
   socket.receive({
     jsonrpc: "2.0",
     method: "conex/client-hello",
-    params: { replyId: "9", from: "link-2", text: "hello alice" },
+    params: { replyId: "9", from: "link-2", fromName: "alice", text: "hello" },
   });
 
   const pongs = socket.sent.slice(before).map((raw) => JSON.parse(raw));
@@ -303,5 +303,7 @@ test("a pushed client hello is answered with a pong before listeners run", async
   });
   // No id: a request would make the host wait for a response that never comes.
   expect(pongs[0].id).toBeUndefined();
-  expect(seen).toEqual(["hello alice"]);
+  // The host resolves the sender's link to a display name, so a client that
+  // never chose one is still greeted by something readable.
+  expect(seen).toEqual(["alice"]);
 });

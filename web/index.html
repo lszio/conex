@@ -3,61 +3,19 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="conex：连上来即可看到在线客户端，发送 hello，并调整自己的名称、分组与可见性。" />
+    <meta
+      name="description"
+      content="conex：连上即可看到在线客户端，发送 hello，并调整自己的名称、分组与可见性。"
+    />
     <title>Conex · hello</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232166d1'/%3E%3Cpath d='M9 20l5-6 4 4 5-7' stroke='white' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232166d1'/%3E%3Cpath d='M9 20l5-6 4 4 5-7' stroke='white' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"
+    />
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
-    <main class="shell">
-      <header class="head">
-        <div>
-          <p class="eyebrow">CONEX</p>
-          <h1>hello</h1>
-        </div>
-        <p id="status" class="status-pill" role="status">连接中…</p>
-      </header>
-
-      <section class="panel me" aria-labelledby="me-title">
-        <h2 id="me-title" class="sr-only">我的设置</h2>
-        <form id="profile-form" class="profile-form">
-          <label>
-            <span>名称</span>
-            <input id="profile-name" maxlength="40" placeholder="未命名客户端" autocomplete="off" />
-          </label>
-          <label>
-            <span>组</span>
-            <input id="profile-group" maxlength="24" placeholder="未分组" autocomplete="off" />
-          </label>
-          <label class="check">
-            <input id="profile-visible" type="checkbox" checked />
-            <span>对其他人可见</span>
-          </label>
-          <button type="submit">保存</button>
-        </form>
-        <p id="profile-state" class="muted" role="status"></p>
-      </section>
-
-      <section class="panel" aria-labelledby="clients-title">
-        <div class="section-heading">
-          <h2 id="clients-title">在线客户端</h2>
-          <span id="client-count" class="count">0 个</span>
-        </div>
-        <ul id="clients" class="clients" aria-live="polite"></ul>
-      </section>
-
-      <section class="panel" aria-labelledby="log-title">
-        <div class="section-heading">
-          <h2 id="log-title">消息</h2>
-          <span class="muted">最近 30 条</span>
-        </div>
-        <ol id="log" class="log" aria-live="polite"></ol>
-      </section>
-
-      <footer class="foot">
-        <p class="muted"><a href="/llms.txt">llms.txt</a></p>
-      </footer>
-    </main>
+    <div id="root"></div>
     <script type="module" src="/app.js"></script>
   </body>
 </html>

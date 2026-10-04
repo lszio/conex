@@ -388,9 +388,25 @@ impl ClientRegistry {
             (reply_id, reply_rx, tx)
         };
         self.in_flight.fetch_add(1, Ordering::AcqRel);
+        // Resolve the sender's link to its display name here rather than making
+        // each page embed its own name: the host already knows it, and a client
+        // that never set a name would otherwise greet everyone as its link id.
+        let from_name = {
+            let guard = self.by_link.lock().expect("client registry poisoned");
+            guard
+                .get(from)
+                .and_then(|sender| {
+                    sender
+                        .lock()
+                        .ok()
+                        .map(|sender| sender.entry.profile.label(from))
+                })
+                .unwrap_or_else(|| "某个客户端".to_string())
+        };
         let payload = serde_json::json!({
             "replyId": reply_id,
             "from": from,
+            "fromName": from_name,
             "text": text,
         });
         let frame = serde_json::json!({

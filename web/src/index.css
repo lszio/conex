@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+/* shadcn/ui design tokens. Values are the neutral zinc/blue scale the
+   components are designed around, expressed as Tailwind theme variables so
+   both the copied components and the page's own classes read the same
+   tokens. */
+@theme {
+  --color-background: oklch(0.99 0.002 250);
+  --color-foreground: oklch(0.21 0.02 260);
+  --color-card: oklch(1 0 0);
+  --color-card-foreground: oklch(0.21 0.02 260);
+  --color-muted: oklch(0.96 0.004 250);
+  --color-muted-foreground: oklch(0.52 0.02 260);
+  --color-border: oklch(0.91 0.006 250);
+  --color-input: oklch(0.91 0.006 250);
+  --color-primary: oklch(0.55 0.17 258);
+  --color-primary-foreground: oklch(0.99 0 0);
+  --color-secondary: oklch(0.96 0.005 250);
+  --color-secondary-foreground: oklch(0.28 0.02 260);
+  --color-destructive: oklch(0.58 0.21 27);
+  --color-destructive-foreground: oklch(0.99 0 0);
+  --color-success: oklch(0.52 0.13 155);
+  --radius: 0.625rem;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  /* Respect the OS setting: the connection status and messages update on
+     their own and must not animate for anyone who asked them not to. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
