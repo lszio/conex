@@ -19,6 +19,18 @@ host_origin = "conex://landing"
 web_origin = "https://conex.lszio.space"
 web_root = "/opt/conex/web"
 
+# Additional accepted origins. One image is served under several domains: the
+# production host plus one preview domain per pull request
+# (`<previewWildcard>.lszio.space`). Without this a preview deployment loads the
+# page and then fails every call, because the Origin check would only accept
+# the production domain.
+#
+# The wildcard is expanded here, not templated, so the shipped file stays a
+# plain, auditable config. Add a line per preview domain pattern you use.
+web_origins = [
+  "https://preview-conex.lszio.space",
+]
+
 # P1 persistent roots (sessions back the UI links; the others are required for
 # the P1 backends to be considered complete).
 content_root = "/var/lib/conex/content"

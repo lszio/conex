@@ -98,6 +98,7 @@ fn config(dir: &TempDir) -> HostConfig {
             },
         ],
         web_origin: None,
+        web_origins: Vec::new(),
         web_root: None,
         agents: vec![AgentConfig {
             id: "agent-a".into(),
