@@ -162,6 +162,18 @@ $ curl -o /dev/null -w '%{http_code}' https://random-nonexistent.lszio.space/  #
 
 未加通配记录前：preview 容器可以构建启动，但域名解析/证书会失败，页面访问不到。
 
+**当前状态（2026-10-05）：配置已就绪，preview 容器尚未生成。** 设置已写入
+（`isPreviewDeploymentsActive: true` / `previewWildcard: preview-conex`），但
+`previewDeployments` 始终为空：本实例安装的 GitHub App
+（`dokploy-2026-09-09-7mx4i4`，installationId `160348011`）只在 push 到跟踪分支时
+投递事件，PR 的 `synchronize`/`opened` 事件没有到达 Dokploy，因此没有触发 preview
+部署。普通 push 会正常触发**生产**部署（`deployment.queueList` 里可见
+`applicationId=fEKm9C8gzoKBXN94LAFq4` 的条目）。
+
+也就是说：通配 DNS 补齐之前这一步就卡住；补齐之后还需要 GitHub App 侧确实投递
+PR 事件。验证判据是 `application.one` 的 `previewDeployments` 出现条目并带
+`url`/`domain`。这两件事都做完之前，不要把「preview 可用」写进任何交付说明。
+
 ## 10. 生产分支切换
 
 Dokploy 应用 `fEKm9C8gzoKBXN94LAFq4` 部署 `branch`。切换即改该字段并重新部署：
