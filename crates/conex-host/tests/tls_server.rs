@@ -40,7 +40,11 @@ fn plaintext_bind_behind_proxy_needs_its_own_flag() {
     // A reverse-proxy container binds 0.0.0.0 in plaintext. This is legal
     // only under the explicit bind flag, and `allow_loopback_http` alone
     // must never be enough for a non-loopback address.
-    let path = write_config(dir.path(), "proxy.toml", &base_config("0.0.0.0:8787", false));
+    let path = write_config(
+        dir.path(),
+        "proxy.toml",
+        &base_config("0.0.0.0:8787", false),
+    );
     assert!(HostConfig::load(&path).is_err());
 
     let body = format!(
