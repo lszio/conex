@@ -1,9 +1,13 @@
-FROM oven/bun:1 AS web-builder
+# Base images are pinned by digest. Floating tags (`rust:1`, `oven/bun:1`)
+# must be resolved through the registry at build time, and a stalled manifest
+# fetch wedges the whole deployment with no useful error.
+FROM oven/bun:1@sha256:9114c058aeae42162ee16dd5084b95fe9473970bb6bcb5b232ab1630f0546895 AS web-builder
 WORKDIR /src
 COPY . .
 RUN bun install --frozen-lockfile && bun run build:web
 
-FROM rust:1-bookworm AS rust-builder
+# rust:1 tracks the stable channel pinned in rust-toolchain.toml.
+FROM rust:1-bookworm@sha256:59037199c44290f2befcdd58dcc540164763fc296950255aaefeef096a1866b0 AS rust-builder
 WORKDIR /src
 COPY . .
 COPY --from=web-builder /src/web/dist ./web/dist
@@ -15,7 +19,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 RUN cargo build --locked --release -p conex-host -p conex-agent
 
-FROM debian:bookworm-slim AS runtime
+FROM debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251 AS runtime
 RUN apt-get update \
     && apt-get install --no-install-recommends -y ca-certificates curl \
     && rm -rf /var/lib/apt/lists/* \
