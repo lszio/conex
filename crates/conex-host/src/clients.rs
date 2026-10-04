@@ -116,6 +116,29 @@ impl ClientProfile {
     }
 }
 
+/// Cap on how many numeric suffixes are tried before a name is considered
+/// unusable. Past this the registry is pathologically full of that name, and
+/// a linkId fallback is more honest than `name-9999`.
+const MAX_NAME_SUFFIX: u32 = 999;
+
+/// Make `desired` unique among `taken`, appending `-2`, `-3`, … on collision.
+///
+/// Uniqueness is by *displayed* name, which is what a reader tells clients
+/// apart by. The caller must exclude the client itself from `taken`, so
+/// re-saving your own unchanged name never renames you: a name is only taken
+/// from someone who is not you.
+fn unique_name(desired: &str, taken: &[String]) -> String {
+    if desired.is_empty() || !taken.iter().any(|name| name == desired) {
+        return desired.to_string();
+    }
+    (2..=MAX_NAME_SUFFIX)
+        .map(|suffix| format!("{desired}-{suffix}"))
+        .find(|candidate| !taken.iter().any(|name| name == candidate))
+        // Every suffix is taken: keep the raw name rather than invent a
+        // number past the cap, and let the list show the collision.
+        .unwrap_or_else(|| desired.to_string())
+}
+
 /// Strip control characters and cap the length. Returns None when the input
 /// is absent or not a string, so the caller can distinguish "unset" from "".
 fn clean(value: Option<&serde_json::Value>, max: usize) -> Option<String> {
@@ -218,8 +241,30 @@ impl ClientRegistry {
         }
     }
 
-    pub fn set_profile(&self, link_id: &str, profile: ClientProfile) -> Option<ClientEntry> {
+    /// Update a client's self-declared profile.
+    ///
+    /// `display_name` is made unique across all *other* clients by appending a
+    /// numeric suffix, so two visitors who both type "alice" are readable as
+    /// `alice` and `alice-2` rather than being indistinguishable in the list.
+    /// Excluding the caller's own link means re-saving an unchanged name never
+    /// renames you.
+    pub fn set_profile(&self, link_id: &str, mut profile: ClientProfile) -> Option<ClientEntry> {
         let guard = self.by_link.lock().expect("client registry poisoned");
+        // Collect other clients' displayed names first: each state is its own
+        // lock, and the registry lock is held throughout so two clients racing
+        // on the same name cannot both claim it.
+        let mut taken: Vec<String> = Vec::new();
+        for (other_id, state) in guard.iter() {
+            if other_id == link_id {
+                continue;
+            }
+            let state = state.lock().expect("client state poisoned");
+            if !state.can_receive() {
+                continue;
+            }
+            taken.push(state.entry.profile.label(other_id));
+        }
+        profile.display_name = unique_name(&profile.display_name, &taken);
         let state = guard.get(link_id)?;
         let mut state = state.lock().expect("client state poisoned");
         // A link with no writer is gone; accepting a write would let a dead
@@ -501,6 +546,76 @@ mod tests {
             rx.try_recv().is_err(),
             "no frame is pushed to a hidden client"
         );
+    }
+
+    #[test]
+    fn duplicate_names_get_numeric_suffixes() {
+        let registry = ClientRegistry::new();
+        for link in ["link-a", "link-b", "link-c"] {
+            registry.register(link, "guest", "demo", "ua");
+            let _rx = attach(&registry, link);
+        }
+        let named = |link: &str, name: &str| {
+            registry
+                .set_profile(
+                    link,
+                    ClientProfile {
+                        display_name: name.into(),
+                        visible: true,
+                        ..ClientProfile::default()
+                    },
+                )
+                .expect("profile set")
+                .profile
+                .label(link)
+        };
+        assert_eq!(named("link-a", "alice"), "alice");
+        assert_eq!(named("link-b", "alice"), "alice-2");
+        assert_eq!(named("link-c", "alice"), "alice-3");
+        // When a middle name is freed, the next claimant takes the free slot
+        // rather than growing the suffix: link-c is asking for "alice" again,
+        // and "alice" is held by link-a, so "alice-2" is the first free one.
+        registry.remove("link-b");
+        assert_eq!(named("link-c", "alice"), "alice-2");
+    }
+
+    #[test]
+    fn saving_your_own_unchanged_name_does_not_rename_you() {
+        let registry = ClientRegistry::new();
+        registry.register("link-a", "guest", "demo", "ua");
+        let _rx = attach(&registry, "link-a");
+        let profile = ClientProfile {
+            display_name: "alice".into(),
+            visible: true,
+            ..ClientProfile::default()
+        };
+        let first = registry
+            .set_profile("link-a", profile.clone())
+            .expect("first save")
+            .profile
+            .label("link-a");
+        // The page re-sends the same profile on every reconnect; that must be
+        // idempotent, not an endless alice -> alice-2 -> alice-3 walk.
+        let second = registry
+            .set_profile("link-a", profile.clone())
+            .expect("second save")
+            .profile
+            .label("link-a");
+        assert_eq!(first, "alice");
+        assert_eq!(second, "alice");
+    }
+
+    #[test]
+    fn empty_names_do_not_collide_with_each_other() {
+        let registry = ClientRegistry::new();
+        registry.register("link-a", "guest", "demo", "ua");
+        let _rx = attach(&registry, "link-a");
+        let label = registry
+            .set_profile("link-a", ClientProfile::default())
+            .expect("profile set")
+            .profile
+            .label("link-a");
+        assert_eq!(label, "client-link-a");
     }
 
     #[test]
