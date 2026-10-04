@@ -1,0 +1,12 @@
+# Dokploy runtime config for conex-host.
+# Bind 0.0.0.0 so the container port is reachable; token hash = sha256(bearer).
+listen = "0.0.0.0:8787"
+allow_loopback_http = true
+audience = "host.dokploy"
+audit_file = "/tmp/conex-audit.jsonl"
+
+[[tokens]]
+token_hash = "ca154d5eb83c0ff5690e126efc0058f957c7da9786e6c94a8db59ed7f7ed6177"
+principal_id = "admin"
+tenant_id = "default"
+audience = "host.dokploy"

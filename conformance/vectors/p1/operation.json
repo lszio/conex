@@ -1,0 +1,65 @@
+{
+  "$schema": "conex P1 operation dedup / execution / state machine cases",
+  "executionClasses": [
+    {"name": "read_only", "retry": "safe"},
+    {"name": "idempotent", "retry": "safe"},
+    {"name": "deduplicated", "retry": "with_operation_id"},
+    {"name": "non_replayable", "retry": "never", "execution": "unknown"}
+  ],
+  "stateMachine": [
+    "accepted -> running -> succeeded",
+    "accepted -> running -> failed",
+    "accepted -> running -> cancelled",
+    "accepted -> running -> unknown"
+  ],
+  "cases": [
+    {
+      "name": "deduplicated_response_lost_recovers_via_operation_get",
+      "executionClass": "deduplicated",
+      "expect": "result_recovered",
+      "details": "上游幂等支持时只执行一次，operation/get 取回结果"
+    },
+    {
+      "name": "non_replayable_response_lost_returns_unknown",
+      "executionClass": "non_replayable",
+      "expect": "unknown",
+      "details": "客户端不得自动重试"
+    },
+    {
+      "name": "same_key_different_param_digest_returns_conflict",
+      "expect": "conflict"
+    },
+    {
+      "name": "operationId_expired_no_silent_replay",
+      "ttlHours": 24,
+      "expect": "expired_or_unknown",
+      "details": "客户端不可静默重新执行"
+    },
+    {
+      "name": "settled_operation_cancel_keeps_terminal_state",
+      "expect": "terminal_state_kept"
+    },
+    {
+      "name": "truly_concurrent_cancel_may_return_outcome_unknown",
+      "expect": "outcome_unknown"
+    },
+    {
+      "name": "unauthorized_principal_cannot_query",
+      "expect": "unauthorized"
+    },
+    {
+      "name": "cross_principal_operationId_guess_rejected",
+      "expect": "unauthorized"
+    }
+  ],
+  "expectedRevisionCases": [
+    {
+      "name": "atomic_expected_revision_check_advertises_conditional_write",
+      "expect": "advertises_conditional_write"
+    },
+    {
+      "name": "read_then_write_bridge_must_not_advertise_conditional_write",
+      "expect": "no_conditional_write"
+    }
+  ]
+}

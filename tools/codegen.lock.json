@@ -1,0 +1,58 @@
+{
+  "generatedBy": "cargo xtask generate",
+  "tools": {
+    "rustc": "1.98.1",
+    "cargo": "1.98.1",
+    "protoc": "36.1",
+    "bun": "1.4.0",
+    "node": "26.8.1",
+    "protoc-gen-ts_proto": "2.12.3",
+    "typescript": "5.9.3",
+    "ajv": "8.20.0"
+  },
+  "tsProtoOpt": "forceLong=string,outputEncodeMethods=true,outputJsonMethods=true,useOptionals=all,outputServices=none,esModuleInterop=true",
+  "tsProtoRuntime": "@bufbuild/protobuf (dependency of @conex/sdk; generated encoders are used by the canonical manifest rule in sdk/typescript/src/content.ts)",
+  "jsonSchema": {
+    "producer": "xtask/src/schema.rs (prost-reflect over the compiled FileDescriptorSet)",
+    "note": "No Go/protoschema plugin is used; the schema is derived deliberately and is not the authoritative runtime validator (MethodContract.prepare is, design S5.2)."
+  },
+  "artifacts": {
+    "descriptor": "schema/generated/conex.bin",
+    "rust": "schema/generated/rust/",
+    "jsonSchema": "schema/generated/jsonschema/",
+    "typescript": "sdk/typescript/src/generated/"
+  },
+  "toolchainRoot": ".toolchain/ (gitignored; see scripts/bootstrap-toolchain.sh)",
+  "phases": {
+    "p0": {
+      "schemas": [
+        "schema/conex/common.proto",
+        "schema/conex/control.proto",
+        "schema/conex/manifest.proto",
+        "schema/conex/rpc.proto",
+        "schema/conex/source.proto"
+      ],
+      "vectors": "conformance/vectors/p0/"
+    },
+    "p1": {
+      "schemas": [
+        "schema/conex/chunking.proto",
+        "schema/conex/session.proto",
+        "schema/conex/stream.proto",
+        "schema/conex/blob.proto",
+        "schema/conex/operation.proto"
+      ],
+      "vectors": "conformance/vectors/p1/",
+      "goldenGenerators": {
+        "conformance/vectors/p1/chunking.json": "conformance/tools/gen_manifest_goldens.py (protoc --encode + python stdlib; checked by `cargo xtask conformance`)"
+      },
+      "contracts": [
+        "docs/contracts/p1-chunking.md",
+        "docs/contracts/p1-blob.md",
+        "docs/contracts/p1-stream.md",
+        "docs/contracts/p1-operation.md"
+      ],
+      "frozen": "2026-09-15 P1-01"
+    }
+  }
+}

@@ -1,0 +1,68 @@
+use std::env;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+fn collect_protos(dir: &Path, out: &mut Vec<PathBuf>) {
+    if let Ok(entries) = fs::read_dir(dir) {
+        let mut paths: Vec<PathBuf> = entries
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| p.extension().map(|x| x == "proto").unwrap_or(false))
+            .collect();
+        paths.sort();
+        out.extend(paths);
+    }
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let manifest = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?);
+    let repo_root = manifest.join("..").join("..").canonicalize()?;
+
+    let mut protos = Vec::new();
+    collect_protos(&repo_root.join("conformance/schema"), &mut protos);
+    collect_protos(&repo_root.join("schema/conex"), &mut protos);
+    if protos.is_empty() {
+        panic!("no .proto files found under conformance/schema or schema/conex");
+    }
+
+    println!(
+        "cargo:rerun-if-changed={}",
+        repo_root.join("conformance/schema").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        repo_root.join("schema/conex").display()
+    );
+
+    let conex_root = repo_root.join("schema/conex");
+    let has_conex = protos.iter().any(|p| p.starts_with(&conex_root));
+    println!("cargo:rustc-check-cfg=cfg(has_conex)");
+    if has_conex {
+        println!("cargo:rustc-cfg=has_conex");
+    }
+
+    let out = PathBuf::from(env::var("OUT_DIR")?);
+    let descriptor = out.join("conex.bin");
+    let includes = [
+        repo_root.join("schema"),
+        repo_root.join("conformance/schema"),
+    ];
+
+    let mut config = prost_build::Config::new();
+    config
+        .file_descriptor_set_path(&descriptor)
+        .compile_well_known_types()
+        .extern_path(".google.protobuf", "::pbjson_types")
+        .bytes(["."]);
+    config.compile_protos(&protos, &includes)?;
+
+    let bytes = fs::read(&descriptor)?;
+    let mut packages = vec![".conex.test"];
+    if has_conex {
+        packages.push(".conex");
+    }
+    pbjson_build::Builder::new()
+        .register_descriptors(&bytes)?
+        .build(&packages)?;
+    Ok(())
+}

@@ -1,0 +1,17 @@
+[package]
+name = "conex-content"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+bytes.workspace = true
+cap-std.workspace = true
+conex-core = { path = "../conex-core" }
+conex-proto = { path = "../conex-proto" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time", "sync"] }
+
+[dev-dependencies]
+tempfile.workspace = true

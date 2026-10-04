@@ -1,0 +1,5 @@
+# Local toolchain lives in .toolchain/ (gitignored); see README and tools/codegen.lock.json.
+# protoc is resolved from PATH, or set PROTOC explicitly in CI.
+
+[alias]
+xtask = "run --package xtask --"
