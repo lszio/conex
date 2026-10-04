@@ -2,12 +2,14 @@
 
 conex（connect + nexus）是一个可嵌入的双向能力路由内核及可选独立进程；工作协议名 `conex`。
 
-**当前状态（2026-10-03）：** P0、P1、Connected landing 已交付；**多主机内容 M0–M5 已交付**（分支 `refactor/arch`，未提交）：内容契约冻结（endpointId+revision 定位、blob/get 互斥目标、protobuf 二进制 DataChunk 通道）、访客会话与 blob 所有权授权、逐端点 Agent 注册生命周期（staged 链接/逐端点 review）、同源 `/content`（Range/ETag/防注入/流式取消）、公共浏览页面（文本/图片/视频/DOCX/ZIP 受限预览，1440/390 双视口 38 项浏览器检查全过）。逐项证据：[多主机内容验证记录](docs/verification/multi-host-content.md)；剩余 M4（Notez 接入）与 M6（验收收口）见计划。历史：P0（`e649ded`）、P1（`f6f8edc`/`4d5ff73`）交付记录见 [P1 验证记录](docs/verification/p1.md)。
+**当前状态（2026-10-04）：** P0、P1、Connected landing、多主机内容 M0–M5 已交付；**公开落地页已部署**到 <https://conex.lszio.space>（分支 `landing`，提交 `a9d3034`/`af47b3d`）：产品叙事、请求链路演示、免凭据访客只读控制台、`/llms.txt`。本轮修复两个真实缺陷：容器反代后的明文监听被配置校验拒绝（新增 `allow_plaintext_bind`）、`/content` 缺 `Content-Length` 导致视频无法拖动。逐项证据：[落地页验证记录](docs/verification/landing-page.md)。历史：多主机内容 M0–M5（[验证记录](docs/verification/multi-host-content.md)）；剩余 M4（Notez 接入）与 M6（验收收口）见计划。
 
 ## 文档
 
 完整地图与阅读顺序见 [docs/README.md](docs/README.md)。
 
+- 落地页验证记录（当前）：[docs/verification/landing-page.md](docs/verification/landing-page.md)
+- Dokploy 部署运行手册：[docs/runbooks/dokploy.md](docs/runbooks/dokploy.md)
 - 设计（权威）：[docs/design/2026-09-14-conex-design.md](docs/design/2026-09-14-conex-design.md)
 - 路线图：[docs/plans/2026-09-15-conex-roadmap.md](docs/plans/2026-09-15-conex-roadmap.md)
 - 多主机内容计划（当前）：[docs/plans/2026-10-01-conex-multi-host-content.md](docs/plans/2026-10-01-conex-multi-host-content.md)
