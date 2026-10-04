@@ -23,6 +23,14 @@ export {
   EndpointSummary,
 } from "./generated/conex/endpoint";
 export {
+  ClientHelloRequest,
+  ClientHelloResult,
+  ClientListRequest,
+  ClientListResponse,
+  ClientProfile,
+  ClientProfileRequest,
+  ClientProfileResponse,
+  ClientSummary,
   ConnectionListRequest,
   ConnectionListResponse,
   UiLinkSummary,

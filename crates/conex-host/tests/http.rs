@@ -164,6 +164,7 @@ impl HttpFixture {
         ]));
         let app = attach_state(
             Arc::new(HttpState {
+                clients: Arc::new(conex_host::clients::ClientRegistry::new()),
                 host: host.clone(),
                 bindings,
                 auth,

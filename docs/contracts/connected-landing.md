@@ -1,6 +1,6 @@
 # Connected landing contract
 
-状态：**L01 契约冻结 + L10 连接面板契约冻结（2026-09-21）+ M0 内容契约冻结（2026-10-02，§8）**。L10 在 `schema/conex/dashboard.proto` 新增 `ConnectionListRequest` / `ConnectionListResponse` / `UiLinkSummary` / `AgentLinkSummary`；M0 调整 `source.proto` / `chunking.proto` / `blob.proto`。Rust/TypeScript/JSON Schema 由 `cargo xtask generate` 生成。L02–L09 边界不变。
+状态：**L01 契约冻结 + L10 连接面板契约冻结（2026-09-21）+ M0 内容契约冻结（2026-10-02，§8）+ L11 客户端 hello 契约冻结（2026-10-04，§9）**。L10 在 `schema/conex/dashboard.proto` 新增 `ConnectionListRequest` / `ConnectionListResponse` / `UiLinkSummary` / `AgentLinkSummary`；L11 新增 `ClientProfile` / `ClientSummary` / `ClientList*` / `ClientHello*`。Rust/TypeScript/JSON Schema 由 `cargo xtask generate` 生成。L02–L09 边界不变。
 
 ## 7. 连接面板契约（L10）
 
@@ -92,3 +92,22 @@ Agent 先验证 Host 的 TLS CA 和 server name，再使用 `role=agent` 的 bea
 **授权覆盖面。** 目录、读取、范围读取、have、上传恢复、提交、pin/unpin、cancel 全部走同一资源授权；CID、upload ID、pin ID 都不是授权凭据，不能凭知道标识绕过租户或资源策略。物理内容按 CID 去重不合并逻辑授权。本节的强制执行在 M1（blob 所有权与资源授权）落地。
 
 **wire 调整。** `BlobGetRequest` 旧 `chunkCid/rangeOffset/rangeLength` 字段号 reserved，由 `committed/remote` oneof 取代；`ResourceSummary.sizeBytes`、`BlobRef.cid`、`BlobGetResponse` 同步调整并统一迁移 Host、Agent、SDK、页面与向量，不保留双轨契约。旧字段（`providerId`）从 wire 结构中删除。
+
+
+## 9. 客户端 hello 契约（L11）
+
+落地页收敛为「hello」：连上即列出在线客户端，逐个发送 hello，每个访客自述名称／组／可见性。契约类型在 `schema/conex/dashboard.proto`。
+
+**客户端的定义。** 一个客户端就是一条浏览器 UI 链接，加上它自述的 `ClientProfile`。访客仍共享 `web_guest.principal_id`；会话级显示名不是身份，不参与授权，也不唯一。
+
+**资料是自述的。** `displayName` ≤ 40 字符、`group` ≤ 24 字符，入库前去除控制字符并截断；`visible` 默认 `true`。资料不授予任何能力，Host 不得因名称或分组改变授权结果。列表中的 `displayName` 为空时由 linkId 前 6 位回退（`client-xxxxxx`），不伪造身份。
+
+**可见性是隐私开关。** `visible = false` 的客户端不进入任何 `client/list` 结果，且 `client/hello` 对其返回 `unavailable`——隐藏即不可寻址，不是仅隐藏标签。
+
+**列表只含可寻址的链接。** `client/list` 只返回已挂上出站通道（handshake 完成）的链接。握手前崩溃或未 clean close 的死链会留下无 writer 的条目，必须既不出现在列表里，也按 60s 宽限后回收，避免注册表无界增长。
+
+**hello 往返。** `client/hello` 携带 `targetLinkId` 与 ≤ 200 字符文本；Host 经目标链接既有的出站通道推送 `conex/client-hello`（JSON-RPC notification），目标回 `conex/client-pong`。Host 测量从入队到收到 pong 的往返毫秒数并返回 `roundTripMs`。目标离线、隐藏或 10s 未答均返回 `unavailable`，不静默丢弃。pong 以 notification 形式抵达，Host 必须在 broker 帧路径之前处理（无 id 的 notification 会被该路径丢弃）。
+
+**方法白名单。** `client/list`、`client/profile`、`client/hello` 加入 UI 角色白名单（`allowed_ui_method`）与 UI ticket 的 capability caps。页面不再提供 shell、写文件、blob 提交、Agent 注册或任意命令入口。
+
+**推送与字节预算。** Host 主动下发的帧必须与 WSS writer 使用同一出站字节计数器；绕过计数会让 writer 的 `fetch_sub` 下溢 `usize`，其后所有预算检查失败并关闭该 socket。

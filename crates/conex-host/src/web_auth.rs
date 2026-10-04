@@ -511,7 +511,14 @@ pub async fn logout(Extension(state): Extension<Arc<HttpState>>, headers: Header
 pub fn allowed_ui_method(method: &str) -> bool {
     matches!(
         method,
-        "endpoint/list" | "connection/list" | "source/list" | "source/read" | "source/search"
+        "endpoint/list"
+            | "connection/list"
+            | "client/list"
+            | "client/profile"
+            | "client/hello"
+            | "source/list"
+            | "source/read"
+            | "source/search"
     )
 }
 

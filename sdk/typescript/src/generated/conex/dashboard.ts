@@ -43,6 +43,80 @@ export interface ConnectionListResponse {
   agentLinks?: AgentLinkSummary[] | undefined;
 }
 
+/**
+ * Client panel messages. A "client" is a browser visitor: one UI link with a
+ * self-declared name, group and visibility. Callers may only see clients that
+ * have `visible` set; hidden clients are not listed to anyone, not even to
+ * themselves as rows (their own row is still addressable by linkId).
+ */
+export interface ClientListRequest {
+}
+
+export interface ClientProfile {
+  /**
+   * Self-declared, session-scoped. Never authenticated, never reused as an
+   * identity: two clients may pick the same name.
+   */
+  displayName?:
+    | string
+    | undefined;
+  /** Optional free-form bucket the visitor can use to sort their own view. */
+  group?:
+    | string
+    | undefined;
+  /** When false the client disappears from every other client's list. */
+  visible?: boolean | undefined;
+}
+
+export interface ClientSummary {
+  linkId?: string | undefined;
+  principalId?: string | undefined;
+  tenantId?: string | undefined;
+  profile?: ClientProfile | undefined;
+  connectedAtMs?: string | undefined;
+  lastSeenAtMs?:
+    | string
+    | undefined;
+  /** Self-reported by the client's own page; never trusted for access. */
+  userAgent?: string | undefined;
+}
+
+export interface ClientListResponse {
+  clients?: ClientSummary[] | undefined;
+}
+
+export interface ClientProfileRequest {
+  profile?: ClientProfile | undefined;
+}
+
+export interface ClientProfileResponse {
+  self?: ClientSummary | undefined;
+}
+
+/**
+ * Sends a greeting to one online client. The host pushes
+ * `conex/client-hello` to the target link; the target replies with
+ * `conex/client-pong`, which the host reports back to the sender together
+ * with the measured round-trip time. An offline or hidden target fails with
+ * `unavailable` rather than being silently dropped.
+ */
+export interface ClientHelloRequest {
+  targetLinkId?: string | undefined;
+  text?: string | undefined;
+}
+
+export interface ClientHelloResult {
+  targetLinkId?:
+    | string
+    | undefined;
+  /**
+   * Round-trip milliseconds measured by the host, from handing the frame to
+   * the target's socket until its pong is read back.
+   */
+  roundTripMs?: string | undefined;
+  reply?: string | undefined;
+}
+
 function createBaseConnectionListRequest(): ConnectionListRequest {
   return {};
 }
@@ -618,6 +692,774 @@ export const ConnectionListResponse: MessageFns<ConnectionListResponse> = {
     const message = createBaseConnectionListResponse();
     message.browserLinks = object.browserLinks?.map((e) => UiLinkSummary.fromPartial(e)) || [];
     message.agentLinks = object.agentLinks?.map((e) => AgentLinkSummary.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseClientListRequest(): ClientListRequest {
+  return {};
+}
+
+export const ClientListRequest: MessageFns<ClientListRequest> = {
+  encode(_: ClientListRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ClientListRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseClientListRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(_: any): ClientListRequest {
+    return {};
+  },
+
+  toJSON(_: ClientListRequest): unknown {
+    const obj: any = {};
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ClientListRequest>, I>>(base?: I): ClientListRequest {
+    return ClientListRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ClientListRequest>, I>>(_: I): ClientListRequest {
+    const message = createBaseClientListRequest();
+    return message;
+  },
+};
+
+function createBaseClientProfile(): ClientProfile {
+  return { displayName: "", group: "", visible: false };
+}
+
+export const ClientProfile: MessageFns<ClientProfile> = {
+  encode(message: ClientProfile, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.displayName !== undefined && message.displayName !== "") {
+      writer.uint32(10).string(message.displayName);
+    }
+    if (message.group !== undefined && message.group !== "") {
+      writer.uint32(18).string(message.group);
+    }
+    if (message.visible !== undefined && message.visible !== false) {
+      writer.uint32(24).bool(message.visible);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ClientProfile {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseClientProfile();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.displayName = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.group = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.visible = reader.bool();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): ClientProfile {
+    return {
+      displayName: isSet(object.displayName)
+        ? globalThis.String(object.displayName)
+        : isSet(object.display_name)
+        ? globalThis.String(object.display_name)
+        : "",
+      group: isSet(object.group) ? globalThis.String(object.group) : "",
+      visible: isSet(object.visible) ? globalThis.Boolean(object.visible) : false,
+    };
+  },
+
+  toJSON(message: ClientProfile): unknown {
+    const obj: any = {};
+    if (message.displayName !== undefined && message.displayName !== "") {
+      obj.displayName = message.displayName;
+    }
+    if (message.group !== undefined && message.group !== "") {
+      obj.group = message.group;
+    }
+    if (message.visible !== undefined && message.visible !== false) {
+      obj.visible = message.visible;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ClientProfile>, I>>(base?: I): ClientProfile {
+    return ClientProfile.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ClientProfile>, I>>(object: I): ClientProfile {
+    const message = createBaseClientProfile();
+    message.displayName = object.displayName ?? "";
+    message.group = object.group ?? "";
+    message.visible = object.visible ?? false;
+    return message;
+  },
+};
+
+function createBaseClientSummary(): ClientSummary {
+  return {
+    linkId: "",
+    principalId: "",
+    tenantId: "",
+    profile: undefined,
+    connectedAtMs: "0",
+    lastSeenAtMs: "0",
+    userAgent: "",
+  };
+}
+
+export const ClientSummary: MessageFns<ClientSummary> = {
+  encode(message: ClientSummary, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.linkId !== undefined && message.linkId !== "") {
+      writer.uint32(10).string(message.linkId);
+    }
+    if (message.principalId !== undefined && message.principalId !== "") {
+      writer.uint32(18).string(message.principalId);
+    }
+    if (message.tenantId !== undefined && message.tenantId !== "") {
+      writer.uint32(26).string(message.tenantId);
+    }
+    if (message.profile !== undefined) {
+      ClientProfile.encode(message.profile, writer.uint32(34).fork()).join();
+    }
+    if (message.connectedAtMs !== undefined && message.connectedAtMs !== "0") {
+      writer.uint32(40).uint64(message.connectedAtMs);
+    }
+    if (message.lastSeenAtMs !== undefined && message.lastSeenAtMs !== "0") {
+      writer.uint32(48).uint64(message.lastSeenAtMs);
+    }
+    if (message.userAgent !== undefined && message.userAgent !== "") {
+      writer.uint32(58).string(message.userAgent);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ClientSummary {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseClientSummary();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.linkId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.principalId = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.tenantId = reader.string();
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.profile = ClientProfile.decode(reader, reader.uint32());
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.connectedAtMs = reader.uint64().toString();
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.lastSeenAtMs = reader.uint64().toString();
+            continue;
+          }
+          case 7: {
+            if (tag !== 58) {
+              break;
+            }
+
+            message.userAgent = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): ClientSummary {
+    return {
+      linkId: isSet(object.linkId)
+        ? globalThis.String(object.linkId)
+        : isSet(object.link_id)
+        ? globalThis.String(object.link_id)
+        : "",
+      principalId: isSet(object.principalId)
+        ? globalThis.String(object.principalId)
+        : isSet(object.principal_id)
+        ? globalThis.String(object.principal_id)
+        : "",
+      tenantId: isSet(object.tenantId)
+        ? globalThis.String(object.tenantId)
+        : isSet(object.tenant_id)
+        ? globalThis.String(object.tenant_id)
+        : "",
+      profile: isSet(object.profile) ? ClientProfile.fromJSON(object.profile) : undefined,
+      connectedAtMs: isSet(object.connectedAtMs)
+        ? globalThis.String(object.connectedAtMs)
+        : isSet(object.connected_at_ms)
+        ? globalThis.String(object.connected_at_ms)
+        : "0",
+      lastSeenAtMs: isSet(object.lastSeenAtMs)
+        ? globalThis.String(object.lastSeenAtMs)
+        : isSet(object.last_seen_at_ms)
+        ? globalThis.String(object.last_seen_at_ms)
+        : "0",
+      userAgent: isSet(object.userAgent)
+        ? globalThis.String(object.userAgent)
+        : isSet(object.user_agent)
+        ? globalThis.String(object.user_agent)
+        : "",
+    };
+  },
+
+  toJSON(message: ClientSummary): unknown {
+    const obj: any = {};
+    if (message.linkId !== undefined && message.linkId !== "") {
+      obj.linkId = message.linkId;
+    }
+    if (message.principalId !== undefined && message.principalId !== "") {
+      obj.principalId = message.principalId;
+    }
+    if (message.tenantId !== undefined && message.tenantId !== "") {
+      obj.tenantId = message.tenantId;
+    }
+    if (message.profile !== undefined) {
+      obj.profile = ClientProfile.toJSON(message.profile);
+    }
+    if (message.connectedAtMs !== undefined && message.connectedAtMs !== "0") {
+      obj.connectedAtMs = message.connectedAtMs;
+    }
+    if (message.lastSeenAtMs !== undefined && message.lastSeenAtMs !== "0") {
+      obj.lastSeenAtMs = message.lastSeenAtMs;
+    }
+    if (message.userAgent !== undefined && message.userAgent !== "") {
+      obj.userAgent = message.userAgent;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ClientSummary>, I>>(base?: I): ClientSummary {
+    return ClientSummary.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ClientSummary>, I>>(object: I): ClientSummary {
+    const message = createBaseClientSummary();
+    message.linkId = object.linkId ?? "";
+    message.principalId = object.principalId ?? "";
+    message.tenantId = object.tenantId ?? "";
+    message.profile = (object.profile !== undefined && object.profile !== null)
+      ? ClientProfile.fromPartial(object.profile)
+      : undefined;
+    message.connectedAtMs = object.connectedAtMs ?? "0";
+    message.lastSeenAtMs = object.lastSeenAtMs ?? "0";
+    message.userAgent = object.userAgent ?? "";
+    return message;
+  },
+};
+
+function createBaseClientListResponse(): ClientListResponse {
+  return { clients: [] };
+}
+
+export const ClientListResponse: MessageFns<ClientListResponse> = {
+  encode(message: ClientListResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.clients !== undefined && message.clients.length !== 0) {
+      for (const v of message.clients) {
+        ClientSummary.encode(v!, writer.uint32(10).fork()).join();
+      }
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ClientListResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseClientListResponse();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            const el = ClientSummary.decode(reader, reader.uint32());
+            if (el !== undefined) {
+              message.clients!.push(el);
+            }
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): ClientListResponse {
+    return {
+      clients: globalThis.Array.isArray(object?.clients)
+        ? object.clients.map((e: any) => ClientSummary.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: ClientListResponse): unknown {
+    const obj: any = {};
+    if (message.clients?.length) {
+      obj.clients = message.clients.map((e) => ClientSummary.toJSON(e));
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ClientListResponse>, I>>(base?: I): ClientListResponse {
+    return ClientListResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ClientListResponse>, I>>(object: I): ClientListResponse {
+    const message = createBaseClientListResponse();
+    message.clients = object.clients?.map((e) => ClientSummary.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseClientProfileRequest(): ClientProfileRequest {
+  return { profile: undefined };
+}
+
+export const ClientProfileRequest: MessageFns<ClientProfileRequest> = {
+  encode(message: ClientProfileRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.profile !== undefined) {
+      ClientProfile.encode(message.profile, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ClientProfileRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseClientProfileRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.profile = ClientProfile.decode(reader, reader.uint32());
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): ClientProfileRequest {
+    return { profile: isSet(object.profile) ? ClientProfile.fromJSON(object.profile) : undefined };
+  },
+
+  toJSON(message: ClientProfileRequest): unknown {
+    const obj: any = {};
+    if (message.profile !== undefined) {
+      obj.profile = ClientProfile.toJSON(message.profile);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ClientProfileRequest>, I>>(base?: I): ClientProfileRequest {
+    return ClientProfileRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ClientProfileRequest>, I>>(object: I): ClientProfileRequest {
+    const message = createBaseClientProfileRequest();
+    message.profile = (object.profile !== undefined && object.profile !== null)
+      ? ClientProfile.fromPartial(object.profile)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseClientProfileResponse(): ClientProfileResponse {
+  return { self: undefined };
+}
+
+export const ClientProfileResponse: MessageFns<ClientProfileResponse> = {
+  encode(message: ClientProfileResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.self !== undefined) {
+      ClientSummary.encode(message.self, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ClientProfileResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseClientProfileResponse();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.self = ClientSummary.decode(reader, reader.uint32());
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): ClientProfileResponse {
+    return { self: isSet(object.self) ? ClientSummary.fromJSON(object.self) : undefined };
+  },
+
+  toJSON(message: ClientProfileResponse): unknown {
+    const obj: any = {};
+    if (message.self !== undefined) {
+      obj.self = ClientSummary.toJSON(message.self);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ClientProfileResponse>, I>>(base?: I): ClientProfileResponse {
+    return ClientProfileResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ClientProfileResponse>, I>>(object: I): ClientProfileResponse {
+    const message = createBaseClientProfileResponse();
+    message.self = (object.self !== undefined && object.self !== null)
+      ? ClientSummary.fromPartial(object.self)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseClientHelloRequest(): ClientHelloRequest {
+  return { targetLinkId: "", text: "" };
+}
+
+export const ClientHelloRequest: MessageFns<ClientHelloRequest> = {
+  encode(message: ClientHelloRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.targetLinkId !== undefined && message.targetLinkId !== "") {
+      writer.uint32(10).string(message.targetLinkId);
+    }
+    if (message.text !== undefined && message.text !== "") {
+      writer.uint32(18).string(message.text);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ClientHelloRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseClientHelloRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.targetLinkId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.text = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): ClientHelloRequest {
+    return {
+      targetLinkId: isSet(object.targetLinkId)
+        ? globalThis.String(object.targetLinkId)
+        : isSet(object.target_link_id)
+        ? globalThis.String(object.target_link_id)
+        : "",
+      text: isSet(object.text) ? globalThis.String(object.text) : "",
+    };
+  },
+
+  toJSON(message: ClientHelloRequest): unknown {
+    const obj: any = {};
+    if (message.targetLinkId !== undefined && message.targetLinkId !== "") {
+      obj.targetLinkId = message.targetLinkId;
+    }
+    if (message.text !== undefined && message.text !== "") {
+      obj.text = message.text;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ClientHelloRequest>, I>>(base?: I): ClientHelloRequest {
+    return ClientHelloRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ClientHelloRequest>, I>>(object: I): ClientHelloRequest {
+    const message = createBaseClientHelloRequest();
+    message.targetLinkId = object.targetLinkId ?? "";
+    message.text = object.text ?? "";
+    return message;
+  },
+};
+
+function createBaseClientHelloResult(): ClientHelloResult {
+  return { targetLinkId: "", roundTripMs: "0", reply: "" };
+}
+
+export const ClientHelloResult: MessageFns<ClientHelloResult> = {
+  encode(message: ClientHelloResult, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.targetLinkId !== undefined && message.targetLinkId !== "") {
+      writer.uint32(10).string(message.targetLinkId);
+    }
+    if (message.roundTripMs !== undefined && message.roundTripMs !== "0") {
+      writer.uint32(16).uint64(message.roundTripMs);
+    }
+    if (message.reply !== undefined && message.reply !== "") {
+      writer.uint32(26).string(message.reply);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ClientHelloResult {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseClientHelloResult();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.targetLinkId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.roundTripMs = reader.uint64().toString();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.reply = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): ClientHelloResult {
+    return {
+      targetLinkId: isSet(object.targetLinkId)
+        ? globalThis.String(object.targetLinkId)
+        : isSet(object.target_link_id)
+        ? globalThis.String(object.target_link_id)
+        : "",
+      roundTripMs: isSet(object.roundTripMs)
+        ? globalThis.String(object.roundTripMs)
+        : isSet(object.round_trip_ms)
+        ? globalThis.String(object.round_trip_ms)
+        : "0",
+      reply: isSet(object.reply) ? globalThis.String(object.reply) : "",
+    };
+  },
+
+  toJSON(message: ClientHelloResult): unknown {
+    const obj: any = {};
+    if (message.targetLinkId !== undefined && message.targetLinkId !== "") {
+      obj.targetLinkId = message.targetLinkId;
+    }
+    if (message.roundTripMs !== undefined && message.roundTripMs !== "0") {
+      obj.roundTripMs = message.roundTripMs;
+    }
+    if (message.reply !== undefined && message.reply !== "") {
+      obj.reply = message.reply;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ClientHelloResult>, I>>(base?: I): ClientHelloResult {
+    return ClientHelloResult.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ClientHelloResult>, I>>(object: I): ClientHelloResult {
+    const message = createBaseClientHelloResult();
+    message.targetLinkId = object.targetLinkId ?? "";
+    message.roundTripMs = object.roundTripMs ?? "0";
+    message.reply = object.reply ?? "";
     return message;
   },
 };

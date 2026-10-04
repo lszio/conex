@@ -1,315 +1,216 @@
-import { ConexWsClient, type EndpointSummary, type UiLinkSummary } from "@conex/sdk";
-import {
-  appendEvent,
-  bindLogin,
-  bindLogout,
-  bindOperationTabs,
-  renderCatalog,
-  renderConnections,
-  renderError,
-  renderResult,
-  renderSelected,
-  setHostStatus,
-  setStage,
-  showApp,
-  showLogin,
-  type Operation,
-} from "./view";
-import { Browser, connectionLabel, type DirectoryPage, type ListingRow } from "./browser";
-import { renderWalkthrough } from "./walkthrough";
+// The hello page: connect, list online clients, greet one, and keep this
+// visitor's own name/group/visibility. Everything is a real call over the
+// same WSS link the protocol defines; there is no local mock state.
+
+import { ConexWsClient, type ClientProfile, type ClientSummary } from "@conex/sdk";
+
+const POLL_MS = 2000;
+const LOG_LIMIT = 30;
+
+const el = <T extends HTMLElement>(selector: string): T =>
+  document.querySelector<T>(selector)!;
 
 let csrfToken = "";
 let client: ConexWsClient | undefined;
-let endpoints: EndpointSummary[] = [];
-let selected: EndpointSummary | undefined;
-let operation: Operation = "list";
+/** This visitor's own link id, used to render the "you" row. */
+let selfLinkId = "";
+let rows: ClientSummary[] = [];
 let pollTimer = 0;
-let pollInFlight = false;
-let connectionsPollTimer = 0;
-let connectionsPollInFlight = false;
-let connectionRows: UiLinkSummary[] = [];
+let polling = false;
 
-/** Same-origin content URL for a resource; never carries a token or path. */
-function contentUrl(endpointId: string, resourceId: string, revision?: string): string {
-  const url = new URL("/content", location.origin);
-  url.searchParams.set("endpointId", endpointId);
-  url.searchParams.set("resourceId", resourceId);
-  if (revision) url.searchParams.set("revision", revision);
-  return url.toString();
+const logEl = el<HTMLOListElement>("#log");
+const clientsEl = el<HTMLUListElement>("#clients");
+const statusEl = el<HTMLParagraphElement>("#status");
+const countEl = el<HTMLSpanElement>("#client-count");
+const profileState = el<HTMLParagraphElement>("#profile-state");
+const nameInput = el<HTMLInputElement>("#profile-name");
+const groupInput = el<HTMLInputElement>("#profile-group");
+const visibleInput = el<HTMLInputElement>("#profile-visible");
+
+function setStatus(label: string, kind: "" | "ready" | "error" = ""): void {
+  statusEl.textContent = label;
+  statusEl.className = `status-pill ${kind}`.trim();
 }
 
-async function fetchRange(url: string, start?: number, end?: number): Promise<Uint8Array> {
-  const headers: Record<string, string> = {};
-  if (start !== undefined && end !== undefined) {
-    headers.Range = `bytes=${start}-${end}`;
+function log(message: string): void {
+  const item = document.createElement("li");
+  const time = document.createElement("span");
+  time.className = "log-time";
+  time.textContent = new Date().toLocaleTimeString();
+  const text = document.createElement("span");
+  text.textContent = message;
+  item.append(time, text);
+  logEl.prepend(item);
+  while (logEl.children.length > LOG_LIMIT) logEl.lastElementChild?.remove();
+}
+
+function labelOf(row: ClientSummary): string {
+  return row.profile?.displayName || row.linkId?.slice(0, 6) || "?";
+}
+
+function ago(ms: string | undefined): string {
+  const value = Number(ms ?? "0");
+  if (!Number.isFinite(value) || value <= 0) return "—";
+  const seconds = Math.max(0, Math.round((Date.now() - value) / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+  return `${Math.round(seconds / 3600)}h`;
+}
+
+function render(): void {
+  countEl.textContent = `${rows.length} 个`;
+  clientsEl.replaceChildren();
+  if (rows.length === 0) {
+    const empty = document.createElement("li");
+    empty.className = "empty";
+    empty.textContent = "还没有其他可见的客户端。开一个页面就能互相 hello。";
+    clientsEl.append(empty);
+    return;
   }
-  const response = await fetch(url, { credentials: "same-origin", headers });
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}) as { message?: string });
-    throw Object.assign(new Error(body.message || `内容读取失败（${response.status}）`), {
-      code: response.status,
-    });
+  // Group first, then name, so the visitor's own grouping is what they see.
+  const sorted = [...rows].sort((a, b) => {
+    const groupA = a.profile?.group ?? "";
+    const groupB = b.profile?.group ?? "";
+    if (groupA !== groupB) return groupA.localeCompare(groupB);
+    return labelOf(a).localeCompare(labelOf(b));
+  });
+  for (const row of sorted) {
+    const linkId = row.linkId;
+    // A row without an id cannot be addressed or compared, so it is not a
+    // usable client; the host always sets it, so this only guards decoding.
+    if (!linkId) continue;
+    const item = document.createElement("li");
+    item.className = "client";
+
+    const identity = document.createElement("div");
+    identity.className = "client-id";
+    const name = document.createElement("strong");
+    name.textContent = labelOf(row);
+    const meta = document.createElement("span");
+    meta.className = "muted";
+    const group = row.profile?.group || "未分组";
+    meta.textContent = `${group} · 活跃于 ${ago(row.lastSeenAtMs)} 前`;
+    identity.append(name, meta);
+    if (linkId === selfLinkId) {
+      const badge = document.createElement("span");
+      badge.className = "badge";
+      badge.textContent = "你";
+      identity.append(badge);
+    }
+
+    const hello = document.createElement("button");
+    hello.type = "button";
+    hello.className = "secondary";
+    hello.textContent = linkId === selfLinkId ? "hello 给自己" : "发送 hello";
+    hello.addEventListener("click", () => { void greet(row); });
+
+    item.append(identity, hello);
+    clientsEl.append(item);
   }
-  return new Uint8Array(await response.arrayBuffer());
 }
 
-function toListingRow(item: unknown): ListingRow {
-  if (!item || typeof item !== "object") {
-    return { resourceId: "", title: "", mime: "application/octet-stream" };
-  }
-  const record = item as Record<string, unknown>;
-  const resourceId = typeof record.resourceId === "string" ? record.resourceId : "";
-  return {
-    resourceId,
-    title: typeof record.title === "string" && record.title ? record.title : resourceId.split("/").pop() ?? resourceId,
-    mime: typeof record.mime === "string" ? record.mime : "application/octet-stream",
-    sizeBytes: typeof record.sizeBytes === "string" ? Number(record.sizeBytes) : undefined,
-    revision: typeof record.revision === "string" ? record.revision : undefined,
-  };
-}
-
-function toDirectoryPage(result: unknown): DirectoryPage {
-  const record = (result ?? {}) as { items?: unknown; nextCursor?: string };
-  const items = Array.isArray(record.items) ? record.items.map(toListingRow) : [];
-  return { rows: items, nextCursor: record.nextCursor };
-}
-
-const browserHost = document.querySelector<HTMLElement>("#browser-host");
-const browserPanel = document.querySelector<HTMLElement>("#browser-panel");
-const browserSearch = document.querySelector<HTMLInputElement>("#browser-search");
-const browserEndpoint = document.querySelector<HTMLElement>("#browser-endpoint");
-const browser = browserHost
-  ? new Browser(browserHost, {
-      list: async (endpointId, input) => {
-        if (!client) return { rows: [] };
-        return toDirectoryPage(await client.list(endpointId, input));
-      },
-      search: async (endpointId, input) => {
-        if (!client) return { rows: [] };
-        return toDirectoryPage(await client.search(endpointId, input));
-      },
-      contentUrl,
-      fetchRange,
-    })
-  : undefined;
-
-function log(phase: string, message: string, method?: string): void {
-  appendEvent({ at: Date.now(), phase, message, method });
-}
-
-async function readError(response: Response): Promise<string> {
+async function greet(target: ClientSummary): Promise<void> {
+  const linkId = target.linkId;
+  if (!client || !linkId) return;
+  const name = labelOf(target);
+  const self = rows.find((row) => row.linkId === selfLinkId);
+  const sender = self?.profile?.displayName || nameInput.value.trim() || "我";
   try {
-    const body = await response.json() as { message?: string };
-    return body.message || `${response.status} ${response.statusText}`;
-  } catch {
-    return `${response.status} ${response.statusText}`;
+    const result = await client.sendHello(linkId, `hello ${sender}`);
+    // The host measures the full round trip. Sub-millisecond results are real
+    // but read as "0 ms" and say nothing useful, so they are shown as such
+    // rather than rounded into a fake number.
+    const measured = Number(result.roundTripMs ?? "0");
+    const shown = measured < 1 ? "<1 ms" : `${measured} ms`;
+    log(`→ ${name}：${shown}，回复「${result.reply}」`);
+  } catch (error) {
+    log(`→ ${name} 失败：${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+async function refresh(): Promise<void> {
+  if (!client || polling) return;
+  polling = true;
+  try {
+    const result = await client.listClients();
+    rows = result.clients ?? [];
+    render();
+  } catch (error) {
+    setStatus(`列表失败：${error instanceof Error ? error.message : String(error)}`, "error");
+  } finally {
+    polling = false;
+  }
+}
+
+async function saveProfile(event: SubmitEvent): Promise<void> {
+  event.preventDefault();
+  if (!client) return;
+  const profile: ClientProfile = {
+    displayName: nameInput.value.trim(),
+    group: groupInput.value.trim(),
+    visible: visibleInput.checked,
+  };
+  try {
+    const result = await client.setProfile(profile);
+    const self = result.self;
+    if (self?.linkId) selfLinkId = self.linkId;
+    profileState.textContent = `已保存 · 你的链接 ${selfLinkId.slice(0, 8)}`;
+    log(`保存资料：${self?.profile?.displayName || "未命名"}${profile.visible ? "（可见）" : "（已隐藏）"}`);
+    await refresh();
+  } catch (error) {
+    profileState.textContent = `保存失败：${error instanceof Error ? error.message : String(error)}`;
   }
 }
 
 async function session(): Promise<boolean> {
   const response = await fetch("/web/session", { credentials: "same-origin" });
   if (!response.ok) return false;
-  const body = await response.json() as { csrf?: string; principalId?: string };
-  csrfToken = body.csrf || "";
-  log("认证", `已恢复会话 ${body.principalId || ""}`);
+  const body = (await response.json()) as { csrf?: string; principalId?: string };
+  csrfToken = body.csrf ?? "";
   return Boolean(csrfToken);
 }
 
-async function login(token: string): Promise<void> {
-  setStage("auth", "正在验证访问凭据…");
-  setHostStatus("认证中", "pending");
-  const response = await fetch("/web/login", {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!response.ok) throw new Error(await readError(response));
-  if (!(await session())) throw new Error("登录成功但会话不可用");
-  showApp();
-  await connect();
-}
-
 async function connect(): Promise<void> {
-  client?.close();
-  setStage("transport", "正在建立安全连接…");
-  setHostStatus("连接中", "pending");
+  setStatus("连接中…");
   client = new ConexWsClient({ origin: location.origin, csrfToken, reconnect: true });
   client.onEvent((event) => {
-    const phase = event.phase || "连接";
-    const message = event.summary || "状态更新";
-    log(phase, message, event.method);
-    if (phase === "ticket" || phase === "authenticating") {
-      setStage("auth", "正在获取本次连接票据…");
-    } else if (phase === "connecting" || phase === "negotiating") {
-      setStage("transport", "正在建立安全连接…");
-    } else if (phase === "hello") {
-      setStage("hello", "Host hello 握手已发送…");
-    } else if (phase === "reconnecting") {
-      setHostStatus("重连中", "pending");
-      setStage("transport", "连接中断，正在重新认证并建立连接…");
-    } else if (phase === "ready") {
-      if (message === "ready") {
-        setStage("done", "连接就绪，端点目录将自动更新");
-        setHostStatus("已就绪", "ready");
-        void refreshCatalog();
-      } else {
-        setStage("ready", "等待 Host 确认 ready…");
-      }
-    } else if (phase === "failed" || phase === "error") {
-      setHostStatus("连接异常", "error");
+    if (event.phase === "ready") {
+      setStatus("已连接", "ready");
+    } else if (event.phase === "reconnecting") {
+      setStatus("重连中…");
+    } else if (event.phase === "failed" || event.phase === "error") {
+      setStatus("连接异常", "error");
     }
   });
-  try {
-    await client.connect();
-    setStage("done", "连接就绪，端点目录将自动更新");
-    setHostStatus("已就绪", "ready");
-    await refreshCatalog();
-    startPolling();
-  } catch (error) {
-    setHostStatus("连接失败", "error");
-    setStage("transport", error instanceof Error ? error.message : "连接失败");
-    log("错误", error instanceof Error ? error.message : "连接失败");
-    throw error;
-  }
+  // Greetings pushed by other clients: the SDK already replied with a pong,
+  // so this only records that it happened.
+  client.onHello((hello) => {
+    log(`← 收到 hello：${hello.text}`);
+  });
+  await client.connect();
+  // Push the current form values so the visitor appears with a usable name.
+  await client.setProfile({
+    displayName: nameInput.value.trim(),
+    group: groupInput.value.trim(),
+    visible: visibleInput.checked,
+  });
+  await refresh();
+  window.clearInterval(pollTimer);
+  pollTimer = window.setInterval(() => { void refresh(); }, POLL_MS);
 }
 
-async function refreshCatalog(): Promise<void> {
-  if (!client || pollInFlight || document.hidden) return;
-  pollInFlight = true;
-  try {
-    const result = await client.listEndpoints({ limit: 100 });
-    endpoints = result.endpoints || [];
-    renderCatalog(endpoints, selectEndpoint);
-    if (selected) selected = endpoints.find((item) => item.endpointId === selected?.endpointId);
-    renderSelected(selected, operation, invoke);
-    // A catalog refresh must not reset navigation, the search box, or a
-    // playing video: only the endpoint's own state is re-rendered.
-    if (selected && browserEndpoint) {
-      browserEndpoint.textContent = `${selected.displayName || selected.endpointId || ""} · ${connectionLabel(selected.connectionState)}`;
+el<HTMLFormElement>("#profile-form").addEventListener("submit", (event) => {
+  void saveProfile(event as SubmitEvent);
+});
+
+void session()
+  .then((active) => {
+    if (!active) {
+      setStatus("会话不可用，请刷新页面", "error");
+      return undefined;
     }
-    log("目录", `已更新 ${endpoints.length} 个端点`);
-  } catch (error) {
-    log("错误", error instanceof Error ? error.message : "目录获取失败", "endpoint/list");
-    setHostStatus("目录获取失败", "error");
-  } finally {
-    pollInFlight = false;
-  }
-}
-
-function startPolling(): void {
-  window.clearInterval(pollTimer);
-  pollTimer = window.setInterval(() => { void refreshCatalog(); }, 3000);
-  window.clearInterval(connectionsPollTimer);
-  connectionsPollTimer = window.setInterval(() => { void refreshConnections(); }, 1000);
-  void refreshConnections();
-}
-
-async function refreshConnections(): Promise<void> {
-  if (!client || connectionsPollInFlight || document.hidden) return;
-  connectionsPollInFlight = true;
-  try {
-    const result = await client.listConnections({});
-    const next = (result.browserLinks ?? []) as UiLinkSummary[];
-    connectionRows = next;
-    renderConnections(next);
-  } catch (err) {
-    // Connection panel is best-effort; do not log each tick to avoid
-    // overwhelming the timeline when the link is not yet ready.
-  } finally {
-    connectionsPollInFlight = false;
-  }
-}
-
-function selectEndpoint(endpoint: EndpointSummary): void {
-  selected = endpoint;
-  renderSelected(selected, operation, invoke);
-  log("目录", `已选择 ${endpoint.displayName || endpoint.endpointId || "端点"}`);
-  if (browserPanel) browserPanel.hidden = false;
-  if (browserEndpoint) {
-    browserEndpoint.textContent = `${endpoint.displayName || endpoint.endpointId || ""} · ${connectionLabel(endpoint.connectionState)}`;
-  }
-  void browser?.openEndpoint(endpoint);
-}
-
-async function invoke(kind: Operation, input: Record<string, string>): Promise<void> {
-  if (!client || !selected?.endpointId) return;
-  renderError("");
-  const method = `source/${kind}`;
-  const started = performance.now();
-  try {
-    let result: unknown;
-    if (kind === "list") result = await client.list(selected.endpointId, { root: input.root || "", limit: 50 });
-    else if (kind === "read") result = await client.read(selected.endpointId, { resourceId: input.resourceId || "" });
-    else result = await client.search(selected.endpointId, { root: "", query: input.query || "", limit: 50 });
-    renderResult(result);
-    log("调用成功", `${Math.round(performance.now() - started)} ms`, method);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "调用失败";
-    renderError(message);
-    log("调用失败", message, method);
-  }
-}
-
-async function logout(): Promise<void> {
-  window.clearInterval(pollTimer);
-  window.clearInterval(connectionsPollTimer);
-  client?.close();
-  client = undefined;
-  await fetch("/web/logout", { method: "POST", credentials: "same-origin", headers: { "x-csrf-token": csrfToken } });
-  csrfToken = "";
-  endpoints = [];
-  selected = undefined;
-  connectionRows = [];
-  renderConnections([]);
-  if (browserPanel) browserPanel.hidden = true;
-  if (browserSearch) browserSearch.value = "";
-  void browser?.openEndpoint(undefined);
-  showLogin();
-  setHostStatus("未连接", "");
-  log("认证", "已退出登录");
-}
-
-bindLogin((token) => { void login(token).catch((error) => showLogin(error instanceof Error ? error.message : "登录失败")); });
-bindLogout(() => { void logout(); });
-bindOperationTabs((next) => {
-  operation = next;
-  renderSelected(selected, operation, invoke);
-});
-// Typing a query must survive directory refreshes: the value is owned by
-// the input and pushed into the browser, never read back from it.
-browserSearch?.addEventListener("input", () => {
-  browser?.setQuery(browserSearch.value);
-  scheduleSearch();
-});
-let searchTimer = 0;
-function scheduleSearch(): void {
-  window.clearTimeout(searchTimer);
-  searchTimer = window.setTimeout(() => { void browser?.refresh(); }, 250);
-}
-// Testing and scripting hook: return the browser to the endpoint root.
-document.querySelector("#browser-panel")?.addEventListener("conex:go-root", () => {
-  void browser?.goToRoot();
-});
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden) {
-    window.clearInterval(pollTimer);
-    window.clearInterval(connectionsPollTimer);
-  } else if (client) {
-    void refreshCatalog();
-    void refreshConnections();
-    startPolling();
-  }
-});
-
-// The walkthrough is static storytelling: it must render even when the session
-// check below fails, so a visitor without a working connection still sees what
-// the system does.
-const walkthroughHost = document.querySelector<HTMLElement>("#walkthrough");
-if (walkthroughHost) {
-  renderWalkthrough(walkthroughHost, document.querySelector<HTMLButtonElement>("#replay") ?? undefined);
-}
-
-void session().then((active) => {
-  if (active) { showApp(); return connect().catch((error) => showLogin(error instanceof Error ? error.message : "连接失败")); }
-  showLogin();
-}).catch((error) => showLogin(error instanceof Error ? error.message : "会话检查失败"));
+    return connect();
+  })
+  .catch((error) => {
+    setStatus(`连接失败：${error instanceof Error ? error.message : String(error)}`, "error");
+  });

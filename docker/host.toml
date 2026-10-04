@@ -1,11 +1,7 @@
-# Runtime config for the public conex landing page (baked into the image).
+# Runtime config for the public conex hello page (baked into the image).
 #
-# This is a READ-ONLY DEMO deployment: the endpoints below expose a small
-# synthetic content tree so a visitor can exercise the real read path. It
-# carries no production data and no real credentials.
-#
-# For a production deployment use deployment/host.toml.example instead, which
-# wires reverse-connected agents and per-principal tokens.
+# READ-ONLY DEMO: visitors connect, see each other, and exchange hellos.
+# There is no content browsing, no write path and no credential here.
 
 # Bind inside the container. TLS terminates at the Dokploy reverse proxy, so
 # the listener is plaintext on a non-loopback address — that requires the
@@ -17,18 +13,21 @@ allow_plaintext_bind = true
 audience = "conex.landing"
 host_origin = "conex://landing"
 
-# Public origin the page is served from. Browser session cookies, CSRF and
-# ticket Origin checks all compare against this exact value.
+# Public origin the page is served from. Session cookies, CSRF and the ticket
+# Origin check all compare against this exact value, so changing the domain
+# means changing this line and rebuilding.
 web_origin = "https://conex.lszio.space"
 web_root = "/opt/conex/web"
 
-# P1 persistent roots (blob content / sessions / operations).
+# P1 persistent roots (sessions back the UI links; the others are required for
+# the P1 backends to be considered complete).
 content_root = "/var/lib/conex/content"
 session_root = "/var/lib/conex/session"
 operation_root = "/var/lib/conex/operation"
 
-# Anonymous read-only visitors. Without this section every visitor would get
-# a 401 and the login form; quotas are independent of authenticated users.
+# Anonymous read-only visitors. Without this section every visitor would get a
+# 401 and the page would have nothing to show; quotas are independent of
+# authenticated users.
 [web_guest]
 principal_id = "guest"
 tenant_id = "demo"
@@ -36,59 +35,7 @@ max_sessions = 256
 idle_ttl_ms = 1800000
 max_issue_per_minute = 120
 
-# No [[tokens]]: this demo is guest-only. Service credentials belong in
-# deployment/host.toml.example, whose `token_hash` values are sha256 digests
-# of secrets that never enter the repository.
-
-# Local read-only demo endpoints. Each one is a distinct capability so the
-# page can show host-grouped topology and per-endpoint authorization.
-[[endpoints]]
-id = "docs"
-tenant_id = "demo"
-provider_id = "conex-provider-fs"
-kind = "source-fs"
-provides = ["source/list", "source/read", "source/search"]
-root = "/opt/conex/demo/docs"
-
-[[endpoints]]
-id = "media"
-tenant_id = "demo"
-provider_id = "conex-provider-fs"
-kind = "source-fs"
-provides = ["source/list", "source/read", "source/search"]
-root = "/opt/conex/demo/media"
-
-[[endpoints]]
-id = "archives"
-tenant_id = "demo"
-provider_id = "conex-provider-fs"
-kind = "source-fs"
-provides = ["source/list", "source/read", "source/search"]
-root = "/opt/conex/demo/archives"
-
-# Guest policy. root = "" with subtree = true means "everything under this
-# endpoint's configured root", which is exactly the tree the container ships.
-# Narrow these to a subdirectory before exposing real data.
-[[policy]]
-principal_id = "guest"
-tenant_id = "demo"
-endpoint_id = "docs"
-actions = ["list", "read", "search"]
-root = ""
-subtree = true
-
-[[policy]]
-principal_id = "guest"
-tenant_id = "demo"
-endpoint_id = "media"
-actions = ["list", "read", "search"]
-root = ""
-subtree = true
-
-[[policy]]
-principal_id = "guest"
-tenant_id = "demo"
-endpoint_id = "archives"
-actions = ["list", "read", "search"]
-root = ""
-subtree = true
+# No [[tokens]] and no [[endpoints]]: this demo is guest-only and serves no
+# data. Service credentials and data endpoints belong in
+# deployment/host.toml.example, whose token_hash values are sha256 digests of
+# secrets that never enter the repository.

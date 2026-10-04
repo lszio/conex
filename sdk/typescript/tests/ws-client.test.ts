@@ -228,3 +228,80 @@ test("listConnections sends connection/list over the ready link", async () => {
   expect(result.browserLinks?.[0]?.principalId).toBe("alice");
   client.close();
 });
+
+test("client methods issue the right envelopes", async () => {
+  FakeWebSocket.instances = [];
+  const { fetchImpl } = fetchStub();
+  const client = new ConexWsClient({
+    origin: "https://host.example",
+    csrfToken: "csrf-1",
+    fetch: fetchImpl,
+    WebSocket: FakeWebSocket,
+    reconnect: false,
+  });
+  const connecting = client.connect();
+  await new Promise<void>((resolve) => client.onEvent((e) => { if (e.phase === "negotiating") resolve(); }));
+  const socket = FakeWebSocket.instances[0];
+  respondHandshake(socket);
+  await connecting;
+
+  const listed = client.listClients();
+  const listFrame = JSON.parse(socket.sent.at(-1)!);
+  expect(listFrame.method).toBe("client/list");
+  socket.receive({ jsonrpc: "2.0", id: listFrame.id, result: { clients: [] } });
+  expect((await listed).clients).toEqual([]);
+
+  const profiled = client.setProfile({ displayName: "alice", group: "team", visible: false });
+  const profileFrame = JSON.parse(socket.sent.at(-1)!);
+  expect(profileFrame.method).toBe("client/profile");
+  // The profile must ride inside `input`, like every other business call.
+  expect(profileFrame.params.input.profile).toEqual({ displayName: "alice", group: "team", visible: false });
+  socket.receive({ jsonrpc: "2.0", id: profileFrame.id, result: { self: { linkId: "link-1" } } });
+  expect((await profiled).self?.linkId).toBe("link-1");
+
+  const greeted = client.sendHello("link-2", "hi");
+  const helloFrame = JSON.parse(socket.sent.at(-1)!);
+  expect(helloFrame.method).toBe("client/hello");
+  expect(helloFrame.params.input).toEqual({ targetLinkId: "link-2", text: "hi" });
+  socket.receive({ jsonrpc: "2.0", id: helloFrame.id, result: { targetLinkId: "link-2", roundTripMs: "7", reply: "pong" } });
+  expect(await greeted).toMatchObject({ reply: "pong" });
+});
+
+test("a pushed client hello is answered with a pong before listeners run", async () => {
+  FakeWebSocket.instances = [];
+  const { fetchImpl } = fetchStub();
+  const client = new ConexWsClient({
+    origin: "https://host.example",
+    csrfToken: "csrf-1",
+    fetch: fetchImpl,
+    WebSocket: FakeWebSocket,
+    reconnect: false,
+  });
+  const connecting = client.connect();
+  await new Promise<void>((resolve) => client.onEvent((e) => { if (e.phase === "negotiating") resolve(); }));
+  const socket = FakeWebSocket.instances[0];
+  respondHandshake(socket);
+  await connecting;
+
+  const seen: string[] = [];
+  client.onHello((hello) => seen.push(hello.text));
+
+  const before = socket.sent.length;
+  // A server-initiated frame carries no id: it is a notification.
+  socket.receive({
+    jsonrpc: "2.0",
+    method: "conex/client-hello",
+    params: { replyId: "9", from: "link-2", text: "hello alice" },
+  });
+
+  const pongs = socket.sent.slice(before).map((raw) => JSON.parse(raw));
+  expect(pongs).toHaveLength(1);
+  expect(pongs[0]).toMatchObject({
+    jsonrpc: "2.0",
+    method: "conex/client-pong",
+    params: { replyId: "9", reply: "pong" },
+  });
+  // No id: a request would make the host wait for a response that never comes.
+  expect(pongs[0].id).toBeUndefined();
+  expect(seen).toEqual(["hello alice"]);
+});

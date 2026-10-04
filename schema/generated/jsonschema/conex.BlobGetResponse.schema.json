@@ -614,6 +614,138 @@
       ],
       "type": "object"
     },
+    "conex.ClientHelloRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "targetLinkId": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "targetLinkId",
+        "text"
+      ],
+      "type": "object"
+    },
+    "conex.ClientHelloResult": {
+      "additionalProperties": false,
+      "properties": {
+        "reply": {
+          "type": "string"
+        },
+        "roundTripMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "targetLinkId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "targetLinkId",
+        "roundTripMs",
+        "reply"
+      ],
+      "type": "object"
+    },
+    "conex.ClientListRequest": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    },
+    "conex.ClientListResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "clients": {
+          "items": {
+            "$ref": "#/$defs/conex.ClientSummary"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "conex.ClientProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "displayName": {
+          "type": "string"
+        },
+        "group": {
+          "type": "string"
+        },
+        "visible": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "displayName",
+        "group",
+        "visible"
+      ],
+      "type": "object"
+    },
+    "conex.ClientProfileRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "profile": {
+          "$ref": "#/$defs/conex.ClientProfile"
+        }
+      },
+      "type": "object"
+    },
+    "conex.ClientProfileResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "self": {
+          "$ref": "#/$defs/conex.ClientSummary"
+        }
+      },
+      "type": "object"
+    },
+    "conex.ClientSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "connectedAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "lastSeenAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "linkId": {
+          "type": "string"
+        },
+        "principalId": {
+          "type": "string"
+        },
+        "profile": {
+          "$ref": "#/$defs/conex.ClientProfile"
+        },
+        "tenantId": {
+          "type": "string"
+        },
+        "userAgent": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "linkId",
+        "principalId",
+        "tenantId",
+        "connectedAtMs",
+        "lastSeenAtMs",
+        "userAgent"
+      ],
+      "type": "object"
+    },
     "conex.CommittedTarget": {
       "additionalProperties": false,
       "properties": {

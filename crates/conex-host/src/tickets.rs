@@ -127,6 +127,9 @@ pub async fn issue_ticket(
         let capabilities: Vec<String> = vec![
             "endpoint/list".into(),
             "connection/list".into(),
+            "client/list".into(),
+            "client/profile".into(),
+            "client/hello".into(),
             "source/list".into(),
             "source/read".into(),
             "source/search".into(),
