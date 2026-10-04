@@ -43,6 +43,9 @@ pub struct HttpState {
     pub p1_provides: Vec<String>,
     pub web_auth: Option<Arc<crate::web_auth::WebAuth>>,
     pub ui_links: Arc<crate::ui_links::UiLinkRegistry>,
+    /// Visitor client registry. The broker lists and addresses clients; the
+    /// WSS loop registers each link's writer and resolves pongs.
+    pub clients: Arc<crate::clients::ClientRegistry>,
 }
 
 /// Build the P0 `/rpc` router without any shared state attached. Callers

@@ -60,6 +60,11 @@ pub struct WssState {
     pub stream: tokio::sync::Mutex<Option<StreamHub>>,
     pub ui_links: Option<Arc<crate::ui_links::UiLinkRegistry>>,
     pub ui_link_id: Option<String>,
+    /// Visitor client registry, present for UI links only.
+    pub clients: Option<Arc<crate::clients::ClientRegistry>>,
+    /// `Sec-WebSocket-Protocol`-free client metadata the page declares; shown
+    /// in the list as a hint and never trusted for access.
+    pub user_agent: String,
 }
 
 impl WssState {
@@ -86,6 +91,8 @@ impl WssState {
             stream: tokio::sync::Mutex::new(None),
             ui_links: None,
             ui_link_id: None,
+            clients: None,
+            user_agent: String::new(),
         }
     }
 }
@@ -315,8 +322,17 @@ pub async fn ws_handler_with_state(
     wss_state.host_side = state.host_side.clone();
     wss_state.web_session = web_session.clone();
     wss_state.ui_links = ui_links_ref.clone();
+    wss_state.clients = Some(state.clients.clone());
     if let Some(session) = web_session.as_ref() {
         wss_state.ui_link_id = Some(session.link_id.clone());
+        // A client exists as soon as its link is minted so it can be listed;
+        // it only becomes addressable once the writer is attached after ready.
+        state.clients.register(
+            &session.link_id,
+            &session.caller.principal_id,
+            &session.caller.tenant_id,
+            "",
+        );
     }
     let wss_state = Arc::new(wss_state);
     let max_frame = usize::try_from(wss_state.limits.max_frame_bytes).unwrap_or(usize::MAX);
@@ -434,6 +450,18 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
         }
         let _ = sender.close().await;
     });
+    // From here the link can receive server-initiated frames, so other
+    // clients may address it. It is deliberately attached after the handshake
+    // so a half-open link is never addressable.
+    if let (Some(clients), Some(link_id)) = (state.clients.as_ref(), state.ui_link_id.as_ref()) {
+        // The pushed frames must be counted against the same budget the
+        // writer drains, otherwise its fetch_sub underflows the counter and
+        // the next budget check closes this socket.
+        clients.attach_writer(
+            link_id,
+            crate::clients::Outbound::new(out_tx.clone(), queued_bytes.clone()),
+        );
+    }
     let inflight = Arc::new(Semaphore::new(
         usize::try_from(state.limits.max_inflight.max(1)).unwrap_or(1),
     ));
@@ -494,6 +522,18 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                 ) {
                                     break;
                                 }
+                            continue;
+                        }
+                        // A client answering a pushed hello arrives as a
+                        // JSON-RPC notification. It is handled here, before
+                        // the broker frame path, because notifications carry
+                        // no request id and are dropped there.
+                        if let Some(reply) = client_pong(&text) {
+                            if let (Some(clients), Some(link_id)) =
+                                (state.clients.as_ref(), state.ui_link_id.as_ref())
+                            {
+                                clients.resolve_reply(link_id, &reply.id, &reply.text);
+                            }
                             continue;
                         }
                         let message = match decode_wire(text.as_bytes()) {
@@ -590,7 +630,7 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                         max_queued,
                                         Message::Text(String::from_utf8_lossy(&bytes).into_owned().into()),
                                     ) {
-                                        break;
+                                    break;
                                     }
                                 continue;
                             }
@@ -913,6 +953,12 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
     }
     let _ = writer.await;
     pending.fail_all().await;
+    if let (Some(clients), Some(link_id)) = (state.clients.as_ref(), state.ui_link_id.as_ref()) {
+        // Stop being addressable, and drop the entry so the list does not
+        // keep advertising a link whose socket is gone.
+        clients.detach_writer(link_id);
+        clients.remove(link_id);
+    }
 }
 
 /// Convert the canonical protobuf Request body into the host's existing HTTP
@@ -981,6 +1027,35 @@ fn broker_frame_from_message(message: conex_proto::Message) -> CallResult<Option
         Some(frame)
     } else {
         None
+    })
+}
+
+/// A `conex/client-pong` notification, extracted before the broker frame path
+/// (notifications carry no request id, so the frame path drops them).
+struct ClientPong {
+    id: String,
+    text: String,
+}
+
+fn client_pong(text: &str) -> Option<ClientPong> {
+    let value: Value = serde_json::from_str(text).ok()?;
+    if value.get("method").and_then(Value::as_str) != Some("conex/client-pong") {
+        return None;
+    }
+    let params = value.get("params")?;
+    let id = params.get("replyId")?.as_str()?.to_string();
+    if id.is_empty() {
+        return None;
+    }
+    Some(ClientPong {
+        id,
+        text: params
+            .get("reply")
+            .and_then(Value::as_str)
+            .unwrap_or("pong")
+            .chars()
+            .take(200)
+            .collect(),
     })
 }
 
@@ -1674,5 +1749,35 @@ mod tests {
         pending.fail_all().await;
         let error = rx.await.unwrap().unwrap_err();
         assert_eq!(error.code(), conex_proto::ErrorCode::Unavailable as i32);
+    }
+}
+
+#[cfg(test)]
+mod client_pong_tests {
+    use super::client_pong;
+
+    #[test]
+    fn parses_the_frame_the_host_pushes() {
+        // Exactly the JSON built in clients.rs::send_hello.
+        let pushed = r#"{"jsonrpc":"2.0","method":"conex/client-hello","params":{"replyId":"7","from":"link-a","text":"hi"}}"#;
+        // The client's answer, as the SDK sends it.
+        let pong = r#"{"jsonrpc":"2.0","method":"conex/client-pong","params":{"replyId":"7","reply":"pong"}}"#;
+        assert!(client_pong(pushed).is_none(), "a hello push is not a pong");
+        let parsed = client_pong(pong).expect("pong must parse");
+        assert_eq!(parsed.id, "7");
+        assert_eq!(parsed.text, "pong");
+    }
+
+    #[test]
+    fn ignores_frames_that_are_not_pongs() {
+        assert!(client_pong(r#"{"jsonrpc":"2.0","id":"1","result":{}}"#).is_none());
+        assert!(client_pong(r#"{"jsonrpc":"2.0","method":"conex/client-pong"}"#).is_none());
+        assert!(
+            client_pong(
+                r#"{"jsonrpc":"2.0","method":"conex/client-pong","params":{"replyId":""}}"#
+            )
+            .is_none()
+        );
+        assert!(client_pong("not json").is_none());
     }
 }

@@ -1,13 +1,13 @@
 # Public landing deployment for Dokploy.
 #
-# One container, guest-only, no secrets: the image bakes `docker/host.toml`
-# and a synthetic demo tree, so a fresh clone deploys without any file
-# mounts or environment variables.
+# One container, guest-only, no secrets: the image bakes `docker/host.toml`,
+# so a fresh clone deploys without any file mounts or environment variables.
+# Visitors connect, see each other and exchange hellos; there is no data
+# endpoint and no credential in this shape.
 #
 # For a real multi-host deployment (reverse-connected agents, per-principal
-# tokens, TLS pinning) use the full stack in the repository history and
-# deployment/host.toml.example; that one needs Secrets + File Mounts and is
-# documented in docs/runbooks/dokploy.md.
+# tokens, TLS pinning) use deployment/host.toml.example instead, which needs
+# Secrets + File Mounts and is documented in docs/runbooks/dokploy.md.
 
 services:
   host:

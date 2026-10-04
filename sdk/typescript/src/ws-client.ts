@@ -3,6 +3,10 @@ import type { Limits } from "./generated/conex/common";
 import type { LinkIdentity } from "./generated/conex/control";
 import { mintUlid } from "./client";
 import type {
+  ClientHelloResult,
+  ClientListResponse,
+  ClientProfile,
+  ClientProfileResponse,
   ConnectionListResponse,
 } from "./generated/conex/dashboard";
 import type {
@@ -118,6 +122,7 @@ export class ConexWsClient {
   private reconnectTimer?: ReturnType<typeof setTimeout>;
   private negotiationResult?: ConexWsNegotiation;
   private readonly listeners = new Set<ConexWsEventListener>();
+  private readonly helloListeners = new Set<(hello: { replyId: string; from: string; text: string }) => void>();
   private readonly pending = new Map<string, PendingCall>();
   private closed = false;
   private handshake?: { step: "hello" | "ready"; helloId: string; negotiationId: string; helloResult?: Record<string, unknown> };
@@ -172,6 +177,36 @@ export class ConexWsClient {
 
   listConnections(input: Record<string, never> = {}): Promise<ConnectionListResponse> {
     return this.call<ConnectionListResponse>("connection/list", "", input);
+  }
+
+  /** Online clients that chose to be visible. */
+  listClients(input: Record<string, never> = {}): Promise<ClientListResponse> {
+    return this.call<ClientListResponse>("client/list", "", input);
+  }
+
+  /** Declare this visitor's own name, group and visibility. */
+  setProfile(profile: ClientProfile): Promise<ClientProfileResponse> {
+    return this.call<ClientProfileResponse>("client/profile", "", { profile });
+  }
+
+  /** Greet another client; resolves once that client answers. */
+  sendHello(targetLinkId: string, text = "hello"): Promise<ClientHelloResult> {
+    return this.call<ClientHelloResult>("client/hello", "", { targetLinkId, text });
+  }
+
+  /**
+   * Send a JSON-RPC notification, which carries no reply. Used to answer a
+   * pushed `conex/client-hello`; a request id would make the host wait for a
+   * response that never comes.
+   */
+  notify(method: string, params: unknown): boolean {
+    if (this.currentState !== "ready" || !this.socket) return false;
+    try {
+      this.socket.send(JSON.stringify({ jsonrpc: "2.0", method, params }));
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   list(endpointId: string, input: SourceListRequest): Promise<SourceListResponse> {
@@ -304,6 +339,11 @@ export class ConexWsClient {
         return;
       }
       if (this.currentState !== "negotiating") {
+        // A server-initiated hello carries no id: it must be answered as a
+        // notification, then surfaced so the page can show it.
+        if (message.id === undefined && typeof message.method === "string") {
+          if (this.handleServerNotification(message)) return;
+        }
         this.routeBusiness(message);
         return;
       }
@@ -363,6 +403,42 @@ export class ConexWsClient {
     }
     this.negotiationResult = buildNegotiation(result, handshake.helloResult);
     succeed();
+  }
+
+  /**
+   * Answer a pushed `conex/client-hello`. Returns false for any other
+   * notification so the caller can keep its normal routing.
+   *
+   * The reply is sent before the listener runs, so a slow listener can never
+   * make the sender time out.
+   */
+  private handleServerNotification(message: JsonRpcMessage): boolean {
+    if (message.method !== "conex/client-hello") return false;
+    const params = (message.params ?? {}) as {
+      replyId?: string;
+      from?: string;
+      text?: string;
+    };
+    if (params.replyId) {
+      this.notify("conex/client-pong", { replyId: params.replyId, reply: "pong" });
+    }
+    this.emit({
+      phase: "request",
+      method: "conex/client-hello",
+      summary: params.text ?? "hello",
+    });
+    this.helloListeners.forEach((listener) => listener({
+      replyId: params.replyId ?? "",
+      from: params.from ?? "",
+      text: params.text ?? "hello",
+    }));
+    return true;
+  }
+
+  /** Greetings pushed by other clients. Returns an unsubscribe function. */
+  onHello(listener: (hello: { replyId: string; from: string; text: string }) => void): () => void {
+    this.helloListeners.add(listener);
+    return () => this.helloListeners.delete(listener);
   }
 
   private routeBusiness(message: JsonRpcMessage): void {
