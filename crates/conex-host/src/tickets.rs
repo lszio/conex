@@ -129,6 +129,7 @@ pub async fn issue_ticket(
             "connection/list".into(),
             "client/list".into(),
             "client/profile".into(),
+            "client/status".into(),
             "client/hello".into(),
             "source/list".into(),
             "source/read".into(),

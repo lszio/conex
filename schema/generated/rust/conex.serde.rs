@@ -4244,6 +4244,208 @@ impl<'de> serde::Deserialize<'de> for ClientProfileResponse {
         deserializer.deserialize_struct("conex.ClientProfileResponse", FIELDS, GeneratedVisitor)
     }
 }
+impl serde::Serialize for ClientStatusRequest {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let len = 0;
+        let struct_ser = serializer.serialize_struct("conex.ClientStatusRequest", len)?;
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for ClientStatusRequest {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                            Err(serde::de::Error::unknown_field(value, FIELDS))
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = ClientStatusRequest;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.ClientStatusRequest")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<ClientStatusRequest, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                while map_.next_key::<GeneratedField>()?.is_some() {
+                    let _ = map_.next_value::<serde::de::IgnoredAny>()?;
+                }
+                Ok(ClientStatusRequest {
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.ClientStatusRequest", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for ClientStatusResponse {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.clients_online != 0 {
+            len += 1;
+        }
+        if self.groups_online != 0 {
+            len += 1;
+        }
+        if !self.groups.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.ClientStatusResponse", len)?;
+        if self.clients_online != 0 {
+            struct_ser.serialize_field("clientsOnline", &self.clients_online)?;
+        }
+        if self.groups_online != 0 {
+            struct_ser.serialize_field("groupsOnline", &self.groups_online)?;
+        }
+        if !self.groups.is_empty() {
+            struct_ser.serialize_field("groups", &self.groups)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for ClientStatusResponse {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "clients_online",
+            "clientsOnline",
+            "groups_online",
+            "groupsOnline",
+            "groups",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            ClientsOnline,
+            GroupsOnline,
+            Groups,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "clientsOnline" | "clients_online" => Ok(GeneratedField::ClientsOnline),
+                            "groupsOnline" | "groups_online" => Ok(GeneratedField::GroupsOnline),
+                            "groups" => Ok(GeneratedField::Groups),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = ClientStatusResponse;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.ClientStatusResponse")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<ClientStatusResponse, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut clients_online__ = None;
+                let mut groups_online__ = None;
+                let mut groups__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::ClientsOnline => {
+                            if clients_online__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("clientsOnline"));
+                            }
+                            clients_online__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::GroupsOnline => {
+                            if groups_online__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("groupsOnline"));
+                            }
+                            groups_online__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::Groups => {
+                            if groups__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("groups"));
+                            }
+                            groups__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(ClientStatusResponse {
+                    clients_online: clients_online__.unwrap_or_default(),
+                    groups_online: groups_online__.unwrap_or_default(),
+                    groups: groups__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.ClientStatusResponse", FIELDS, GeneratedVisitor)
+    }
+}
 impl serde::Serialize for ClientSummary {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -4273,6 +4475,12 @@ impl serde::Serialize for ClientSummary {
         if !self.user_agent.is_empty() {
             len += 1;
         }
+        if !self.group_key.is_empty() {
+            len += 1;
+        }
+        if self.last_round_trip_ms != 0 {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("conex.ClientSummary", len)?;
         if !self.link_id.is_empty() {
             struct_ser.serialize_field("linkId", &self.link_id)?;
@@ -4299,6 +4507,14 @@ impl serde::Serialize for ClientSummary {
         if !self.user_agent.is_empty() {
             struct_ser.serialize_field("userAgent", &self.user_agent)?;
         }
+        if !self.group_key.is_empty() {
+            struct_ser.serialize_field("groupKey", &self.group_key)?;
+        }
+        if self.last_round_trip_ms != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("lastRoundTripMs", ToString::to_string(&self.last_round_trip_ms).as_str())?;
+        }
         struct_ser.end()
     }
 }
@@ -4322,6 +4538,10 @@ impl<'de> serde::Deserialize<'de> for ClientSummary {
             "lastSeenAtMs",
             "user_agent",
             "userAgent",
+            "group_key",
+            "groupKey",
+            "last_round_trip_ms",
+            "lastRoundTripMs",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -4333,6 +4553,8 @@ impl<'de> serde::Deserialize<'de> for ClientSummary {
             ConnectedAtMs,
             LastSeenAtMs,
             UserAgent,
+            GroupKey,
+            LastRoundTripMs,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -4361,6 +4583,8 @@ impl<'de> serde::Deserialize<'de> for ClientSummary {
                             "connectedAtMs" | "connected_at_ms" => Ok(GeneratedField::ConnectedAtMs),
                             "lastSeenAtMs" | "last_seen_at_ms" => Ok(GeneratedField::LastSeenAtMs),
                             "userAgent" | "user_agent" => Ok(GeneratedField::UserAgent),
+                            "groupKey" | "group_key" => Ok(GeneratedField::GroupKey),
+                            "lastRoundTripMs" | "last_round_trip_ms" => Ok(GeneratedField::LastRoundTripMs),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -4387,6 +4611,8 @@ impl<'de> serde::Deserialize<'de> for ClientSummary {
                 let mut connected_at_ms__ = None;
                 let mut last_seen_at_ms__ = None;
                 let mut user_agent__ = None;
+                let mut group_key__ = None;
+                let mut last_round_trip_ms__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::LinkId => {
@@ -4435,6 +4661,20 @@ impl<'de> serde::Deserialize<'de> for ClientSummary {
                             }
                             user_agent__ = Some(map_.next_value()?);
                         }
+                        GeneratedField::GroupKey => {
+                            if group_key__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("groupKey"));
+                            }
+                            group_key__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::LastRoundTripMs => {
+                            if last_round_trip_ms__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("lastRoundTripMs"));
+                            }
+                            last_round_trip_ms__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
                     }
                 }
                 Ok(ClientSummary {
@@ -4445,6 +4685,8 @@ impl<'de> serde::Deserialize<'de> for ClientSummary {
                     connected_at_ms: connected_at_ms__.unwrap_or_default(),
                     last_seen_at_ms: last_seen_at_ms__.unwrap_or_default(),
                     user_agent: user_agent__.unwrap_or_default(),
+                    group_key: group_key__.unwrap_or_default(),
+                    last_round_trip_ms: last_round_trip_ms__.unwrap_or_default(),
                 })
             }
         }
@@ -6289,6 +6531,241 @@ impl<'de> serde::Deserialize<'de> for Failure {
             }
         }
         deserializer.deserialize_struct("conex.Failure", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for GroupStatus {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.group_key.is_empty() {
+            len += 1;
+        }
+        if !self.label.is_empty() {
+            len += 1;
+        }
+        if self.clients_online != 0 {
+            len += 1;
+        }
+        if self.last_round_trip_ms != 0 {
+            len += 1;
+        }
+        if self.avg_round_trip_ms != 0 {
+            len += 1;
+        }
+        if self.round_trips != 0 {
+            len += 1;
+        }
+        if self.files_shared != 0 {
+            len += 1;
+        }
+        if self.shared_bytes != 0 {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.GroupStatus", len)?;
+        if !self.group_key.is_empty() {
+            struct_ser.serialize_field("groupKey", &self.group_key)?;
+        }
+        if !self.label.is_empty() {
+            struct_ser.serialize_field("label", &self.label)?;
+        }
+        if self.clients_online != 0 {
+            struct_ser.serialize_field("clientsOnline", &self.clients_online)?;
+        }
+        if self.last_round_trip_ms != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("lastRoundTripMs", ToString::to_string(&self.last_round_trip_ms).as_str())?;
+        }
+        if self.avg_round_trip_ms != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("avgRoundTripMs", ToString::to_string(&self.avg_round_trip_ms).as_str())?;
+        }
+        if self.round_trips != 0 {
+            struct_ser.serialize_field("roundTrips", &self.round_trips)?;
+        }
+        if self.files_shared != 0 {
+            struct_ser.serialize_field("filesShared", &self.files_shared)?;
+        }
+        if self.shared_bytes != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("sharedBytes", ToString::to_string(&self.shared_bytes).as_str())?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for GroupStatus {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "group_key",
+            "groupKey",
+            "label",
+            "clients_online",
+            "clientsOnline",
+            "last_round_trip_ms",
+            "lastRoundTripMs",
+            "avg_round_trip_ms",
+            "avgRoundTripMs",
+            "round_trips",
+            "roundTrips",
+            "files_shared",
+            "filesShared",
+            "shared_bytes",
+            "sharedBytes",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            GroupKey,
+            Label,
+            ClientsOnline,
+            LastRoundTripMs,
+            AvgRoundTripMs,
+            RoundTrips,
+            FilesShared,
+            SharedBytes,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "groupKey" | "group_key" => Ok(GeneratedField::GroupKey),
+                            "label" => Ok(GeneratedField::Label),
+                            "clientsOnline" | "clients_online" => Ok(GeneratedField::ClientsOnline),
+                            "lastRoundTripMs" | "last_round_trip_ms" => Ok(GeneratedField::LastRoundTripMs),
+                            "avgRoundTripMs" | "avg_round_trip_ms" => Ok(GeneratedField::AvgRoundTripMs),
+                            "roundTrips" | "round_trips" => Ok(GeneratedField::RoundTrips),
+                            "filesShared" | "files_shared" => Ok(GeneratedField::FilesShared),
+                            "sharedBytes" | "shared_bytes" => Ok(GeneratedField::SharedBytes),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = GroupStatus;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.GroupStatus")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<GroupStatus, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut group_key__ = None;
+                let mut label__ = None;
+                let mut clients_online__ = None;
+                let mut last_round_trip_ms__ = None;
+                let mut avg_round_trip_ms__ = None;
+                let mut round_trips__ = None;
+                let mut files_shared__ = None;
+                let mut shared_bytes__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::GroupKey => {
+                            if group_key__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("groupKey"));
+                            }
+                            group_key__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Label => {
+                            if label__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("label"));
+                            }
+                            label__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ClientsOnline => {
+                            if clients_online__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("clientsOnline"));
+                            }
+                            clients_online__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::LastRoundTripMs => {
+                            if last_round_trip_ms__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("lastRoundTripMs"));
+                            }
+                            last_round_trip_ms__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::AvgRoundTripMs => {
+                            if avg_round_trip_ms__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("avgRoundTripMs"));
+                            }
+                            avg_round_trip_ms__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::RoundTrips => {
+                            if round_trips__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("roundTrips"));
+                            }
+                            round_trips__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::FilesShared => {
+                            if files_shared__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("filesShared"));
+                            }
+                            files_shared__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::SharedBytes => {
+                            if shared_bytes__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("sharedBytes"));
+                            }
+                            shared_bytes__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                    }
+                }
+                Ok(GroupStatus {
+                    group_key: group_key__.unwrap_or_default(),
+                    label: label__.unwrap_or_default(),
+                    clients_online: clients_online__.unwrap_or_default(),
+                    last_round_trip_ms: last_round_trip_ms__.unwrap_or_default(),
+                    avg_round_trip_ms: avg_round_trip_ms__.unwrap_or_default(),
+                    round_trips: round_trips__.unwrap_or_default(),
+                    files_shared: files_shared__.unwrap_or_default(),
+                    shared_bytes: shared_bytes__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.GroupStatus", FIELDS, GeneratedVisitor)
     }
 }
 impl serde::Serialize for HelloRequest {

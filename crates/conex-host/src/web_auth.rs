@@ -515,6 +515,7 @@ pub fn allowed_ui_method(method: &str) -> bool {
             | "connection/list"
             | "client/list"
             | "client/profile"
+            | "client/status"
             | "client/hello"
             | "source/list"
             | "source/read"

@@ -78,7 +78,22 @@ export interface ClientSummary {
     | string
     | undefined;
   /** Self-reported by the client's own page; never trusted for access. */
-  userAgent?: string | undefined;
+  userAgent?:
+    | string
+    | undefined;
+  /**
+   * Host-derived hash of `profile.group`. The group text is a self-declared
+   * label; this hash is the isolation key, so two clients are peers only when
+   * their keys match.
+   */
+  groupKey?:
+    | string
+    | undefined;
+  /**
+   * Last round trip this client was measured on, in milliseconds. 0 means no
+   * hello has been exchanged with it yet.
+   */
+  lastRoundTripMs?: string | undefined;
 }
 
 export interface ClientListResponse {
@@ -115,6 +130,45 @@ export interface ClientHelloResult {
    */
   roundTripMs?: string | undefined;
   reply?: string | undefined;
+}
+
+/**
+ * `client/status`: what the host sees right now. Aggregate counters plus one
+ * row per group, so a page can show "N clients, M groups" and the measured
+ * latency of every group without polling anything else.
+ *
+ * Latency is only ever a real measurement: `lastRoundTripMs` and
+ * `avgRoundTripMs` are 0 until a hello has completed, and 0 in the JSON plane
+ * is rendered as "<1 ms", never as a fabricated number.
+ */
+export interface ClientStatusRequest {
+}
+
+export interface GroupStatus {
+  /**
+   * Host-derived isolation key; the group text itself is a display label the
+   * visitor chose and is not part of the key.
+   */
+  groupKey?:
+    | string
+    | undefined;
+  /**
+   * The group's own label when every member declared the same one, empty when
+   * members differ.
+   */
+  label?: string | undefined;
+  clientsOnline?: number | undefined;
+  lastRoundTripMs?: string | undefined;
+  avgRoundTripMs?: string | undefined;
+  roundTrips?: number | undefined;
+  filesShared?: number | undefined;
+  sharedBytes?: string | undefined;
+}
+
+export interface ClientStatusResponse {
+  clientsOnline?: number | undefined;
+  groupsOnline?: number | undefined;
+  groups?: GroupStatus[] | undefined;
 }
 
 function createBaseConnectionListRequest(): ConnectionListRequest {
@@ -862,6 +916,8 @@ function createBaseClientSummary(): ClientSummary {
     connectedAtMs: "0",
     lastSeenAtMs: "0",
     userAgent: "",
+    groupKey: "",
+    lastRoundTripMs: "0",
   };
 }
 
@@ -887,6 +943,12 @@ export const ClientSummary: MessageFns<ClientSummary> = {
     }
     if (message.userAgent !== undefined && message.userAgent !== "") {
       writer.uint32(58).string(message.userAgent);
+    }
+    if (message.groupKey !== undefined && message.groupKey !== "") {
+      writer.uint32(66).string(message.groupKey);
+    }
+    if (message.lastRoundTripMs !== undefined && message.lastRoundTripMs !== "0") {
+      writer.uint32(72).uint64(message.lastRoundTripMs);
     }
     return writer;
   },
@@ -960,6 +1022,22 @@ export const ClientSummary: MessageFns<ClientSummary> = {
             message.userAgent = reader.string();
             continue;
           }
+          case 8: {
+            if (tag !== 66) {
+              break;
+            }
+
+            message.groupKey = reader.string();
+            continue;
+          }
+          case 9: {
+            if (tag !== 72) {
+              break;
+            }
+
+            message.lastRoundTripMs = reader.uint64().toString();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -1005,6 +1083,16 @@ export const ClientSummary: MessageFns<ClientSummary> = {
         : isSet(object.user_agent)
         ? globalThis.String(object.user_agent)
         : "",
+      groupKey: isSet(object.groupKey)
+        ? globalThis.String(object.groupKey)
+        : isSet(object.group_key)
+        ? globalThis.String(object.group_key)
+        : "",
+      lastRoundTripMs: isSet(object.lastRoundTripMs)
+        ? globalThis.String(object.lastRoundTripMs)
+        : isSet(object.last_round_trip_ms)
+        ? globalThis.String(object.last_round_trip_ms)
+        : "0",
     };
   },
 
@@ -1031,6 +1119,12 @@ export const ClientSummary: MessageFns<ClientSummary> = {
     if (message.userAgent !== undefined && message.userAgent !== "") {
       obj.userAgent = message.userAgent;
     }
+    if (message.groupKey !== undefined && message.groupKey !== "") {
+      obj.groupKey = message.groupKey;
+    }
+    if (message.lastRoundTripMs !== undefined && message.lastRoundTripMs !== "0") {
+      obj.lastRoundTripMs = message.lastRoundTripMs;
+    }
     return obj;
   },
 
@@ -1048,6 +1142,8 @@ export const ClientSummary: MessageFns<ClientSummary> = {
     message.connectedAtMs = object.connectedAtMs ?? "0";
     message.lastSeenAtMs = object.lastSeenAtMs ?? "0";
     message.userAgent = object.userAgent ?? "";
+    message.groupKey = object.groupKey ?? "";
+    message.lastRoundTripMs = object.lastRoundTripMs ?? "0";
     return message;
   },
 };
@@ -1460,6 +1556,390 @@ export const ClientHelloResult: MessageFns<ClientHelloResult> = {
     message.targetLinkId = object.targetLinkId ?? "";
     message.roundTripMs = object.roundTripMs ?? "0";
     message.reply = object.reply ?? "";
+    return message;
+  },
+};
+
+function createBaseClientStatusRequest(): ClientStatusRequest {
+  return {};
+}
+
+export const ClientStatusRequest: MessageFns<ClientStatusRequest> = {
+  encode(_: ClientStatusRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ClientStatusRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseClientStatusRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(_: any): ClientStatusRequest {
+    return {};
+  },
+
+  toJSON(_: ClientStatusRequest): unknown {
+    const obj: any = {};
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ClientStatusRequest>, I>>(base?: I): ClientStatusRequest {
+    return ClientStatusRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ClientStatusRequest>, I>>(_: I): ClientStatusRequest {
+    const message = createBaseClientStatusRequest();
+    return message;
+  },
+};
+
+function createBaseGroupStatus(): GroupStatus {
+  return {
+    groupKey: "",
+    label: "",
+    clientsOnline: 0,
+    lastRoundTripMs: "0",
+    avgRoundTripMs: "0",
+    roundTrips: 0,
+    filesShared: 0,
+    sharedBytes: "0",
+  };
+}
+
+export const GroupStatus: MessageFns<GroupStatus> = {
+  encode(message: GroupStatus, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.groupKey !== undefined && message.groupKey !== "") {
+      writer.uint32(10).string(message.groupKey);
+    }
+    if (message.label !== undefined && message.label !== "") {
+      writer.uint32(18).string(message.label);
+    }
+    if (message.clientsOnline !== undefined && message.clientsOnline !== 0) {
+      writer.uint32(24).uint32(message.clientsOnline);
+    }
+    if (message.lastRoundTripMs !== undefined && message.lastRoundTripMs !== "0") {
+      writer.uint32(32).uint64(message.lastRoundTripMs);
+    }
+    if (message.avgRoundTripMs !== undefined && message.avgRoundTripMs !== "0") {
+      writer.uint32(40).uint64(message.avgRoundTripMs);
+    }
+    if (message.roundTrips !== undefined && message.roundTrips !== 0) {
+      writer.uint32(48).uint32(message.roundTrips);
+    }
+    if (message.filesShared !== undefined && message.filesShared !== 0) {
+      writer.uint32(56).uint32(message.filesShared);
+    }
+    if (message.sharedBytes !== undefined && message.sharedBytes !== "0") {
+      writer.uint32(64).uint64(message.sharedBytes);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GroupStatus {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseGroupStatus();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.groupKey = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.label = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 24) {
+              break;
+            }
+
+            message.clientsOnline = reader.uint32();
+            continue;
+          }
+          case 4: {
+            if (tag !== 32) {
+              break;
+            }
+
+            message.lastRoundTripMs = reader.uint64().toString();
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.avgRoundTripMs = reader.uint64().toString();
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.roundTrips = reader.uint32();
+            continue;
+          }
+          case 7: {
+            if (tag !== 56) {
+              break;
+            }
+
+            message.filesShared = reader.uint32();
+            continue;
+          }
+          case 8: {
+            if (tag !== 64) {
+              break;
+            }
+
+            message.sharedBytes = reader.uint64().toString();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): GroupStatus {
+    return {
+      groupKey: isSet(object.groupKey)
+        ? globalThis.String(object.groupKey)
+        : isSet(object.group_key)
+        ? globalThis.String(object.group_key)
+        : "",
+      label: isSet(object.label) ? globalThis.String(object.label) : "",
+      clientsOnline: isSet(object.clientsOnline)
+        ? globalThis.Number(object.clientsOnline)
+        : isSet(object.clients_online)
+        ? globalThis.Number(object.clients_online)
+        : 0,
+      lastRoundTripMs: isSet(object.lastRoundTripMs)
+        ? globalThis.String(object.lastRoundTripMs)
+        : isSet(object.last_round_trip_ms)
+        ? globalThis.String(object.last_round_trip_ms)
+        : "0",
+      avgRoundTripMs: isSet(object.avgRoundTripMs)
+        ? globalThis.String(object.avgRoundTripMs)
+        : isSet(object.avg_round_trip_ms)
+        ? globalThis.String(object.avg_round_trip_ms)
+        : "0",
+      roundTrips: isSet(object.roundTrips)
+        ? globalThis.Number(object.roundTrips)
+        : isSet(object.round_trips)
+        ? globalThis.Number(object.round_trips)
+        : 0,
+      filesShared: isSet(object.filesShared)
+        ? globalThis.Number(object.filesShared)
+        : isSet(object.files_shared)
+        ? globalThis.Number(object.files_shared)
+        : 0,
+      sharedBytes: isSet(object.sharedBytes)
+        ? globalThis.String(object.sharedBytes)
+        : isSet(object.shared_bytes)
+        ? globalThis.String(object.shared_bytes)
+        : "0",
+    };
+  },
+
+  toJSON(message: GroupStatus): unknown {
+    const obj: any = {};
+    if (message.groupKey !== undefined && message.groupKey !== "") {
+      obj.groupKey = message.groupKey;
+    }
+    if (message.label !== undefined && message.label !== "") {
+      obj.label = message.label;
+    }
+    if (message.clientsOnline !== undefined && message.clientsOnline !== 0) {
+      obj.clientsOnline = Math.round(message.clientsOnline);
+    }
+    if (message.lastRoundTripMs !== undefined && message.lastRoundTripMs !== "0") {
+      obj.lastRoundTripMs = message.lastRoundTripMs;
+    }
+    if (message.avgRoundTripMs !== undefined && message.avgRoundTripMs !== "0") {
+      obj.avgRoundTripMs = message.avgRoundTripMs;
+    }
+    if (message.roundTrips !== undefined && message.roundTrips !== 0) {
+      obj.roundTrips = Math.round(message.roundTrips);
+    }
+    if (message.filesShared !== undefined && message.filesShared !== 0) {
+      obj.filesShared = Math.round(message.filesShared);
+    }
+    if (message.sharedBytes !== undefined && message.sharedBytes !== "0") {
+      obj.sharedBytes = message.sharedBytes;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<GroupStatus>, I>>(base?: I): GroupStatus {
+    return GroupStatus.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GroupStatus>, I>>(object: I): GroupStatus {
+    const message = createBaseGroupStatus();
+    message.groupKey = object.groupKey ?? "";
+    message.label = object.label ?? "";
+    message.clientsOnline = object.clientsOnline ?? 0;
+    message.lastRoundTripMs = object.lastRoundTripMs ?? "0";
+    message.avgRoundTripMs = object.avgRoundTripMs ?? "0";
+    message.roundTrips = object.roundTrips ?? 0;
+    message.filesShared = object.filesShared ?? 0;
+    message.sharedBytes = object.sharedBytes ?? "0";
+    return message;
+  },
+};
+
+function createBaseClientStatusResponse(): ClientStatusResponse {
+  return { clientsOnline: 0, groupsOnline: 0, groups: [] };
+}
+
+export const ClientStatusResponse: MessageFns<ClientStatusResponse> = {
+  encode(message: ClientStatusResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.clientsOnline !== undefined && message.clientsOnline !== 0) {
+      writer.uint32(8).uint32(message.clientsOnline);
+    }
+    if (message.groupsOnline !== undefined && message.groupsOnline !== 0) {
+      writer.uint32(16).uint32(message.groupsOnline);
+    }
+    if (message.groups !== undefined && message.groups.length !== 0) {
+      for (const v of message.groups) {
+        GroupStatus.encode(v!, writer.uint32(26).fork()).join();
+      }
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ClientStatusResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseClientStatusResponse();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.clientsOnline = reader.uint32();
+            continue;
+          }
+          case 2: {
+            if (tag !== 16) {
+              break;
+            }
+
+            message.groupsOnline = reader.uint32();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            const el = GroupStatus.decode(reader, reader.uint32());
+            if (el !== undefined) {
+              message.groups!.push(el);
+            }
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): ClientStatusResponse {
+    return {
+      clientsOnline: isSet(object.clientsOnline)
+        ? globalThis.Number(object.clientsOnline)
+        : isSet(object.clients_online)
+        ? globalThis.Number(object.clients_online)
+        : 0,
+      groupsOnline: isSet(object.groupsOnline)
+        ? globalThis.Number(object.groupsOnline)
+        : isSet(object.groups_online)
+        ? globalThis.Number(object.groups_online)
+        : 0,
+      groups: globalThis.Array.isArray(object?.groups) ? object.groups.map((e: any) => GroupStatus.fromJSON(e)) : [],
+    };
+  },
+
+  toJSON(message: ClientStatusResponse): unknown {
+    const obj: any = {};
+    if (message.clientsOnline !== undefined && message.clientsOnline !== 0) {
+      obj.clientsOnline = Math.round(message.clientsOnline);
+    }
+    if (message.groupsOnline !== undefined && message.groupsOnline !== 0) {
+      obj.groupsOnline = Math.round(message.groupsOnline);
+    }
+    if (message.groups?.length) {
+      obj.groups = message.groups.map((e) => GroupStatus.toJSON(e));
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ClientStatusResponse>, I>>(base?: I): ClientStatusResponse {
+    return ClientStatusResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ClientStatusResponse>, I>>(object: I): ClientStatusResponse {
+    const message = createBaseClientStatusResponse();
+    message.clientsOnline = object.clientsOnline ?? 0;
+    message.groupsOnline = object.groupsOnline ?? 0;
+    message.groups = object.groups?.map((e) => GroupStatus.fromPartial(e)) || [];
     return message;
   },
 };

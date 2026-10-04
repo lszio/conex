@@ -707,10 +707,49 @@
       },
       "type": "object"
     },
+    "conex.ClientStatusRequest": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    },
+    "conex.ClientStatusResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "clientsOnline": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "groups": {
+          "items": {
+            "$ref": "#/$defs/conex.GroupStatus"
+          },
+          "type": "array"
+        },
+        "groupsOnline": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "clientsOnline",
+        "groupsOnline"
+      ],
+      "type": "object"
+    },
     "conex.ClientSummary": {
       "additionalProperties": false,
       "properties": {
         "connectedAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "groupKey": {
+          "type": "string"
+        },
+        "lastRoundTripMs": {
           "format": "uint64",
           "pattern": "^[0-9]+$",
           "type": "string"
@@ -742,7 +781,9 @@
         "tenantId",
         "connectedAtMs",
         "lastSeenAtMs",
-        "userAgent"
+        "userAgent",
+        "groupKey",
+        "lastRoundTripMs"
       ],
       "type": "object"
     },
@@ -1054,6 +1095,58 @@
           "type": "string"
         }
       },
+      "type": "object"
+    },
+    "conex.GroupStatus": {
+      "additionalProperties": false,
+      "properties": {
+        "avgRoundTripMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "clientsOnline": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "filesShared": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "groupKey": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "lastRoundTripMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "roundTrips": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sharedBytes": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "groupKey",
+        "label",
+        "clientsOnline",
+        "lastRoundTripMs",
+        "avgRoundTripMs",
+        "roundTrips",
+        "filesShared",
+        "sharedBytes"
+      ],
       "type": "object"
     },
     "conex.HelloRequest": {

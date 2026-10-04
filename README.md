@@ -2,7 +2,7 @@
 
 conex（connect + nexus）是一个可嵌入的双向能力路由内核及可选独立进程；工作协议名 `conex`。
 
-**当前状态（2026-10-04）：** 落地页收敛为 **hello 页面**并已部署到 <https://conex.lszio.space>（分支 `landing`，提交 `d03cd06`）：连上即列出在线客户端，逐个发送 hello（返回实测往返毫秒），每个访客自设名称／组／是否可见；`visible = false` 既不出现在别人列表里也不可被问候。免凭据、无数据端点、无写路径。契约见 [connected-landing §9](docs/contracts/connected-landing.md)，证据见 [hello 页面验证记录](docs/verification/landing-page.md)。P0、P1、Connected landing、多主机内容 M0–M5 已交付。历史：多主机内容 M0–M5（[验证记录](docs/verification/multi-host-content.md)）；剩余 M4（Notez 接入）与 M6（验收收口）见计划。
+**当前状态（2026-10-05）：** 落地页从「hello 单场景」改为**项目介绍 + 两个场景 + 状态**（分支 `refactor/arch`）：首屏说明 conex 是双向能力路由内核，hello 与文件共享是它做的两件事。`group` 由自述标签升级为**隔离键**（SHA-256 派生），不同组互相不可见、不可问候、不可访问文件；`client/status` 报出全 Host 在线客户端数、分组数与每组实测延迟（未测量显示「尚未测量」而非 0 ms）；文件场景支持选择文件或整个目录共享给同组，按提供者分卡片展示，可预览与下载。契约见 [connected-landing §10](docs/contracts/connected-landing.md)，证据见 [L12 验证记录](docs/verification/landing-page.md)。P0、P1、Connected landing、多主机内容 M0–M5 已交付。剩余 M4（Notez 接入）与 M6（验收收口）…
 
 ## 文档
 

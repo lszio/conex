@@ -176,3 +176,111 @@ errors: none
    `google/protobuf/struct.proto` → 装 `libprotobuf-dev`。
 3. 部署永久挂起：基础镜像浮动 tag 的 manifest 拉取卡死 40 分钟且无报错，
    Dokploy 又不允许并发起第二次部署 → 三个基础镜像固定为 digest。
+
+---
+
+# L12：项目定位、分组隔离与文件共享场景（2026-10-05）
+
+契约见 [connected-landing §10](../contracts/connected-landing.md)。本文只记录
+**实际执行并通过**的结果。三个真实浏览器上下文（A、B、跨组访客）跑在同一个真实
+`conex-host` 上。
+
+## 1. 真实浏览器验收（23 项全过）
+
+脚本 `scripts/verify-landing-scenes.ts`，三个独立 `BrowserContext`（各自独立会话
+cookie），`bun web/dev.ts` 起的 guest-only Host：
+
+```console
+$ CONEX_VERIFY_ORIGIN=http://127.0.0.1:8080 bun scripts/verify-landing-scenes.ts
+ok   页面定位是 conex 本身
+ok   介绍页说明 conex 的定位与连接方式
+ok   另一个组看不到本组客户端
+ok   A 的消息泡泡带实测往返延迟: ["我 → 2:58:07 AM\n\nhello\n\n<1 ms"]
+ok   B 收到 A 的 hello 泡泡: ["alice → 2:58:07 AM\n\nhello"]
+ok   状态页显示客户端计数
+ok   状态页显示分组计数
+ok   team-a 显示 2 个客户端
+ok   team-a 显示实测延迟
+ok   本组完成过 hello 后不再显示「尚未测量」
+ok   未发过 hello 的组显示「尚未测量」
+ok   A 上传后收到成功提示
+ok   B 在文件场景看到 A 提供的文件
+ok   文件卡片标出所有者而不是当前用户
+ok   文件按提供者分卡片显示所有者
+ok   B 看不到撤回按钮（非所有者）
+ok   文本文件提供预览入口
+ok   预览读到真实字节: 第一行：这是共享的文本。
+ok   下载链接指向同源共享路由
+ok   同组客户端下载到的字节与上传一致
+ok   另一个组的文件场景看不到该文件
+ok   提供者断开后文件被回收
+ok   页面无控制台错误
+全部检查通过
+```
+
+关键读数：`team-a` 组「2 客户端 / 最近 <1 ms / 均值 <1 ms」，`team-b` 组
+「1 客户端 / 最近 尚未测量 / 均值 尚未测量」——未测量的组显示「尚未测量」而不是
+0 ms。跨组访客在 `client/list` 与文件场景都看不到 `team-a` 的任何内容。
+
+## 2. 三个由真浏览器暴露的真实缺陷
+
+### 2.1 文本共享文件预览为乱码
+
+**现象**：UTF-8 中文 `.txt` 共享后，预览显示 `ç¬¬ä¸€è¡Œï¼š...`。
+
+**根因**：下载响应的 `Content-Type` 只有 `text/plain`，没有 charset。浏览器按默认
+编码解码 UTF-8 字节流，得到 mojibake。
+
+**修法**：Host 在 `share_http.rs` 对 `text/*` 与 `application/json` 补
+`; charset=utf-8`；页面预览改为 `arrayBuffer()` + 显式 `TextDecoder("utf-8")`，
+不再依赖 fetch 的二次解码。修后预览实测为「第一行：这是共享的文本。」。
+
+### 2.2 同组客户端看不到对方新共享的文件
+
+**现象**：A 上传后，B 的文件场景一直显示「这个组还没有人共享文件」。
+
+**根因**：轮询只调 `refresh()`（`client/list`），文件列表只在连接建立与本端写入后
+刷新。更关键的是 `if (document.hidden) return;` 这一行——A、B 两个标签页中只有一个
+可见，**后台标签页的整个轮询被跳过**，所以后台的 B 永远拿不到新文件。
+
+**修法**：`client/list` 仍对隐藏标签页省工，但文件列表无条件轮询。修后 B 的
+`GET /web/files` 每 3s 返回含 `report.txt` 的列表。
+
+### 2.3 共享文件撤回先删后校验归属
+
+**现象**：`ShareStore::remove` 先 `files.remove(id)` 再比对 `owner_link_id`，
+非所有者的撤回请求虽然返回 `Forbidden`，文件却已经被删掉——任何组内成员都能销毁
+别人的上传。
+
+**修法**：先 `get` 比对归属，通过后才 `remove`。`only_the_owner_may_withdraw_a_file`
+断言拒绝后文件仍在（实测通过）。
+
+## 3. 自动化测试
+
+```console
+$ cargo test -p conex-host --lib                       # 38 passed
+$ cargo test -p conex-host --test share                # 8 passed
+$ cargo test --workspace                               # 全部 ok
+$ bun test sdk/typescript/tests                        # 25 pass / 2 skip / 0 fail
+$ bun run typecheck                                    # 通过
+$ cargo xtask e2e --suite connected-landing            # passed
+$ cargo xtask e2e --suite connected-landing-web        # passed
+$ cargo xtask e2e --suite connected-landing-connections # passed
+```
+
+`tests/share.rs` 用真实 router + 真实 WSS 握手（guest 会话、ticket、hello/ready）
+覆盖 8 项：同组列举/预览/下载字节一致、跨组 404、跨组 hello `Forbidden` 且同组
+hello 往返成功并写入延迟、只有所有者可撤回、无 CSRF 拒绝写入、活动内容只下载、
+断开即回收、超限上传被传输层拒绝。
+
+`clients.rs` / `share.rs` 单元测试覆盖：组隔离列举、改名即换 key、同标签同 key、
+空组是独立 key、状态只在真测量后报延迟、跨组配额、单文件上限、单客户端文件数、
+断开释放配额、所有权校验、HTML/SVG 不内联、文件名与 MIME 的头注入清洗、空名回退。
+
+## 4. 未验证项
+
+- 移动端视口（仅桌面 1280 px 验收）。
+- 目录选择器（`webkitdirectory`）未在自动化里驱动——脚本用 `DataTransfer` 构造
+  单文件，目录整包上传未实测。
+- 共享文件不跨重启存活（设计如此，内存实现）。
+- 跨主机真实 TLS 与真实 OIDC：沿用既有缺口，本轮未涉及。

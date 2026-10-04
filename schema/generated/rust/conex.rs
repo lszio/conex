@@ -666,6 +666,15 @@ pub struct ClientSummary {
     /// Self-reported by the client's own page; never trusted for access.
     #[prost(string, tag = "7")]
     pub user_agent: ::prost::alloc::string::String,
+    /// Host-derived hash of `profile.group`. The group text is a self-declared
+    /// label; this hash is the isolation key, so two clients are peers only when
+    /// their keys match.
+    #[prost(string, tag = "8")]
+    pub group_key: ::prost::alloc::string::String,
+    /// Last round trip this client was measured on, in milliseconds. 0 means no
+    /// hello has been exchanged with it yet.
+    #[prost(uint64, tag = "9")]
+    pub last_round_trip_ms: u64,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ClientListResponse {
@@ -704,6 +713,47 @@ pub struct ClientHelloResult {
     pub round_trip_ms: u64,
     #[prost(string, tag = "3")]
     pub reply: ::prost::alloc::string::String,
+}
+/// `client/status`: what the host sees right now. Aggregate counters plus one
+/// row per group, so a page can show "N clients, M groups" and the measured
+/// latency of every group without polling anything else.
+///
+/// Latency is only ever a real measurement: `lastRoundTripMs` and
+/// `avgRoundTripMs` are 0 until a hello has completed, and 0 in the JSON plane
+/// is rendered as "<1 ms", never as a fabricated number.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ClientStatusRequest {}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GroupStatus {
+    /// Host-derived isolation key; the group text itself is a display label the
+    /// visitor chose and is not part of the key.
+    #[prost(string, tag = "1")]
+    pub group_key: ::prost::alloc::string::String,
+    /// The group's own label when every member declared the same one, empty when
+    /// members differ.
+    #[prost(string, tag = "2")]
+    pub label: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "3")]
+    pub clients_online: u32,
+    #[prost(uint64, tag = "4")]
+    pub last_round_trip_ms: u64,
+    #[prost(uint64, tag = "5")]
+    pub avg_round_trip_ms: u64,
+    #[prost(uint32, tag = "6")]
+    pub round_trips: u32,
+    #[prost(uint32, tag = "7")]
+    pub files_shared: u32,
+    #[prost(uint64, tag = "8")]
+    pub shared_bytes: u64,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ClientStatusResponse {
+    #[prost(uint32, tag = "1")]
+    pub clients_online: u32,
+    #[prost(uint32, tag = "2")]
+    pub groups_online: u32,
+    #[prost(message, repeated, tag = "3")]
+    pub groups: ::prost::alloc::vec::Vec<GroupStatus>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct AuthorizedScope {

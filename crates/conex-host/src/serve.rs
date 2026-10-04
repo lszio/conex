@@ -346,6 +346,7 @@ pub fn build_router(config: &HostConfig) -> Result<Router, CallError> {
         web_auth,
         ui_links,
         clients: built.clients.clone(),
+        shares: Arc::new(crate::share::ShareStore::new()),
     });
     let mut base = build_p0_router();
     if built.broker.is_some() && built.host_side.is_some() {

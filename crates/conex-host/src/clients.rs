@@ -19,6 +19,7 @@ use std::time::{Duration, Instant};
 
 use axum::extract::ws::Message;
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use tokio::sync::{mpsc, oneshot};
 
 use conex_core::CallError;
@@ -34,6 +35,21 @@ const HELLO_TIMEOUT: Duration = Duration::from_secs(10);
 /// Long enough that a link which registered but has not finished its handshake
 /// is never reaped.
 const ORPHAN_GRACE_MS: u64 = 60_000;
+
+/// Isolation key derived from the self-declared group text.
+///
+/// The group a visitor types is a label; the key is what the host compares.
+/// Hashing rather than comparing raw text keeps the key a fixed width, hides
+/// the label from anything that only needs the key, and makes "no group" a
+/// real key of its own instead of a falsy value that would silently match
+/// everything.
+pub fn group_key(group: &str) -> String {
+    let digest = Sha256::digest(group.as_bytes());
+    digest[..8]
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
 
 /// How a link's outbound channel is exposed to the registry.
 ///
@@ -163,6 +179,57 @@ pub struct ClientEntry {
     pub connected_at_ms: u64,
     pub last_seen_at_ms: u64,
     pub user_agent: String,
+    /// Isolation key derived from `profile.group`; recomputed on every profile
+    /// write so a client that renames its group immediately leaves its old
+    /// group instead of lingering under a stale key.
+    pub group_key: String,
+    /// Last measured hello round trip in milliseconds; 0 until one completes.
+    pub last_round_trip_ms: u64,
+    /// Running total behind `avg_round_trip_ms`.
+    round_trip_total_ms: u64,
+    round_trips: u64,
+    /// Files this client currently offers to its group.
+    pub files_shared: u32,
+    pub shared_bytes: u64,
+}
+
+impl ClientEntry {
+    fn new(link_id: &str, principal_id: &str, tenant_id: &str, user_agent: &str) -> Self {
+        let profile = ClientProfile {
+            visible: true,
+            ..ClientProfile::default()
+        };
+        Self {
+            link_id: link_id.to_string(),
+            principal_id: principal_id.to_string(),
+            tenant_id: tenant_id.to_string(),
+            group_key: group_key(&profile.group),
+            last_round_trip_ms: 0,
+            round_trip_total_ms: 0,
+            round_trips: 0,
+            files_shared: 0,
+            shared_bytes: 0,
+            profile,
+            connected_at_ms: now_ms(),
+            last_seen_at_ms: now_ms(),
+            user_agent: sanitize_user_agent(user_agent),
+        }
+    }
+
+    /// Mean of every completed round trip, truncated to whole milliseconds.
+    /// Zero while no hello has completed, which the page renders as "尚未测量"
+    /// instead of a latency of zero.
+    pub fn avg_round_trip_ms(&self) -> u64 {
+        // Zero while no hello has completed, which the page renders as "尚未测量"
+        // instead of a latency of zero.
+        self.round_trip_total_ms
+            .checked_div(self.round_trips)
+            .unwrap_or(0)
+    }
+
+    pub fn round_trips(&self) -> u64 {
+        self.round_trips
+    }
 }
 
 struct ClientState {
@@ -180,7 +247,24 @@ impl ClientState {
     }
 }
 
-#[derive(Default, Clone)]
+/// One row of `client/status`: the online state of a single group.
+///
+/// Latency fields stay 0 until a hello in that group has actually completed.
+/// A zero here means "not measured", and the page says so instead of printing
+/// a number that no measurement produced.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct GroupStatus {
+    pub group_key: String,
+    pub label: String,
+    pub clients_online: u32,
+    pub last_round_trip_ms: u64,
+    pub avg_round_trip_ms: u64,
+    pub round_trips: u64,
+    pub files_shared: u32,
+    pub shared_bytes: u64,
+}
+
+#[derive(Clone, Default)]
 pub struct ClientRegistry {
     by_link: Arc<Mutex<HashMap<String, Arc<Mutex<ClientState>>>>>,
     in_flight: Arc<AtomicU64>,
@@ -194,25 +278,13 @@ impl ClientRegistry {
     /// Create a link's entry. The link exists (and is listed) before the WSS
     /// upgrade completes; `attach_writer` flips it addressable.
     pub fn register(&self, link_id: &str, principal_id: &str, tenant_id: &str, user_agent: &str) {
-        let entry = ClientEntry {
-            link_id: link_id.to_string(),
-            principal_id: principal_id.to_string(),
-            tenant_id: tenant_id.to_string(),
-            profile: ClientProfile {
-                visible: true,
-                ..ClientProfile::default()
-            },
-            connected_at_ms: now_ms(),
-            last_seen_at_ms: now_ms(),
-            user_agent: sanitize_user_agent(user_agent),
-        };
         self.by_link
             .lock()
             .expect("client registry poisoned")
             .insert(
                 link_id.to_string(),
                 Arc::new(Mutex::new(ClientState {
-                    entry,
+                    entry: ClientEntry::new(link_id, principal_id, tenant_id, user_agent),
                     tx: None,
                     replies: HashMap::new(),
                     next_reply_id: 0,
@@ -273,6 +345,10 @@ impl ClientRegistry {
             return None;
         }
         state.entry.profile = profile;
+        // The isolation key follows the label: renaming a group moves the
+        // client out of the old one immediately instead of leaving it
+        // reachable through a key it no longer names.
+        state.entry.group_key = group_key(&state.entry.profile.group);
         Some(state.entry.clone())
     }
 
@@ -321,6 +397,105 @@ impl ClientRegistry {
         rows
     }
 
+    /// Clients in the caller's own group, plus the caller's row when hidden.
+    ///
+    /// The group is the isolation boundary: a client that never greets another
+    /// group must not even be able to see it. Hidden clients are excluded
+    /// from everyone else's view, and a hidden caller sees only itself.
+    pub fn list_for_group(&self, caller: &str) -> Vec<ClientEntry> {
+        let Some(own_key) = self.get(caller).map(|entry| entry.group_key) else {
+            return Vec::new();
+        };
+        self.list()
+            .into_iter()
+            .filter(|entry| {
+                entry.group_key == own_key && (entry.profile.visible || entry.link_id == caller)
+            })
+            .collect()
+    }
+
+    /// True when both links exist under the same group key. Addressability
+    /// across groups is refused at this check, not at the call site, so every
+    /// path that can push a frame to another client shares one rule.
+    pub fn same_group(&self, from: &str, to: &str) -> bool {
+        match (self.get(from), self.get(to)) {
+            (Some(from_entry), Some(to_entry)) => from_entry.group_key == to_entry.group_key,
+            _ => false,
+        }
+    }
+
+    /// Record a completed hello round trip against both participants.
+    ///
+    /// Latency is attributed to the pair, not to the socket: the number a
+    /// page shows is the time the message actually spent crossing the host,
+    /// so it stays meaningful across links in the same group.
+    pub fn record_round_trip(&self, from: &str, to: &str, millis: u64) {
+        let guard = self.by_link.lock().expect("client registry poisoned");
+        for link_id in [from, to] {
+            if let Some(state) = guard.get(link_id) {
+                let mut state = state.lock().expect("client state poisoned");
+                state.entry.last_round_trip_ms = millis;
+                state.entry.round_trip_total_ms =
+                    state.entry.round_trip_total_ms.saturating_add(millis);
+                state.entry.round_trips += 1;
+            }
+        }
+    }
+
+    /// Update a client's shared-file counters; the share store is the caller.
+    pub fn set_shared(&self, link_id: &str, files: u32, bytes: u64) {
+        let guard = self.by_link.lock().expect("client registry poisoned");
+        if let Some(state) = guard.get(link_id) {
+            let mut state = state.lock().expect("client state poisoned");
+            state.entry.files_shared = files;
+            state.entry.shared_bytes = bytes;
+        }
+    }
+
+    /// Aggregate per-group status. Latency columns are sums over the group,
+    /// so a group with no completed hello reports 0 rather than a made-up
+    /// number the page could mistake for a measurement.
+    pub fn group_status(&self) -> Vec<GroupStatus> {
+        let mut groups: HashMap<String, GroupStatus> = HashMap::new();
+        for entry in self.list() {
+            let status = groups
+                .entry(entry.group_key.clone())
+                .or_insert(GroupStatus {
+                    group_key: entry.group_key.clone(),
+                    label: entry.profile.group.clone(),
+                    clients_online: 0,
+                    last_round_trip_ms: 0,
+                    avg_round_trip_ms: 0,
+                    round_trips: 0,
+                    files_shared: 0,
+                    shared_bytes: 0,
+                });
+            status.clients_online += 1;
+            status.files_shared += entry.files_shared;
+            status.shared_bytes += entry.shared_bytes;
+            // Clients in one group may disagree on their label; showing either
+            // as "the" label would misreport the rest.
+            if status.label != entry.profile.group {
+                status.label.clear();
+            }
+            let round_trips = entry.round_trips();
+            if entry.last_round_trip_ms > status.last_round_trip_ms {
+                status.last_round_trip_ms = entry.last_round_trip_ms;
+            }
+            if round_trips > 0 {
+                // Weighted by each client's own trip count, so a group average
+                // is not skewed by whoever has been measured most.
+                let weighted = status.avg_round_trip_ms.saturating_mul(status.round_trips)
+                    + entry.avg_round_trip_ms().saturating_mul(round_trips);
+                status.round_trips += round_trips;
+                status.avg_round_trip_ms = weighted.checked_div(status.round_trips).unwrap_or(0);
+            }
+        }
+        let mut rows: Vec<GroupStatus> = groups.into_values().collect();
+        rows.sort_by(|a, b| a.group_key.cmp(&b.group_key));
+        rows
+    }
+
     /// Drop entries whose writer is gone.
     ///
     /// A tab that dies without a clean close leaves its entry behind forever.
@@ -358,14 +533,22 @@ impl ClientRegistry {
     /// Deliver a hello to one client and wait for its pong.
     ///
     /// Fails with `unavailable` when the target is gone, still handshaking, or
-    /// hidden — a hidden client is unreachable by design, so the sender gets a
-    /// clear error instead of silence.
+    /// hidden — a hidden client is unreachable by design, so the sender gets
+    /// a clear error instead of silence. A target in another group is
+    /// unreachable for the same reason: the group is the isolation boundary,
+    /// and it is enforced here so no caller can route around it.
     pub async fn send_hello(
         &self,
         target_link_id: &str,
         from: &str,
         text: &str,
     ) -> Result<(u64, String), CallError> {
+        if !self.same_group(from, target_link_id) {
+            return Err(CallError::new(
+                conex_proto::ErrorCode::Forbidden,
+                "target client is in another group",
+            ));
+        }
         let state = {
             let guard = self.by_link.lock().expect("client registry poisoned");
             guard
@@ -438,7 +621,12 @@ impl ClientRegistry {
             }
         };
         self.in_flight.fetch_sub(1, Ordering::AcqRel);
-        Ok((started.elapsed().as_millis() as u64, reply))
+        let elapsed = started.elapsed().as_millis() as u64;
+        // A sub-millisecond exchange truncates to 0; that is a real
+        // measurement, so it is recorded as 0 and rendered as "<1 ms" rather
+        // than rounded up to a millisecond nobody waited.
+        self.record_round_trip(from, target_link_id, elapsed);
+        Ok((elapsed, reply))
     }
 
     /// Called by the target's WSS loop when it receives `conex/client-pong`.
@@ -542,6 +730,10 @@ mod tests {
     #[tokio::test]
     async fn hello_to_hidden_client_is_refused() {
         let registry = ClientRegistry::new();
+        // Both links must exist: a sender that never registered is not in a
+        // group at all, which is a different refusal from "target is hidden".
+        registry.register("link-a", "guest", "demo", "ua");
+        let _rx_sender = attach(&registry, "link-a");
         registry.register("link-b", "guest", "demo", "ua");
         let mut rx = attach(&registry, "link-b");
         registry
@@ -562,6 +754,150 @@ mod tests {
             rx.try_recv().is_err(),
             "no frame is pushed to a hidden client"
         );
+    }
+
+    #[tokio::test]
+    async fn a_client_in_another_group_is_unreachable() {
+        let registry = ClientRegistry::new();
+        for link in ["link-a", "link-b"] {
+            registry.register(link, "guest", "demo", "ua");
+            let _rx = attach(&registry, link);
+        }
+        for (link, group) in [("link-a", "team-a"), ("link-b", "team-b")] {
+            registry
+                .set_profile(
+                    link,
+                    ClientProfile {
+                        group: group.into(),
+                        visible: true,
+                        ..ClientProfile::default()
+                    },
+                )
+                .expect("profile set");
+        }
+        let mut rx = attach(&registry, "link-b");
+        let error = registry
+            .send_hello("link-b", "link-a", "hi")
+            .await
+            .expect_err("a cross-group target must be refused");
+        assert_eq!(error.code(), conex_proto::ErrorCode::Forbidden as i32);
+        assert!(
+            rx.try_recv().is_err(),
+            "no frame may reach a client in another group"
+        );
+    }
+
+    #[test]
+    fn listing_is_scoped_to_the_callers_group() {
+        let registry = ClientRegistry::new();
+        for (link, group) in [
+            ("link-a1", "team-a"),
+            ("link-a2", "team-a"),
+            ("link-b1", "team-b"),
+        ] {
+            registry.register(link, "guest", "demo", "ua");
+            let _rx = attach(&registry, link);
+            registry
+                .set_profile(
+                    link,
+                    ClientProfile {
+                        group: group.into(),
+                        visible: true,
+                        ..ClientProfile::default()
+                    },
+                )
+                .expect("profile set");
+        }
+        let mut peers: Vec<String> = registry
+            .list_for_group("link-a1")
+            .into_iter()
+            .map(|entry| entry.link_id)
+            .collect();
+        peers.sort();
+        assert_eq!(peers, vec!["link-a1".to_string(), "link-a2".to_string()]);
+        // The whole host still holds all three clients across two groups.
+        assert_eq!(registry.online_count(), 3);
+    }
+
+    #[test]
+    fn renaming_the_group_moves_the_client_immediately() {
+        let registry = ClientRegistry::new();
+        for (link, group) in [("link-a", "team-a"), ("link-b", "team-b")] {
+            registry.register(link, "guest", "demo", "ua");
+            let _rx = attach(&registry, link);
+            registry
+                .set_profile(
+                    link,
+                    ClientProfile {
+                        group: group.into(),
+                        visible: true,
+                        ..ClientProfile::default()
+                    },
+                )
+                .expect("profile set");
+        }
+        assert!(!registry.same_group("link-a", "link-b"));
+        let before = registry.get("link-a").expect("entry").group_key;
+        registry
+            .set_profile(
+                "link-a",
+                ClientProfile {
+                    group: "team-b".into(),
+                    visible: true,
+                    ..ClientProfile::default()
+                },
+            )
+            .expect("profile set");
+        let after = registry.get("link-a").expect("entry").group_key;
+        assert_ne!(before, after, "the isolation key must follow the label");
+        assert!(registry.same_group("link-a", "link-b"));
+    }
+
+    #[test]
+    fn the_same_group_label_always_yields_the_same_key() {
+        assert_eq!(group_key("team-a"), group_key("team-a"));
+        assert_ne!(group_key("team-a"), group_key("team-b"));
+        // "no group" is a key of its own, not a falsy value that would match
+        // every ungrouped visitor and every group named "".
+        assert_ne!(group_key(""), group_key("team-a"));
+        assert_eq!(group_key("").len(), 16);
+    }
+
+    #[tokio::test]
+    async fn status_reports_counts_and_only_measured_latency() {
+        let registry = ClientRegistry::new();
+        for link in ["link-a", "link-b"] {
+            registry.register(link, "guest", "demo", "ua");
+            let _rx = attach(&registry, link);
+            registry
+                .set_profile(
+                    link,
+                    ClientProfile {
+                        group: "team-a".into(),
+                        visible: true,
+                        ..ClientProfile::default()
+                    },
+                )
+                .expect("profile set");
+        }
+        // Before any hello, latency must be absent rather than zero-valued.
+        let before = registry.group_status();
+        assert_eq!(before.len(), 1);
+        assert_eq!(before[0].clients_online, 2);
+        assert_eq!(before[0].label, "team-a");
+        assert_eq!(before[0].round_trips, 0);
+        assert_eq!(before[0].avg_round_trip_ms, 0);
+
+        registry.record_round_trip("link-a", "link-b", 7);
+        registry.record_round_trip("link-a", "link-b", 3);
+        let after = registry.group_status();
+        assert_eq!(after[0].round_trips, 4, "both ends of both hellos count");
+        assert_eq!(after[0].last_round_trip_ms, 3);
+        assert_eq!(after[0].avg_round_trip_ms, 5);
+        registry.set_shared("link-a", 2, 1024);
+        let shared = registry.group_status();
+        assert_eq!(shared[0].files_shared, 2);
+        assert_eq!(shared[0].shared_bytes, 1024);
     }
 
     #[test]
@@ -658,6 +994,8 @@ mod tests {
     #[tokio::test]
     async fn hello_round_trip_reports_the_reply() {
         let registry = ClientRegistry::new();
+        registry.register("link-a", "guest", "demo", "ua");
+        let _rx_sender = attach(&registry, "link-a");
         registry.register("link-b", "guest", "demo", "ua");
         let queued = Arc::new(AtomicUsize::new(0));
         let (tx, mut rx) = mpsc::channel(4);
