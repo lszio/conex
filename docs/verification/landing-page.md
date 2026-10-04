@@ -171,10 +171,12 @@ $ bun run typecheck                     # SDK + web 均无错
 $ cargo xtask e2e --suite connected-landing             # A/B 隔离 + 真停 A 进程生命周期
 $ cargo xtask e2e --suite connected-landing-web         # login/session/list+read
 $ cargo xtask e2e --suite connected-landing-connections # connection/list stale + 计数
-$ docker build -t conex:landing .        # 成功
+$ cargo xtask check                                      # all steps passed（fmt/generate/conformance/additivity/e2e）
+$ docker build -t conex:final-pin .                      # 成功（生产镜像）
 ```
 
-`cargo xtask check` 未在本轮运行（集成门禁，见下）。
+`cargo fmt --all --check` 与 `cargo clippy --workspace --all-targets -- -D warnings`
+亦单独跑过：fmt 干净、clippy 0 findings。
 
 ## 10. Dokploy 部署（已上线）
 
@@ -239,7 +241,6 @@ prefers-reduced-motion: done 7 / active 0（无动画）
 
 ## 未验证项
 
-- `cargo xtask check` 全量门禁（含 fmt/clippy 债务检查）未在本轮运行。
 - 跨主机真实反连、真实证书 pin、真实 OIDC：沿用既有缺口，本轮未涉及。
 - 移动端真机（仅 390px 视口模拟，无触屏设备实测）。
 - `clip.mp4` 未在有专有编解码器的浏览器上实测（headless 环境无 H.264）；
