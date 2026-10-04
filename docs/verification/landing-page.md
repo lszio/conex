@@ -121,6 +121,30 @@ $ cargo test -p conex-host --lib client_pong # 2/2
 `cargo xtask check` 未在本轮运行；其子项（fmt / generate / clippy / 全量测试）
 已分别验证通过。
 
+## 6. 性能（实测，非估计）
+
+`cargo xtask bench --suite hello` 启动真实 Host、用真实 SDK 客户端跑，结果写入
+`web/src/perf-data.json` 供性能页渲染。数据为本机 loopback，不代表公网延迟。
+
+| 场景 | p50 | p95 | p99 | max |
+|---|---|---|---|---|
+| hello 单客户端给自己 | <1 ms | 0.4 ms | 0.5 ms | 0.5 ms |
+| hello（8 客户端在线） | 0.75 ms | **41.4 ms** | 42.2 ms | 42.5 ms |
+| hello（64 客户端在线） | 0.7 ms | **41.4 ms** | 42.1 ms | 42.5 ms |
+| client/list（8 客户端） | 0.45 ms | 0.61 ms | 0.74 ms | 0.83 ms |
+| client/list（64 客户端） | 2.18 ms | 2.81 ms | 3.17 ms | 3.5 ms |
+
+**两个诚实结论：**
+
+1. **注册表规模不影响 hello 延迟。** 8 个与 64 个客户端在线时分布几乎相同，说明
+   链路成本与在线人数无关；`client/list` 从 0.45 ms 涨到 2.18 ms（64 vs 8），
+   这才是随人数增长的部分，也是页面把轮询间隔设为 3s 的原因。
+
+2. **p95 的 41 ms 是真的，本轮未定位。** 逐次打印采样位置后发现：慢样本**永远落在
+   每轮的第二个发送者**（`position=1`），第一个永远正常；换目标客户端的第一次
+   也正常，warmup 也消不掉。规模不变、位置固定、值几乎恒为 41 ms，与 Linux
+   delayed-ACK 量级吻合，但未做抓包确认，因此性能页照实展示该 p95，不做粉饰。
+
 ## 7. 未验证项
 
 - 多访客高并发（>50）下的广播与回收行为。

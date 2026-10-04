@@ -122,7 +122,9 @@ export class ConexWsClient {
   private reconnectTimer?: ReturnType<typeof setTimeout>;
   private negotiationResult?: ConexWsNegotiation;
   private readonly listeners = new Set<ConexWsEventListener>();
-  private readonly helloListeners = new Set<(hello: { replyId: string; from: string; text: string }) => void>();
+  private readonly helloListeners = new Set<
+    (hello: { replyId: string; from: string; fromName: string; text: string }) => void
+  >();
   private readonly pending = new Map<string, PendingCall>();
   private closed = false;
   private handshake?: { step: "hello" | "ready"; helloId: string; negotiationId: string; helloResult?: Record<string, unknown> };
@@ -417,6 +419,7 @@ export class ConexWsClient {
     const params = (message.params ?? {}) as {
       replyId?: string;
       from?: string;
+      fromName?: string;
       text?: string;
     };
     if (params.replyId) {
@@ -430,13 +433,18 @@ export class ConexWsClient {
     this.helloListeners.forEach((listener) => listener({
       replyId: params.replyId ?? "",
       from: params.from ?? "",
+      // The host resolves the sender's link to its display name, so a client
+      // that never chose one is still greeted by something readable.
+      fromName: params.fromName ?? "",
       text: params.text ?? "hello",
     }));
     return true;
   }
 
   /** Greetings pushed by other clients. Returns an unsubscribe function. */
-  onHello(listener: (hello: { replyId: string; from: string; text: string }) => void): () => void {
+  onHello(
+    listener: (hello: { replyId: string; from: string; fromName: string; text: string }) => void,
+  ): () => void {
     this.helloListeners.add(listener);
     return () => this.helloListeners.delete(listener);
   }
