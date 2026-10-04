@@ -1,21 +1,30 @@
-// Page shell: status, tabbed panels, and the connection lifecycle. Tabs exist
-// because the performance report is reference material, not something to read
-// between two hellos.
+// Page shell: what conex is, then the two scenes it demonstrates.
+//
+// Tabs exist because these are different questions. "介绍" is a claim about
+// the project, "hello" and "文件" are two live scenes that need a real
+// connection, "状态" is what the host currently sees, and the performance
+// report is reference material rather than something to read between two
+// greetings.
 
 import { useState } from "react";
 
 import { Badge, Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ClientList } from "@/components/client-list";
+import { FileScene } from "@/components/file-scene";
 import { Intro } from "@/components/intro";
+import { MessageBubbles } from "@/components/message-bubbles";
 import { MessageLog } from "@/components/message-log";
 import { PerfPanel } from "@/components/perf-panel";
 import { ProfileCard } from "@/components/profile-card";
+import { StatusPanel } from "@/components/status-panel";
 import { useHelloPage } from "@/hooks/use-hello-page";
 
 const TABS = [
-  { id: "clients", label: "客户端" },
   { id: "about", label: "介绍" },
+  { id: "hello", label: "hello 场景" },
+  { id: "file", label: "文件场景" },
+  { id: "status", label: "状态" },
   { id: "perf", label: "性能" },
 ] as const;
 
@@ -30,7 +39,12 @@ const STATUS_VARIANT = {
 
 export function App() {
   const page = useHelloPage();
-  const [tab, setTab] = useState<TabId>("clients");
+  // Every login lands on the hello scene: it is the one that proves the
+  // connection is real without asking the visitor to pick a file.
+  const [tab, setTab] = useState<TabId>("hello");
+  const self = page.clients.find((row) => row.linkId === page.selfLinkId);
+  const selfName = self?.profile?.displayName || page.draft.displayName || "你";
+  const ownGroupKey = self?.groupKey ?? "";
 
   return (
     <div className="mx-auto grid w-full max-w-3xl gap-4 px-4 py-8">
@@ -39,7 +53,7 @@ export function App() {
           <p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--color-primary)]">
             conex
           </p>
-          <h1 className="text-3xl font-semibold tracking-tight">hello</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">双向能力路由内核</h1>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-[var(--color-muted-foreground)]" role="status">
@@ -51,7 +65,7 @@ export function App() {
         </div>
       </header>
 
-      <nav className="flex gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-muted)] p-1">
+      <nav className="flex flex-wrap gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-muted)] p-1">
         {TABS.map((item) => (
           <Button
             key={item.id}
@@ -65,8 +79,11 @@ export function App() {
         ))}
       </nav>
 
-      {tab === "clients" ? (
+      {tab === "about" ? <Intro /> : null}
+
+      {tab === "hello" ? (
         <div className="grid gap-4">
+          <MessageBubbles bubbles={page.bubbles} selfLabel={selfName} peerCount={page.clients.length - 1} />
           <ProfileCard
             draft={page.draft}
             notice={page.savedNotice}
@@ -75,39 +92,47 @@ export function App() {
               void page.save(next);
             }}
           />
-          <ClientList clients={page.clients} selfLinkId={page.selfLinkId} onGreet={(row) => void page.greet(row)} />
+          <ClientList clients={page.clients} selfLinkId={page.selfLinkId} onGreet={page.greet} />
           <MessageLog messages={page.messages} />
         </div>
       ) : null}
 
-      {tab === "about" ? (
+      {tab === "file" ? (
         <div className="grid gap-4">
-          <Intro />
-          <Card>
-            <CardContent className="p-5 text-sm text-[var(--color-muted-foreground)]">
-              <p className="grid gap-2">
-                这里的每个客户端就是一条浏览器连接。你看到的名字由你自己填写，Host
-                会保证同屏不重名；隐藏之后你既不出现在别人的列表里，也无法被别人问候。
-              </p>
-              <p className="mt-2 grid gap-2">
-                这台 Host 由中心进程统一认证与路由。页面不提供写入、命令执行或任何改变
-                远端状态的能力，只有只读的问与答。
-              </p>
-              <p className="mt-3">
-                <a
-                  className="font-medium text-[var(--color-primary)] underline underline-offset-4"
-                  href="/llms.txt"
-                >
-                  llms.txt
-                </a>{" "}
-                是同一站点的机器可读说明。
-              </p>
-            </CardContent>
-          </Card>
+          <ProfileCard
+            draft={page.draft}
+            notice={page.savedNotice}
+            onChange={page.setDraft}
+            onSave={(next) => {
+              // The group decides who can see these files, so it is stated
+              // here rather than only in the hello scene's card.
+              void page.save(next);
+            }}
+          />
+          <FileScene
+            files={page.files}
+            selfLinkId={page.selfLinkId}
+            groupLabel={self?.profile?.group ?? page.draft.group}
+            groupKey={ownGroupKey}
+            notice={page.shareNotice}
+            uploading={page.uploading}
+            onShare={(picked) => void page.shareFiles(picked)}
+            onWithdraw={(file) => void page.withdrawFile(file)}
+            fileUrl={page.fileUrl}
+          />
         </div>
       ) : null}
 
+      {tab === "status" ? <StatusPanel status={page.status} ownGroupKey={ownGroupKey} /> : null}
+
       {tab === "perf" ? <PerfPanel /> : null}
+
+      <Card>
+        <CardContent className="p-5 text-xs text-[var(--color-muted-foreground)]">
+          这个页面运行的是真实的 conex-host 进程：所有客户端、往返延迟与文件都来自实际的
+          连接，不是模拟数据。分组由你自己填写，经 Host 哈希成隔离键，只在同组内可见。
+        </CardContent>
+      </Card>
     </div>
   );
 }

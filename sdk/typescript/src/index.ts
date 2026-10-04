@@ -30,9 +30,12 @@ export {
   ClientProfile,
   ClientProfileRequest,
   ClientProfileResponse,
+  ClientStatusRequest,
+  ClientStatusResponse,
   ClientSummary,
   ConnectionListRequest,
   ConnectionListResponse,
+  GroupStatus,
   UiLinkSummary,
   AgentLinkSummary,
 } from "./generated/conex/dashboard";

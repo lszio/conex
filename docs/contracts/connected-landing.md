@@ -122,3 +122,64 @@ Agent 先验证 Host 的 TLS CA 和 server name，再使用 `role=agent` 的 bea
 **方法白名单。** `client/list`、`client/profile`、`client/hello` 加入 UI 角色白名单（`allowed_ui_method`）与 UI ticket 的 capability caps。页面不再提供 shell、写文件、blob 提交、Agent 注册或任意命令入口。
 
 **推送与字节预算。** Host 主动下发的帧必须与 WSS writer 使用同一出站字节计数器；绕过计数会让 writer 的 `fetch_sub` 下溢 `usize`，其后所有预算检查失败并关闭该 socket。
+
+## 10. 分组隔离、状态与文件共享契约（L12）
+
+落地页从「hello 单场景」扩展为项目介绍 + 两个场景 + 状态。契约类型在
+`schema/conex/dashboard.proto`（`ClientSummary.groupKey`、`ClientSummary.lastRoundTripMs`、
+`ClientStatusRequest`/`GroupStatus`/`ClientStatusResponse`）。
+
+**分组是隔离键，不是排序桶。** 访客填写的 `group` 是标签；Host 用 SHA-256 前 8 字节
+（16 位十六进制小写）派生 `groupKey`，隔离一律按 key 比较：
+
+- `client/list` 只返回**同组**客户端；`client/profile` 每次写入都重算 key，改名组后
+  客户端立即离开原分组，不留在旧 key 下
+- `client/hello` 跨组返回 `Forbidden`（-32003），且该检查在 `ClientRegistry::send_hello`
+  内部，不能由调用方绕过
+- 「未分组」是 key `e3b0c44298fc1c14`（空串的哈希），是一个真实分组而不是与所有组匹配的空值
+
+**延迟只有在真测过时存在。** `record_round_trip` 在一次 hello 完成时把实测毫秒记到
+**双方**（往返是这对客户端之间的属性），并累计总和与次数。`lastRoundTripMs` /
+`avgRoundTripMs` / `roundTrips` 在没有任何完成的 hello 时为 0，页面渲染为「尚未测量」，
+不显示 0 ms——把缺测量渲染成 0 会让状态页谎报连接速度。亚毫秒往返截断为 0，页面显示
+`<1 ms` 而不是四舍五入成一个没人等过的毫秒数。
+
+**`client/status` 只投影计数与延迟。** `clientsOnline` / `groupsOnline` 是全 Host 计数
+（回答「这台 Host 上有多少客户端与分组」这个进程级事实），每组一行 `GroupStatus`：
+key、标签（组内标签不一致时清空而不是任选其一）、在线数、最近与平均延迟、往返次数、
+共享文件数与字节。**不投影任何个人行**：不含 linkId、名称或文件明细，因此它不泄露
+`client/list` 的组隔离之外的信息。同组内标签不一致时 `label` 为空字符串。
+
+**文件共享是同组临时内容。** 四个同源路由共用 web 会话 cookie：
+
+| 路由 | 方法 | 授权 | 用途 |
+|---|---|---|---|
+| `/web/files` | GET | cookie | 列出本组文件 |
+| `/web/files` | POST | cookie + Origin + CSRF | 共享一个文件（原始字节） |
+| `/web/files/download` | GET | cookie | 读取文件字节 |
+| `/web/files/remove` | POST | cookie + Origin + CSRF | 撤回自己提供的文件 |
+
+读方法与 `/web/session`、`/content` 同规则（GET 是安全方法）；写方法是状态变更，
+必须校验精确匹配的 `web_origin` 与 CSRF nonce，与 `POST /web/logout` 一致。
+
+**文件 id 不是访问凭据。** `ShareStore::get` 以调用方 groupKey 过滤，跨组与不存在都
+返回 `None`，下载路由因此对两者都答 404——可区分的 403 会确认该 id 存在。上传路由的
+body 上限单独设为 8 MiB（`UPLOAD_BODY_LIMIT`），不放宽其他端点继承的 1 MiB JSON 上限。
+
+**配额在存入前检查。** 单文件 ≤ 8 MiB、单组累计 ≤ 32 MiB、单客户端 ≤ 32 个文件。
+组的当前用量是新文件的计量基准，因此两个客户端竞争最后一段配额时不会都成功。
+
+**提供者断开即回收。** WSS 循环在 `detach_writer` 之后调用 `ShareStore::remove_owner`：
+断开的客户端不再能提供文件，字节随之释放、组配额归还。`remove` 先校验归属再删除——
+先删后校验会让任何组内成员销毁别人的上传。
+
+**内联预览是 Host 的判定。** 只有不带活动内容的类型可内联（`text/plain`、
+`text/markdown`、`text/csv`、`application/json`、`application/pdf`、常见位图）；
+`text/html`、`image/svg+xml` 等一律 `attachment`，避免在他人会话里执行脚本。文本响应的
+`Content-Type` 必须带 `; charset=utf-8`，否则浏览器按默认编码解码，UTF-8 中文变乱码。
+文件名与 MIME 进响应头前必须过滤控制字符、引号、斜杠与 CR/LF；文件名按
+`filename="ascii"` + `filename*=UTF-8''pct` 双写。
+
+**页面定位。** 首屏说明 conex 是什么（可嵌入的双向能力路由内核），hello 与文件是它做的
+两件事而非产品本身。`hello` 场景把问候渲染为消息泡泡（发出方带实测往返，未回应时显示
+「等待回应…」）；`状态` 页显示客户端数、分组数与每组延迟。默认标签是 hello 场景。

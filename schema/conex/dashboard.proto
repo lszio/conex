@@ -58,6 +58,13 @@ message ClientSummary {
   uint64 last_seen_at_ms = 6;
   // Self-reported by the client's own page; never trusted for access.
   string user_agent = 7;
+  // Host-derived hash of `profile.group`. The group text is a self-declared
+  // label; this hash is the isolation key, so two clients are peers only when
+  // their keys match.
+  string group_key = 8;
+  // Last round trip this client was measured on, in milliseconds. 0 means no
+  // hello has been exchanged with it yet.
+  uint64 last_round_trip_ms = 9;
 }
 
 message ClientListResponse {
@@ -88,4 +95,34 @@ message ClientHelloResult {
   // the target's socket until its pong is read back.
   uint64 round_trip_ms = 2;
   string reply = 3;
+}
+
+// `client/status`: what the host sees right now. Aggregate counters plus one
+// row per group, so a page can show "N clients, M groups" and the measured
+// latency of every group without polling anything else.
+//
+// Latency is only ever a real measurement: `lastRoundTripMs` and
+// `avgRoundTripMs` are 0 until a hello has completed, and 0 in the JSON plane
+// is rendered as "<1 ms", never as a fabricated number.
+message ClientStatusRequest {}
+
+message GroupStatus {
+  // Host-derived isolation key; the group text itself is a display label the
+  // visitor chose and is not part of the key.
+  string group_key = 1;
+  // The group's own label when every member declared the same one, empty when
+  // members differ.
+  string label = 2;
+  uint32 clients_online = 3;
+  uint64 last_round_trip_ms = 4;
+  uint64 avg_round_trip_ms = 5;
+  uint32 round_trips = 6;
+  uint32 files_shared = 7;
+  uint64 shared_bytes = 8;
+}
+
+message ClientStatusResponse {
+  uint32 clients_online = 1;
+  uint32 groups_online = 2;
+  repeated GroupStatus groups = 3;
 }

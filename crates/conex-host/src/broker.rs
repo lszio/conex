@@ -424,15 +424,43 @@ impl Broker {
         match call.method.as_str() {
             "client/list" => {
                 object(&call.input)?;
-                // A hidden client is not listed to anyone, including itself:
-                // the page renders the caller's own row from `client/profile`.
+                // The group is the isolation boundary: a caller only ever sees
+                // its own group's clients. A hidden client is not listed to
+                // anyone including itself; the page renders its own row from
+                // `client/profile`.
                 let rows: Vec<Value> = registry
-                    .list()
+                    .list_for_group(link_id)
                     .into_iter()
                     .filter(|entry| entry.profile.visible)
                     .map(client_to_json)
                     .collect();
                 Ok(json!({ "clients": rows }))
+            }
+            "client/status" => {
+                object(&call.input)?;
+                // Aggregate counters are host-wide on purpose: the status page
+                // answers "how many clients and groups are on this host", which
+                // is a fact about the process rather than about the caller. No
+                // individual row, name or file is projected here, so it leaks
+                // nothing a group-scoped `client/list` would not.
+                let groups = registry.group_status();
+                Ok(json!({
+                    "clientsOnline": registry.online_count().to_string(),
+                    "groupsOnline": groups.len().to_string(),
+                    "groups": groups
+                        .iter()
+                        .map(|group| json!({
+                            "groupKey": group.group_key,
+                            "label": group.label,
+                            "clientsOnline": group.clients_online.to_string(),
+                            "lastRoundTripMs": group.last_round_trip_ms.to_string(),
+                            "avgRoundTripMs": group.avg_round_trip_ms.to_string(),
+                            "roundTrips": group.round_trips.to_string(),
+                            "filesShared": group.files_shared.to_string(),
+                            "sharedBytes": group.shared_bytes.to_string(),
+                        }))
+                        .collect::<Vec<Value>>(),
+                }))
             }
             "client/profile" => {
                 let input = object(&call.input)?;
@@ -497,6 +525,11 @@ fn client_to_json(entry: crate::clients::ClientEntry) -> Value {
         "connectedAtMs": entry.connected_at_ms.to_string(),
         "lastSeenAtMs": entry.last_seen_at_ms.to_string(),
         "userAgent": entry.user_agent,
+        "groupKey": entry.group_key,
+        "lastRoundTripMs": entry.last_round_trip_ms.to_string(),
+        "avgRoundTripMs": entry.avg_round_trip_ms().to_string(),
+        "filesShared": entry.files_shared.to_string(),
+        "sharedBytes": entry.shared_bytes.to_string(),
     })
 }
 

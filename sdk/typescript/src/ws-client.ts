@@ -7,6 +7,7 @@ import type {
   ClientListResponse,
   ClientProfile,
   ClientProfileResponse,
+  ClientStatusResponse,
   ConnectionListResponse,
 } from "./generated/conex/dashboard";
 import type {
@@ -181,9 +182,20 @@ export class ConexWsClient {
     return this.call<ConnectionListResponse>("connection/list", "", input);
   }
 
-  /** Online clients that chose to be visible. */
+  /** Online clients that chose to be visible, in the caller's own group. */
   listClients(input: Record<string, never> = {}): Promise<ClientListResponse> {
     return this.call<ClientListResponse>("client/list", "", input);
+  }
+
+  /**
+   * Host-wide counters plus one row per group: how many clients and groups are
+   * on this host, and the latency actually measured in each group.
+   *
+   * The latency fields are 0 (as strings) until a hello in that group has
+   * completed. Treat 0 as "not measured" rather than as a fast connection.
+   */
+  listClientStatus(input: Record<string, never> = {}): Promise<ClientStatusResponse> {
+    return this.call<ClientStatusResponse>("client/status", "", input);
   }
 
   /** Declare this visitor's own name, group and visibility. */

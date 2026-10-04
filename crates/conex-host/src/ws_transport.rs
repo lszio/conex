@@ -62,6 +62,8 @@ pub struct WssState {
     pub ui_link_id: Option<String>,
     /// Visitor client registry, present for UI links only.
     pub clients: Option<Arc<crate::clients::ClientRegistry>>,
+    /// Group-scoped file sharing; used to drop a link's files on disconnect.
+    pub shares: Option<Arc<crate::share::ShareStore>>,
     /// `Sec-WebSocket-Protocol`-free client metadata the page declares; shown
     /// in the list as a hint and never trusted for access.
     pub user_agent: String,
@@ -92,6 +94,7 @@ impl WssState {
             ui_links: None,
             ui_link_id: None,
             clients: None,
+            shares: None,
             user_agent: String::new(),
         }
     }
@@ -323,6 +326,7 @@ pub async fn ws_handler_with_state(
     wss_state.web_session = web_session.clone();
     wss_state.ui_links = ui_links_ref.clone();
     wss_state.clients = Some(state.clients.clone());
+    wss_state.shares = Some(state.shares.clone());
     if let Some(session) = web_session.as_ref() {
         wss_state.ui_link_id = Some(session.link_id.clone());
         // A client exists as soon as its link is minted so it can be listed;
@@ -957,6 +961,13 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
         // Stop being addressable, and drop the entry so the list does not
         // keep advertising a link whose socket is gone.
         clients.detach_writer(link_id);
+        // A disconnected client cannot offer files any more. Reclaiming the
+        // bytes here is what keeps the store bounded on a long-running public
+        // host; without it a page that reconnects a few times would leave
+        // every previous upload readable and charged to its group.
+        if let Some(shares) = state.shares.as_ref() {
+            shares.remove_owner(link_id);
+        }
         clients.remove(link_id);
     }
 }
