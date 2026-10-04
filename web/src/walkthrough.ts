@@ -104,12 +104,15 @@ export function renderWalkthrough(host: HTMLElement, replay?: HTMLButtonElement)
   const play = (nodes: HTMLElement[]): void => {
     let index = 0;
     const step = (): void => {
-      if (index > 0) nodes[index - 1]?.classList.add("done");
+      // `active` marks the current step only, and is moved forward each tick:
+      // a finished run must not leave every step highlighted.
+      if (index > 0) nodes[index - 1]?.classList.replace("active", "done");
       nodes[index]?.classList.add("active");
       index += 1;
       if (index >= nodes.length) {
-        window.clearInterval(timer);
-        nodes[nodes.length - 1]?.classList.add("done");
+        window.clearTimeout(timer);
+        // The last step finishes too, so the block rests in a single state.
+        nodes[nodes.length - 1]?.classList.replace("active", "done");
         return;
       }
       timer = window.setTimeout(step, STEP_MS);
@@ -119,11 +122,24 @@ export function renderWalkthrough(host: HTMLElement, replay?: HTMLButtonElement)
 
   const start = (): void => {
     clear();
-    play(build());
+    const nodes = build();
+    // A visitor who prefers reduced motion, or who is reading with the tab in
+    // the background, gets the finished state rather than a sequence that
+    // plays out unseen.
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || document.hidden) {
+      nodes.forEach((node) => node.classList.add("done"));
+      return;
+    }
+    play(nodes);
   };
 
   replay?.addEventListener("click", () => {
     start();
+  });
+  // Replay once on return to the tab: the steps are the point of the section,
+  // and arriving at a finished block should not require hunting for replay.
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) start();
   });
   start();
 }
