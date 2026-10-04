@@ -75,11 +75,11 @@ if (!(await llms.exists())) {
 }
 await Bun.write(`${outdir}/llms.txt`, llms);
 
-// The bench report the performance page renders. Committed with the code so
-// the page has data without needing a measurement at build time.
-const perf = Bun.file(`${root}/src/perf-data.json`);
-if (!(await perf.exists())) {
+// The bench report the performance page renders is imported into the bundle
+// from src/perf-data.json, so it ships inside app.js rather than as a separate
+// file the Host would have to be taught to serve. Its presence is still
+// checked: a missing report means the performance page would render nothing.
+if (!(await Bun.file(`${root}/src/perf-data.json`).exists())) {
   console.error("web/src/perf-data.json is missing; run `cargo xtask bench --suite hello`");
   process.exit(1);
 }
-await Bun.write(`${outdir}/perf-data.json`, perf);
