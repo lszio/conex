@@ -127,6 +127,10 @@ pub async fn issue_ticket(
         let capabilities: Vec<String> = vec![
             "endpoint/list".into(),
             "connection/list".into(),
+            "client/list".into(),
+            "client/profile".into(),
+            "client/status".into(),
+            "client/hello".into(),
             "source/list".into(),
             "source/read".into(),
             "source/search".into(),
@@ -134,7 +138,10 @@ pub async fn issue_ticket(
         let ticket = match side.tickets.issue(
             &session.caller.principal_id,
             &session.caller.tenant_id,
-            web.origin(),
+            // Bound to the origin the session was created on, not the
+            // configured primary: the WSS upgrade re-checks this string, so a
+            // preview-domain session must be bound to its own domain.
+            &session.origin,
             target_host,
             "ui",
             capabilities,

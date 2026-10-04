@@ -630,6 +630,131 @@ pub struct ConnectionListResponse {
     #[prost(message, repeated, tag = "2")]
     pub agent_links: ::prost::alloc::vec::Vec<AgentLinkSummary>,
 }
+/// Client panel messages. A "client" is a browser visitor: one UI link with a
+/// self-declared name, group and visibility. Callers may only see clients that
+/// have `visible` set; hidden clients are not listed to anyone, not even to
+/// themselves as rows (their own row is still addressable by linkId).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ClientListRequest {}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ClientProfile {
+    /// Self-declared, session-scoped. Never authenticated, never reused as an
+    /// identity: two clients may pick the same name.
+    #[prost(string, tag = "1")]
+    pub display_name: ::prost::alloc::string::String,
+    /// Optional free-form bucket the visitor can use to sort their own view.
+    #[prost(string, tag = "2")]
+    pub group: ::prost::alloc::string::String,
+    /// When false the client disappears from every other client's list.
+    #[prost(bool, tag = "3")]
+    pub visible: bool,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ClientSummary {
+    #[prost(string, tag = "1")]
+    pub link_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub principal_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub tenant_id: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "4")]
+    pub profile: ::core::option::Option<ClientProfile>,
+    #[prost(uint64, tag = "5")]
+    pub connected_at_ms: u64,
+    #[prost(uint64, tag = "6")]
+    pub last_seen_at_ms: u64,
+    /// Self-reported by the client's own page; never trusted for access.
+    #[prost(string, tag = "7")]
+    pub user_agent: ::prost::alloc::string::String,
+    /// Host-derived hash of `profile.group`. The group text is a self-declared
+    /// label; this hash is the isolation key, so two clients are peers only when
+    /// their keys match.
+    #[prost(string, tag = "8")]
+    pub group_key: ::prost::alloc::string::String,
+    /// Last round trip this client was measured on, in milliseconds. 0 means no
+    /// hello has been exchanged with it yet.
+    #[prost(uint64, tag = "9")]
+    pub last_round_trip_ms: u64,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ClientListResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub clients: ::prost::alloc::vec::Vec<ClientSummary>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ClientProfileRequest {
+    #[prost(message, optional, tag = "1")]
+    pub profile: ::core::option::Option<ClientProfile>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ClientProfileResponse {
+    #[prost(message, optional, tag = "1")]
+    pub self_: ::core::option::Option<ClientSummary>,
+}
+/// Sends a greeting to one online client. The host pushes
+/// `conex/client-hello` to the target link; the target replies with
+/// `conex/client-pong`, which the host reports back to the sender together
+/// with the measured round-trip time. An offline or hidden target fails with
+/// `unavailable` rather than being silently dropped.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ClientHelloRequest {
+    #[prost(string, tag = "1")]
+    pub target_link_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub text: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ClientHelloResult {
+    #[prost(string, tag = "1")]
+    pub target_link_id: ::prost::alloc::string::String,
+    /// Round-trip milliseconds measured by the host, from handing the frame to
+    /// the target's socket until its pong is read back.
+    #[prost(uint64, tag = "2")]
+    pub round_trip_ms: u64,
+    #[prost(string, tag = "3")]
+    pub reply: ::prost::alloc::string::String,
+}
+/// `client/status`: what the host sees right now. Aggregate counters plus one
+/// row per group, so a page can show "N clients, M groups" and the measured
+/// latency of every group without polling anything else.
+///
+/// Latency is only ever a real measurement: `lastRoundTripMs` and
+/// `avgRoundTripMs` are 0 until a hello has completed, and 0 in the JSON plane
+/// is rendered as "<1 ms", never as a fabricated number.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ClientStatusRequest {}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GroupStatus {
+    /// Host-derived isolation key; the group text itself is a display label the
+    /// visitor chose and is not part of the key.
+    #[prost(string, tag = "1")]
+    pub group_key: ::prost::alloc::string::String,
+    /// The group's own label when every member declared the same one, empty when
+    /// members differ.
+    #[prost(string, tag = "2")]
+    pub label: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "3")]
+    pub clients_online: u32,
+    #[prost(uint64, tag = "4")]
+    pub last_round_trip_ms: u64,
+    #[prost(uint64, tag = "5")]
+    pub avg_round_trip_ms: u64,
+    #[prost(uint32, tag = "6")]
+    pub round_trips: u32,
+    #[prost(uint32, tag = "7")]
+    pub files_shared: u32,
+    #[prost(uint64, tag = "8")]
+    pub shared_bytes: u64,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ClientStatusResponse {
+    #[prost(uint32, tag = "1")]
+    pub clients_online: u32,
+    #[prost(uint32, tag = "2")]
+    pub groups_online: u32,
+    #[prost(message, repeated, tag = "3")]
+    pub groups: ::prost::alloc::vec::Vec<GroupStatus>,
+}
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct AuthorizedScope {
     #[prost(string, tag = "1")]

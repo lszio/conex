@@ -70,6 +70,9 @@ pub struct BrokerDeps {
     /// Anonymous visitor principal (plan M1.1); `connection/list` isolates
     /// these callers to their own browser link and hides agent declarations.
     pub guest_principal: Option<String>,
+    /// Visitor-facing client registry backing `client/list`, `client/profile`
+    /// and `client/hello`.
+    pub clients: Option<Arc<crate::clients::ClientRegistry>>,
     /// M3: reverse-agent links used to fetch remote content slices after the
     /// policy-authorized probe.
     pub remote: Option<Arc<crate::remote::RemoteConnections>>,
@@ -139,6 +142,9 @@ impl Broker {
         }
         if call.method == "connection/list" {
             return self.dispatch_connection_list(&call).await;
+        }
+        if call.method.starts_with("client/") {
+            return self.dispatch_client(&call).await;
         }
         let duration = call.deadline.saturating_duration_since(Instant::now());
         self.host
@@ -396,6 +402,135 @@ impl Broker {
             "agentLinks": agent_links,
         }))
     }
+
+    /// `client/*`: the visitor-facing client panel. Every method requires a
+    /// bound UI link, because a client is defined by its link.
+    async fn dispatch_client(&self, call: &BrokerCall) -> CallResult<Value> {
+        if call.role != "ui" {
+            return Err(CallError::new(
+                conex_proto::ErrorCode::Forbidden,
+                "client methods are restricted to the ui role",
+            ));
+        }
+        let registry = self
+            .deps
+            .clients
+            .as_ref()
+            .ok_or_else(|| unavailable("client registry is not configured"))?;
+        let link_id = call
+            .link_id
+            .as_deref()
+            .ok_or_else(|| bad_req("client methods require a browser link"))?;
+        match call.method.as_str() {
+            "client/list" => {
+                object(&call.input)?;
+                // The group is the isolation boundary: a caller only ever sees
+                // its own group's clients. A hidden client is not listed to
+                // anyone including itself; the page renders its own row from
+                // `client/profile`.
+                let rows: Vec<Value> = registry
+                    .list_for_group(link_id)
+                    .into_iter()
+                    .filter(|entry| entry.profile.visible)
+                    .map(client_to_json)
+                    .collect();
+                Ok(json!({ "clients": rows }))
+            }
+            "client/status" => {
+                object(&call.input)?;
+                // Aggregate counters are host-wide on purpose: the status page
+                // answers "how many clients and groups are on this host", which
+                // is a fact about the process rather than about the caller. No
+                // individual row, name or file is projected here, so it leaks
+                // nothing a group-scoped `client/list` would not.
+                let groups = registry.group_status();
+                Ok(json!({
+                    "clientsOnline": registry.online_count().to_string(),
+                    "groupsOnline": groups.len().to_string(),
+                    "groups": groups
+                        .iter()
+                        .map(|group| json!({
+                            "groupKey": group.group_key,
+                            "label": group.label,
+                            "clientsOnline": group.clients_online.to_string(),
+                            "lastRoundTripMs": group.last_round_trip_ms.to_string(),
+                            "avgRoundTripMs": group.avg_round_trip_ms.to_string(),
+                            "roundTrips": group.round_trips.to_string(),
+                            "filesShared": group.files_shared.to_string(),
+                            "sharedBytes": group.shared_bytes.to_string(),
+                        }))
+                        .collect::<Vec<Value>>(),
+                }))
+            }
+            "client/profile" => {
+                let input = object(&call.input)?;
+                let profile_value = input.get("profile").cloned().unwrap_or(Value::Null);
+                let profile = crate::clients::ClientProfile::from_input(&profile_value)
+                    .ok_or_else(|| {
+                        CallError::new(
+                            conex_proto::ErrorCode::BadRequest,
+                            "profile must be an object",
+                        )
+                    })?;
+                let entry = registry
+                    .set_profile(link_id, profile)
+                    .ok_or_else(|| unavailable("client link is gone"))?;
+                Ok(json!({ "self": client_to_json(entry) }))
+            }
+            "client/hello" => {
+                let input = object(&call.input)?;
+                let target = input
+                    .get("targetLinkId")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
+                if target.is_empty() {
+                    return Err(CallError::new(
+                        conex_proto::ErrorCode::BadRequest,
+                        "targetLinkId is required",
+                    ));
+                }
+                let text = input
+                    .get("text")
+                    .and_then(Value::as_str)
+                    .unwrap_or("hello")
+                    .chars()
+                    .take(200)
+                    .collect::<String>();
+                let (round_trip_ms, reply) = registry.send_hello(target, link_id, &text).await?;
+                Ok(json!({
+                    "targetLinkId": target,
+                    "roundTripMs": round_trip_ms.to_string(),
+                    "reply": reply,
+                }))
+            }
+            other => Err(CallError::new(
+                conex_proto::ErrorCode::BadRequest,
+                format!("unknown client method: {other}"),
+            )),
+        }
+    }
+}
+
+fn client_to_json(entry: crate::clients::ClientEntry) -> Value {
+    json!({
+        "linkId": entry.link_id,
+        "principalId": entry.principal_id,
+        "tenantId": entry.tenant_id,
+        "profile": {
+            "displayName": entry.profile.label(&entry.link_id),
+            "declaredName": entry.profile.display_name,
+            "group": entry.profile.group,
+            "visible": entry.profile.visible,
+        },
+        "connectedAtMs": entry.connected_at_ms.to_string(),
+        "lastSeenAtMs": entry.last_seen_at_ms.to_string(),
+        "userAgent": entry.user_agent,
+        "groupKey": entry.group_key,
+        "lastRoundTripMs": entry.last_round_trip_ms.to_string(),
+        "avgRoundTripMs": entry.avg_round_trip_ms().to_string(),
+        "filesShared": entry.files_shared.to_string(),
+        "sharedBytes": entry.shared_bytes.to_string(),
+    })
 }
 
 fn find_contract(method: &str) -> Option<MethodContract> {

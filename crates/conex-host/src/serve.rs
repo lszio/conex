@@ -37,6 +37,7 @@ pub struct BuiltHost {
     pub broker: Option<Arc<Broker>>,
     pub host_side: Option<HostSide>,
     pub catalog: Option<Arc<crate::catalog::EndpointCatalog>>,
+    pub clients: Arc<crate::clients::ClientRegistry>,
     pub p1_provides: Vec<String>,
 }
 
@@ -252,6 +253,9 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
     } else {
         None
     };
+    // One client registry per process: the broker lists and addresses, the
+    // WSS loop registers writers and reads pongs, both hold the same Arc.
+    let clients = Arc::new(crate::clients::ClientRegistry::new());
     let broker = if p1_active {
         let deps = BrokerDeps {
             content: content_store.clone(),
@@ -264,6 +268,7 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
                 .web_guest
                 .as_ref()
                 .map(|guest| guest.principal_id.clone()),
+            clients: Some(clients.clone()),
             remote: host_side.as_ref().map(|side| side.connections.clone()),
         };
         Some(Arc::new(Broker::new(host.clone(), deps)))
@@ -306,6 +311,7 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
         broker,
         host_side,
         catalog,
+        clients,
         p1_provides,
     })
 }
@@ -314,9 +320,14 @@ pub fn build_router(config: &HostConfig) -> Result<Router, CallError> {
     let built = build(config)?;
     let ui_links = Arc::new(crate::ui_links::UiLinkRegistry::new());
     let web_auth = built.host_side.as_ref().and_then(|side| {
-        config.web_origin.as_ref().map(|origin| {
+        // The accepted-origin set: the primary plus any additional configured
+        // ones, so one image works under production and preview domains.
+        let mut origins: Vec<String> = config.web_origin.iter().cloned().collect();
+        origins.extend(config.web_origins.iter().cloned());
+        origins.dedup();
+        (!origins.is_empty()).then(|| {
             Arc::new(crate::web_auth::WebAuth::with_guest(
-                origin.clone(),
+                origins,
                 !config.allow_loopback_http,
                 side.tickets.clone(),
                 ui_links.clone(),
@@ -339,6 +350,8 @@ pub fn build_router(config: &HostConfig) -> Result<Router, CallError> {
         p1_provides: built.p1_provides.clone(),
         web_auth,
         ui_links,
+        clients: built.clients.clone(),
+        shares: Arc::new(crate::share::ShareStore::new()),
     });
     let mut base = build_p0_router();
     if built.broker.is_some() && built.host_side.is_some() {

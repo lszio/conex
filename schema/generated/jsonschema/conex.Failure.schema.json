@@ -614,6 +614,179 @@
       ],
       "type": "object"
     },
+    "conex.ClientHelloRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "targetLinkId": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "targetLinkId",
+        "text"
+      ],
+      "type": "object"
+    },
+    "conex.ClientHelloResult": {
+      "additionalProperties": false,
+      "properties": {
+        "reply": {
+          "type": "string"
+        },
+        "roundTripMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "targetLinkId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "targetLinkId",
+        "roundTripMs",
+        "reply"
+      ],
+      "type": "object"
+    },
+    "conex.ClientListRequest": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    },
+    "conex.ClientListResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "clients": {
+          "items": {
+            "$ref": "#/$defs/conex.ClientSummary"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "conex.ClientProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "displayName": {
+          "type": "string"
+        },
+        "group": {
+          "type": "string"
+        },
+        "visible": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "displayName",
+        "group",
+        "visible"
+      ],
+      "type": "object"
+    },
+    "conex.ClientProfileRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "profile": {
+          "$ref": "#/$defs/conex.ClientProfile"
+        }
+      },
+      "type": "object"
+    },
+    "conex.ClientProfileResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "self": {
+          "$ref": "#/$defs/conex.ClientSummary"
+        }
+      },
+      "type": "object"
+    },
+    "conex.ClientStatusRequest": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    },
+    "conex.ClientStatusResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "clientsOnline": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "groups": {
+          "items": {
+            "$ref": "#/$defs/conex.GroupStatus"
+          },
+          "type": "array"
+        },
+        "groupsOnline": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "clientsOnline",
+        "groupsOnline"
+      ],
+      "type": "object"
+    },
+    "conex.ClientSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "connectedAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "groupKey": {
+          "type": "string"
+        },
+        "lastRoundTripMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "lastSeenAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "linkId": {
+          "type": "string"
+        },
+        "principalId": {
+          "type": "string"
+        },
+        "profile": {
+          "$ref": "#/$defs/conex.ClientProfile"
+        },
+        "tenantId": {
+          "type": "string"
+        },
+        "userAgent": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "linkId",
+        "principalId",
+        "tenantId",
+        "connectedAtMs",
+        "lastSeenAtMs",
+        "userAgent",
+        "groupKey",
+        "lastRoundTripMs"
+      ],
+      "type": "object"
+    },
     "conex.CommittedTarget": {
       "additionalProperties": false,
       "properties": {
@@ -922,6 +1095,58 @@
           "type": "string"
         }
       },
+      "type": "object"
+    },
+    "conex.GroupStatus": {
+      "additionalProperties": false,
+      "properties": {
+        "avgRoundTripMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "clientsOnline": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "filesShared": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "groupKey": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "lastRoundTripMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "roundTrips": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sharedBytes": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "groupKey",
+        "label",
+        "clientsOnline",
+        "lastRoundTripMs",
+        "avgRoundTripMs",
+        "roundTrips",
+        "filesShared",
+        "sharedBytes"
+      ],
       "type": "object"
     },
     "conex.HelloRequest": {

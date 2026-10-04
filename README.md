@@ -2,12 +2,14 @@
 
 conex（connect + nexus）是一个可嵌入的双向能力路由内核及可选独立进程；工作协议名 `conex`。
 
-**当前状态（2026-10-03）：** P0、P1、Connected landing 已交付；**多主机内容 M0–M5 已交付**（分支 `refactor/arch`，未提交）：内容契约冻结（endpointId+revision 定位、blob/get 互斥目标、protobuf 二进制 DataChunk 通道）、访客会话与 blob 所有权授权、逐端点 Agent 注册生命周期（staged 链接/逐端点 review）、同源 `/content`（Range/ETag/防注入/流式取消）、公共浏览页面（文本/图片/视频/DOCX/ZIP 受限预览，1440/390 双视口 38 项浏览器检查全过）。逐项证据：[多主机内容验证记录](docs/verification/multi-host-content.md)；剩余 M4（Notez 接入）与 M6（验收收口）见计划。历史：P0（`e649ded`）、P1（`f6f8edc`/`4d5ff73`）交付记录见 [P1 验证记录](docs/verification/p1.md)。
+**当前状态（2026-10-05）：** 落地页从「hello 单场景」改为**项目介绍 + 两个场景 + 状态**（分支 `refactor/arch`）：首屏说明 conex 是双向能力路由内核，hello 与文件共享是它做的两件事。`group` 由自述标签升级为**隔离键**（SHA-256 派生），不同组互相不可见、不可问候、不可访问文件；`client/status` 报出全 Host 在线客户端数、分组数与每组实测延迟（未测量显示「尚未测量」而非 0 ms）；文件场景支持选择文件或整个目录共享给同组，按提供者分卡片展示，可预览与下载。契约见 [connected-landing §10](docs/contracts/connected-landing.md)，证据见 [L12 验证记录](docs/verification/landing-page.md)。P0、P1、Connected landing、多主机内容 M0–M5 已交付。剩余 M4（Notez 接入）与 M6（验收收口）…
 
 ## 文档
 
 完整地图与阅读顺序见 [docs/README.md](docs/README.md)。
 
+- 落地页验证记录（当前）：[docs/verification/landing-page.md](docs/verification/landing-page.md)
+- Dokploy 部署运行手册：[docs/runbooks/dokploy.md](docs/runbooks/dokploy.md)
 - 设计（权威）：[docs/design/2026-09-14-conex-design.md](docs/design/2026-09-14-conex-design.md)
 - 路线图：[docs/plans/2026-09-15-conex-roadmap.md](docs/plans/2026-09-15-conex-roadmap.md)
 - 多主机内容计划（当前）：[docs/plans/2026-10-01-conex-multi-host-content.md](docs/plans/2026-10-01-conex-multi-host-content.md)

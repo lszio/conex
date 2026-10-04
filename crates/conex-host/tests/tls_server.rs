@@ -35,6 +35,27 @@ fn plaintext_needs_loopback_and_flag() {
 }
 
 #[test]
+fn plaintext_bind_behind_proxy_needs_its_own_flag() {
+    let dir = tempfile::tempdir().unwrap();
+    // A reverse-proxy container binds 0.0.0.0 in plaintext. This is legal
+    // only under the explicit bind flag, and `allow_loopback_http` alone
+    // must never be enough for a non-loopback address.
+    let path = write_config(
+        dir.path(),
+        "proxy.toml",
+        &base_config("0.0.0.0:8787", false),
+    );
+    assert!(HostConfig::load(&path).is_err());
+
+    let body = format!(
+        "{}\nallow_plaintext_bind = true\n",
+        base_config("0.0.0.0:8787", false)
+    );
+    let path = write_config(dir.path(), "proxy-allowed.toml", &body);
+    HostConfig::load(&path).expect("explicit plaintext bind behind a proxy must load");
+}
+
+#[test]
 fn rejects_duplicate_endpoints_unknown_kind_and_unknown_fields() {
     let dir = tempfile::tempdir().unwrap();
     let endpoints = "\

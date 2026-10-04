@@ -70,6 +70,7 @@ async fn make_broker(
     );
     let side = HostSide::new();
     let deps = BrokerDeps {
+        clients: None,
         content: Some(Arc::new(content)),
         session: Some(Arc::new(session)),
         operation: Some(Arc::new(operation)),
