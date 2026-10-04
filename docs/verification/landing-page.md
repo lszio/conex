@@ -145,6 +145,20 @@ $ cargo test -p conex-host --lib client_pong # 2/2
    也正常，warmup 也消不掉。规模不变、位置固定、值几乎恒为 41 ms，与 Linux
    delayed-ACK 量级吻合，但未做抓包确认，因此性能页照实展示该 p95，不做粉饰。
 
+## 6b. 线上验收（shadcn 版本）
+
+```console
+both connected, no credential
+tabs: 客户端 | 介绍 | 性能
+A sees: [ 'alice', 'alice-2' ]      # 两人同名 → Host 加后缀
+B sees: [ 'alice', 'alice-2' ]
+A name after reload: alice          # localStorage 缓存生效
+perf rows: 5 | first p50: <1 ms     # 性能页渲染 bench 数据
+intro headings: 这是什么 | 浏览器只连一处 | 名字只是显示 | hello 是真往返
+after hide, A sees: [ 'alice' ]    # 只剩自己
+errors: none
+```
+
 ## 7. 未验证项
 
 - 多访客高并发（>50）下的广播与回收行为。
