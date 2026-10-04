@@ -1,6 +1,6 @@
 # Dokploy 部署运行手册
 
-> 状态：**公开落地页已部署并验证**（2026-10-04）。`https://conex.lszio.space` 跑单容器 guest-only 演示栈：访客免凭据浏览、真实只读调用、`/llms.txt` 可用。逐项实测输出见 [落地页验证记录](../verification/landing-page.md)。
+> 状态：**公开落地页已部署并验证**（2026-10-04），**2026-10-05 切换到新页面并开启 PR preview**（§9、§10）。`https://conex.lszio.space` 跑单容器 guest-only 演示栈：访客免凭据浏览、真实只读调用、`/llms.txt` 可用。逐项实测输出见 [落地页验证记录](../verification/landing-page.md)。
 >
 > 上游：[connected-landing 契约](../contracts/connected-landing.md)、[connected-landing 运行手册](connected-landing.md)、[设计 v6](../design/2026-09-14-conex-design.md)。
 
@@ -99,3 +99,85 @@ curl -sSi $ORIGIN/web/session | head -3                           # 200 + Set-Co
 | 视频能播但拖不动 | 响应缺 `Content-Length` | 已修（`content_http.rs`）；旧镜像需重建 |
 | 部署一直 `running`、日志不增长、站点 502 | 基础镜像浮动 tag 的 manifest 拉取卡死；Dokploy 不允许并发起第二次部署 | 已把三个基础镜像固定为 digest；卡死后先 `application.stop` 再 redeploy |
 | Agent `Connection refused` 持续 | host 未就绪或网络不通 | 启动握手前那两行属正常；持续出现查 `depends_on` 与网络 |
+
+
+## 8. 多域名：一份镜像服务生产与 preview
+
+一个镜像会被部署到**多个域名**：生产域名，加上每个 PR 一个 preview 域名。而
+`web_origin` 驱动四处校验（`/web/login` 与 `/tickets` 的 Origin 比对、CSRF、ticket
+绑定、WSS 升级的 Origin 比对）。单值 `web_origin` 会让 preview 部署「页面能打开、
+所有调用 401」——正是 §4 记录的换域名陷阱，只是这次由每个 PR 自动触发。
+
+`web_origins` 追加可接受 origin：
+
+```toml
+web_origin = "https://conex.lszio.space"     # 主 origin
+web_origins = [
+  "https://preview-conex.lszio.space",      # preview 通配展开后的实际域名
+]
+```
+
+规则：
+
+- `WebAuth` 持有 origin **集合**；会话记录**自己被创建时那个** origin，签发的 ticket
+  绑定同一个值。不这样绑定，preview 会话会被钉在生产 origin 上，WSS 升级直接被拒。
+- 未配置的 origin 一律 401；格式非法的 `web_origins` 条目在**加载期**就失败，不等到
+  第一个请求——不能带着一个永远匹配不上的 origin 启动。
+- 通配符不在配置里展开。`docker/host.toml` 保持可审计的明文列表，用到哪种 preview
+  域名形态就加一行。
+
+实测（本地真实 host，`/tickets` 带上有效 CSRF）：
+
+```console
+production origin                  bound origin: https://conex.lszio.space          201
+preview origin (configured)         bound origin: https://preview-conex.lszio.space 201
+unconfigured origin                bound origin: None                             401
+```
+
+## 9. PR preview 环境
+
+Dokploy 原生 preview deployment：每个 PR 一个独立容器 + 独立域名，互不影响，`limit`
+之外自动回收。已为 Conex 应用（`fEKm9C8gzoKBXN94LAFq4`）开启：
+
+| 字段 | 值 | 含义 |
+|---|---|---|
+| `isPreviewDeploymentsActive` | `true` | 开启 |
+| `previewWildcard` | `preview-conex` | 域名形如 `preview-conex.<pr>.lszio.space` |
+| `previewHttps` / `previewCertificateType` | `true` / `letsencrypt` | 与生产一致 |
+| `previewPort` | `8787` | 与生产一致 |
+| `previewLimit` | `3` | 同时存活的 preview 上限 |
+| `previewRequireCollaboratorPermissions` | `true` | 仅协作者可触发 |
+
+**前置条件：通配 DNS。** 2026-10-05 实测本机无法判定——本地 DNS 被代理劫持成
+`198.18.x` fake-IP，直连权威 NS（`dns11.hichina.com`）拿到的也是同样地址。判定方法是
+穿过代理实际请求：
+
+```console
+$ curl -o /dev/null -w '%{http_code}' https://conex.lszio.space/          # 200
+$ curl -o /dev/null -w '%{http_code}' https://random-nonexistent.lszio.space/  # 000
+```
+
+`000` 说明随机子域没有记录，**通配未配置**。加一条 `*.lszio.space` 指向当前 A 记录
+后，preview 域名才能签发证书并路由。
+
+未加通配记录前：preview 容器可以构建启动，但域名解析/证书会失败，页面访问不到。
+
+## 10. 生产分支切换
+
+Dokploy 应用 `fEKm9C8gzoKBXN94LAFq4` 部署 `branch`。切换即改该字段并重新部署：
+
+```bash
+dokploy application update --applicationId fEKm9C8gzoKBXN94LAFq4 --branch refactor/arch
+dokploy application deploy  --applicationId fEKm9C8gzoKBXN94LAFq4
+```
+
+**`application.redeploy` 与 `application.deploy` 都不会新建部署记录**（返回
+`json: null`，`deployments` 列表不变），只有 `dokploy application deploy` 真的入队。
+判据是 `application.one` 里最新一条 `deployments[0].status` 变成 `running`。
+
+切换前先确认线上现状，便于回退：
+
+```console
+$ curl -sS https://conex.lszio.space/ | grep -o '<title>[^<]*</title>'
+<title>Conex · hello</title>
+```
