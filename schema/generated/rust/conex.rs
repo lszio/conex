@@ -692,27 +692,40 @@ pub struct ClientProfileResponse {
     pub self_: ::core::option::Option<ClientSummary>,
 }
 /// Sends a greeting to one online client. The host pushes
-/// `conex/client-hello` to the target link; the target replies with
+/// `conex/client-hello` to the target link; the target answers with
 /// `conex/client-pong`, which the host reports back to the sender together
 /// with the measured round-trip time. An offline or hidden target fails with
 /// `unavailable` rather than being silently dropped.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ClientHelloRequest {
     #[prost(string, tag = "1")]
     pub target_link_id: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
     pub text: ::prost::alloc::string::String,
+    /// Callback arguments: the fields the sender wants answered. An empty
+    /// payload is a bare greeting — the target's SDK acknowledges it
+    /// immediately, so a latency sample never waits on a human. A non-empty
+    /// payload makes it a question: the frame is pushed with `ask`, the
+    /// auto-acknowledge is skipped, and the round trip is only measured once the
+    /// target actually answers it. Untrusted and length-capped by the host.
+    #[prost(message, optional, tag = "3")]
+    pub payload: ::core::option::Option<::pbjson_types::Struct>,
 }
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ClientHelloResult {
     #[prost(string, tag = "1")]
     pub target_link_id: ::prost::alloc::string::String,
     /// Round-trip milliseconds measured by the host, from handing the frame to
-    /// the target's socket until its pong is read back.
+    /// the target's socket until its answer is read back.
     #[prost(uint64, tag = "2")]
     pub round_trip_ms: u64,
     #[prost(string, tag = "3")]
     pub reply: ::prost::alloc::string::String,
+    /// The target's answer to `payload`, echoed back verbatim. An empty object
+    /// when the target acknowledged without answering, or answered with nothing
+    /// the host could parse — never a fabricated value.
+    #[prost(message, optional, tag = "4")]
+    pub answer: ::core::option::Option<::pbjson_types::Struct>,
 }
 /// `client/status`: what the host sees right now. Aggregate counters plus one
 /// row per group, so a page can show "N clients, M groups" and the measured

@@ -378,6 +378,10 @@ pub struct WebTicket {
     pub peer_role: String,
     pub capability_caps: Vec<String>,
     pub session_id: Option<String>,
+    /// The browser link this ticket opens. Minted when the tab asks for the
+    /// ticket rather than taken from the session, so a second tab on the same
+    /// cookie gets its own client instead of hijacking the first tab's.
+    pub link_id: String,
     pub issued_at_ms: u64,
     pub expires_at_ms: u64,
 }
@@ -402,6 +406,7 @@ impl TicketRegistry {
         peer_role: &str,
         capability_caps: Vec<String>,
         session_id: Option<String>,
+        link_id: String,
     ) -> Result<WebTicket, CallError> {
         if origin.is_empty() || !(origin.starts_with("http://") || origin.starts_with("https://")) {
             return Err(CallError::new(
@@ -432,6 +437,7 @@ impl TicketRegistry {
             peer_role: peer_role.to_string(),
             capability_caps,
             session_id,
+            link_id,
             issued_at_ms: now,
             expires_at_ms: now + TICKET_TTL_MS,
         };

@@ -46,6 +46,11 @@ pub const UPLOAD_BODY_LIMIT: usize = MAX_FILE_BYTES as usize;
 #[serde(rename_all = "camelCase")]
 struct DownloadQuery {
     id: String,
+    /// The tab's link, for a plain `<a href>` download that cannot set a
+    /// header. It is verified against the session exactly like the header is,
+    /// so this is a transport detail and not a second way in.
+    #[serde(default)]
+    link_id: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -54,6 +59,11 @@ struct RemoveRequest {
     id: String,
 }
 
+/// Header the tab presents its own link on. The cookie alone cannot say which
+/// tab is asking — two tabs share one — so every share route resolves the
+/// caller through this, and the session checks that the tab owns it.
+pub const LINK_HEADER: &str = "x-conex-link-id";
+
 /// The caller's own client row.
 ///
 /// The WSS loop is what registers it, so a visitor whose socket is not up has
@@ -61,7 +71,19 @@ struct RemoveRequest {
 /// Returning `None` rather than an empty list is deliberate: an empty group
 /// would look like "nobody has shared anything" instead of "you are not
 /// connected yet".
-fn own_entry(state: &Arc<HttpState>, link_id: &str) -> Option<crate::clients::ClientEntry> {
+///
+/// `None` also covers a link this session does not own: a tab cannot borrow a
+/// sibling tab's identity by putting its link on the request.
+fn own_entry(
+    state: &Arc<HttpState>,
+    session: &crate::web_auth::WebSession,
+    headers: &axum::http::HeaderMap,
+) -> Option<crate::clients::ClientEntry> {
+    let web = state.web_auth.as_ref()?;
+    let link_id = headers.get(LINK_HEADER)?.to_str().ok()?;
+    if !web.owns_link(session, link_id) {
+        return None;
+    }
     state.clients.get(link_id)
 }
 
@@ -74,7 +96,7 @@ pub async fn list_files(Extension(state): Extension<Arc<HttpState>>, request: Re
         Ok(session) => session,
         Err(error) => return status_for(error),
     };
-    let Some(entry) = own_entry(&state, &session.link_id) else {
+    let Some(entry) = own_entry(&state, &session, headers) else {
         return no_link();
     };
     let files = state
@@ -110,7 +132,7 @@ pub async fn upload_file(
         Ok(session) => session,
         Err(error) => return status_for(error),
     };
-    let Some(entry) = own_entry(&state, &session.link_id) else {
+    let Some(entry) = own_entry(&state, &session, &headers) else {
         return no_link();
     };
     let declared = headers
@@ -161,12 +183,25 @@ pub async fn download_file(
         Ok(session) => session,
         Err(error) => return status_for(error),
     };
-    let Some(entry) = own_entry(&state, &session.link_id) else {
-        return no_link();
-    };
     let query: DownloadQuery = match Query::<DownloadQuery>::try_from_uri(request.uri()) {
         Ok(Query(query)) => query,
         Err(_) => return bad_request("id is required"),
+    };
+    // The link comes from the query on a plain link and from the header on a
+    // fetch; either way it is checked against the session before it is used.
+    let link_id = if query.link_id.is_empty() {
+        headers
+            .get(LINK_HEADER)
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or("")
+    } else {
+        query.link_id.as_str()
+    };
+    if !web.owns_link(&session, link_id) {
+        return no_link();
+    }
+    let Some(entry) = state.clients.get(link_id) else {
+        return no_link();
     };
     // A file outside the caller's group is reported as unknown, not as
     // forbidden: a different answer would confirm the id exists.
@@ -226,7 +261,7 @@ pub async fn remove_file(
         Ok(session) => session,
         Err(error) => return status_for(error),
     };
-    let Some(entry) = own_entry(&state, &session.link_id) else {
+    let Some(entry) = own_entry(&state, &session, &headers) else {
         return no_link();
     };
     let body = match axum::body::to_bytes(request.into_body(), 4 * 1024).await {

@@ -496,11 +496,24 @@ impl Broker {
                     .chars()
                     .take(200)
                     .collect::<String>();
-                let (round_trip_ms, reply) = registry.send_hello(target, link_id, &text).await?;
+                // The callback payload is capped here so an oversized one is
+                // refused to its own sender instead of timing out on the target.
+                let payload = match input.get("payload") {
+                    Some(value) => crate::clients::cap_payload(value)?,
+                    None => None,
+                };
+                let outcome = registry
+                    .send_hello(target, link_id, &text, payload.as_ref())
+                    .await?;
                 Ok(json!({
                     "targetLinkId": target,
-                    "roundTripMs": round_trip_ms.to_string(),
-                    "reply": reply,
+                    "roundTripMs": outcome.round_trip_ms.to_string(),
+                    "reply": outcome.reply,
+                    // An absent answer is an empty object rather than a
+                    // missing field: the shape is the same either way, so a
+                    // client never has to distinguish "no answer" from
+                    // "this host does not support answers".
+                    "answer": outcome.answer.unwrap_or_else(|| json!({})),
                 }))
             }
             other => Err(CallError::new(

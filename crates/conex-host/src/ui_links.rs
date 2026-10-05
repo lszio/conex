@@ -34,8 +34,12 @@ impl UiLinkRegistry {
         Self::default()
     }
 
-    /// Allocate a fresh link for a freshly minted web session. The link is
+    /// Allocate a fresh link for a newly connected browser socket. The link is
     /// considered "not yet connected" until the WSS handshake reports ready.
+    ///
+    /// One link per *connection*, not per session: a visitor who opens two
+    /// tabs holds two links and is two addressable clients. The session
+    /// cookie is what they share, not who they are.
     pub fn register(&self, principal_id: &str, tenant_id: &str) -> UiLink {
         let link = UiLink {
             link_id: random_link_id(),
@@ -52,6 +56,20 @@ impl UiLinkRegistry {
             .expect("ui link registry poisoned")
             .insert(link.link_id.clone(), link.clone());
         link
+    }
+
+    /// Drop a link that was never connected, so a failed upgrade or an
+    /// abandoned tab leaves no row behind. A link that did connect is kept
+    /// until its socket cleanup path removes it, which is where the client's
+    /// files and counters are reclaimed too.
+    pub fn release_unconnected(&self, link_id: &str) -> bool {
+        let mut guard = self.by_link.lock().expect("ui link registry poisoned");
+        match guard.get(link_id) {
+            Some(link) if link.tickets_issued == 0 && link.calls_total == 0 => {
+                guard.remove(link_id).is_some()
+            }
+            _ => false,
+        }
     }
 
     pub fn touch(&self, link_id: &str) {
@@ -104,6 +122,11 @@ impl UiLinkRegistry {
             .cloned()
             .collect()
     }
+}
+
+/// A fresh link id, for callers that need one without registering it.
+pub fn new_link_id() -> String {
+    random_link_id()
 }
 
 fn random_link_id() -> String {

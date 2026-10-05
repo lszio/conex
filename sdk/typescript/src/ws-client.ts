@@ -107,6 +107,22 @@ interface JsonRpcMessage {
   error?: unknown;
 }
 
+/**
+ * A greeting or a question the host pushed to this client.
+ *
+ * `ask` is the whole distinction: false is a greeting this client has already
+ * acknowledged, true is a question whose answer only the page can supply.
+ */
+export interface ConexHelloPush {
+  replyId: string;
+  from: string;
+  fromName: string;
+  text: string;
+  ask: boolean;
+  /** The sender's callback arguments. Empty unless `ask` is true. */
+  payload: Record<string, unknown>;
+}
+
 export class ConexWsClient {
   private readonly origin: string;
   private readonly csrfToken?: string;
@@ -122,10 +138,10 @@ export class ConexWsClient {
   private connectPromise?: Promise<void>;
   private reconnectTimer?: ReturnType<typeof setTimeout>;
   private negotiationResult?: ConexWsNegotiation;
+  /// Set from the ticket response; the getter above is the public shape.
+  private linkIdField?: string;
   private readonly listeners = new Set<ConexWsEventListener>();
-  private readonly helloListeners = new Set<
-    (hello: { replyId: string; from: string; fromName: string; text: string }) => void
-  >();
+  private readonly helloListeners = new Set<(hello: ConexHelloPush) => void>();
   private readonly pending = new Map<string, PendingCall>();
   private closed = false;
   private handshake?: { step: "hello" | "ready"; helloId: string; negotiationId: string; helloResult?: Record<string, unknown> };
@@ -150,6 +166,17 @@ export class ConexWsClient {
 
   get state(): ConexWsState {
     return this.currentState;
+  }
+
+  /**
+   * The link this client's ticket opened, once the ticket has been issued.
+   *
+   * It is the tab's own identity: every browser tab on one cookie holds a
+   * different one, and the same-origin HTTP routes need it to answer "who am
+   * I" without guessing from the cookie. Undefined before the first ticket.
+   */
+  get linkId(): string | undefined {
+    return this.linkIdField;
   }
 
   onEvent(listener: ConexWsEventListener): () => void {
@@ -203,9 +230,25 @@ export class ConexWsClient {
     return this.call<ClientProfileResponse>("client/profile", "", { profile });
   }
 
-  /** Greet another client; resolves once that client answers. */
-  sendHello(targetLinkId: string, text = "hello"): Promise<ClientHelloResult> {
-    return this.call<ClientHelloResult>("client/hello", "", { targetLinkId, text });
+  /**
+   * Greet another client; resolves once that client answers.
+   *
+   * A `payload` makes it a question rather than a greeting: the target is not
+   * acknowledged automatically, and its `answer` comes back in the result. A
+   * bare hello resolves as soon as the target's SDK acknowledges, which is what
+   * a latency sample wants; a payload resolves when a person or a handler has
+   * actually answered, which is what a question wants.
+   */
+  sendHello(
+    targetLinkId: string,
+    text = "hello",
+    payload?: Record<string, unknown>,
+  ): Promise<ClientHelloResult> {
+    return this.call<ClientHelloResult>("client/hello", "", {
+      targetLinkId,
+      text,
+      ...(payload ? { payload } : {}),
+    });
   }
 
   /**
@@ -293,6 +336,9 @@ export class ConexWsClient {
       }
       if (typeof ticketBody.ticket !== "string" || !ticketBody.ticket) {
         throw new ConexError("ticket response is missing ticket", { status: response.status });
+      }
+      if (typeof ticketBody.linkId === "string" && ticketBody.linkId) {
+        this.linkIdField = ticketBody.linkId;
       }
       const expiresAt = parseExpiry(ticketBody.expiresAt ?? ticketBody.expiresAtMs);
       this.ticket = { value: ticketBody.ticket, expiresAt };
@@ -423,8 +469,12 @@ export class ConexWsClient {
    * Answer a pushed `conex/client-hello`. Returns false for any other
    * notification so the caller can keep its normal routing.
    *
-   * The reply is sent before the listener runs, so a slow listener can never
-   * make the sender time out.
+   * A greeting (`ask` absent) is answered right here, before any listener
+   * runs, so the sender's latency sample measures the socket rather than the
+   * page. A question (`ask: true`) is *not*: the sender is waiting for a real
+   * answer, and acknowledging it automatically would hand back a measurement
+   * nobody took. The listener answers it, or nobody does and the sender sees
+   * the timeout.
    */
   private handleServerNotification(message: JsonRpcMessage): boolean {
     if (message.method !== "conex/client-hello") return false;
@@ -433,8 +483,10 @@ export class ConexWsClient {
       from?: string;
       fromName?: string;
       text?: string;
+      ask?: boolean;
+      payload?: Record<string, unknown>;
     };
-    if (params.replyId) {
+    if (params.replyId && params.ask !== true) {
       this.notify("conex/client-pong", { replyId: params.replyId, reply: "pong" });
     }
     this.emit({
@@ -442,20 +494,40 @@ export class ConexWsClient {
       method: "conex/client-hello",
       summary: params.text ?? "hello",
     });
-    this.helloListeners.forEach((listener) => listener({
+    const hello = {
       replyId: params.replyId ?? "",
       from: params.from ?? "",
       // The host resolves the sender's link to its display name, so a client
       // that never chose one is still greeted by something readable.
       fromName: params.fromName ?? "",
       text: params.text ?? "hello",
-    }));
+      ask: params.ask === true,
+      payload: params.payload ?? {},
+    };
+    this.helloListeners.forEach((listener) => listener(hello));
     return true;
+  }
+
+  /**
+   * Answer a question the host pushed, with the fields the sender asked about.
+   *
+   * Returns false when the hello needs no answer — it was a bare greeting, or
+   * it carries no `replyId` — so a caller can fire it from a shared handler
+   * without checking first. A non-object answer is refused here rather than
+   * pushed: the host drops it, and failing loudly beats a silent timeout on
+   * the other side.
+   */
+  answerHello(replyId: string, answer: Record<string, unknown>, reply = "answered"): boolean {
+    if (!replyId) return false;
+    if (typeof answer !== "object" || answer === null || Array.isArray(answer)) {
+      throw new ConexError("hello answer must be an object", { code: -32602 });
+    }
+    return this.notify("conex/client-pong", { replyId, reply, answer });
   }
 
   /** Greetings pushed by other clients. Returns an unsubscribe function. */
   onHello(
-    listener: (hello: { replyId: string; from: string; fromName: string; text: string }) => void,
+    listener: (hello: ConexHelloPush) => void,
   ): () => void {
     this.helloListeners.add(listener);
     return () => this.helloListeners.delete(listener);
