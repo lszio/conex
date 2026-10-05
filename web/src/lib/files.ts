@@ -25,9 +25,25 @@ export interface FileListing {
 }
 
 let csrfToken = "";
+let linkId = "";
 
 export function setCsrfToken(token: string): void {
   csrfToken = token;
+}
+
+/**
+ * The tab's own link, sent on every share request.
+ *
+ * Two tabs share one session cookie, so the cookie says who is browsing and
+ * this says which tab is asking. The host checks the link belongs to the
+ * session, which is what keeps a tab from acting as its sibling.
+ */
+export function setLinkId(value: string): void {
+  linkId = value;
+}
+
+function authHeaders(): Record<string, string> {
+  return linkId ? { "x-conex-link-id": linkId } : {};
 }
 
 function query(params: Record<string, string>): string {
@@ -46,7 +62,10 @@ async function failure(response: Response): Promise<never> {
 }
 
 export async function listFiles(): Promise<FileListing> {
-  const response = await fetch("/web/files", { credentials: "same-origin" });
+  const response = await fetch("/web/files", {
+    credentials: "same-origin",
+    headers: authHeaders(),
+  });
   if (!response.ok) await failure(response);
   const body = (await response.json()) as Omit<FileListing, "limits"> & {
     limits?: { maxFileBytes?: string; maxFilesPerClient?: string };
@@ -65,6 +84,7 @@ export async function uploadFile(file: File): Promise<SharedFile> {
     method: "POST",
     credentials: "same-origin",
     headers: {
+      ...authHeaders(),
       "x-csrf-token": csrfToken,
       "x-conex-file-name": encodeURIComponent(file.name),
       "x-conex-file-type": encodeURIComponent(file.type || "application/octet-stream"),
@@ -81,14 +101,15 @@ export async function removeFile(id: string): Promise<void> {
   const response = await fetch("/web/files/remove", {
     method: "POST",
     credentials: "same-origin",
-    headers: { "x-csrf-token": csrfToken, "content-type": "application/json" },
+    headers: { ...authHeaders(), "x-csrf-token": csrfToken, "content-type": "application/json" },
     body: JSON.stringify({ id }),
   });
   if (!response.ok) await failure(response);
 }
 
 /** Preview and download both go through the same URL; the host decides
- *  `inline` vs `attachment` from the file's own MIME type. */
+ *  `inline` vs `attachment` from the file's own MIME type. The link travels in
+ *  the query because a plain `<a href>` cannot set a header. */
 export function downloadFileUrl(file: SharedFile): string {
-  return `/web/files/download?${query({ id: file.id })}`;
+  return `/web/files/download?${query(linkId ? { id: file.id, linkId } : { id: file.id })}`;
 }

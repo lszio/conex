@@ -284,3 +284,59 @@ hello 往返成功并写入延迟、只有所有者可撤回、无 CSRF 拒绝�
   单文件，目录整包上传未实测。
 - 共享文件不跨重启存活（设计如此，内存实现）。
 - 跨主机真实 TLS 与真实 OIDC：沿用既有缺口，本轮未涉及。
+## 5. 一个 cookie 挤成两个标签页：链接按 session 铸造的根因修复（2026-10-05）
+
+**现象**：同一浏览器开两个标签页，Host 只认出一个客户端——两页显示同一条链接、同一个
+名字，其中一页改名另一页的列表就跳。文件归属同理：两个标签页的文件混在同一个 owner 下。
+
+**根因**：链接在 `WebAuth::login_guest` / `login` 里铸造，也就是**签发 session 时**。cookie
+是浏览器级的，所以同一浏览器的所有标签页共享一条链接、一个 `ClientEntry`、一个显示名、
+一个文件归属。注册表 `register` 还会按 linkId 覆盖，后来的 socket 直接顶掉前一个的
+出站通道。
+
+**修法**：链接改在 **`POST /tickets`** 铸造（`tickets.rs`），ticket 携带 `linkId`，
+WSS 升级校验该链接属于本会话（`ws_transport.rs`）后才注册客户端。会话持有自己拥有的链接
+集合（`WebSession::links`，上限 32），`claim_link` / `owns_link` 是唯一的判定点；同源
+HTTP 路由在 `x-conex-link-id` 上收调用方链接，下载因为是普通 `<a href>` 额外允许
+`?linkId=`，同样比对会话集合。
+
+**改这一处的连带影响**（都是同一个根因的下游，不是顺手改的）：
+
+- `WebSession` 去掉 `link_id` 字段，改为链接集合；`revoke` 回收集合里所有链接
+- `/web/files*` 四条路由的调用方解析从 `session.link_id` 改为请求头里的链接
+- `killing_wss_keeps_link_listed_but_freezes_last_seen` 原先断言「一个 session 一条链接」，
+  改为断言「死链仍在列表里且 `lastSeenAtMs` 冻结」+「新链接与之并存」
+
+**实测**（真浏览器，真实 host，`scripts/verify-landing-scenes.ts`）：
+
+```
+ok   标签页 A 拿到自己的短链: Ekp_W8aS
+ok   同一浏览器的两个标签页是不同的链接: Ekp_W8aS vs jLTKO9k8
+ok   同组三个客户端都在 A 的列表里: true/true
+ok   另一个组的客户端不出现在 A 的列表里
+ok   A 收到角落提示而不是对话气泡: "bob 向你打招呼\n\nhello"
+ok   发送方看到实测往返: "已发送 hello 给 alice\n\nalice 已确认，<1 ms"
+ok   提问在接收方变成待确认提示: "bob 提问\n\n请回答这个问题\n\n你的状态\n确认并回复"
+ok   待确认提示里有确认按钮
+ok   回答回到发送方: "alice 的回答\n\n你的状态：在线"
+ok   同一浏览器的另一个标签页也能看到该文件
+ok   另一个标签页不能撤回他人文件（所有者按链接区分）
+全部检查通过（28 项）
+```
+
+**本轮顺带做的界面改动**（同一批真实验收覆盖）：
+
+- 页面从「五个标签」改为**工作台**：顶部状态栏常驻本标签页名字、短链接、分组 key、
+  同组在线数、全站在线数；面板只切内容
+- 消息泡泡组件删除，问候改为右上角 toast（`ToastStack`），不再推动页面布局
+- `client/hello` 新增 `payload` / `answer`：带参数即提问，目标的 SDK 不再自动确认，
+  回答只能由页面的「确认并回复」按钮给出。Host 侧 payload ≤ 1 KiB、answer ≤ 64 节点 / 4 层
+- Rust 单测：`a_question_pushes_ask_and_waits_for_the_targets_own_answer`、
+  `a_bare_greeting_carries_no_ask_and_no_payload`、
+  `an_oversized_payload_is_refused_to_its_own_sender`、
+  `an_answer_deeper_or_wider_than_the_cap_is_dropped_not_walked`
+
+**门禁**：`cargo fmt --all`、`cargo clippy --workspace --all-targets`（零警告）、
+`cargo test --workspace`、`bun test sdk/typescript/tests`（25 pass）、`bun run typecheck`、
+`bun run build:web`、`cargo xtask generate --check` 全部通过。
+>>>>>>> 7c573df (feat(web): a workbench where each tab is one client)
