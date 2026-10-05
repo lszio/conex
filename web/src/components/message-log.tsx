@@ -1,7 +1,7 @@
 // Message log for hellos sent and received. Newest first, capped, and split by
 // direction so an outbound greeting is never mistaken for a reply.
 
-import { ArrowDownLeft, ArrowUpRight, Info } from "lucide-react";
+import { AlertTriangle, ArrowDownLeft, ArrowUpRight, Info } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { LogEntry } from "@/hooks/use-hello-page";
@@ -10,12 +10,14 @@ const ICON = {
   out: ArrowUpRight,
   in: ArrowDownLeft,
   system: Info,
+  error: AlertTriangle,
 } as const;
 
 const TONE = {
   out: "text-[var(--color-primary)]",
   in: "text-[var(--color-success)]",
   system: "text-[var(--color-muted-foreground)]",
+  error: "text-[var(--color-destructive)]",
 } as const;
 
 export function MessageLog({ messages }: { messages: LogEntry[] }) {

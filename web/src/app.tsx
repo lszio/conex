@@ -46,6 +46,15 @@ export function App() {
   const selfName = self?.profile?.displayName || page.draft.displayName || "你";
   const ownGroupKey = self?.groupKey ?? "";
   const peers = page.clients.length - 1;
+  // A short list with peers online is the confusing case: the host counts
+  // them, `client/list` withholds them. Say which of the two rules applied
+  // instead of leaving a bare 0 to be read as "nobody else is here".
+  const peerHint =
+    peers > 0
+      ? "个可问候的客户端"
+      : page.status.clientsOnline > 1
+        ? `全站 ${page.status.clientsOnline} 个在线，分在 ${page.status.groupsOnline} 个组——只有同组且可见的客户端才会出现在这里`
+        : "当前只有你一个在线";
 
   return (
     <div className="mx-auto grid w-full max-w-5xl gap-4 px-4 py-6">
@@ -88,7 +97,7 @@ export function App() {
               icon={Hand}
               label="在线同组"
               value={String(Math.max(peers, 0))}
-              hint="个可问候的客户端"
+              hint={peerHint}
             />
             <Stat
               icon={Gauge}
@@ -124,7 +133,13 @@ export function App() {
         {panel === "hello" ? (
           <div className="grid gap-4">
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
-              <ClientList clients={page.clients} selfLinkId={page.selfLinkId} onGreet={page.greet} />
+              <ClientList
+                clients={page.clients}
+                selfLinkId={page.selfLinkId}
+                clientsOnline={page.status.clientsOnline}
+                selfVisible={page.draft.visible}
+                onGreet={page.greet}
+              />
               <ProfileCard
                 draft={page.draft}
                 notice={page.savedNotice}

@@ -47,6 +47,14 @@ use crate::http::HttpState;
 
 const WSS_PROFILES: &[ProfileId] = &[ProfileId::JsonRpc2Wss, ProfileId::ProtobufWss];
 
+/// How often a live socket is pinged.
+const PING_INTERVAL_SECS: u64 = 20;
+/// How long a link may go without a pong before it is dropped. Enforced only
+/// on links whose liveness this process owns (agents); a browser link's
+/// browser-stack pong stops whenever the tab is throttled, which says nothing
+/// about whether the visitor is still there.
+const PONG_TIMEOUT_SECS: u64 = 40;
+
 pub struct WssState {
     pub broker: Arc<Broker>,
     pub limits: Limits,
@@ -488,10 +496,9 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
     let mut dispatch_tasks = JoinSet::new();
     let last_pong = Arc::new(Mutex::new(Instant::now()));
     let mut heartbeat = interval_at(
-        Instant::now() + std::time::Duration::from_secs(20),
-        std::time::Duration::from_secs(20),
+        Instant::now() + StdDuration::from_secs(PING_INTERVAL_SECS),
+        StdDuration::from_secs(PING_INTERVAL_SECS),
     );
-
     loop {
         tokio::select! {
             _ = wait_for_revocation(&state) => { break; }
@@ -942,7 +949,22 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                 }
             }
             _ = heartbeat.tick() => {
-                if last_pong.lock().await.elapsed() > StdDuration::from_secs(40) {
+                // A browser answers a WebSocket ping in the network stack, not
+                // in page JavaScript, so a backgrounded tab stops replying the
+                // moment its timers are throttled — while the tab and its
+                // visitor are still perfectly alive. Enforcing the pong
+                // deadline on a browser link therefore evicts exactly the
+                // links a returning visitor expects to find still connected.
+                //
+                // So the pong deadline stays what it is for: links whose
+                // liveness this process owns (agents, which also have their
+                // own lease). A browser link is bounded instead by its
+                // session's idle TTL, which is a real inactivity signal and
+                // is revoked explicitly on logout.
+                let pong_deadline_enforced = state.role != "ui";
+                if pong_deadline_enforced
+                    && last_pong.lock().await.elapsed() > StdDuration::from_secs(PONG_TIMEOUT_SECS)
+                {
                     break;
                 }
                 if state.role == "agent"

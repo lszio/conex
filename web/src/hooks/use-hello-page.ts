@@ -21,7 +21,8 @@ export interface LogEntry {
   id: number;
   at: number;
   text: string;
-  tone: "out" | "in" | "system";
+  /** `error` is a failed read or send: worth noticing, not worth a banner. */
+  tone: "out" | "in" | "system" | "error";
 }
 
 /**
@@ -197,18 +198,27 @@ export function useHelloPage(): HelloPageState {
         })),
       });
     } catch (error) {
-      setDetail(`读取列表失败：${error instanceof Error ? error.message : String(error)}`);
+      // A poll that fails mid-outage is a transient read, not a page state:
+      // writing it into the connection detail made one blip leave a permanent
+      // "读取列表失败" banner over a link that had already recovered. The
+      // connection state is owned by the socket events, which do clear.
+      log(`读取列表失败：${error instanceof Error ? error.message : String(error)}`, "error");
     }
-  }, []);
+  }, [log]);
 
   const refreshFiles = useCallback(async () => {
     try {
       const listing = await listFiles();
       setFiles(listing.files);
     } catch (error) {
-      setShareNotice(`读取文件失败：${error instanceof Error ? error.message : String(error)}`);
+      // Same rule as the client list: a backgrounded or reconnecting tab
+      // fails this read for a moment. That is a transient fact, and pinning
+      // it into the scene's notice left a red error on a recovered page.
+      // The success/failure notices below belong to the visitor's own
+      // actions, so a poll must not clear them either.
+      log(`读取文件失败：${error instanceof Error ? error.message : String(error)}`, "error");
     }
-  }, []);
+  }, [log]);
 
   useEffect(() => {
     let cancelled = false;

@@ -29,6 +29,10 @@ const DEFAULT_TIMEOUT_MS = 8000;
 const DEFAULT_TICKET_PATH = "/tickets";
 const DEFAULT_WS_PATH = "/wss";
 const MAX_FRAME_BYTES = 1024 * 1024;
+/// Calls that may wait for a reconnect. A page polls on a timer, so a long
+/// outage must not turn into an unbounded pile of resends that all arrive at
+/// once when the link comes back.
+const MAX_QUEUED_CALLS = 32;
 const RECONNECT_DELAY_MS = 100;
 
 type WebSocketHandler = (event: { data: unknown }) => void;
@@ -88,9 +92,20 @@ export type ConexWsEventListener = (event: ConexWsEvent) => void;
 
 interface PendingCall {
   method: string;
+  /** The exact frame that was sent, kept so a reconnect can resend it. */
+  message: string;
   resolve: (value: unknown) => void;
   reject: (reason: unknown) => void;
   timer: ReturnType<typeof setTimeout>;
+}
+
+/** A call that survived a disconnect and is waiting for the next link. */
+interface QueuedCall {
+  id: string;
+  method: string;
+  message: string;
+  resolve: (value: unknown) => void;
+  reject: (reason: unknown) => void;
 }
 
 interface Ticket {
@@ -143,6 +158,8 @@ export class ConexWsClient {
   private readonly listeners = new Set<ConexWsEventListener>();
   private readonly helloListeners = new Set<(hello: ConexHelloPush) => void>();
   private readonly pending = new Map<string, PendingCall>();
+  /** Calls issued while the link was down, replayed in order on reconnect. */
+  private readonly queued: QueuedCall[] = [];
   private closed = false;
   private handshake?: { step: "hello" | "ready"; helloId: string; negotiationId: string; helloResult?: Record<string, unknown> };
 
@@ -286,6 +303,12 @@ export class ConexWsClient {
     this.currentState = "closed";
     this.emit({ phase: "closed", summary: "client closed" });
     this.rejectPending(new ConexError("client is closed", { code: -32011 }));
+    // Queued calls are waiting for a link that will never come, so they are
+    // failed here too; otherwise their promises would never settle.
+    for (const call of this.queued) {
+      call.reject(new ConexError("client is closed", { code: -32011 }));
+    }
+    this.queued.length = 0;
     const socket = this.socket;
     this.socket = undefined;
     try {
@@ -307,6 +330,10 @@ export class ConexWsClient {
     if (this.closed || this.socket !== socket) throw new ConexError("client is closed", { code: -32011 });
     this.setState("ready");
     this.emit({ phase: "ready", summary: "ready" });
+    // The link is back: anything the outage interrupted goes out now, before
+    // the page issues its next poll, so the visitor sees one refresh instead
+    // of an error followed by a stale list.
+    this.flushQueued();
   }
 
   private getTicket(force = false): Promise<string> {
@@ -568,7 +595,13 @@ export class ConexWsClient {
       this.pending.delete(id);
       deferred.reject(new ConexError("websocket request timed out", { code: -32006 }));
     }, this.timeoutMs);
-    this.pending.set(id, { method, resolve: deferred.resolve, reject: deferred.reject, timer });
+    this.pending.set(id, {
+      method,
+      message,
+      resolve: deferred.resolve,
+      reject: deferred.reject,
+      timer,
+    });
     try {
       this.socket.send(message);
       this.emit({ phase: "request", requestId: id, method, summary: "sent" });
@@ -583,14 +616,68 @@ export class ConexWsClient {
     if (this.socket !== socket || this.closed) return;
     this.socket = undefined;
     this.negotiationResult = undefined;
-    this.rejectPending(new ConexError("websocket connection closed", { code: -32000 }));
+    // A call that was in flight when the socket dropped is not a failed call.
+    // The reconnect re-opens the link, and these are ordinary read calls
+    // (list clients, list files) that are valid a moment later, so they are
+    // put back on the queue and sent again once the link is ready. Failing
+    // them here instead is what made a backgrounded tab look broken: the
+    // page's poll loop threw on every tick and the visitor saw an error
+    // rather than a slow refresh.
+    this.requeuePending();
     this.emit({ phase: "close", summary: "transport closed" });
     if (!this.reconnectEnabled) {
+      this.rejectPending(new ConexError("websocket connection closed", { code: -32000 }));
       this.setState("failed");
       return;
     }
     this.setState("reconnecting");
     this.scheduleReconnect();
+  }
+
+  /**
+   * Move in-flight calls back onto the queue for the next connection.
+   *
+   * Their timers keep running, so a call that never gets an answer still
+   * times out on its own budget instead of hanging forever.
+   */
+  private requeuePending(): void {
+    if (this.queued.length >= MAX_QUEUED_CALLS) {
+      this.rejectPending(
+        new ConexError("too many calls queued while reconnecting", { code: -32012 }),
+      );
+      return;
+    }
+    for (const [id, call] of this.pending) {
+      this.queued.push({
+        id,
+        method: call.method,
+        message: call.message,
+        resolve: call.resolve,
+        reject: call.reject,
+      });
+      this.pending.delete(id);
+    }
+  }
+
+  /** Send whatever survived a reconnect, oldest first. */
+  private flushQueued(): void {
+    while (this.queued.length > 0) {
+      const next = this.queued[0];
+      if (!this.socket) return;
+      this.queued.shift();
+      const timer = setTimeout(() => {
+        this.pending.delete(next.id);
+        next.reject(new ConexError("websocket request timed out", { code: -32006 }));
+      }, this.timeoutMs);
+      this.pending.set(next.id, { ...next, resolve: next.resolve, reject: next.reject, timer });
+      try {
+        this.socket.send(next.message);
+      } catch (error) {
+        clearTimeout(timer);
+        this.pending.delete(next.id);
+        next.reject(toConexError(error));
+      }
+    }
   }
 
   private scheduleReconnect(): void {
