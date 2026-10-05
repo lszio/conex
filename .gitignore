@@ -1,7 +1,28 @@
+# Build and toolchain output
 /target
-/.toolchain
+.toolchain
 node_modules
-*.log
-.DS_Store
 web/dist
+
+# Local search/index caches (tool state, not source). `.zvec-grep` was
+# committed by accident and untracked again: it embedded an absolute home
+# path and changed on every run. `.gitnexus` was never tracked.
+.zvec-grep
 .gitnexus
+
+# Test and CI leftovers
+/test-results
+/playwright-report
+/blob-report
+/playwright/.cache
+
+# Runtime output. `conex-host` writes its audit log wherever the config's
+# `audit_file` points; a repo-root `audit.log` is the easy mistake.
+*.log
+/audit.log
+.DS_Store
+
+# Local secrets. `.env.example` files stay tracked on purpose.
+.env
+.env.*
+!.env.example

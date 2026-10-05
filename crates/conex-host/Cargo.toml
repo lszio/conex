@@ -2,6 +2,10 @@
 name = "conex-host"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "conex standalone host process: wiring, listener, policy, credentials and audit sink"
 
 [[bin]]
 name = "conex-host"

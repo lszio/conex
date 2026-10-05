@@ -1,13 +1,13 @@
 # conex 文档导航
 
-conex 的文档按「规范 / 契约 / 计划 / 证据 / 操作」分层，每类只有一个权威来源。本页是入口；根 [README](../README.md) 只保留项目简介、快速开始与三个调用例子。
+conex 的文档按「规范 / 契约 / 计划 / 证据 / 操作」分层，每类只有一个权威来源。本页是入口；根 [README](../README.md) 是项目门面：项目介绍、三条上手路径、架构、性能参考、开发门禁与贡献约定。
 
 ## 状态（2026-10-04 复核）
 
 - **P0 已交付**（提交 `e649ded`）：broker 只读数据连接，JSON-RPC/HTTP 与 inproc 共用同一授权执行路径；fs 与 HTTP catalog 两个 provider；TypeScript consumer；P0 门禁与 CI。
 - **P1 已交付**：两条 WSS Profile 真实握手（JSON text + protobuf 二进制，bearer 在 upgrade 认证）；`/wss` `/tickets` `/oidc/*` 挂入 host；`blob/session/operation/agent` 经 broker 派发并强制 bearer 主体绑定；P1-04 Stream 状态机（信用/ACK/重放/reset/slow_consumer）与 `stream.json` 行为测试；1 GiB 经 Stream 弱网续传 e2e（坏块 + 断线续传）；`[oidc]` 配置下 RS256 id_token 验签。见 [P1 验证记录](verification/p1.md)、[P1 运行手册](runbooks/p1.md)。
 - **Connected landing 已交付**：中心 Host + 反连 Agent + 浏览器会话/ticket + 端点目录 + 连接面板；三条 e2e 套件（landing / landing-web / landing-connections，含真停 Agent 进程的生命周期场景）。见 [验证记录](verification/connected-landing.md)、[运行手册](runbooks/connected-landing.md)。
-- **多主机内容 M0–M5 已交付**（分支 `refactor/arch`，未提交）：内容契约冻结（endpointId+revision 定位、blob/get 互斥目标、二进制 DataChunk 通道）、访客会话与 blob 所有权授权、逐端点注册生命周期、Agent 复用 provider 机制、同源 `/content`（Range/ETag/防注入/流式取消）、公共浏览页面（文本/图片/视频/DOCX/ZIP 受限预览，1440/390 双视口 38 项浏览器检查全过）。逐项证据见 [多主机内容验证记录](verification/multi-host-content.md)。
+- **多主机内容 M0–M5 已交付**：`refactor/arch` 已合入 `dev`。内容契约冻结（endpointId+revision 定位、blob/get 互斥目标、二进制 DataChunk 通道）、访客会话与 blob 所有权授权、逐端点注册生命周期、Agent 复用 provider 机制、同源 `/content`（Range/ETag/防注入/流式取消）、公共浏览页面（文本/图片/视频/DOCX/ZIP 受限预览，1440/390 双视口 38 项浏览器检查全过）。逐项证据见 [多主机内容验证记录](verification/multi-host-content.md)。
 - **下一步**：M4（Notez 接入，需真实 Notez 仓库与实例）与 M6（验收收口），见 [多主机内容计划](plans/2026-10-01-conex-multi-host-content.md)。
 - **落地页工作台（2026-10-05）**：**一个标签页就是一个客户端**——链接改在取 WSS 票据时铸造，同一浏览器的两个标签页共享 cookie 却是两条链接、两个独立客户端（`x-conex-link-id` 让同源 HTTP 路由认出是哪个标签页在请求）。页面从标签改为工作台：顶部状态栏常驻本标签页名字、短链接、分组 key 与在线数，问候从消息泡泡改为右上角 toast。`client/hello` 新增 `payload` / `answer`：带参数即**提问**，目标 SDK 不再自动确认，回答由页面通知里的「确认并回复」给出。契约 `ClientHelloRequest.payload` / `ClientHelloResult.answer` 与链接铸造时机见 [connected-landing §9](contracts/connected-landing.md)，28 项真浏览器验收见 [验证记录](verification/landing-page.md)。
 - **hello 页面已部署（2026-10-04）**：<https://conex.lszio.space>。契约 `ClientProfile` / `ClientSummary` / `client/*`（`connected-landing` §9），访客免凭据。见 [hello 页面验证记录](verification/landing-page.md)、[Dokploy 部署运行手册](runbooks/dokploy.md)。
