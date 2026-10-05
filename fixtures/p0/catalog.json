@@ -1,0 +1,6 @@
+{
+  "entries": [
+    {"resourceId": "hello.md", "title": "Hello", "mime": "text/markdown", "text": "hello conex\n"},
+    {"resourceId": "team/design.org", "title": "Design", "mime": "text/plain", "text": "* conex routing\n"}
+  ]
+}

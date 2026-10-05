@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+package conex;
+
+import "conex/chunking.proto";
+
+// P0 只读 source 方法。ResourceId 是 UTF-8、斜杠分段、无空段/./../NUL/反斜杠的
+// 相对资源名；根目录用空字符串，仅允许出现在 list/search 的 root。
+// M0 元数据规则（docs/contracts/connected-landing.md §8）：
+// - title 是文件名（basename），不是路径；resource_id 才是定位。
+// - mime 未知时必须填 application/octet-stream；MIME 不等于允许执行内容。
+// - size_bytes / 长度一律十进制字符串，避免 JS Number 丢精度。
+// - revision 是不透明定位令牌，只做等值比较；provider 无法提供时缺省。
+// - kind 描述目录项类型；本轮 list 只产出常规文件。
+enum EntryKind {
+  ENTRY_KIND_UNSPECIFIED = 0;
+  ENTRY_KIND_FILE = 1;
+  ENTRY_KIND_DIRECTORY = 2;
+}
+
+message ResourceSummary {
+  string resource_id = 1;
+  string title = 2;
+  string mime = 3;
+  optional string size_bytes = 4;
+  optional string revision = 5;
+  EntryKind kind = 6;
+}
+
+message SourceListRequest {
+  string root = 1;
+  optional uint32 limit = 2;
+  optional string cursor = 3;
+}
+
+message SourceListResponse {
+  repeated ResourceSummary items = 1;
+  optional string next_cursor = 2;
+}
+
+message SourceReadRequest {
+  string resource_id = 1;
+}
+
+// M0：读取结果二选一。
+// - 小型受支持 UTF-8 文本：内联 text（可附已计算 cid）。
+// - 附件与大文本：content 引用（BlobRef），不读入整文件、不伪造 cid。
+// text 与 content 互斥；cid 仅在字节已按 CID 格式计算时出现，可变远端文件缺省。
+message SourceReadResponse {
+  ResourceSummary resource = 1;
+  optional string text = 2;
+  optional string cid = 3;
+  optional BlobRef content = 4;
+}
+
+message SearchHit {
+  ResourceSummary resource = 1;
+  string excerpt = 2;
+}
+
+message SourceSearchRequest {
+  string root = 1;
+  string query = 2;
+  optional uint32 limit = 3;
+  optional string cursor = 4;
+}
+
+message SourceSearchResponse {
+  repeated SearchHit items = 1;
+  optional string next_cursor = 2;
+}

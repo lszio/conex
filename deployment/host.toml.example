@@ -1,0 +1,143 @@
+# Production host.toml — Dokploy mounts this read-only at /etc/conex/host.toml.
+#
+# Every literal value is a placeholder. Replace it from the Dokploy
+# environment variables (see deployment/.env.example) before going live.
+# Dokploy's `File Mount` + Compose `env_file` keep secrets out of the
+# repo; only hashed tokens / fingerprints land in this file.
+#
+# Verification: the SHA-256 hex digests below must be computed on the
+# runner, not stored in git. Use `scripts/gen-token.sh <plaintext>` (see
+# scripts/) and paste the hex strings into Dokploy's secret manager.
+
+# Public listening address. Inside the container, host always listens on
+# 8787; Dokploy's reverse proxy fronts it.
+listen = "0.0.0.0:8787"
+# Production must keep loopback HTTP disabled — TLS terminates at the
+# Dokploy proxy and the agent WSS uses wss://.
+allow_loopback_http = false
+# Audience baked into every bearer / ticket signature.
+audience = "host.example.internal"
+# Origin agents must advertise in `agent/register`; keep prefix-only
+# verification here (full PKI pinning is a future item).
+host_origin = "conex://host.example.internal"
+# Same-origin browser origin the landing page is served from. Drives
+# CORS + Set-Cookie SameSite behavior.
+web_origin = "https://landing.example.com"
+# Static UI root baked into the runtime image at /opt/conex/web.
+web_root = "/opt/conex/web"
+# Persistent roots. Dokploy creates the named volumes
+# (conex-content / conex-session / conex-operation); the compose file
+# mounts them read-write under /var/lib/conex.
+content_root = "/var/lib/conex/content"
+session_root = "/var/lib/conex/session"
+operation_root = "/var/lib/conex/operation"
+
+# Anonymous visitors: bound to the `guest` principal with the read-only UI
+# method whitelist (endpoint/list + connection/list + source/*). Quotas are
+# independent from authenticated users' per-principal cap. Remove the whole
+# section for deployments that require a UI bearer token.
+[web_guest]
+principal_id = "guest"
+tenant_id = "production"
+# Global bound on live anonymous sessions (default 64).
+max_sessions = 64
+# Sliding idle expiry, extended on each authenticated use (default 15 min).
+idle_ttl_ms = 900000
+# Session issuance rate limit per rolling minute (default 60).
+max_issue_per_minute = 60
+
+# Token registry. Each token's `token_hash` is sha256(<plaintext>); the
+# plaintext lives only in Dokploy secrets and never in this file. The
+# principal/tenant below drive the policy gates below them.
+[[tokens]]
+token_hash = "<sha256-of-ui-token>"
+principal_id = "ui-admin"
+tenant_id = "production"
+audience = "host.example.internal"
+role = "ui"
+
+[[tokens]]
+token_hash = "<sha256-of-agent-a-token>"
+principal_id = "agent-a"
+tenant_id = "production"
+audience = "host.example.internal"
+role = "agent"
+
+[[tokens]]
+token_hash = "<sha256-of-agent-b-token>"
+principal_id = "agent-b"
+tenant_id = "production"
+audience = "host.example.internal"
+role = "agent"
+
+# Reverse-connect agents (WSS /wss upgrade from agent→host). The host
+# accepts each `id` only when the WSS bearer authenticates as the
+# matching principal above; otherwise `agent/register` is rejected.
+[[agents]]
+id = "agent-a"
+tenant_id = "production"
+credential_name = "agent-a-token"
+credential_backend = "file:/run/secrets/agent_a_token"
+
+[[agents]]
+id = "agent-b"
+tenant_id = "production"
+credential_name = "agent-b-token"
+credential_backend = "file:/run/secrets/agent_b_token"
+
+# Source-remote endpoints. The host binds each endpoint to its owning
+# agent; only the agent's WSS may service `source/list|read|search`.
+[[endpoints]]
+id = "notes-a"
+tenant_id = "production"
+provider_id = "notes-a-provider"
+kind = "source-remote"
+provides = ["source/list", "source/read", "source/search"]
+root = "team"
+agent_id = "agent-a"
+
+[[endpoints]]
+id = "notes-b"
+tenant_id = "production"
+provider_id = "notes-b-provider"
+kind = "source-remote"
+provides = ["source/list", "source/read", "source/search"]
+root = "team"
+agent_id = "agent-b"
+
+# Policies. The visitor principal "guest" gets the read-only UI
+# whitelist (the broker rejects every other method anyway, so the
+# policy here is just a guard against path traversal on the agent
+# side). The named UI principal gets the same. Tighten roots below
+# `team` for production.
+[[policy]]
+principal_id = "guest"
+tenant_id = "production"
+endpoint_id = "notes-a"
+actions = ["list", "read", "search"]
+root = "team"
+subtree = true
+
+[[policy]]
+principal_id = "guest"
+tenant_id = "production"
+endpoint_id = "notes-b"
+actions = ["list", "read", "search"]
+root = "team"
+subtree = true
+
+[[policy]]
+principal_id = "ui-admin"
+tenant_id = "production"
+endpoint_id = "notes-a"
+actions = ["list", "read", "search"]
+root = "team"
+subtree = true
+
+[[policy]]
+principal_id = "ui-admin"
+tenant_id = "production"
+endpoint_id = "notes-b"
+actions = ["list", "read", "search"]
+root = "team"
+subtree = true

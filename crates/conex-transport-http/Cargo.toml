@@ -1,0 +1,23 @@
+[package]
+name = "conex-transport-http"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+bytes.workspace = true
+conex-core = { path = "../conex-core" }
+conex-proto = { path = "../conex-proto" }
+http.workspace = true
+http-body-util.workspace = true
+hyper.workspace = true
+hyper-util.workspace = true
+rustls.workspace = true
+rustls-pemfile.workspace = true
+tokio.workspace = true
+tokio-rustls.workspace = true
+webpki-roots.workspace = true
+
+[dev-dependencies]
+rcgen.workspace = true
+tokio = { workspace = true, features = ["test-util"] }

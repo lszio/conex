@@ -1,0 +1,33 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  p0:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.0"
+
+      - name: protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "36.1"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install JS dependencies
+        run: bun install --frozen-lockfile
+
+      - name: P0 gate
+        run: cargo xtask check
