@@ -100,6 +100,20 @@ Agent 先验证 Host 的 TLS CA 和 server name，再使用 `role=agent` 的 bea
 
 **客户端的定义。** 一个客户端就是一条浏览器 UI 链接，加上它自述的 `ClientProfile`。访客仍共享 `web_guest.principal_id`；会话级显示名不是身份，不参与授权，也不唯一。
 
+**一个标签页就是一个客户端。** 链接在 **`POST /tickets` 时**铸造，不在签发 session 时：
+cookie 说明「谁在浏览」，链接说明「哪个标签页在说话」。同一浏览器开两个标签页共享一个
+cookie，因此必须得到两条链接、两行 `client/list`、两个独立客户端——否则一个 cookie 会
+把两个窗口挤成同一行，两个标签页会互相顶掉对方的名字与文件归属。三条规则成立：
+
+- 每次取 ticket 都铸造新链接，响应回 `linkId`；重连的标签页拿到新链接，因为旧 socket
+  的清理路径已经移除了它那一行，复用 id 会让半开的链接替一个已经不存在的 socket 应答
+- 会话记录自己拥有的链接集合（上限 32 个标签页），`POST /tickets` 登记、WSS 升级校验、
+  session revoke 回收都走这一个集合；**请求声称的 linkId 一律与集合比对**，标签页不能
+  冒用同一会话里另一个标签页的身份
+- 同源 HTTP 路由（`/web/files*`）在 header `x-conex-link-id` 上收调用方的链接；下载因为
+  是普通 `<a href>` 收不了 header，允许 `?linkId=`，同样比对会话集合——这是传输方式，
+  不是第二条入口
+
 **资料是自述的。** `displayName` ≤ 40 字符、`group` ≤ 24 字符，入库前去除控制字符并截断；`visible` 默认 `true`。资料不授予任何能力，Host 不得因名称或分组改变授权结果。列表中的 `displayName` 为空时由 linkId 前 6 位回退（`client-xxxxxx`），不伪造身份。
 
 **显示名全局唯一。** 名称是读者区分客户端的唯一依据，因此同名必须可区分：Host 在
@@ -114,6 +128,20 @@ Agent 先验证 Host 的 TLS CA 和 server name，再使用 `role=agent` 的 bea
 **列表只含可寻址的链接。** `client/list` 只返回已挂上出站通道（handshake 完成）的链接。握手前崩溃或未 clean close 的死链会留下无 writer 的条目，必须既不出现在列表里，也按 60s 宽限后回收，避免注册表无界增长。
 
 **hello 往返。** `client/hello` 携带 `targetLinkId` 与 ≤ 200 字符文本；Host 经目标链接既有的出站通道推送 `conex/client-hello`（JSON-RPC notification），目标回 `conex/client-pong`。Host 测量从入队到收到 pong 的往返毫秒数并返回 `roundTripMs`。目标离线、隐藏或 10s 未答均返回 `unavailable`，不静默丢弃。pong 以 notification 形式抵达，Host 必须在 broker 帧路径之前处理（无 id 的 notification 会被该路径丢弃）。
+
+**hello 可以是回调。** `ClientHelloRequest.payload` 是发送方想被回答的字段，`ClientHelloResult.answer`
+是目标原样回传的回答。区分二者的是推送帧上的 **`ask`**：
+
+- `payload` 为空或缺省 → `ask: false`，**这是问候**。目标的 SDK 在派发监听器之前就自动回
+  pong，于是测到的往返是 socket 的往返，不是页面的往返——这正是延迟样本要的东西
+- `payload` 非空 → `ask: true`，**这是提问**。目标的 SDK **不**自动回 pong：自动确认会让
+  发送方拿到一个没人测过的往返数字。回答只能来自页面，回调形式是
+  `client.answerHello(replyId, answer, reply?)`；没人回答就是发送方超时
+
+两侧的边界都在 Host 上：payload 按序列化后 ≤ 1 KiB 拒绝，**退给发送方自己**（否则目标只会
+看到一次超时，没人知道是谁的参数太大）；answer 按 64 节点 / 4 层封顶，超限整个丢弃而不是
+替对方走完一棵深树。`answer` 缺失时返回空对象 `{}`，形状恒定，客户端不必区分「没有回答」
+与「这个 Host 不支持回答」。
 
 **收方看到的是名字，不是 linkId。** 推送帧除 `from`（发送方 linkId）外还带
 `fromName`：由 Host 用注册表把 linkId 解析为发送方当前的显示名。页面不把自己的名字拼进
@@ -180,6 +208,12 @@ body 上限单独设为 8 MiB（`UPLOAD_BODY_LIMIT`），不放宽其他端点�
 文件名与 MIME 进响应头前必须过滤控制字符、引号、斜杠与 CR/LF；文件名按
 `filename="ascii"` + `filename*=UTF-8''pct` 双写。
 
-**页面定位。** 首屏说明 conex 是什么（可嵌入的双向能力路由内核），hello 与文件是它做的
-两件事而非产品本身。`hello` 场景把问候渲染为消息泡泡（发出方带实测往返，未回应时显示
-「等待回应…」）；`状态` 页显示客户端数、分组数与每组延迟。默认标签是 hello 场景。
+**页面定位。** 首屏说明 conex 是什么（可嵌入的双向能力路由内核），消息与文件是它做的
+两件事而非产品本身。页面是**工作台**：顶部状态栏常驻本标签页的名字、短链接、分组 key、
+同组在线数与全站在线数——「我是谁、我占着哪条链接」不能藏在某个标签后面。面板（消息 /
+文件 / 状态 / 介绍 / 性能）只切换内容，不切换状态栏。默认面板是消息。
+
+**通知是事件，不是会话。** 问候渲染为右上角的 toast，不是聊天气泡：一条提示到达、被读到、
+然后自己消失，页面不会因为它而移动。区别只有一处有意义——**提问**（`ask: true`）带确认
+表单与「确认并回复」按钮，且不自动消失，因为 Host 此刻在等一个人而不是等一个 socket。
+空字段被省略而不是发成 `""`：发送方拿到更短的回答，而不是一个看起来已回答其实没答的字段。

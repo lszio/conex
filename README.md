@@ -2,7 +2,7 @@
 
 conex（connect + nexus）是一个可嵌入的双向能力路由内核及可选独立进程；工作协议名 `conex`。
 
-**当前状态（2026-10-05）：** 落地页从「hello 单场景」改为**项目介绍 + 两个场景 + 状态**（分支 `refactor/arch`）：首屏说明 conex 是双向能力路由内核，hello 与文件共享是它做的两件事。`group` 由自述标签升级为**隔离键**（SHA-256 派生），不同组互相不可见、不可问候、不可访问文件；`client/status` 报出全 Host 在线客户端数、分组数与每组实测延迟（未测量显示「尚未测量」而非 0 ms）；文件场景支持选择文件或整个目录共享给同组，按提供者分卡片展示，可预览与下载。契约见 [connected-landing §10](docs/contracts/connected-landing.md)，证据见 [L12 验证记录](docs/verification/landing-page.md)。P0、P1、Connected landing、多主机内容 M0–M5 已交付。剩余 M4（Notez 接入）与 M6（验收收口）…
+**当前状态（2026-10-05）：** 落地页改为**工作台**（分支 `refactor/arch`）：顶部状态栏常驻本标签页的名字、短链接、分组 key 与在线数，面板切换内容。**一个标签页就是一个客户端**——链接在取 WSS 票据时铸造，同一浏览器的两个标签页共享 cookie 却是两个独立客户端，文件归属也按链接区分。问候从消息泡泡改为右上角提示；`client/hello` 带 `payload` 时是**提问**：目标 SDK 不自动确认，回答由提示里的「确认并回复」回传。`group` 由自述标签升级为**隔离键**（SHA-256 派生），不同组互相不可见、不可问候、不可访问文件；`client/status` 报出每组实测延迟（未测量显示「尚未测量」而非 0 ms）。契约见 [connected-landing §9](docs/contracts/connected-landing.md)，证据见 [工作台验证记录](docs/verification/landing-page.md)。P0、P1、Connected landing、多主机内容 M0–M5 已交付。剩余 M4（Notez 接入）与 M6（验收收口）…
 
 ## 文档
 
