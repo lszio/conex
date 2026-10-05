@@ -377,3 +377,62 @@ ok   另一个标签页不能撤回他人文件（所有者按链接区分）
 **门禁**：`cargo fmt --all`、`cargo clippy --workspace --all-targets`（零警告）、
 `cargo test --workspace`、`bun test sdk/typescript/tests`（25 pass）、`bun run typecheck`、
 `bun run build:web`、`cargo xtask generate --check` 全部通过。
+
+## 7. 加载与保活上线（2026-10-06）
+
+**分支事故**：生产实际跟踪 `refactor/arch`，而本轮改动在 `dev`。两条分支已分叉
+（dev 多 8 个提交，refactor/arch 多 4 个，含 stale-cookie 修复）。按决定把
+`refactor/arch` 合入 `dev`，把 Dokploy 的跟踪分支切到 `dev` 后部署。合并冲突 3 处：
+`app.tsx` 与 `client-list.tsx` 取 dev 侧（本轮的空态与 hint 文案是 superset），
+README 两段都留（dev 的导语 + refactor/arch 的现状段，现状段补上实测数字），
+验证文档两个事故各留一节，并清掉上一次合并遗留的冲突标记。
+
+**合并后门禁**：Rust 346 通过 / 0 失败（比合并前多 1 个，来自 refactor/arch 的
+stale-cookie 回归测试）、SDK 27 pass / 0 fail、clippy 0、fmt clean、typecheck clean、
+真浏览器 23 项全过。
+
+**镜像自验**（本地容器，覆写 `web_origin`）：`app.js` 334 614 字节，`Accept-Encoding: gzip`
+时 106 585 字节；两个标签页链接不同，页面 0 错误。
+
+**线上实测**（`https://conex.lszio.space`，部署后）：
+
+```console
+$ curl -sI -H 'Accept-Encoding: gzip' $O/app.js
+content-encoding: gzip
+content-length: 106585                      # 部署前 846804，无压缩
+$ curl -o /dev/null -w '%{http_code}\n' $O/ $O/llms.txt $O/llm.txt $O/not-found
+200 200 200 404
+$ curl -sI $O/ | grep -iE 'content-security|nosniff|x-frame|cache-control'
+content-security-policy / x-content-type-options: nosniff / x-frame-options: DENY / cache-control: no-store
+$ curl -sI $O/web/session | grep -i set-cookie
+set-cookie: conex_web_session=…; Path=/; HttpOnly; SameSite=Strict; Secure
+```
+
+真浏览器：
+
+```console
+线上到「已连接」: 373 ms                  # 部署前 5419~6958 ms
+资源: app.js 104KB / 57ms, style.css 20KB / 57ms, session 21ms, tickets 22ms
+两个标签页: SPnbpCV_ vs p5RIZ_mz -> 不同 ✓
+A 列表: [ 'client-p5RIZ_', 'client-SPnbpC' ]
+页面错误: 无
+全部检查通过                             # 23 项
+```
+
+**首屏口径**：本地 4139 ms → 544 ms（1.6 Mbit/s 限速链路），线上 5.4–7.0 s → 373 ms。
+两者都不是估计：前者是新旧两个 bundle 过同一条限速代理，后者是同一个真实浏览器
+分别访问部署前后的站点。
+
+**踩到的两个陷阱**（都按 runbook 处理，不是新问题）：
+
+- 容器自验时把 `listen` 改成 loopback 且保留 `allow_plaintext_bind`，配置加载期直接
+  拒绝（`plaintext requires allow_loopback_http = true or allow_plaintext_bind = true`）；
+  改成 `0.0.0.0` + `allow_plaintext_bind` 才对。loopback 绑定虽然能起，但宿主浏览器
+  访问不到（`ERR_SOCKET_NOT_CONNECTED`），真浏览器验收必须绑 `0.0.0.0`。
+- `deployment.queueList` 返回长度 1 但状态字段为 null，`docker.getContainers` 返回空对象——
+  这两个接口在这个版本上都读不出有用信息，判断进度要看 `deployment.all` 的
+  `status`/`finishedAt`。
+
+**部署窗口的一个观察**：部署 20:17:17 开始、20:22:34 `done`，但在 `done` 之后约 40 秒内
+首次 curl 仍拿到旧镜像的 846 804 字节，随后才切换。也就是说 **`status=done` 之后还有
+一小段旧容器在前面挡流量**，此时若立刻验收会得到"部署无效"的错误结论。
