@@ -19,6 +19,7 @@ use std::time::{Duration, Instant};
 
 use axum::extract::ws::Message;
 use serde::Serialize;
+use serde_json::Map;
 use sha2::{Digest, Sha256};
 use tokio::sync::{mpsc, oneshot};
 
@@ -137,6 +138,15 @@ impl ClientProfile {
 /// a linkId fallback is more honest than `name-9999`.
 const MAX_NAME_SUFFIX: u32 = 999;
 
+/// Cap on a pushed hello's callback payload and on the answer that comes back.
+/// Both cross to another client, so both are cut before they are queued: a
+/// payload is bounded by its serialized size, an answer by its depth, width
+/// and node count, which stops a deep or wide object from being cheap to
+/// request and expensive to walk.
+const MAX_PAYLOAD_BYTES: usize = 1024;
+const MAX_ANSWER_NODES: usize = 64;
+const MAX_ANSWER_DEPTH: usize = 4;
+
 /// Make `desired` unique among `taken`, appending `-2`, `-3`, … on collision.
 ///
 /// Uniqueness is by *displayed* name, which is what a reader tells clients
@@ -236,10 +246,14 @@ struct ClientState {
     entry: ClientEntry,
     /// Writer for server-initiated frames. `None` until the link is ready.
     tx: Option<Outbound>,
-    /// Awaits the target's pong, keyed by a per-send correlation id.
-    replies: HashMap<String, oneshot::Sender<String>>,
+    /// Awaits the target's answer, keyed by a per-send correlation id.
+    replies: HashMap<String, oneshot::Sender<HelloAnswer>>,
     next_reply_id: u64,
 }
+
+/// What a target sent back for one hello: its plain acknowledgement plus the
+/// answer to the sender's callback payload, when the sender asked one.
+pub type HelloAnswer = (String, Option<serde_json::Value>);
 
 impl ClientState {
     fn can_receive(&self) -> bool {
@@ -530,19 +544,26 @@ impl ClientRegistry {
         self.in_flight.load(Ordering::Acquire)
     }
 
-    /// Deliver a hello to one client and wait for its pong.
+    /// Deliver a hello to one client and wait for its answer.
     ///
     /// Fails with `unavailable` when the target is gone, still handshaking, or
     /// hidden — a hidden client is unreachable by design, so the sender gets
     /// a clear error instead of silence. A target in another group is
     /// unreachable for the same reason: the group is the isolation boundary,
     /// and it is enforced here so no caller can route around it.
+    ///
+    /// `payload` is the sender's callback argument. An empty object is a bare
+    /// greeting the target's SDK answers on its own; a non-empty one marks the
+    /// frame as `ask`, which the target's SDK does *not* answer for it, so the
+    /// measurement here is the time a real answer took rather than the time a
+    /// socket took.
     pub async fn send_hello(
         &self,
         target_link_id: &str,
         from: &str,
         text: &str,
-    ) -> Result<(u64, String), CallError> {
+        payload: Option<&serde_json::Value>,
+    ) -> Result<HelloOutcome, CallError> {
         if !self.same_group(from, target_link_id) {
             return Err(CallError::new(
                 conex_proto::ErrorCode::Forbidden,
@@ -586,16 +607,26 @@ impl ClientRegistry {
                 })
                 .unwrap_or_else(|| "某个客户端".to_string())
         };
-        let payload = serde_json::json!({
+        let asks = payload.is_some_and(|value| !value.as_object().is_some_and(Map::is_empty));
+        let mut params = serde_json::json!({
             "replyId": reply_id,
             "from": from,
             "fromName": from_name,
             "text": text,
         });
+        if let Some(params) = params.as_object_mut() {
+            // `ask: true` is the whole mechanism: the target answers a bare
+            // greeting itself, and withholds that answer when the sender asked
+            // a question, so a latency number can only ever be real.
+            params.insert("ask".into(), serde_json::Value::Bool(asks));
+            if let Some(payload) = payload.filter(|_| asks) {
+                params.insert("payload".into(), payload.clone());
+            }
+        }
         let frame = serde_json::json!({
             "jsonrpc": "2.0",
             "method": "conex/client-hello",
-            "params": payload,
+            "params": params,
         });
         let bytes = frame.to_string();
         if bytes.len() > MAX_PUSHED_BYTES {
@@ -612,8 +643,8 @@ impl ClientRegistry {
             self.in_flight.fetch_sub(1, Ordering::AcqRel);
             return Err(unavailable("target client is not connected"));
         }
-        let reply = match tokio::time::timeout(HELLO_TIMEOUT, receiver).await {
-            Ok(Ok(reply)) => reply,
+        let answer = match tokio::time::timeout(HELLO_TIMEOUT, receiver).await {
+            Ok(Ok(answer)) => answer,
             _ => {
                 self.resolve_reply(target_link_id, &reply_id, "");
                 self.in_flight.fetch_sub(1, Ordering::AcqRel);
@@ -626,25 +657,102 @@ impl ClientRegistry {
         // measurement, so it is recorded as 0 and rendered as "<1 ms" rather
         // than rounded up to a millisecond nobody waited.
         self.record_round_trip(from, target_link_id, elapsed);
-        Ok((elapsed, reply))
+        Ok(HelloOutcome {
+            round_trip_ms: elapsed,
+            reply: answer.0,
+            answer: answer.1,
+        })
     }
 
     /// Called by the target's WSS loop when it receives `conex/client-pong`.
     /// Returns false when the reply id is unknown or already timed out, so the
     /// caller can answer an unsolicited pong without inventing a result.
     pub fn resolve_reply(&self, link_id: &str, reply_id: &str, reply: &str) -> bool {
+        self.resolve_answer(link_id, reply_id, reply, None)
+    }
+
+    /// The full form: an acknowledgement plus an optional answer to the
+    /// sender's callback payload. The answer is capped before it is stored, so
+    /// one client cannot make another's hello resolve with an unbounded value.
+    pub fn resolve_answer(
+        &self,
+        link_id: &str,
+        reply_id: &str,
+        reply: &str,
+        answer: Option<&serde_json::Value>,
+    ) -> bool {
         let guard = self.by_link.lock().expect("client registry poisoned");
         let Some(state) = guard.get(link_id) else {
             return false;
         };
         let mut state = state.lock().expect("client state poisoned");
         if let Some(sender) = state.replies.remove(reply_id) {
-            let _ = sender.send(reply.to_string());
+            let _ = sender.send((reply.to_string(), answer.and_then(cap_answer)));
             true
         } else {
             false
         }
     }
+}
+
+/// What a completed hello measured and what the target answered.
+#[derive(Debug)]
+pub struct HelloOutcome {
+    pub round_trip_ms: u64,
+    pub reply: String,
+    pub answer: Option<serde_json::Value>,
+}
+
+/// Reject a callback payload that is too large to push, so the sender learns
+/// its own argument was refused instead of watching the target time out.
+pub fn cap_payload(value: &serde_json::Value) -> Result<Option<serde_json::Value>, CallError> {
+    let Some(object) = value.as_object() else {
+        return Ok(None);
+    };
+    if object.is_empty() {
+        return Ok(None);
+    }
+    let bytes = value.to_string().len();
+    if bytes > MAX_PAYLOAD_BYTES {
+        return Err(CallError::new(
+            conex_proto::ErrorCode::PayloadTooLarge,
+            format!("hello payload exceeds {MAX_PAYLOAD_BYTES} bytes"),
+        ));
+    }
+    Ok(Some(value.clone()))
+}
+
+/// Keep an answer small enough to hand back. The walk is breadth-first with a
+/// node budget, so a deep or wide object is dropped rather than fully
+/// traversed on behalf of whoever sent the hello.
+fn cap_answer(value: &serde_json::Value) -> Option<serde_json::Value> {
+    let mut budget = MAX_ANSWER_NODES;
+    fn walk(
+        value: &serde_json::Value,
+        depth: usize,
+        budget: &mut usize,
+    ) -> Option<serde_json::Value> {
+        if *budget == 0 || depth > MAX_ANSWER_DEPTH {
+            return None;
+        }
+        *budget -= 1;
+        Some(match value {
+            serde_json::Value::Object(fields) => serde_json::Value::Object(
+                fields
+                    .iter()
+                    .map(|(key, child)| Some((key.clone(), walk(child, depth + 1, budget)?)))
+                    .collect::<Option<serde_json::Map<_, _>>>()?,
+            ),
+            serde_json::Value::Array(items) => serde_json::Value::Array(
+                items
+                    .iter()
+                    .map(|item| walk(item, depth + 1, budget))
+                    .collect::<Option<Vec<_>>>()?,
+            ),
+            leaf => leaf.clone(),
+        })
+    }
+    walk(value, 0, &mut budget)
 }
 
 fn unavailable(message: &str) -> CallError {
@@ -746,7 +854,7 @@ mod tests {
             )
             .expect("profile set");
         let error = registry
-            .send_hello("link-b", "link-a", "hi")
+            .send_hello("link-b", "link-a", "hi", None)
             .await
             .expect_err("hidden client must be unreachable");
         assert_eq!(error.code(), conex_proto::ErrorCode::Unavailable as i32);
@@ -777,7 +885,7 @@ mod tests {
         }
         let mut rx = attach(&registry, "link-b");
         let error = registry
-            .send_hello("link-b", "link-a", "hi")
+            .send_hello("link-b", "link-a", "hi", None)
             .await
             .expect_err("a cross-group target must be refused");
         assert_eq!(error.code(), conex_proto::ErrorCode::Forbidden as i32);
@@ -1019,12 +1127,142 @@ mod tests {
                 .to_string();
             resolver.resolve_reply("link-b", &reply_id, "pong from b");
         });
-        let (round_trip_ms, reply) = registry
-            .send_hello("link-b", "link-a", "hi")
+        let outcome = registry
+            .send_hello("link-b", "link-a", "hi", None)
             .await
             .expect("hello");
         pump.await.expect("pump");
-        assert_eq!(reply, "pong from b");
-        assert!(u128::from(round_trip_ms) < HELLO_TIMEOUT.as_millis());
+        assert_eq!(outcome.reply, "pong from b");
+        assert!(u128::from(outcome.round_trip_ms) < HELLO_TIMEOUT.as_millis());
+    }
+
+    #[tokio::test]
+    async fn a_question_pushes_ask_and_waits_for_the_targets_own_answer() {
+        let registry = ClientRegistry::new();
+        registry.register("link-a", "guest", "demo", "ua");
+        let _rx_sender = attach(&registry, "link-a");
+        registry.register("link-b", "guest", "demo", "ua");
+        let queued = Arc::new(AtomicUsize::new(0));
+        let (tx, mut rx) = mpsc::channel(4);
+        registry.attach_writer("link-b", Outbound::new(tx, queued.clone()));
+        let drain = queued;
+        let resolver = registry.clone();
+        let pump = tokio::spawn(async move {
+            let Some((frame, bytes)) = rx.recv().await else {
+                return;
+            };
+            drain.fetch_sub(bytes, Ordering::AcqRel);
+            let Message::Text(text) = frame else {
+                return;
+            };
+            let value: serde_json::Value = serde_json::from_str(text.as_str()).expect("frame json");
+            // `ask: true` is what tells the target's SDK not to acknowledge on
+            // its own: without it the sender's latency would measure nothing.
+            assert_eq!(value["params"]["ask"], serde_json::Value::Bool(true));
+            assert_eq!(
+                value["params"]["payload"]["你的状态"],
+                serde_json::Value::String(String::new())
+            );
+            let reply_id = value["params"]["replyId"].as_str().expect("replyId");
+            resolver.resolve_answer(
+                "link-b",
+                reply_id,
+                "已回答",
+                Some(&serde_json::json!({ "你的状态": "在线" })),
+            );
+        });
+        let outcome = registry
+            .send_hello(
+                "link-b",
+                "link-a",
+                "请回答",
+                Some(&serde_json::json!({ "你的状态": "" })),
+            )
+            .await
+            .expect("hello");
+        pump.await.expect("pump");
+        assert_eq!(
+            outcome.answer,
+            Some(serde_json::json!({ "你的状态": "在线" })),
+            "the answer must reach the sender verbatim"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_bare_greeting_carries_no_ask_and_no_payload() {
+        let registry = ClientRegistry::new();
+        registry.register("link-a", "guest", "demo", "ua");
+        let _rx_sender = attach(&registry, "link-a");
+        registry.register("link-b", "guest", "demo", "ua");
+        let queued = Arc::new(AtomicUsize::new(0));
+        let (tx, mut rx) = mpsc::channel(4);
+        registry.attach_writer("link-b", Outbound::new(tx, queued.clone()));
+        let drain = queued;
+        let resolver = registry.clone();
+        let pump = tokio::spawn(async move {
+            let Some((frame, bytes)) = rx.recv().await else {
+                return;
+            };
+            drain.fetch_sub(bytes, Ordering::AcqRel);
+            let Message::Text(text) = frame else {
+                return;
+            };
+            let value: serde_json::Value = serde_json::from_str(text.as_str()).expect("frame json");
+            assert_eq!(
+                value["params"]["ask"],
+                serde_json::Value::Bool(false),
+                "a greeting must stay acknowledgeable by the target's SDK"
+            );
+            assert!(
+                value["params"].get("payload").is_none(),
+                "a greeting has no callback arguments to push"
+            );
+            let reply_id = value["params"]["replyId"].as_str().expect("replyId");
+            resolver.resolve_reply("link-b", reply_id, "pong");
+        });
+        // An empty payload is a greeting: it must not turn into a question
+        // that waits on a human to notice it.
+        let outcome = registry
+            .send_hello("link-b", "link-a", "hi", Some(&serde_json::json!({})))
+            .await
+            .expect("hello");
+        pump.await.expect("pump");
+        assert_eq!(outcome.answer, None);
+    }
+
+    #[test]
+    fn an_oversized_payload_is_refused_to_its_own_sender() {
+        let big = serde_json::json!({ "q": "x".repeat(MAX_PAYLOAD_BYTES) });
+        let error = cap_payload(&big).expect_err("an oversized payload must be refused");
+        assert_eq!(error.code(), conex_proto::ErrorCode::PayloadTooLarge as i32);
+        // An empty or absent payload is a greeting, not a zero-length question.
+        assert!(
+            cap_payload(&serde_json::json!({}))
+                .expect("empty")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn an_answer_deeper_or_wider_than_the_cap_is_dropped_not_walked() {
+        let mut deep = serde_json::json!("leaf");
+        for _ in 0..(MAX_ANSWER_DEPTH + 3) {
+            deep = serde_json::json!({ "n": deep });
+        }
+        assert!(
+            cap_answer(&deep).is_none(),
+            "too deep to be worth handing back"
+        );
+        let wide = serde_json::json!(
+            (0..(MAX_ANSWER_NODES + 5))
+                .map(|index| index.to_string())
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            cap_answer(&wide).is_none(),
+            "too wide to be worth handing back"
+        );
+        let ok = serde_json::json!({ "a": 1, "b": { "c": "x" } });
+        assert_eq!(cap_answer(&ok), Some(ok));
     }
 }

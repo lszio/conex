@@ -6,6 +6,7 @@
 
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
+import { Struct } from "../google/protobuf/struct";
 
 export const protobufPackage = "conex";
 
@@ -110,14 +111,25 @@ export interface ClientProfileResponse {
 
 /**
  * Sends a greeting to one online client. The host pushes
- * `conex/client-hello` to the target link; the target replies with
+ * `conex/client-hello` to the target link; the target answers with
  * `conex/client-pong`, which the host reports back to the sender together
  * with the measured round-trip time. An offline or hidden target fails with
  * `unavailable` rather than being silently dropped.
  */
 export interface ClientHelloRequest {
   targetLinkId?: string | undefined;
-  text?: string | undefined;
+  text?:
+    | string
+    | undefined;
+  /**
+   * Callback arguments: the fields the sender wants answered. An empty
+   * payload is a bare greeting — the target's SDK acknowledges it
+   * immediately, so a latency sample never waits on a human. A non-empty
+   * payload makes it a question: the frame is pushed with `ask`, the
+   * auto-acknowledge is skipped, and the round trip is only measured once the
+   * target actually answers it. Untrusted and length-capped by the host.
+   */
+  payload?: { [key: string]: any } | undefined;
 }
 
 export interface ClientHelloResult {
@@ -126,10 +138,18 @@ export interface ClientHelloResult {
     | undefined;
   /**
    * Round-trip milliseconds measured by the host, from handing the frame to
-   * the target's socket until its pong is read back.
+   * the target's socket until its answer is read back.
    */
   roundTripMs?: string | undefined;
-  reply?: string | undefined;
+  reply?:
+    | string
+    | undefined;
+  /**
+   * The target's answer to `payload`, echoed back verbatim. An empty object
+   * when the target acknowledged without answering, or answered with nothing
+   * the host could parse — never a fabricated value.
+   */
+  answer?: { [key: string]: any } | undefined;
 }
 
 /**
@@ -1363,7 +1383,7 @@ export const ClientProfileResponse: MessageFns<ClientProfileResponse> = {
 };
 
 function createBaseClientHelloRequest(): ClientHelloRequest {
-  return { targetLinkId: "", text: "" };
+  return { targetLinkId: "", text: "", payload: undefined };
 }
 
 export const ClientHelloRequest: MessageFns<ClientHelloRequest> = {
@@ -1373,6 +1393,9 @@ export const ClientHelloRequest: MessageFns<ClientHelloRequest> = {
     }
     if (message.text !== undefined && message.text !== "") {
       writer.uint32(18).string(message.text);
+    }
+    if (message.payload !== undefined) {
+      Struct.encode(Struct.wrap(message.payload), writer.uint32(26).fork()).join();
     }
     return writer;
   },
@@ -1406,6 +1429,14 @@ export const ClientHelloRequest: MessageFns<ClientHelloRequest> = {
             message.text = reader.string();
             continue;
           }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.payload = Struct.unwrap(Struct.decode(reader, reader.uint32()));
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -1426,6 +1457,7 @@ export const ClientHelloRequest: MessageFns<ClientHelloRequest> = {
         ? globalThis.String(object.target_link_id)
         : "",
       text: isSet(object.text) ? globalThis.String(object.text) : "",
+      payload: isObject(object.payload) ? object.payload : undefined,
     };
   },
 
@@ -1437,6 +1469,9 @@ export const ClientHelloRequest: MessageFns<ClientHelloRequest> = {
     if (message.text !== undefined && message.text !== "") {
       obj.text = message.text;
     }
+    if (message.payload !== undefined) {
+      obj.payload = message.payload;
+    }
     return obj;
   },
 
@@ -1447,12 +1482,13 @@ export const ClientHelloRequest: MessageFns<ClientHelloRequest> = {
     const message = createBaseClientHelloRequest();
     message.targetLinkId = object.targetLinkId ?? "";
     message.text = object.text ?? "";
+    message.payload = object.payload ?? undefined;
     return message;
   },
 };
 
 function createBaseClientHelloResult(): ClientHelloResult {
-  return { targetLinkId: "", roundTripMs: "0", reply: "" };
+  return { targetLinkId: "", roundTripMs: "0", reply: "", answer: undefined };
 }
 
 export const ClientHelloResult: MessageFns<ClientHelloResult> = {
@@ -1465,6 +1501,9 @@ export const ClientHelloResult: MessageFns<ClientHelloResult> = {
     }
     if (message.reply !== undefined && message.reply !== "") {
       writer.uint32(26).string(message.reply);
+    }
+    if (message.answer !== undefined) {
+      Struct.encode(Struct.wrap(message.answer), writer.uint32(34).fork()).join();
     }
     return writer;
   },
@@ -1506,6 +1545,14 @@ export const ClientHelloResult: MessageFns<ClientHelloResult> = {
             message.reply = reader.string();
             continue;
           }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.answer = Struct.unwrap(Struct.decode(reader, reader.uint32()));
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -1531,6 +1578,7 @@ export const ClientHelloResult: MessageFns<ClientHelloResult> = {
         ? globalThis.String(object.round_trip_ms)
         : "0",
       reply: isSet(object.reply) ? globalThis.String(object.reply) : "",
+      answer: isObject(object.answer) ? object.answer : undefined,
     };
   },
 
@@ -1545,6 +1593,9 @@ export const ClientHelloResult: MessageFns<ClientHelloResult> = {
     if (message.reply !== undefined && message.reply !== "") {
       obj.reply = message.reply;
     }
+    if (message.answer !== undefined) {
+      obj.answer = message.answer;
+    }
     return obj;
   },
 
@@ -1556,6 +1607,7 @@ export const ClientHelloResult: MessageFns<ClientHelloResult> = {
     message.targetLinkId = object.targetLinkId ?? "";
     message.roundTripMs = object.roundTripMs ?? "0";
     message.reply = object.reply ?? "";
+    message.answer = object.answer ?? undefined;
     return message;
   },
 };
@@ -1955,6 +2007,10 @@ export type DeepPartial<T> = T extends Builtin ? T
 type KeysOfUnion<T> = T extends T ? keyof T : never;
 export type Exact<P, I extends P> = P extends Builtin ? P
   : P & { [K in keyof P]: Exact<P[K], I[K]> } & { [K in Exclude<keyof I, KeysOfUnion<P>>]: never };
+
+function isObject(value: any): boolean {
+  return typeof value === "object" && value !== null;
+}
 
 function isSet(value: any): boolean {
   return value !== null && value !== undefined;

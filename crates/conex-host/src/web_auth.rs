@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -22,6 +22,10 @@ const SESSION_TTL_MS: u64 = 8 * 60 * 60 * 1000;
 /// independent from anonymous visitor capacity).
 const MAX_SESSIONS_PER_PRINCIPAL: usize = 8;
 const MAX_SESSIONS_GLOBAL: usize = 1024;
+/// Browser tabs one session may hold. A visitor with more than this many
+/// open tabs is not a scenario worth supporting, and an unbounded set is a
+/// per-request allocation someone can grow.
+pub const MAX_LINKS_PER_SESSION: usize = 32;
 /// How long a removed session id is remembered for the guest-cookie reissue
 /// decision (guest cookies may reissue; authenticated cookies must not
 /// silently downgrade).
@@ -61,7 +65,14 @@ pub struct WebSession {
     expires_at_ms: std::sync::atomic::AtomicU64,
     /// Sliding idle expiry; `None` for authenticated sessions (fixed TTL).
     idle_ttl_ms: Option<u64>,
-    pub link_id: String,
+    /// Links minted for this session, one per browser socket.
+    ///
+    /// A tab claims one with `POST /tickets` and presents it back on every
+    /// HTTP route, so two tabs sharing one cookie are two addressable clients
+    /// rather than one row that flickers between them. Membership is recorded
+    /// here rather than trusted from the request, so a page cannot claim
+    /// another tab's link.
+    links: Mutex<HashSet<String>>,
     revoked: std::sync::atomic::AtomicBool,
     pub revoked_signal: Notify,
 }
@@ -190,9 +201,6 @@ impl WebAuth {
                 "anonymous session capacity exceeded",
             ));
         }
-        let link = self
-            .ui_links
-            .register(&guest.principal_id, &guest.tenant_id);
         let session = Arc::new(WebSession {
             id: random_token(),
             csrf: random_token(),
@@ -211,12 +219,34 @@ impl WebAuth {
             },
             expires_at_ms: std::sync::atomic::AtomicU64::new(now + guest.idle_ttl_ms),
             idle_ttl_ms: Some(guest.idle_ttl_ms),
-            link_id: link.link_id.clone(),
+            links: Mutex::new(HashSet::new()),
             revoked: std::sync::atomic::AtomicBool::new(false),
             revoked_signal: Notify::new(),
         });
         sessions.insert(session.id.clone(), session.clone());
         Ok(session)
+    }
+
+    /// Record a link this session's tab now owns, and return the session's
+    /// full link set. Reclaiming a tab is this set's job, so the ticket route
+    /// calls it and nothing else has to.
+    pub fn claim_link(&self, session: &WebSession, link_id: &str) -> usize {
+        let mut links = session.links.lock().expect("session links poisoned");
+        links.insert(link_id.to_string());
+        // A session's tabs are bounded so a client cannot grow the set
+        // forever by asking for tickets in a loop.
+        links.len().min(MAX_LINKS_PER_SESSION)
+    }
+
+    /// Whether this session owns `link_id`. Every HTTP route resolves the
+    /// caller's link through here, so a link that is online but belongs to
+    /// another tab of the same session is still not usable by this request.
+    pub fn owns_link(&self, session: &WebSession, link_id: &str) -> bool {
+        session
+            .links
+            .lock()
+            .expect("session links poisoned")
+            .contains(link_id)
     }
 
     pub fn ui_links(&self) -> &Arc<UiLinkRegistry> {
@@ -268,9 +298,6 @@ impl WebAuth {
                 "web session capacity exceeded",
             ));
         }
-        let link = self
-            .ui_links
-            .register(&inbound.caller.principal_id, &inbound.caller.tenant_id);
         let session = Arc::new(WebSession {
             id: random_token(),
             csrf: random_token(),
@@ -283,7 +310,7 @@ impl WebAuth {
             },
             expires_at_ms: std::sync::atomic::AtomicU64::new(now + SESSION_TTL_MS),
             idle_ttl_ms: None,
-            link_id: link.link_id.clone(),
+            links: Mutex::new(HashSet::new()),
             revoked: std::sync::atomic::AtomicBool::new(false),
             revoked_signal: Notify::new(),
         });
@@ -350,7 +377,12 @@ impl WebAuth {
             let principal = session.caller.principal_id.clone();
             session.revoke();
             self.tickets.revoke_session(id);
-            self.ui_links.remove(&session.link_id);
+            // Revoking the session ends every tab it opened, so every link it
+            // claimed goes with it. Each tab's own socket cleanup path would
+            // otherwise still be holding a live, addressable client.
+            for link_id in session.links.lock().expect("session links poisoned").iter() {
+                self.ui_links.remove(link_id);
+            }
             self.record_tombstone(id, principal);
             true
         } else {

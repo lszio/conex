@@ -3548,12 +3548,18 @@ impl serde::Serialize for ClientHelloRequest {
         if !self.text.is_empty() {
             len += 1;
         }
+        if self.payload.is_some() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("conex.ClientHelloRequest", len)?;
         if !self.target_link_id.is_empty() {
             struct_ser.serialize_field("targetLinkId", &self.target_link_id)?;
         }
         if !self.text.is_empty() {
             struct_ser.serialize_field("text", &self.text)?;
+        }
+        if let Some(v) = self.payload.as_ref() {
+            struct_ser.serialize_field("payload", v)?;
         }
         struct_ser.end()
     }
@@ -3568,12 +3574,14 @@ impl<'de> serde::Deserialize<'de> for ClientHelloRequest {
             "target_link_id",
             "targetLinkId",
             "text",
+            "payload",
         ];
 
         #[allow(clippy::enum_variant_names)]
         enum GeneratedField {
             TargetLinkId,
             Text,
+            Payload,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -3597,6 +3605,7 @@ impl<'de> serde::Deserialize<'de> for ClientHelloRequest {
                         match value {
                             "targetLinkId" | "target_link_id" => Ok(GeneratedField::TargetLinkId),
                             "text" => Ok(GeneratedField::Text),
+                            "payload" => Ok(GeneratedField::Payload),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -3618,6 +3627,7 @@ impl<'de> serde::Deserialize<'de> for ClientHelloRequest {
             {
                 let mut target_link_id__ = None;
                 let mut text__ = None;
+                let mut payload__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::TargetLinkId => {
@@ -3632,11 +3642,18 @@ impl<'de> serde::Deserialize<'de> for ClientHelloRequest {
                             }
                             text__ = Some(map_.next_value()?);
                         }
+                        GeneratedField::Payload => {
+                            if payload__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("payload"));
+                            }
+                            payload__ = map_.next_value()?;
+                        }
                     }
                 }
                 Ok(ClientHelloRequest {
                     target_link_id: target_link_id__.unwrap_or_default(),
                     text: text__.unwrap_or_default(),
+                    payload: payload__,
                 })
             }
         }
@@ -3660,6 +3677,9 @@ impl serde::Serialize for ClientHelloResult {
         if !self.reply.is_empty() {
             len += 1;
         }
+        if self.answer.is_some() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("conex.ClientHelloResult", len)?;
         if !self.target_link_id.is_empty() {
             struct_ser.serialize_field("targetLinkId", &self.target_link_id)?;
@@ -3671,6 +3691,9 @@ impl serde::Serialize for ClientHelloResult {
         }
         if !self.reply.is_empty() {
             struct_ser.serialize_field("reply", &self.reply)?;
+        }
+        if let Some(v) = self.answer.as_ref() {
+            struct_ser.serialize_field("answer", v)?;
         }
         struct_ser.end()
     }
@@ -3687,6 +3710,7 @@ impl<'de> serde::Deserialize<'de> for ClientHelloResult {
             "round_trip_ms",
             "roundTripMs",
             "reply",
+            "answer",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -3694,6 +3718,7 @@ impl<'de> serde::Deserialize<'de> for ClientHelloResult {
             TargetLinkId,
             RoundTripMs,
             Reply,
+            Answer,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -3718,6 +3743,7 @@ impl<'de> serde::Deserialize<'de> for ClientHelloResult {
                             "targetLinkId" | "target_link_id" => Ok(GeneratedField::TargetLinkId),
                             "roundTripMs" | "round_trip_ms" => Ok(GeneratedField::RoundTripMs),
                             "reply" => Ok(GeneratedField::Reply),
+                            "answer" => Ok(GeneratedField::Answer),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -3740,6 +3766,7 @@ impl<'de> serde::Deserialize<'de> for ClientHelloResult {
                 let mut target_link_id__ = None;
                 let mut round_trip_ms__ = None;
                 let mut reply__ = None;
+                let mut answer__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::TargetLinkId => {
@@ -3762,12 +3789,19 @@ impl<'de> serde::Deserialize<'de> for ClientHelloResult {
                             }
                             reply__ = Some(map_.next_value()?);
                         }
+                        GeneratedField::Answer => {
+                            if answer__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("answer"));
+                            }
+                            answer__ = map_.next_value()?;
+                        }
                     }
                 }
                 Ok(ClientHelloResult {
                     target_link_id: target_link_id__.unwrap_or_default(),
                     round_trip_ms: round_trip_ms__.unwrap_or_default(),
                     reply: reply__.unwrap_or_default(),
+                    answer: answer__,
                 })
             }
         }

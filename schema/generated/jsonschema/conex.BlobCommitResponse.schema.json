@@ -617,6 +617,9 @@
     "conex.ClientHelloRequest": {
       "additionalProperties": false,
       "properties": {
+        "payload": {
+          "type": "object"
+        },
         "targetLinkId": {
           "type": "string"
         },
@@ -633,6 +636,9 @@
     "conex.ClientHelloResult": {
       "additionalProperties": false,
       "properties": {
+        "answer": {
+          "type": "object"
+        },
         "reply": {
           "type": "string"
         },
