@@ -135,6 +135,20 @@ pub async fn issue_ticket(
             "source/read".into(),
             "source/search".into(),
         ];
+        // The link is minted here, per ticket, so each tab is its own client.
+        // A tab that reconnects asks again and gets a new one: the old socket's
+        // cleanup already removed its row, and reusing the id would let a
+        // half-open link answer for a socket that is gone.
+        let link = web
+            .ui_links()
+            .register(&session.caller.principal_id, &session.caller.tenant_id);
+        if web.claim_link(&session, &link.link_id) >= crate::web_auth::MAX_LINKS_PER_SESSION {
+            web.ui_links().remove(&link.link_id);
+            return call_error_data_to_response(CallError::new(
+                conex_proto::ErrorCode::QuotaExceeded,
+                "too many open tabs for one session",
+            ));
+        }
         let ticket = match side.tickets.issue(
             &session.caller.principal_id,
             &session.caller.tenant_id,
@@ -146,6 +160,7 @@ pub async fn issue_ticket(
             "ui",
             capabilities,
             Some(session.id.clone()),
+            link.link_id,
         ) {
             Ok(ticket) => ticket,
             Err(error) => return call_error_data_to_response(error),
@@ -172,6 +187,9 @@ pub async fn issue_ticket(
         &request.peer_role,
         request.capability_caps,
         request.session_id,
+        // A bearer caller has no browser tab to name, and the link is only
+        // read back on the WSS upgrade, so the generated id is enough.
+        crate::ui_links::new_link_id(),
     ) {
         Ok(ticket) => ticket_response(ticket),
         Err(error) => call_error_data_to_response(error),
@@ -189,6 +207,9 @@ fn ticket_response(ticket: crate::agent::WebTicket) -> Response {
             "targetHost": ticket.target_host,
             "peerRole": ticket.peer_role,
             "capabilityCaps": ticket.capability_caps,
+            // The tab is told which link it now owns, so its HTTP routes can
+            // say who they are without a second round trip.
+            "linkId": ticket.link_id,
             "issuedAtMs": ticket.issued_at_ms.to_string(),
             "expiresAtMs": ticket.expires_at_ms.to_string(),
         })),

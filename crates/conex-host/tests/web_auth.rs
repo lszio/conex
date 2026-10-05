@@ -361,6 +361,7 @@ fn tickets_are_random_one_use_and_origin_bound() {
             "ui",
             vec!["source/read".into()],
             Some("session".into()),
+            "link-test".into(),
         )
         .expect("first ticket");
     let second = registry
@@ -372,6 +373,7 @@ fn tickets_are_random_one_use_and_origin_bound() {
             "ui",
             vec!["source/read".into()],
             Some("session".into()),
+            "link-test".into(),
         )
         .expect("second ticket");
     assert_ne!(first.ticket, second.ticket);
@@ -399,6 +401,7 @@ fn tickets_are_random_one_use_and_origin_bound() {
             "agent",
             Vec::new(),
             None,
+            "link-agent".into(),
         )
         .expect("agent ticket");
     assert_eq!(agent.peer_role, "agent");

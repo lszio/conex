@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package conex;
 
+import "google/protobuf/struct.proto";
+
 // Connection panel messages (L10). Real-time view of every browser link and
 // every reverse-connected agent link on the host. Only ui role callers can
 // inspect the UI link rows; service/agent roles are rejected at the broker.
@@ -80,21 +82,32 @@ message ClientProfileResponse {
 }
 
 // Sends a greeting to one online client. The host pushes
-// `conex/client-hello` to the target link; the target replies with
+// `conex/client-hello` to the target link; the target answers with
 // `conex/client-pong`, which the host reports back to the sender together
 // with the measured round-trip time. An offline or hidden target fails with
 // `unavailable` rather than being silently dropped.
 message ClientHelloRequest {
   string target_link_id = 1;
   string text = 2;
+  // Callback arguments: the fields the sender wants answered. An empty
+  // payload is a bare greeting — the target's SDK acknowledges it
+  // immediately, so a latency sample never waits on a human. A non-empty
+  // payload makes it a question: the frame is pushed with `ask`, the
+  // auto-acknowledge is skipped, and the round trip is only measured once the
+  // target actually answers it. Untrusted and length-capped by the host.
+  google.protobuf.Struct payload = 3;
 }
 
 message ClientHelloResult {
   string target_link_id = 1;
   // Round-trip milliseconds measured by the host, from handing the frame to
-  // the target's socket until its pong is read back.
+  // the target's socket until its answer is read back.
   uint64 round_trip_ms = 2;
   string reply = 3;
+  // The target's answer to `payload`, echoed back verbatim. An empty object
+  // when the target acknowledged without answering, or answered with nothing
+  // the host could parse — never a fabricated value.
+  google.protobuf.Struct answer = 4;
 }
 
 // `client/status`: what the host sees right now. Aggregate counters plus one

@@ -235,84 +235,100 @@ pub async fn ws_handler_with_state(
         )
             .into_response();
     }
-    let (caller, role, capability_caps, web_session, ui_links_ref) = if let Some(ticket) = ticket {
-        let Some(web) = state.web_auth.as_ref() else {
-            return (StatusCode::UNAUTHORIZED, "web auth is not configured").into_response();
-        };
-        if let Err(error) = web.check_origin(&headers) {
-            return crate::web_auth::error_response(error);
-        }
-        let origin = headers
-            .get(axum::http::header::ORIGIN)
-            .and_then(|value| value.to_str().ok())
-            .unwrap_or_default();
-        let target_host = headers
-            .get(axum::http::header::HOST)
-            .and_then(|value| value.to_str().ok())
-            .unwrap_or_default();
-        let entry = match state
-            .host_side
-            .as_ref()
-            .and_then(|side| side.tickets.consume_for(ticket, origin, target_host).ok())
-        {
-            Some(entry) => entry,
-            None => return (StatusCode::UNAUTHORIZED, "invalid ticket").into_response(),
-        };
-        if entry.peer_role != "ui" {
-            return (
-                StatusCode::UNAUTHORIZED,
-                "ticket role is not valid for browser links",
-            )
-                .into_response();
-        }
-        let Some(session_id) = entry.session_id.as_deref() else {
-            return (
-                StatusCode::UNAUTHORIZED,
-                "ticket is not bound to a web session",
-            )
-                .into_response();
-        };
-        let Some(session) = web.get(session_id) else {
-            return (
-                StatusCode::UNAUTHORIZED,
-                "web session is invalid or expired",
-            )
-                .into_response();
-        };
-        if session.caller.principal_id != entry.principal_id
-            || session.caller.tenant_id != entry.tenant_id
-        {
-            return (StatusCode::UNAUTHORIZED, "ticket session binding mismatch").into_response();
-        }
-        let registry = state.ui_links.clone();
-        registry.increment_tickets(&session.link_id);
-        (
-            session.caller.clone(),
-            session.role.clone(),
-            entry.capability_caps,
-            Some(session),
-            Some(registry),
-        )
-    } else {
-        let inbound = match state.auth.authenticate(authorization) {
-            Ok(inbound) => inbound,
-            Err(error) => {
+    let (caller, role, capability_caps, web_session, ui_links_ref, ticket_link_id) =
+        if let Some(ticket) = ticket {
+            let Some(web) = state.web_auth.as_ref() else {
+                return (StatusCode::UNAUTHORIZED, "web auth is not configured").into_response();
+            };
+            if let Err(error) = web.check_origin(&headers) {
+                return crate::web_auth::error_response(error);
+            }
+            let origin = headers
+                .get(axum::http::header::ORIGIN)
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or_default();
+            let target_host = headers
+                .get(axum::http::header::HOST)
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or_default();
+            let entry = match state
+                .host_side
+                .as_ref()
+                .and_then(|side| side.tickets.consume_for(ticket, origin, target_host).ok())
+            {
+                Some(entry) => entry,
+                None => return (StatusCode::UNAUTHORIZED, "invalid ticket").into_response(),
+            };
+            if entry.peer_role != "ui" {
                 return (
                     StatusCode::UNAUTHORIZED,
-                    axum::Json(json!({ "code": error.code(), "message": error.message() })),
+                    "ticket role is not valid for browser links",
                 )
                     .into_response();
             }
-        };
-        if inbound.role == "ui" {
-            return (
-                StatusCode::UNAUTHORIZED,
-                "UI links require a session ticket",
+            let Some(session_id) = entry.session_id.as_deref() else {
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    "ticket is not bound to a web session",
+                )
+                    .into_response();
+            };
+            let Some(session) = web.get(session_id) else {
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    "web session is invalid or expired",
+                )
+                    .into_response();
+            };
+            if session.caller.principal_id != entry.principal_id
+                || session.caller.tenant_id != entry.tenant_id
+            {
+                return (StatusCode::UNAUTHORIZED, "ticket session binding mismatch")
+                    .into_response();
+            }
+            // The link is the ticket's, not the session's: two tabs on one cookie
+            // are two clients, and this is what makes them two.
+            if !state
+                .web_auth
+                .as_ref()
+                .is_some_and(|web| web.owns_link(&session, &entry.link_id))
+            {
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    "ticket link is not bound to this web session",
+                )
+                    .into_response();
+            }
+            let registry = state.ui_links.clone();
+            registry.increment_tickets(&entry.link_id);
+            (
+                session.caller.clone(),
+                session.role.clone(),
+                entry.capability_caps,
+                Some(session),
+                Some(registry),
+                Some(entry.link_id),
             )
-                .into_response();
-        }
-        (inbound.caller, inbound.role, Vec::new(), None, None)
-    };
+        } else {
+            let inbound = match state.auth.authenticate(authorization) {
+                Ok(inbound) => inbound,
+                Err(error) => {
+                    return (
+                        StatusCode::UNAUTHORIZED,
+                        axum::Json(json!({ "code": error.code(), "message": error.message() })),
+                    )
+                        .into_response();
+                }
+            };
+            if inbound.role == "ui" {
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    "UI links require a session ticket",
+                )
+                    .into_response();
+            }
+            (inbound.caller, inbound.role, Vec::new(), None, None, None)
+        };
     let advertised = if role == "ui" {
         capability_caps.clone()
     } else {
@@ -327,12 +343,12 @@ pub async fn ws_handler_with_state(
     wss_state.ui_links = ui_links_ref.clone();
     wss_state.clients = Some(state.clients.clone());
     wss_state.shares = Some(state.shares.clone());
-    if let Some(session) = web_session.as_ref() {
-        wss_state.ui_link_id = Some(session.link_id.clone());
+    if let (Some(session), Some(link_id)) = (web_session.as_ref(), ticket_link_id.as_ref()) {
+        wss_state.ui_link_id = Some(link_id.clone());
         // A client exists as soon as its link is minted so it can be listed;
         // it only becomes addressable once the writer is attached after ready.
         state.clients.register(
-            &session.link_id,
+            link_id,
             &session.caller.principal_id,
             &session.caller.tenant_id,
             "",
@@ -532,11 +548,16 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                         // JSON-RPC notification. It is handled here, before
                         // the broker frame path, because notifications carry
                         // no request id and are dropped there.
-                        if let Some(reply) = client_pong(&text) {
+                        if let Some(reply) = client_answer(&text) {
                             if let (Some(clients), Some(link_id)) =
                                 (state.clients.as_ref(), state.ui_link_id.as_ref())
                             {
-                                clients.resolve_reply(link_id, &reply.id, &reply.text);
+                                clients.resolve_answer(
+                                    link_id,
+                                    &reply.id,
+                                    &reply.text,
+                                    reply.answer.as_ref(),
+                                );
                             }
                             continue;
                         }
@@ -1046,9 +1067,12 @@ fn broker_frame_from_message(message: conex_proto::Message) -> CallResult<Option
 struct ClientPong {
     id: String,
     text: String,
+    /// The target's answer to the sender's callback payload. `None` for a bare
+    /// acknowledgement, which carries no answer by definition.
+    answer: Option<Value>,
 }
 
-fn client_pong(text: &str) -> Option<ClientPong> {
+fn client_answer(text: &str) -> Option<ClientPong> {
     let value: Value = serde_json::from_str(text).ok()?;
     if value.get("method").and_then(Value::as_str) != Some("conex/client-pong") {
         return None;
@@ -1067,6 +1091,13 @@ fn client_pong(text: &str) -> Option<ClientPong> {
             .chars()
             .take(200)
             .collect(),
+        // A non-object answer is dropped rather than coerced: the contract is
+        // an object of answered fields, and anything else is a client bug that
+        // must not reach the sender as data.
+        answer: params
+            .get("answer")
+            .filter(|answer| answer.is_object())
+            .cloned(),
     })
 }
 
@@ -1765,7 +1796,7 @@ mod tests {
 
 #[cfg(test)]
 mod client_pong_tests {
-    use super::client_pong;
+    use super::client_answer;
 
     #[test]
     fn parses_the_frame_the_host_pushes() {
@@ -1773,22 +1804,25 @@ mod client_pong_tests {
         let pushed = r#"{"jsonrpc":"2.0","method":"conex/client-hello","params":{"replyId":"7","from":"link-a","text":"hi"}}"#;
         // The client's answer, as the SDK sends it.
         let pong = r#"{"jsonrpc":"2.0","method":"conex/client-pong","params":{"replyId":"7","reply":"pong"}}"#;
-        assert!(client_pong(pushed).is_none(), "a hello push is not a pong");
-        let parsed = client_pong(pong).expect("pong must parse");
+        assert!(
+            client_answer(pushed).is_none(),
+            "a hello push is not a pong"
+        );
+        let parsed = client_answer(pong).expect("pong must parse");
         assert_eq!(parsed.id, "7");
         assert_eq!(parsed.text, "pong");
     }
 
     #[test]
     fn ignores_frames_that_are_not_pongs() {
-        assert!(client_pong(r#"{"jsonrpc":"2.0","id":"1","result":{}}"#).is_none());
-        assert!(client_pong(r#"{"jsonrpc":"2.0","method":"conex/client-pong"}"#).is_none());
+        assert!(client_answer(r#"{"jsonrpc":"2.0","id":"1","result":{}}"#).is_none());
+        assert!(client_answer(r#"{"jsonrpc":"2.0","method":"conex/client-pong"}"#).is_none());
         assert!(
-            client_pong(
+            client_answer(
                 r#"{"jsonrpc":"2.0","method":"conex/client-pong","params":{"replyId":""}}"#
             )
             .is_none()
         );
-        assert!(client_pong("not json").is_none());
+        assert!(client_answer("not json").is_none());
     }
 }

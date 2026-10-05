@@ -178,7 +178,7 @@ impl Visitor {
             .expect("csrf")
             .to_string();
 
-        let ticket = http
+        let ticket_body = http
             .post(format!("{origin}/tickets"))
             .header("cookie", &cookie)
             .header("origin", &origin)
@@ -189,9 +189,16 @@ impl Visitor {
             .expect("ticket")
             .json::<Value>()
             .await
-            .expect("ticket json")["ticket"]
+            .expect("ticket json");
+        let ticket = ticket_body["ticket"]
             .as_str()
             .expect("ticket value")
+            .to_string();
+        // The link is minted per ticket, so two tabs on one cookie are two
+        // clients. The share routes resolve the caller from it.
+        let link_id = ticket_body["linkId"]
+            .as_str()
+            .expect("ticket linkId")
             .to_string();
 
         use tokio_tungstenite::tungstenite::client::IntoClientRequest;
@@ -240,7 +247,7 @@ impl Visitor {
         Self {
             cookie,
             csrf,
-            link_id: String::new(),
+            link_id,
             socket: Some(socket),
         }
     }
@@ -304,14 +311,17 @@ impl Visitor {
             .get(format!("http://{}/web/files", host.addr))
             .header("cookie", &self.cookie)
             .header("origin", format!("http://{}", host.addr))
+            .header("x-conex-link-id", &self.link_id)
     }
 
     /// The download route, not the listing route: the two are different paths
-    /// and a query string on the listing route would simply be ignored.
+    /// and a query string on the listing route would simply be ignored. The
+    /// link rides in the query here because this is what a plain `<a href>`
+    /// does; the host checks it against the session all the same.
     fn download(&self, host: &Host, id: &str) -> reqwest::RequestBuilder {
         reqwest::Client::new()
             .get(format!("http://{}/web/files/download", host.addr))
-            .query(&[("id", id)])
+            .query(&[("id", id), ("linkId", &self.link_id)])
             .header("cookie", &self.cookie)
             .header("origin", format!("http://{}", host.addr))
     }
@@ -335,6 +345,7 @@ impl Visitor {
             .header("cookie", &self.cookie)
             .header("origin", format!("http://{}", host.addr))
             .header("x-csrf-token", &self.csrf)
+            .header("x-conex-link-id", &self.link_id)
             .header("x-conex-file-name", name)
             .header("x-conex-file-type", mime)
             .body(bytes)
@@ -569,6 +580,9 @@ async fn only_the_owner_may_withdraw_a_file() {
         .header("cookie", &bob.cookie)
         .header("origin", format!("http://{}", host.addr))
         .header("x-csrf-token", &bob.csrf)
+        // Bob's own link: he is a real client here, and ownership — not his
+        // mere session — is what must refuse him.
+        .header("x-conex-link-id", &bob.link_id)
         .json(&json!({ "id": file_id }))
         .send()
         .await
@@ -588,6 +602,7 @@ async fn only_the_owner_may_withdraw_a_file() {
         .header("cookie", &alice.cookie)
         .header("origin", format!("http://{}", host.addr))
         .header("x-csrf-token", &alice.csrf)
+        .header("x-conex-link-id", &alice.link_id)
         .json(&json!({ "id": file_id }))
         .send()
         .await

@@ -142,6 +142,16 @@ async fn http_login(addr: SocketAddr, origin: &str) -> WebSession {
 }
 
 async fn fetch_ticket(addr: SocketAddr, origin: &str, session: &WebSession) -> String {
+    fetch_ticket_with_link(addr, origin, session).await.0
+}
+
+/// The ticket plus the link it opened. The link is minted per ticket, so two
+/// tabs on one cookie get two of them — that is the whole point of the split.
+async fn fetch_ticket_with_link(
+    addr: SocketAddr,
+    origin: &str,
+    session: &WebSession,
+) -> (String, String) {
     let resp = reqwest::Client::new()
         .post(format!("http://{addr}/tickets"))
         .header(ORIGIN, origin)
@@ -158,10 +168,18 @@ async fn fetch_ticket(addr: SocketAddr, origin: &str, session: &WebSession) -> S
         resp.status()
     );
     let body: Value = resp.json().await.expect("ticket body");
-    body.get("ticket")
+    let ticket = body
+        .get("ticket")
         .and_then(Value::as_str)
         .map(str::to_owned)
-        .expect("ticket value")
+        .expect("ticket value");
+    let link_id = body
+        .get("linkId")
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+        .expect("ticket linkId");
+    (ticket, link_id)
 }
 
 async fn open_wss(
@@ -360,7 +378,7 @@ async fn killing_wss_keeps_link_listed_but_freezes_last_seen() {
     let host = HostHandle::spawn().await;
     let origin = format!("http://{}", host.addr);
     let session = http_login(host.addr, &origin).await;
-    let ticket = fetch_ticket(host.addr, &origin, &session).await;
+    let (ticket, link1) = fetch_ticket_with_link(host.addr, &origin, &session).await;
 
     let mut ws = open_wss(host.addr, &ticket, &origin).await;
     bootstrap(&mut ws).await;
@@ -372,22 +390,38 @@ async fn killing_wss_keeps_link_listed_but_freezes_last_seen() {
         .to_string();
     drop(ws);
 
-    let ticket2 = fetch_ticket(host.addr, &origin, &session).await;
+    // A reconnect mints a second link: the cookie is the same, but a socket
+    // that is gone can never answer, so the new one is a new client.
+    let (ticket2, link2) = fetch_ticket_with_link(host.addr, &origin, &session).await;
+    assert_ne!(link1, link2, "one session, two sockets, two links");
     let mut ws2 = open_wss(host.addr, &ticket2, &origin).await;
     bootstrap(&mut ws2).await;
     let after = wss_connection_list(&mut ws2).await;
+    let links = after["browserLinks"].as_array().expect("browserLinks");
     assert_eq!(
-        after["browserLinks"].as_array().unwrap().len(),
-        1,
-        "previous WS closing must not remove the link"
+        links.len(),
+        2,
+        "the dead link is still listed next to the live one: {after}"
     );
-    let after_seen = after["browserLinks"][0]["lastSeenAtMs"]
-        .as_str()
-        .unwrap()
-        .to_string();
+    let dead = links
+        .iter()
+        .find(|link| link["linkId"] == link1)
+        .expect("the closed link must stay listed");
+    assert_eq!(
+        dead["lastSeenAtMs"].as_str().unwrap(),
+        first_seen,
+        "a dead link's lastSeenAtMs freezes instead of advancing"
+    );
+    let live_seen = links
+        .iter()
+        .find(|link| link["linkId"] == link2)
+        .and_then(|link| link["lastSeenAtMs"].as_str())
+        .expect("the new link")
+        .parse::<u64>()
+        .unwrap();
     assert!(
-        after_seen.parse::<u64>().unwrap() >= first_seen.parse::<u64>().unwrap(),
-        "lastSeenAtMs must not regress (before={first_seen}, after={after_seen})"
+        live_seen >= first_seen.parse::<u64>().unwrap(),
+        "lastSeenAtMs must not regress (before={first_seen}, after={live_seen})"
     );
 
     ws2.close(None).await.ok();
