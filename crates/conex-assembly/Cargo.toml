@@ -2,6 +2,10 @@
 name = "conex-assembly"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "conex assembly root that wires providers into the host"
 
 [dependencies]
 conex-core = { path = "../conex-core" }
