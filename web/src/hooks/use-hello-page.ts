@@ -10,12 +10,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ConexWsClient, type ClientSummary } from "@conex/sdk";
 
-import { listFiles, uploadFile, downloadFileUrl, removeFile, setCsrfToken, type SharedFile } from "@/lib/files";
+import { listFiles, uploadFile, downloadFileUrl, removeFile, setCsrfToken, setLinkId, type SharedFile } from "@/lib/files";
 
 const CACHE_KEY = "conex.profile.v1";
 const POLL_MS = 3000;
 const LOG_LIMIT = 40;
-const BUBBLE_LIMIT = 24;
+const TOAST_LIMIT = 6;
 
 export interface LogEntry {
   id: number;
@@ -24,16 +24,26 @@ export interface LogEntry {
   tone: "out" | "in" | "system";
 }
 
-/** A hello shown as a bubble on the target site, newest last. */
-export interface Bubble {
+/**
+ * A notification in the corner, not a line in a transcript.
+ *
+ * A hello is an event, not a conversation: it arrives, it is read, it is gone.
+ * `replyId` is present only while the notification is a question waiting for
+ * this tab to answer it — that is what lets a toast own a confirm button
+ * without the page having to track which greeting it belongs to.
+ */
+export interface Toast {
   id: number;
   at: number;
-  /** Display name of the peer, resolved by the host. */
-  from: string;
-  text: string;
-  direction: "in" | "out";
-  /** Round-trip milliseconds; only present for an outgoing hello. */
-  roundTripMs?: number;
+  title: string;
+  body: string;
+  tone: "info" | "success" | "error";
+  /** Present when this toast is a question the host is still waiting on. */
+  replyId?: string;
+  /** The fields the sender asked about, echoed in the confirm prompt. */
+  fields?: string[];
+  /** How long before the toast leaves on its own; questions never expire. */
+  ttlMs: number;
 }
 
 /** One row of `client/status`. */
@@ -98,7 +108,7 @@ export interface HelloPageState {
   clients: ClientSummary[];
   selfLinkId: string;
   messages: LogEntry[];
-  bubbles: Bubble[];
+  toasts: Toast[];
   draft: CachedProfile;
   savedNotice: string;
   status: StatusState;
@@ -109,7 +119,10 @@ export interface HelloPageState {
   /** Takes the profile to save: setState is async, so reading `draft` here
    *  after onChange would persist the previous values. */
   save: (next: CachedProfile) => Promise<void>;
-  greet: (target: ClientSummary) => void;
+  greet: (target: ClientSummary, ask?: string) => void;
+  /** Answer a question the host pushed, with a value per asked field. */
+  answerToast: (toast: Toast, values: Record<string, string>) => void;
+  dismissToast: (id: number) => void;
   shareFiles: (files: FileList) => Promise<void>;
   withdrawFile: (file: SharedFile) => Promise<void>;
   fileUrl: (file: SharedFile) => string;
@@ -127,7 +140,7 @@ export function useHelloPage(): HelloPageState {
   const [clients, setClients] = useState<ClientSummary[]>([]);
   const [selfLinkId, setSelfLinkId] = useState("");
   const [messages, setMessages] = useState<LogEntry[]>([]);
-  const [bubbles, setBubbles] = useState<Bubble[]>([]);
+  const [toasts, setToasts] = useState<Toast[]>([]);
   const [draft, setDraft] = useState<CachedProfile>(cached.current);
   const [savedNotice, setSavedNotice] = useState("");
   const [status, setStatus] = useState<StatusState>(EMPTY_STATUS);
@@ -137,7 +150,7 @@ export function useHelloPage(): HelloPageState {
 
   const clientRef = useRef<ConexWsClient | undefined>(undefined);
   const logId = useRef(0);
-  const bubbleId = useRef(0);
+  const toastId = useRef(0);
   const selfLinkRef = useRef("");
 
   const log = useCallback((text: string, tone: LogEntry["tone"] = "system") => {
@@ -151,12 +164,16 @@ export function useHelloPage(): HelloPageState {
     [],
   );
 
-  const pushBubble = useCallback((bubble: Omit<Bubble, "id" | "at">) => {
-    bubbleId.current += 1;
-    const entry: Bubble = { ...bubble, id: bubbleId.current, at: Date.now() };
-    // Bubbles read as a conversation, so the newest goes last; the cap keeps
-    // a long session from growing the DOM without bound.
-    setBubbles((previous) => [...previous, entry].slice(-BUBBLE_LIMIT));
+  const dismissToast = useCallback((id: number) => {
+    setToasts((previous) => previous.filter((toast) => toast.id !== id));
+  }, []);
+
+  const pushToast = useCallback((toast: Omit<Toast, "id" | "at">) => {
+    toastId.current += 1;
+    const entry: Toast = { ...toast, id: toastId.current, at: Date.now() };
+    // Newest last so the stack reads top-down; the cap keeps a chatty group
+    // from filling the corner, and a question outranks a notice when it does.
+    setToasts((previous) => [...previous, entry].slice(-TOAST_LIMIT));
   }, []);
 
   const refresh = useCallback(async () => {
@@ -207,6 +224,10 @@ export function useHelloPage(): HelloPageState {
       if (!self?.linkId) return;
       selfLinkRef.current = self.linkId;
       setSelfLinkId(self.linkId);
+      // The share routes resolve the caller from this header, and the host
+      // refuses a link the session does not own. The SDK's ticket link is the
+      // same one the host registered for this socket, so they always agree.
+      setLinkId(client.linkId ?? self.linkId);
       // The host may suffix a duplicate name; show what it actually assigned
       // rather than what was typed, so the field never lies about the name
       // other visitors will see.
@@ -243,11 +264,31 @@ export function useHelloPage(): HelloPageState {
       });
       client.onHello((hello) => {
         const from = hello.fromName || "某个客户端";
-        // The bubble is the point of the hello scene: the greeting appears
-        // on the target's own page, with the sender's name resolved by the
-        // host rather than by the sender's page.
-        pushBubble({ from, text: hello.text || "hello", direction: "in" });
-        log(`收到 ${from} 的 hello`, "in");
+        if (!hello.ask) {
+          // A greeting is already acknowledged by the SDK, so this tab has
+          // nothing to decide: it arrives as a notice and goes away on its own.
+          pushToast({
+            title: `${from} 向你打招呼`,
+            body: hello.text || "hello",
+            tone: "info",
+            ttlMs: 5000,
+          });
+          log(`收到 ${from} 的 hello`, "in");
+          return;
+        }
+        // A question is not answered by this client — only by the person
+        // looking at it, so it stays until they confirm or dismiss it. The
+        // sender is timing out on a real human either way.
+        const fields = Object.keys(hello.payload);
+        pushToast({
+          title: `${from} 提问`,
+          body: hello.text || "请回答",
+          tone: "info",
+          replyId: hello.replyId,
+          fields,
+          ttlMs: 0,
+        });
+        log(`收到 ${from} 的提问：${fields.join("、") || "无字段"}`, "in");
       });
       await client.connect();
       setConnection("ready");
@@ -280,7 +321,7 @@ export function useHelloPage(): HelloPageState {
       window.clearInterval(poll);
       clientRef.current?.close();
     };
-  }, [log, pushBubble, refresh, refreshFiles]);
+  }, [log, pushToast, refresh, refreshFiles]);
 
   const save = useCallback(
     async (profile: CachedProfile) => {
@@ -320,36 +361,78 @@ export function useHelloPage(): HelloPageState {
   );
 
   const greet = useCallback(
-    (target: ClientSummary) => {
+    (target: ClientSummary, ask?: string) => {
       const client = clientRef.current;
       const linkId = target.linkId;
       const name = label(target);
       if (!client || !linkId) return;
-      // The bubble goes in before the round trip finishes so the greeting is
-      // visible immediately; the measured latency fills in when it answers.
-      pushBubble({ from: name, text: "hello", direction: "out" });
+      // The question's field name *is* the callback argument: whatever the
+      // sender typed is the key the target's confirm form is asked to fill.
+      const field = ask?.trim();
+      const payload = field ? { [field]: "" } : undefined;
       void (async () => {
         try {
-          // The host attaches the sender's display name; the text stays plain so
-          // the recipient is not told twice who is greeting them.
-          const result = await client.sendHello(linkId, "hello");
+          // A question carries a payload, so the host waits for a real answer
+          // instead of the target's automatic acknowledgement.
+          const result = await client.sendHello(
+            linkId,
+            payload ? "请回答这个问题" : "hello",
+            payload,
+          );
           const measured = Number(result.roundTripMs ?? "0");
           // A sub-millisecond result is real but reads as zero; say so rather
           // than rounding a valid measurement into a fake one.
           const shown = measured < 1 ? "<1 ms" : `${measured} ms`;
-          setBubbles((previous) => {
-            const last = previous[previous.length - 1];
-            if (!last || last.direction !== "out" || last.roundTripMs !== undefined) return previous;
-            return [...previous.slice(0, -1), { ...last, roundTripMs: measured }];
+          const answered = Object.entries(result.answer ?? {});
+          pushToast({
+            title: payload ? `${name} 的回答` : `已发送 hello 给 ${name}`,
+            body: answered.length
+              ? answered.map(([field, value]) => `${field}：${String(value)}`).join("，")
+              : `${name} 已确认，${shown}`,
+            tone: "success",
+            ttlMs: payload ? 0 : 5000,
           });
           log(`→ ${name}：${shown}，回复「${result.reply}」`, "out");
         } catch (error) {
+          pushToast({
+            title: `发送给 ${name} 失败`,
+            body: error instanceof Error ? error.message : String(error),
+            tone: "error",
+            ttlMs: 8000,
+          });
           log(`→ ${name} 失败：${error instanceof Error ? error.message : String(error)}`, "out");
         }
         await refresh();
       })();
     },
-    [label, log, pushBubble, refresh],
+    [label, log, pushToast, refresh],
+  );
+
+  const answerToast = useCallback(
+    (toast: Toast, values: Record<string, string>) => {
+      const client = clientRef.current;
+      if (!client || !toast.replyId) return;
+      const answer: Record<string, string> = {};
+      for (const field of toast.fields ?? Object.keys(values)) {
+        const value = values[field]?.trim();
+        // An empty field is omitted rather than sent as "": the sender gets a
+        // shorter answer instead of a field that looks answered and is not.
+        if (value) answer[field] = value;
+      }
+      if (Object.keys(answer).length === 0) return;
+      if (!client.answerHello(toast.replyId, answer, "已回答")) {
+        pushToast({
+          title: "回答未送达",
+          body: "连接已断开，这条提问没有发出去",
+          tone: "error",
+          ttlMs: 8000,
+        });
+        return;
+      }
+      dismissToast(toast.id);
+      log(`已回答 ${toast.title}：${Object.keys(answer).join("、")}`, "out");
+    },
+    [dismissToast, log, pushToast],
   );
 
   const shareFiles = useCallback(
@@ -396,7 +479,7 @@ export function useHelloPage(): HelloPageState {
     clients,
     selfLinkId,
     messages,
-    bubbles,
+    toasts,
     draft,
     savedNotice,
     status,
@@ -406,6 +489,8 @@ export function useHelloPage(): HelloPageState {
     setDraft,
     save,
     greet,
+    answerToast,
+    dismissToast,
     shareFiles,
     withdrawFile,
     fileUrl: downloadFileUrl,
