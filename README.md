@@ -7,6 +7,8 @@
 一个中心 host 统一做认证、授权、端点目录与路由；文件、HTTP 目录、反向连接的 agent
 作为 provider 接入同一份契约。Rust 内核 + TypeScript SDK + 一个能真连真跑的工作台。
 
+**当前状态（2026-10-06）：** 落地页是**工作台**：顶部状态栏常驻本标签页的名字、短链接、分组 key 与在线数，面板切换内容。**一个标签页就是一个客户端**——链接在取 WSS 票据时铸造，同一浏览器的两个标签页共享 cookie 却是两个独立客户端，文件归属也按链接区分。问候从消息泡泡改为右上角提示；`client/hello` 带 `payload` 时是**提问**：目标 SDK 不自动确认，回答由提示里的「确认并回复」回传。`group` 由自述标签升级为**隔离键**（SHA-256 派生），不同组互相不可见、不可问候、不可访问文件；`client/status` 报出每组实测延迟（未测量显示「尚未测量」而非 0 ms）。实测首屏 4.1s → 0.54s（bundle 827KB 未压缩 → 104KB gzip），后台标签页不再被保活策略踢下线。契约见 [connected-landing §9](docs/contracts/connected-landing.md)，证据见 [工作台验证记录](docs/verification/landing-page.md)。P0、P1、Connected landing、多主机内容 M0–M5 已交付。剩余 M4（Notez 接入）与 M6（验收收口）…
+
 [在线工作台](https://conex.lszio.space) · [文档导航](docs/README.md) · [设计 v6](docs/design/2026-09-14-conex-design.md)
 
 </div>

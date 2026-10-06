@@ -179,6 +179,77 @@ test("reconnect gets a fresh ticket and restores ready state", async () => {
   client.close();
 });
 
+test("a call interrupted by a disconnect is replayed on the new link", async () => {
+  FakeWebSocket.instances = [];
+  const { fetchImpl } = fetchStub();
+  const client = new ConexWsClient({
+    origin: "https://host.example",
+    fetch: fetchImpl,
+    WebSocket: FakeWebSocket,
+    reconnect: true,
+  });
+  const socketReady = new Promise<void>((resolve) => {
+    client.onEvent((event) => {
+      if (event.phase === "negotiating") resolve();
+    });
+  });
+  const connecting = client.connect();
+  await socketReady;
+  respondHandshake(FakeWebSocket.instances[0]);
+  await connecting;
+
+  // In flight when the socket dies: the visitor's tab was backgrounded and
+  // the poll was mid-request. This must not reject — the call is still valid.
+  const inflight = client.listClients();
+  const original = JSON.parse(FakeWebSocket.instances[0].sent.at(-1) as string);
+  FakeWebSocket.instances[0].disconnect();
+
+  const reconnecting = new Promise<void>((resolve) => {
+    client.onEvent((event) => {
+      if (event.phase === "negotiating" && FakeWebSocket.instances.length === 2) resolve();
+    });
+  });
+  await reconnecting;
+  respondHandshake(FakeWebSocket.instances[1]);
+  await Promise.resolve();
+
+  const replayed = JSON.parse(FakeWebSocket.instances[1].sent.at(-1) as string);
+  expect(replayed.method).toBe("client/list");
+  expect(replayed.id).toBe(original.id);
+
+  // And it still resolves, from the answer on the replacement socket.
+  FakeWebSocket.instances[1].receive({ jsonrpc: "2.0", id: replayed.id, result: { clients: [] } });
+  expect(await inflight).toEqual({ clients: [] });
+  client.close();
+});
+
+test("close fails calls that are waiting for a reconnect", async () => {
+  FakeWebSocket.instances = [];
+  const { fetchImpl } = fetchStub();
+  const client = new ConexWsClient({
+    origin: "https://host.example",
+    fetch: fetchImpl,
+    WebSocket: FakeWebSocket,
+    reconnect: true,
+  });
+  const socketReady = new Promise<void>((resolve) => {
+    client.onEvent((event) => {
+      if (event.phase === "negotiating") resolve();
+    });
+  });
+  const connecting = client.connect();
+  await socketReady;
+  respondHandshake(FakeWebSocket.instances[0]);
+  await connecting;
+
+  const inflight = client.listClients();
+  FakeWebSocket.instances[0].disconnect();
+  // Closing while a call sits in the reconnect queue must still settle it:
+  // no link is coming, so the promise cannot be left dangling.
+  client.close();
+  await expect(inflight).rejects.toMatchObject({ code: -32011 });
+});
+
 test("listConnections sends connection/list over the ready link", async () => {
   FakeWebSocket.instances = [];
   const { fetchImpl } = fetchStub();

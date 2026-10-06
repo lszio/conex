@@ -284,7 +284,45 @@ hello 往返成功并写入延迟、只有所有者可撤回、无 CSRF 拒绝�
   单文件，目录整包上传未实测。
 - 共享文件不跨重启存活（设计如此，内存实现）。
 - 跨主机真实 TLS 与真实 OIDC：沿用既有缺口，本轮未涉及。
-## 5. 一个 cookie 挤成两个标签页：链接按 session 铸造的根因修复（2026-10-05）
+## 5. 部署事故：陈旧会话 cookie 把回访访客锁在外面（2026-10-04 晚）
+
+**现象**：切换到新页面重新部署后，**所有已有访客看到「会话不可用」**，刷新无效；新访客
+（无 cookie）正常。curl 直连 `/web/session` 返回 200，所以问题只在「带着旧 cookie」这一侧。
+
+**真浏览器复现**（真实 host，塞一个已死进程的 cookie）：
+
+```console
+$ bun scripts/...   # 最小复现：addCookies 一个陈旧 session 后 reload
+修复前: CONEX | | 双向能力路由内核 | 会话不可用 | 异常
+修复后: CONEX | | 双向能力路由内核 | 已连接 | 已连接
+```
+
+**根因**：`can_reissue_guest` 只接受「有 tombstone 且标记为 guest」的 id。tombstone 在
+**本进程签发**的会话死亡时才写入，所以上一个进程（重启／重新部署／容器重建）签发的
+cookie 没有 tombstone，无法归类，reissue 路径直接拒绝。cookie 是 HttpOnly，页面也无法
+自己清掉——只能硬刷新整个 cookie jar 之外的手段才可能恢复。
+
+**修法**：没有 tombstone 的 id 按 guest 会话处理。它不可能属于已认证主体：本进程唯一
+为真实主体签发 `ui` 会话的路径是 `login`，那条路径在会话死亡时会写 tombstone。标记为
+「非 guest」的 tombstone 仍返回认证错误，已认证用户不会被静默降级。
+
+**回归测试**：`a_cookie_from_a_previous_process_becomes_a_fresh_guest_session`——重启
+host 后重放旧 cookie，断言拿到新的 guest 会话而不是 401。
+
+**顺带记录一条 Dokploy 陷阱**：`dokploy application deploy` 之后队列可能停在 2 不动
+（`deployment.queueList`），与 runbook 里「manifest 拉取卡死」是同一类症状；等它自己
+排空即可（实测约 60s），期间线上仍是旧镜像。
+
+**线上验证（部署后）**：
+
+```console
+$ curl -o /dev/null -w '%{http_code}' https://conex.lszio.space/            # 200
+$ curl -o /dev/null -w '%{http_code}' https://conex.lszio.space/not-found   # 404
+陈旧 cookie 访客: 已连接        # 修复前为 会话不可用
+干净访客:        已连接
+```
+
+## 6. 一个 cookie 挤成两个标签页：链接按 session 铸造的根因修复（2026-10-05）
 
 **现象**：同一浏览器开两个标签页，Host 只认出一个客户端——两页显示同一条链接、同一个
 名字，其中一页改名另一页的列表就跳。文件归属同理：两个标签页的文件混在同一个 owner 下。
@@ -339,4 +377,62 @@ ok   另一个标签页不能撤回他人文件（所有者按链接区分）
 **门禁**：`cargo fmt --all`、`cargo clippy --workspace --all-targets`（零警告）、
 `cargo test --workspace`、`bun test sdk/typescript/tests`（25 pass）、`bun run typecheck`、
 `bun run build:web`、`cargo xtask generate --check` 全部通过。
->>>>>>> 7c573df (feat(web): a workbench where each tab is one client)
+
+## 7. 加载与保活上线（2026-10-06）
+
+**分支事故**：生产实际跟踪 `refactor/arch`，而本轮改动在 `dev`。两条分支已分叉
+（dev 多 8 个提交，refactor/arch 多 4 个，含 stale-cookie 修复）。按决定把
+`refactor/arch` 合入 `dev`，把 Dokploy 的跟踪分支切到 `dev` 后部署。合并冲突 3 处：
+`app.tsx` 与 `client-list.tsx` 取 dev 侧（本轮的空态与 hint 文案是 superset），
+README 两段都留（dev 的导语 + refactor/arch 的现状段，现状段补上实测数字），
+验证文档两个事故各留一节，并清掉上一次合并遗留的冲突标记。
+
+**合并后门禁**：Rust 346 通过 / 0 失败（比合并前多 1 个，来自 refactor/arch 的
+stale-cookie 回归测试）、SDK 27 pass / 0 fail、clippy 0、fmt clean、typecheck clean、
+真浏览器 23 项全过。
+
+**镜像自验**（本地容器，覆写 `web_origin`）：`app.js` 334 614 字节，`Accept-Encoding: gzip`
+时 106 585 字节；两个标签页链接不同，页面 0 错误。
+
+**线上实测**（`https://conex.lszio.space`，部署后）：
+
+```console
+$ curl -sI -H 'Accept-Encoding: gzip' $O/app.js
+content-encoding: gzip
+content-length: 106585                      # 部署前 846804，无压缩
+$ curl -o /dev/null -w '%{http_code}\n' $O/ $O/llms.txt $O/llm.txt $O/not-found
+200 200 200 404
+$ curl -sI $O/ | grep -iE 'content-security|nosniff|x-frame|cache-control'
+content-security-policy / x-content-type-options: nosniff / x-frame-options: DENY / cache-control: no-store
+$ curl -sI $O/web/session | grep -i set-cookie
+set-cookie: conex_web_session=…; Path=/; HttpOnly; SameSite=Strict; Secure
+```
+
+真浏览器：
+
+```console
+线上到「已连接」: 373 ms                  # 部署前 5419~6958 ms
+资源: app.js 104KB / 57ms, style.css 20KB / 57ms, session 21ms, tickets 22ms
+两个标签页: SPnbpCV_ vs p5RIZ_mz -> 不同 ✓
+A 列表: [ 'client-p5RIZ_', 'client-SPnbpC' ]
+页面错误: 无
+全部检查通过                             # 23 项
+```
+
+**首屏口径**：本地 4139 ms → 544 ms（1.6 Mbit/s 限速链路），线上 5.4–7.0 s → 373 ms。
+两者都不是估计：前者是新旧两个 bundle 过同一条限速代理，后者是同一个真实浏览器
+分别访问部署前后的站点。
+
+**踩到的两个陷阱**（都按 runbook 处理，不是新问题）：
+
+- 容器自验时把 `listen` 改成 loopback 且保留 `allow_plaintext_bind`，配置加载期直接
+  拒绝（`plaintext requires allow_loopback_http = true or allow_plaintext_bind = true`）；
+  改成 `0.0.0.0` + `allow_plaintext_bind` 才对。loopback 绑定虽然能起，但宿主浏览器
+  访问不到（`ERR_SOCKET_NOT_CONNECTED`），真浏览器验收必须绑 `0.0.0.0`。
+- `deployment.queueList` 返回长度 1 但状态字段为 null，`docker.getContainers` 返回空对象——
+  这两个接口在这个版本上都读不出有用信息，判断进度要看 `deployment.all` 的
+  `status`/`finishedAt`。
+
+**部署窗口的一个观察**：部署 20:17:17 开始、20:22:34 `done`，但在 `done` 之后约 40 秒内
+首次 curl 仍拿到旧镜像的 846 804 字节，随后才切换。也就是说 **`status=done` 之后还有
+一小段旧容器在前面挡流量**，此时若立刻验收会得到"部署无效"的错误结论。

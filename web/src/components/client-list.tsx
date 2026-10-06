@@ -10,6 +10,12 @@ import { Button } from "@/components/ui/button";
 export interface ClientListProps {
   clients: ClientSummary[];
   selfLinkId: string;
+  /** Host-wide counters, so the empty state can say *why* it is empty. */
+  clientsOnline: number;
+  /** Whether this tab is currently listed at all; it is not when hidden. */
+  selfVisible: boolean;
+  /** Why the count is what it is, worded by the page that owns the header. */
+  peerHint: string;
   onGreet: (target: ClientSummary, ask?: string) => void;
 }
 
@@ -26,7 +32,14 @@ function seen(ms: string | undefined): string {
   return `${Math.round(seconds / 3600)} 小时前活跃`;
 }
 
-export function ClientList({ clients, selfLinkId, onGreet }: ClientListProps) {
+export function ClientList({
+  clients,
+  selfLinkId,
+  clientsOnline,
+  selfVisible,
+  peerHint,
+  onGreet,
+}: ClientListProps) {
   // Which row is composing a question, and what field it asks about. At most
   // one row is open: two open forms on a list this short is noise.
   const [asking, setAsking] = useState("");
@@ -50,17 +63,24 @@ export function ClientList({ clients, selfLinkId, onGreet }: ClientListProps) {
 
   return (
     <Card>
-      <CardHeader className="flex-row items-center justify-between space-y-0">
-        <CardTitle>在线客户端</CardTitle>
-        <Badge variant="secondary">{clients.length} 个</Badge>
-      </CardHeader>
-      <CardContent>
-        {clients.length === 0 ? (
-          <p className="rounded-md border border-dashed border-[var(--color-border)] p-6 text-center text-sm text-[var(--color-muted-foreground)]">
-            还没有其他可见的客户端。再开一个页面就能互相 hello。
-          </p>
-        ) : (
-          <div className="grid gap-4">
+<CardHeader className="flex-row items-center justify-between space-y-0">
+          <CardTitle>在线的人</CardTitle>
+          <Badge variant="secondary">{Math.max(clients.length - 1, 0)} 位</Badge>
+        </CardHeader>
+        <CardContent>
+          {clients.length === 0 ? (
+            <p className="rounded-md border border-dashed border-[var(--color-border)] p-6 text-center text-sm text-[var(--color-muted-foreground)]">
+              {!selfVisible
+                ? "你关掉了「可见」，所以没有客户端能列出你。这只影响别人看不见你——你自己的名字、分组和文件都不受影响。"
+                : clientsOnline > 1
+                  ? "你是当前组里唯一一个能看到的客户端。别人在别的组，或关掉了「可见」——只有同组且可见的客户端才会出现在这里。"
+                  : "还没有其他可见的客户端。再开一个页面就能互相 hello。"}
+            </p>
+          ) : (
+            <div className="grid gap-3">
+              {clients.length > 1 ? (
+                <p className="text-xs text-[var(--color-muted-foreground)]">{peerHint}</p>
+              ) : null}
             {[...groups.entries()].map(([group, rows]) => (
               <section key={group} className="grid gap-2">
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-muted-foreground)]">

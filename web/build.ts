@@ -7,6 +7,9 @@ import { join } from "node:path";
 // @import "tailwindcss"); the CLI is the supported entry point for those.
 const root = import.meta.dir;
 const outdir = `${root}/dist`;
+// Debug escape hatch: `bun run build:web -- --no-minify` keeps readable names
+// in the shipped bundle when a production stack trace has to be read.
+const minify = !process.argv.includes("--no-minify");
 
 await rm(outdir, { recursive: true, force: true });
 
@@ -15,9 +18,12 @@ const result = await Bun.build({
   outdir,
   target: "browser",
   format: "esm",
-  // Unminified: a stack that names the failing component is worth more here
-  // than the few kilobytes, and this page is not bandwidth-bound.
-  minify: false,
+  // Minified: the page is one blocking bundle on the critical path, and
+  // measured from the public host it was 827 KB taking 5-7 s to transfer
+  // (the session + ticket round trip is 22 ms by comparison). Minified it is
+  // 548 KB, and gzipped on the wire ~168 KB. `bun run build:web -- --no-minify`
+  // keeps the readable bundle for production incident debugging.
+  minify,
   sourcemap: "none",
   naming: { entry: "app.js" },
   define: { "process.env.NODE_ENV": '"production"' },
@@ -74,12 +80,3 @@ if (!(await llms.exists())) {
   process.exit(1);
 }
 await Bun.write(`${outdir}/llms.txt`, llms);
-
-// The bench report the performance page renders is imported into the bundle
-// from src/perf-data.json, so it ships inside app.js rather than as a separate
-// file the Host would have to be taught to serve. Its presence is still
-// checked: a missing report means the performance page would render nothing.
-if (!(await Bun.file(`${root}/src/perf-data.json`).exists())) {
-  console.error("web/src/perf-data.json is missing; run `cargo xtask bench --suite hello`");
-  process.exit(1);
-}
