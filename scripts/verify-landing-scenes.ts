@@ -40,13 +40,7 @@ async function ready(page: Page): Promise<void> {
   );
 }
 
-async function openPanel(page: Page, name: string): Promise<void> {
-  await page.getByRole("button", { name, exact: true }).click();
-  await page.waitForTimeout(400);
-}
-
 async function setProfile(page: Page, name: string, group: string): Promise<void> {
-  await openPanel(page, "消息");
   await page.getByLabel("名称").fill(name);
   await page.getByLabel("组").fill(group);
   await page.getByRole("button", { name: "保存" }).click();
@@ -141,7 +135,7 @@ async function main(): Promise<void> {
 
     // The workbench lists every same-group client, and A sees two of its own
     // tabs plus B — three rows, not one flickering row for the shared cookie.
-    await openPanel(tabA, "消息");
+    await tabA.waitForTimeout(800);
     await tabA.waitForTimeout(1200);
     const listText = await tabA.locator("main").innerText();
     check(
@@ -197,7 +191,8 @@ async function main(): Promise<void> {
     );
 
     // Status: counters and a latency that was measured, not assumed.
-    await openPanel(tabA, "状态");
+    await tabA.getByText("运行状态与延迟").click();
+    await tabA.waitForTimeout(600);
     await tabA.waitForTimeout(1500);
     const statusText = await tabA.locator("main").innerText();
     check(/在线客户端/.test(statusText), "状态面板显示客户端计数");
@@ -217,7 +212,7 @@ async function main(): Promise<void> {
     check(/尚未测量/.test(malloryRow), `未发过 hello 的组显示「尚未测量」: ${malloryRow}`);
 
     // Files: the two shared-cookie tabs are two owners, not one.
-    await openPanel(tabA, "文件");
+    await tabA.waitForTimeout(600);
     await pickFile(tabA, SAMPLE_NAME, SAMPLE_BODY);
     await tabA.waitForTimeout(2000);
     check(
@@ -225,7 +220,7 @@ async function main(): Promise<void> {
       "A 上传后收到成功提示",
     );
 
-    await openPanel(b, "文件");
+    await b.waitForTimeout(600);
     await b.waitForTimeout(1500);
     const bBody = await b.locator("main").innerText();
     check(bBody.includes(SAMPLE_NAME), "B 在文件面板看到 A 提供的文件");
@@ -259,7 +254,7 @@ async function main(): Promise<void> {
 
     // The sibling tab can see the file but cannot withdraw it, and the
     // cross-group visitor sees nothing.
-    await openPanel(tabA2, "文件");
+    await tabA2.waitForTimeout(600);
     await tabA2.waitForTimeout(1500);
     const a2Body = await tabA2.locator("main").innerText();
     check(a2Body.includes(SAMPLE_NAME), "同一浏览器的另一个标签页也能看到该文件");
@@ -268,7 +263,7 @@ async function main(): Promise<void> {
       "另一个标签页不能撤回他人文件（所有者按链接区分）",
     );
 
-    await openPanel(outsider, "文件");
+    await outsider.waitForTimeout(600);
     await outsider.waitForTimeout(1500);
     check(
       !(await outsider.locator("main").innerText()).includes(SAMPLE_NAME),

@@ -1,34 +1,22 @@
-// The workbench: one screen, with the connection's own state always visible.
+// The landing page: one screen, no tabs.
 //
-// The previous shape was a stack of tabs, which hid the two things a visitor
-// actually needs to know — whether they are connected, and who they are right
-// now — behind whatever tab happened to be open. So the header is a status bar
-// with the live link, the scenes are panels, and nothing owns the whole page.
+// The workbench put five panels behind a switch, which hid the only two facts
+// a visitor needs — who they are, and who else is here — behind whatever
+// panel happened to be open. So this is one screen: your identity, the people
+// you can reach, and what you have already exchanged. Files and the status
+// read are folded into the same scroll rather than hidden behind a nav.
 
-import { useState } from "react";
-import { Activity, Copy, FolderOpen, Gauge, Hand, Info, Users } from "lucide-react";
+import { Activity, Copy, FolderOpen, Gauge, Hand, Users } from "lucide-react";
 
-import { Badge, Card, CardContent, CardHeader, CardTitle, Separator } from "@/components/ui/card";
+import { Badge, Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ClientList } from "@/components/client-list";
 import { FileScene } from "@/components/file-scene";
-import { Intro } from "@/components/intro";
 import { MessageLog } from "@/components/message-log";
-import { PerfPanel } from "@/components/perf-panel";
 import { ProfileCard } from "@/components/profile-card";
 import { StatusPanel } from "@/components/status-panel";
 import { ToastStack } from "@/components/toast-stack";
 import { useHelloPage } from "@/hooks/use-hello-page";
-
-const PANELS = [
-  { id: "hello", label: "消息", icon: Hand },
-  { id: "file", label: "文件", icon: FolderOpen },
-  { id: "status", label: "状态", icon: Activity },
-  { id: "about", label: "介绍", icon: Info },
-  { id: "perf", label: "性能", icon: Gauge },
-] as const;
-
-type PanelId = (typeof PANELS)[number]["id"];
 
 const STATUS_VARIANT = {
   connecting: "secondary",
@@ -39,206 +27,150 @@ const STATUS_VARIANT = {
 
 export function App() {
   const page = useHelloPage();
-  // Every login lands on the message panel: it is the one that proves the
-  // connection is real without asking the visitor to pick a file.
-  const [panel, setPanel] = useState<PanelId>("hello");
   const self = page.clients.find((row) => row.linkId === page.selfLinkId);
   const selfName = self?.profile?.displayName || page.draft.displayName || "你";
   const ownGroupKey = self?.groupKey ?? "";
   const peers = page.clients.length - 1;
   // A short list with peers online is the confusing case: the host counts
-  // them, `client/list` withholds them. Say which of the two rules applied
-  // instead of leaving a bare 0 to be read as "nobody else is here".
+  // them, `client/list` withholds them. Say which rule applied instead of
+  // leaving a bare 0 to be read as "nobody else is here".
   const peerHint =
     peers > 0
       ? "个可问候的客户端"
       : page.status.clientsOnline > 1
-        ? `全站 ${page.status.clientsOnline} 个在线，分在 ${page.status.groupsOnline} 个组——只有同组且可见的客户端才会出现在这里`
+        ? `全站 ${page.status.clientsOnline} 个在线——只有同组且可见的才出现在这里`
         : "当前只有你一个在线";
 
   return (
-    <div className="mx-auto grid w-full max-w-5xl gap-4 px-4 py-6">
+    <div className="mx-auto grid w-full max-w-3xl gap-4 px-4 py-6">
       <header className="grid gap-3">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--color-primary)]">
-              conex
-            </p>
-            <h1 className="text-2xl font-semibold tracking-tight">双向能力路由内核</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-[var(--color-muted-foreground)]" role="status">
-              {page.detail}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-lg font-semibold tracking-tight">
+            <span className="text-[var(--color-primary)]">conex</span>
+            <span className="ml-2 font-normal text-[var(--color-muted-foreground)]">
+              双向能力路由内核
             </span>
-            <Badge variant={STATUS_VARIANT[page.connection]}>
-              {page.connection === "ready" ? "已连接" : page.connection === "error" ? "异常" : "连接中"}
-            </Badge>
-          </div>
+          </h1>
+<div className="flex items-center gap-2">
+              <Badge variant={STATUS_VARIANT[page.connection]}>
+                {page.connection === "ready" ? "已连接" : page.connection === "error" ? "异常" : "连接中"}
+              </Badge>
+              {page.connection !== "ready" ? (
+                <span className="text-xs text-[var(--color-muted-foreground)]" role="status">
+                  {page.detail}
+                </span>
+              ) : null}
+            </div>
         </div>
 
-        {/* The status bar, not a tab: who this tab is, which link it holds, and
-            how many peers can hear it. This is what makes two tabs in one
-            browser read as two clients rather than one flickering row. */}
+        {/* Who this tab is, in one line. Two tabs of one browser must never read
+            as one client, so the link is shown rather than implied. */}
         <Card>
-          <CardContent className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Stat
-              icon={Users}
-              label="本标签页"
-              value={selfName}
-              hint={page.selfLinkId ? `链接 ${page.selfLinkId.slice(0, 8)}` : "尚未就绪"}
-            />
-            <Stat
-              icon={Activity}
-              label="本组分组"
-              value={ownGroupKey ? ownGroupKey.slice(0, 8) : "—"}
-              hint={self?.profile?.group || "未分组"}
-            />
-            <Stat
-              icon={Hand}
-              label="在线同组"
-              value={String(Math.max(peers, 0))}
-              hint={peerHint}
-            />
-            <Stat
-              icon={Gauge}
-              label="全站在线"
-              value={String(page.status.clientsOnline)}
-              hint={`${page.status.groupsOnline} 个分组`}
-            />
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <Users className="size-4 shrink-0 text-[var(--color-muted-foreground)]" aria-hidden />
+              <span className="truncate font-medium">{selfName}</span>
+              <Badge variant="outline">你</Badge>
+              {page.selfLinkId ? (
+                <span className="truncate font-mono text-xs text-[var(--color-muted-foreground)]">
+                  链接 {page.selfLinkId.slice(0, 8)}
+                </span>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-4 text-xs text-[var(--color-muted-foreground)]">
+              <span className="flex items-center gap-1">
+                <Hand className="size-3.5" aria-hidden />
+                在线 {Math.max(peers, 0)}
+              </span>
+              <span className="flex items-center gap-1">
+                <Gauge className="size-3.5" aria-hidden />
+                全站 {page.status.clientsOnline}
+              </span>
+            </div>
           </CardContent>
         </Card>
+
+        <p className="text-xs text-[var(--color-muted-foreground)]">
+          再开一个标签页，就能和这里的人互相打招呼。每个标签页是一个独立客户端。
+        </p>
       </header>
 
-      <nav className="flex flex-wrap gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-muted)] p-1">
-        {PANELS.map((item) => {
-          const Icon = item.icon;
-          return (
-            <Button
-              key={item.id}
-              variant={panel === item.id ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setPanel(item.id)}
-              aria-current={panel === item.id ? "page" : undefined}
-            >
-              <Icon className="size-3.5" aria-hidden />
-              {item.label}
-            </Button>
-          );
-        })}
-      </nav>
-
       <main className="grid gap-4">
-        {panel === "about" ? <Intro /> : null}
+        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_18rem] sm:items-start">
+          <ClientList
+            clients={page.clients}
+            selfLinkId={page.selfLinkId}
+            clientsOnline={page.status.clientsOnline}
+            selfVisible={page.draft.visible}
+            onGreet={page.greet}
+            peerHint={peerHint}
+          />
+          <ProfileCard
+            draft={page.draft}
+            notice={page.savedNotice}
+            onChange={page.setDraft}
+            onSave={(next) => {
+              void page.save(next);
+            }}
+          />
+        </div>
 
-        {panel === "hello" ? (
-          <div className="grid gap-4">
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
-              <ClientList
-                clients={page.clients}
-                selfLinkId={page.selfLinkId}
-                clientsOnline={page.status.clientsOnline}
-                selfVisible={page.draft.visible}
-                onGreet={page.greet}
-              />
-              <ProfileCard
-                draft={page.draft}
-                notice={page.savedNotice}
-                onChange={page.setDraft}
-                onSave={(next) => {
-                  void page.save(next);
-                }}
-              />
-            </div>
-            <MessageLog messages={page.messages} />
+        <MessageLog messages={page.messages} />
+
+        {/* Files come after the people and the exchange: on a landing page the
+            point is who is here and whether the greeting landed, and an empty
+            share panel sitting above that reads as the page having nothing to
+            show. */}
+        <FileScene
+          files={page.files}
+          selfLinkId={page.selfLinkId}
+          groupLabel={self?.profile?.group || page.draft.group}
+          groupKey={ownGroupKey}
+          notice={page.shareNotice}
+          uploading={page.uploading}
+          onShare={(picked) => void page.shareFiles(picked)}
+          onWithdraw={(file) => void page.withdrawFile(file)}
+          fileUrl={page.fileUrl}
+        />
+
+        <details className="rounded-md border border-[var(--color-border)]">
+          <summary className="cursor-pointer px-4 py-2 text-xs font-medium text-[var(--color-muted-foreground)]">
+            运行状态与延迟
+          </summary>
+          <div className="border-t border-[var(--color-border)] p-3">
+            <StatusPanel status={page.status} ownGroupKey={ownGroupKey} />
           </div>
-        ) : null}
-
-        {panel === "file" ? (
-          <div className="grid gap-4">
-            <ProfileCard
-              draft={page.draft}
-              notice={page.savedNotice}
-              onChange={page.setDraft}
-              onSave={(next) => {
-                // The group decides who can see these files, so it is stated
-                // here rather than only in the message panel's card.
-                void page.save(next);
-              }}
-            />
-            <FileScene
-              files={page.files}
-              selfLinkId={page.selfLinkId}
-              groupLabel={self?.profile?.group || page.draft.group}
-              groupKey={ownGroupKey}
-              notice={page.shareNotice}
-              uploading={page.uploading}
-              onShare={(picked) => void page.shareFiles(picked)}
-              onWithdraw={(file) => void page.withdrawFile(file)}
-              fileUrl={page.fileUrl}
-            />
-          </div>
-        ) : null}
-
-        {panel === "status" ? <StatusPanel status={page.status} ownGroupKey={ownGroupKey} /> : null}
-
-        {panel === "perf" ? <PerfPanel /> : null}
+        </details>
       </main>
 
-      <Separator />
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle>这个页面在做什么</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap items-start justify-between gap-4 p-5 pt-0 text-xs text-[var(--color-muted-foreground)]">
-          <p className="min-w-[16rem] flex-1">
-            这个页面运行的是真实的 conex-host 进程：所有客户端、往返延迟与文件都来自实际的连接，
-            不是模拟数据。分组由你自己填写，经 Host 哈希成隔离键，只在同组内可见。
-            每个标签页是一个独立客户端，各自持有自己的链接。
-          </p>
+      <footer className="flex flex-wrap items-center justify-between gap-3 pt-1 text-xs text-[var(--color-muted-foreground)]">
+        <p className="min-w-[14rem] flex-1">
+          这个页面跑的是真实的 conex-host 进程：在线的人、往返延迟和文件都来自实际连接。
+          不填组名就是全员一组；填了组名就只和同组的人互相可见。
+        </p>
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-1">
+            <Activity className="size-3.5" aria-hidden />
+            {page.status.groupsOnline} 个分组
+          </span>
+          <span className="flex items-center gap-1">
+            <FolderOpen className="size-3.5" aria-hidden />
+            {page.files.length} 个文件
+          </span>
           <Button
             variant="secondary"
             size="sm"
             onClick={() => void navigator.clipboard?.writeText(location.href)}
           >
             <Copy className="size-3.5" aria-hidden />
-            复制本页链接
+            复制链接
           </Button>
-        </CardContent>
-      </Card>
+        </div>
+      </footer>
 
       {/* Corner notifications, outside the layout: a hello must never move the
           thing the visitor is about to click. */}
-      <ToastStack
-        toasts={page.toasts}
-        onAnswer={page.answerToast}
-        onDismiss={page.dismissToast}
-      />
-    </div>
-  );
-}
-
-function Stat({
-  icon: Icon,
-  label,
-  value,
-  hint,
-}: {
-  icon: typeof Users;
-  label: string;
-  value: string;
-  hint: string;
-}) {
-  return (
-    <div className="grid gap-0.5">
-      <span className="flex items-center gap-1.5 text-xs text-[var(--color-muted-foreground)]">
-        <Icon className="size-3.5" aria-hidden />
-        {label}
-      </span>
-      <span className="truncate text-base font-semibold" title={value}>
-        {value}
-      </span>
-      <span className="truncate font-mono text-xs text-[var(--color-muted-foreground)]">{hint}</span>
+      <ToastStack toasts={page.toasts} onAnswer={page.answerToast} onDismiss={page.dismissToast} />
     </div>
   );
 }

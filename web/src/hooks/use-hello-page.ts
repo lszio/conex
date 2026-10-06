@@ -65,7 +65,17 @@ export interface StatusState {
   groups: GroupRow[];
 }
 
-/** What the visitor typed, kept locally so a reload can restore it. */
+/**
+ * What the visitor typed, kept locally so a reload can restore it.
+ *
+ * Kept in `sessionStorage`, not `localStorage`: the cookie is browser-wide, so
+ * every tab is its own client, and a name is part of that identity. In
+ * `localStorage` the second tab read the first tab's name, sent it, got it
+ * suffixed, and wrote the suffixed name back over both tabs — so two tabs of
+ * one browser fought over a single name and neither row read true.
+ * `sessionStorage` is per-tab and survives a reload, which is exactly the
+ * lifetime this cache is for.
+ */
 export interface CachedProfile {
   displayName: string;
   group: string;
@@ -74,7 +84,7 @@ export interface CachedProfile {
 
 export function readCachedProfile(): CachedProfile | undefined {
   try {
-    const raw = localStorage.getItem(CACHE_KEY);
+    const raw = sessionStorage.getItem(CACHE_KEY);
     if (!raw) return undefined;
     const parsed = JSON.parse(raw) as Partial<CachedProfile>;
     if (typeof parsed !== "object" || parsed === null) return undefined;
@@ -92,7 +102,7 @@ export function readCachedProfile(): CachedProfile | undefined {
 
 export function writeCachedProfile(profile: CachedProfile): void {
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(profile));
+    sessionStorage.setItem(CACHE_KEY, JSON.stringify(profile));
   } catch {
     // A failed write is not worth interrupting the visitor over.
   }
@@ -223,6 +233,23 @@ export function useHelloPage(): HelloPageState {
   useEffect(() => {
     let cancelled = false;
     let poll = 0;
+    // Refreshing when the tab comes back makes the list correct the instant
+    // it is looked at. The poll alone used to skip hidden tabs, so a
+    // backgrounded tab — the normal state for the first of two tabs — never
+    // learned who arrived while it slept.
+    //
+    // Both events are watched because neither alone covers every way a tab
+    // regains focus: `visibilitychange` fires on a real tab switch but not on
+    // every window focus, and `focus` covers the reverse. Listening to one and
+    // assuming is what left the list stale in the first place.
+    const onVisible = () => {
+      if (!document.hidden) {
+        void refresh();
+        void refreshFiles();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
 
     const applyProfile = async (client: ConexWsClient, profile: CachedProfile) => {
       const result = await client.setProfile({
@@ -307,11 +334,7 @@ export function useHelloPage(): HelloPageState {
       await refresh();
       await refreshFiles();
       poll = window.setInterval(() => {
-        // `client/list` is skipped for a hidden tab to spare it work, but the
-        // shared files must not be: a visitor watching one tab in the
-        // background has to see what peers shared when they come back, and
-        // that is the whole point of the file scene.
-        if (!document.hidden) void refresh();
+        void refresh();
         void refreshFiles();
       }, POLL_MS);
     };
@@ -329,6 +352,8 @@ export function useHelloPage(): HelloPageState {
     return () => {
       cancelled = true;
       window.clearInterval(poll);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
       clientRef.current?.close();
     };
   }, [log, pushToast, refresh, refreshFiles]);
