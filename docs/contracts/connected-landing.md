@@ -166,6 +166,13 @@ cookie，因此必须得到两条链接、两行 `client/list`、两个独立客
   内部，不能由调用方绕过
 - 「未分组」是 key `e3b0c44298fc1c14`（空串的哈希），是一个真实分组而不是与所有组匹配的空值
 
+**组名是加入凭据，只对本人可见。** 知道组名是进入同一分组的唯一条件，因此 Host 永远
+不把 `profile.group` 文本投影给任何他人：`client/list` 的每一行 `profile.group` 一律
+为空字符串（含调用者自己的行），`client/status` 的 `GroupStatus.label` 恒为空（字段保留
+仅为线上兼容）。组文本只在 `client/profile` 的 `self` 响应里回显给所有者本人。页面把
+组名默认为 `default`，提供随机组名生成与「复制/分享组名」入口——主动把组名发给谁，
+谁才能进组；页面其余位置（在线列表、状态行）从不渲染组名文本，状态行只显示 key 前 8 位。
+
 **延迟只有在真测过时存在。** `record_round_trip` 在一次 hello 完成时把实测毫秒记到
 **双方**（往返是这对客户端之间的属性），并累计总和与次数。`lastRoundTripMs` /
 `avgRoundTripMs` / `roundTrips` 在没有任何完成的 hello 时为 0，页面渲染为「尚未测量」，
@@ -174,9 +181,8 @@ cookie，因此必须得到两条链接、两行 `client/list`、两个独立客
 
 **`client/status` 只投影计数与延迟。** `clientsOnline` / `groupsOnline` 是全 Host 计数
 （回答「这台 Host 上有多少客户端与分组」这个进程级事实），每组一行 `GroupStatus`：
-key、标签（组内标签不一致时清空而不是任选其一）、在线数、最近与平均延迟、往返次数、
-共享文件数与字节。**不投影任何个人行**：不含 linkId、名称或文件明细，因此它不泄露
-`client/list` 的组隔离之外的信息。同组内标签不一致时 `label` 为空字符串。
+key、在线数、最近与平均延迟、往返次数、共享文件数与字节。**不投影任何个人行**：不含
+linkId、名称或文件明细。`label` 恒为空字符串——组名是加入凭据（见上），统计行只认 key。
 
 **文件共享是同组临时内容。** 四个同源路由共用 web 会话 cookie：
 
@@ -201,11 +207,18 @@ body 上限单独设为 8 MiB（`UPLOAD_BODY_LIMIT`），不放宽其他端点�
 断开的客户端不再能提供文件，字节随之释放、组配额归还。`remove` 先校验归属再删除——
 先删后校验会让任何组内成员销毁别人的上传。
 
+**文件名可以是相对目录路径。** 目录上传把 `webkitRelativePath`（`dir/sub/file.png`）放
+进 `x-conex-file-name`；`ShareStore::sanitize_name` 按 `/` 分段清理——控制字符、`\\`、
+引号替换为 `_`，空段与 `.` 丢弃，`..` 展平为 `_`，总长截断 240 字符——名字仍是**显示
+字符串**，从不作为文件系统路径（字节在内存、按 id 键）。`Content-Disposition` 用最后
+一段 basename。页面按路径把每个提供者的文件渲染成目录树，列表视图用原生 `<details>`
+折叠，网格视图用目录瓦片下钻 + 面包屑；两种视图共享同一份树数据。
+
 **内联预览是 Host 的判定。** 只有不带活动内容的类型可内联（`text/plain`、
 `text/markdown`、`text/csv`、`application/json`、`application/pdf`、常见位图）；
 `text/html`、`image/svg+xml` 等一律 `attachment`，避免在他人会话里执行脚本。文本响应的
 `Content-Type` 必须带 `; charset=utf-8`，否则浏览器按默认编码解码，UTF-8 中文变乱码。
-文件名与 MIME 进响应头前必须过滤控制字符、引号、斜杠与 CR/LF；文件名按
+文件名与 MIME 进响应头前必须过滤控制字符、引号与 CR/LF；文件名按
 `filename="ascii"` + `filename*=UTF-8''pct` 双写。
 
 **页面定位。** 首屏说明 conex 是什么（可嵌入的双向能力路由内核），消息与文件是它做的

@@ -31,9 +31,10 @@ pub const MAX_FILE_BYTES: u64 = 8 * 1024 * 1024;
 pub const MAX_GROUP_BYTES: u64 = 32 * 1024 * 1024;
 /// Largest number of files one client may offer at a time.
 pub const MAX_FILES_PER_CLIENT: usize = 32;
-/// Longest file name kept. Anything longer is truncated rather than rejected:
-/// a long name is a cosmetic problem, not an attempt to abuse the store.
-const MAX_NAME_CHARS: usize = 120;
+/// Longest name kept, including its directory path. Anything longer is
+/// truncated rather than rejected: a long name is a cosmetic problem, not an
+/// attempt to abuse the store.
+const MAX_NAME_CHARS: usize = 240;
 const MAX_NAME_FALLBACK: &str = "file";
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
@@ -234,24 +235,34 @@ fn unknown_file() -> CallError {
     CallError::new(conex_proto::ErrorCode::BadRequest, "unknown file")
 }
 
-/// Keep the visible name and drop everything that could be used to inject
-/// into a header, a path, or the DOM as markup. The name is never used as a
-/// filesystem path, but it is echoed into a `Content-Disposition` header and
-/// rendered as text by every client in the group.
+/// Keep the visible name and drop everything that could be injected into a
+/// header or the DOM as markup. A relative directory path is allowed — the
+/// file scene renders `dir/sub/file` as a tree — but every segment is
+/// cleaned and traversal segments are flattened, so the name stays a display
+/// string. It is never used as a filesystem path: the bytes live in memory,
+/// keyed by id.
 fn sanitize_name(raw: &str) -> String {
-    let cleaned: String = raw
-        .chars()
-        .map(|c| {
-            if c.is_control() || matches!(c, '/' | '\\' | '"' | '\'') {
-                '_'
-            } else {
-                c
-            }
-        })
-        .collect();
-    let trimmed = cleaned.trim();
-    let capped: String = trimmed.chars().take(MAX_NAME_CHARS).collect();
-    let capped = capped.trim().to_string();
+    let mut segments: Vec<String> = Vec::new();
+    for segment in raw.split('/') {
+        let cleaned: String = segment
+            .chars()
+            .map(|c| {
+                if c.is_control() || matches!(c, '\\' | '"' | '\'') {
+                    '_'
+                } else {
+                    c
+                }
+            })
+            .collect();
+        match cleaned.trim() {
+            "" | "." => {}
+            ".." => segments.push("_".to_string()),
+            clean => segments.push(clean.to_string()),
+        }
+    }
+    let joined = segments.join("/");
+    let capped: String = joined.chars().take(MAX_NAME_CHARS).collect();
+    let capped = capped.trim().trim_matches('/').to_string();
     if capped.is_empty() {
         MAX_NAME_FALLBACK.to_string()
     } else {
@@ -445,23 +456,37 @@ mod tests {
     }
 
     #[test]
-    fn names_and_mimes_cannot_smuggle_headers_or_paths() {
+    fn names_cannot_smuggle_headers_but_may_carry_directory_paths() {
         let store = store();
         let file = store
             .put(
                 "a",
                 "someone",
                 "team-a",
-                "in/ject\"ed\r\nX: y.txt",
+                "docs/../in ject\"ed\r\nX: y.txt",
                 "text/plain\r\nX: y",
                 Arc::new(vec![0u8; 1]),
             )
             .expect("put");
         assert!(!file.name.contains('\r'));
-        assert!(!file.name.contains('/'));
         assert!(!file.name.contains('"'));
-        assert!(!file.mime.contains('\r'));
+        assert!(
+            !file.name.contains(".."),
+            "traversal segments are flattened"
+        );
+        assert_eq!(file.name, "docs/_/in ject_ed__X: y.txt");
         assert_eq!(file.mime, "application/octet-stream");
+        let nested = store
+            .put(
+                "a",
+                "someone",
+                "team-a",
+                "/照片/2024//聚会.png",
+                "image/png",
+                Arc::new(vec![0u8; 1]),
+            )
+            .expect("put");
+        assert_eq!(nested.name, "照片/2024/聚会.png");
     }
 
     #[test]

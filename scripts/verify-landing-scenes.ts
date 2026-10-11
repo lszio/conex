@@ -42,7 +42,7 @@ async function ready(page: Page): Promise<void> {
 
 async function setProfile(page: Page, name: string, group: string): Promise<void> {
   await page.getByLabel("名称").fill(name);
-  await page.getByLabel("组").fill(group);
+  await page.getByLabel("组名", { exact: true }).fill(group);
   await page.getByRole("button", { name: "保存" }).click();
   await page.waitForTimeout(800);
 }
@@ -197,16 +197,19 @@ async function main(): Promise<void> {
     const statusText = await tabA.locator("main").innerText();
     check(/在线客户端/.test(statusText), "状态面板显示客户端计数");
     check(/在线分组/.test(statusText), "状态面板显示分组计数");
+    // Rows are anonymous: the group text is the join secret, so the own row
+    // carries the「你的组」badge and the other row is what remains.
     const teamRow = await tabA
       .locator("li")
-      .filter({ hasText: "team-a" })
+      .filter({ hasText: "你的组" })
       .first()
       .innerText();
     check(/3 客户端/.test(teamRow), `team-a 显示 3 个客户端: ${teamRow}`);
     check(/最近\s*(<1 ms|\d+ ms)/.test(teamRow), `team-a 显示实测延迟: ${teamRow}`);
+    check(!teamRow.includes("team-a"), "状态行不显示组名文本");
     const malloryRow = await tabA
       .locator("li")
-      .filter({ hasText: "team-b" })
+      .filter({ hasText: "尚未测量" })
       .first()
       .innerText();
     check(/尚未测量/.test(malloryRow), `未发过 hello 的组显示「尚未测量」: ${malloryRow}`);

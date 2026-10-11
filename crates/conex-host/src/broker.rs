@@ -432,7 +432,17 @@ impl Broker {
                     .list_for_group(link_id)
                     .into_iter()
                     .filter(|entry| entry.profile.visible)
-                    .map(client_to_json)
+                    // The group text is the join secret: a visitor shares it
+                    // out-of-band or not at all, so the listing never echoes
+                    // it — not even to the caller. `client/profile` self is
+                    // the only place a client reads its own group back.
+                    .map(|entry| {
+                        let mut row = client_to_json(entry);
+                        if let Some(profile) = row.get_mut("profile") {
+                            profile["group"] = Value::String(String::new());
+                        }
+                        row
+                    })
                     .collect();
                 Ok(json!({ "clients": rows }))
             }
@@ -451,7 +461,9 @@ impl Broker {
                         .iter()
                         .map(|group| json!({
                             "groupKey": group.group_key,
-                            "label": group.label,
+                            // Always empty: the group text is the join secret
+                            // and is never projected into host-wide stats.
+                            "label": "",
                             "clientsOnline": group.clients_online.to_string(),
                             "lastRoundTripMs": group.last_round_trip_ms.to_string(),
                             "avgRoundTripMs": group.avg_round_trip_ms.to_string(),

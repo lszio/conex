@@ -61,7 +61,11 @@ export interface ClientProfile {
   displayName?:
     | string
     | undefined;
-  /** Optional free-form bucket the visitor can use to sort their own view. */
+  /**
+   * The join secret of the visitor's group: knowledge of the name is the only
+   * requirement to share with that group, so the host never projects it to
+   * anyone but its owner (`client/profile` self). Empty in every listing row.
+   */
   group?:
     | string
     | undefined;
@@ -173,8 +177,8 @@ export interface GroupStatus {
     | string
     | undefined;
   /**
-   * The group's own label when every member declared the same one, empty when
-   * members differ.
+   * Always empty: the group text is the join secret and is never projected
+   * into host-wide stats. Kept for wire compatibility.
    */
   label?: string | undefined;
   clientsOnline?: number | undefined;

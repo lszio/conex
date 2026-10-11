@@ -239,10 +239,13 @@ pub async fn download_file(
     } else {
         "attachment"
     };
+    // The name may carry a directory path (`dir/sub/file.png`); the browser
+    // saving through this header should get the bare file name.
+    let base = file.name.rsplit('/').next().unwrap_or(&file.name);
     if let Ok(value) = HeaderValue::from_str(&format!(
         "{disposition}; filename=\"{}\"; filename*=UTF-8''{}",
-        ascii_name(&file.name),
-        percent_encode(&file.name)
+        ascii_name(base),
+        percent_encode(base)
     )) {
         headers_out.insert(header::CONTENT_DISPOSITION, value);
     }

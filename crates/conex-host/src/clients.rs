@@ -269,7 +269,6 @@ impl ClientState {
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct GroupStatus {
     pub group_key: String,
-    pub label: String,
     pub clients_online: u32,
     pub last_round_trip_ms: u64,
     pub avg_round_trip_ms: u64,
@@ -476,7 +475,6 @@ impl ClientRegistry {
                 .entry(entry.group_key.clone())
                 .or_insert(GroupStatus {
                     group_key: entry.group_key.clone(),
-                    label: entry.profile.group.clone(),
                     clients_online: 0,
                     last_round_trip_ms: 0,
                     avg_round_trip_ms: 0,
@@ -487,11 +485,6 @@ impl ClientRegistry {
             status.clients_online += 1;
             status.files_shared += entry.files_shared;
             status.shared_bytes += entry.shared_bytes;
-            // Clients in one group may disagree on their label; showing either
-            // as "the" label would misreport the rest.
-            if status.label != entry.profile.group {
-                status.label.clear();
-            }
             let round_trips = entry.round_trips();
             if entry.last_round_trip_ms > status.last_round_trip_ms {
                 status.last_round_trip_ms = entry.last_round_trip_ms;
@@ -992,7 +985,6 @@ mod tests {
         let before = registry.group_status();
         assert_eq!(before.len(), 1);
         assert_eq!(before[0].clients_online, 2);
-        assert_eq!(before[0].label, "team-a");
         assert_eq!(before[0].round_trips, 0);
         assert_eq!(before[0].avg_round_trip_ms, 0);
 

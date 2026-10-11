@@ -125,7 +125,6 @@ export function App() {
           files={page.files}
           selfLinkId={page.selfLinkId}
           groupLabel={self?.profile?.group || page.draft.group}
-          groupKey={ownGroupKey}
           notice={page.shareNotice}
           uploading={page.uploading}
           onShare={(picked) => void page.shareFiles(picked)}

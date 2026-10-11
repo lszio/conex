@@ -436,3 +436,37 @@ A 列表: [ 'client-p5RIZ_', 'client-SPnbpC' ]
 **部署窗口的一个观察**：部署 20:17:17 开始、20:22:34 `done`，但在 `done` 之后约 40 秒内
 首次 curl 仍拿到旧镜像的 846 804 字节，随后才切换。也就是说 **`status=done` 之后还有
 一小段旧容器在前面挡流量**，此时若立刻验收会得到"部署无效"的错误结论。
+
+## 8. 组名转为加入凭据 + 文件目录树（2026-10-11）
+
+**改动**：组名语义从「自述标签」收紧为「加入凭据」——`client/list` 每行
+`profile.group` 置空、`client/status` 的 `label` 恒空（proto 注释同步，
+`GroupStatus` 结构体删除 `label` 字段），组文本只在 `client/profile` self 回显。
+页面默认组名 `default`，提供随机组名（10 位无歧义字符集）与复制/分享入口；在线列表
+取消按组名分节。文件名允许相对目录路径：`sanitize_name` 按 `/` 分段清理（`..` 展平、
+控制字符/引号替换、240 字符截断），`Content-Disposition` 改用 basename；页面把每个
+提供者的文件渲染成目录树，列表（`<details>` 折叠）与网格（目录瓦片下钻 + 面包屑）
+两种视图。同测试文件的宿主拉起逻辑顺带修了一个端口竞态：bind-then-drop 取端口与并行
+测试的 host 抢端口，readiness 连到别人家导致首个请求 Connection refused（MR5 CI 的
+偶发失败即此）——现在子进程退出即换端口重试，最多 5 次。
+
+**门禁**：clippy 0、fmt clean、typecheck clean、`xtask generate --check` 通过、
+workspace 测试全绿（含 share.rs 单测改写 `names_cannot_smuggle_headers_but_may_
+carry_directory_paths`）、SDK 29 pass / 0 fail。
+
+**真浏览器**（`bun web/dev.ts` + 真实 Chromium）：
+
+- 永久套件 `scripts/verify-landing-scenes.ts` 全部通过（含新断言「状态行不显示组名
+  文本」——状态行只出现 key 前 8 位与「你的组」徽章）。
+- 一次性 21 项（跑完即删）：新访客组名默认 `default`；随机按钮产出
+  `[23456789a-z]{10}`（如 `78r46kzkgk`）；复制按钮 `aria-label` 变「已复制」；
+  甲/乙同组互见；目录上传 3 文件（`会议纪要/十月/周会.md` 等 CJK 路径）列表视图出现
+  「会议纪要」目录与嵌套文件；网格视图目录瓦片显示文件数、下钻到「十月」后上层文件
+  不再显示、面包屑「根目录/会议纪要」可跳转；乙看到甲的完整树；两页组名文本各只出现
+  在自己的分享徽章里（1 次）；在线列表不含组名；第三人在别的组看不到任何文件与成员。
+- 截图核对：组名行「组名 + 随机/复制图标按钮」单行不换行；树形缩进正常。
+
+**过程中被真浏览器暴露的缺陷**：ProfileCard 组名标签原为「组名（加入凭据）」＋两个
+带文字的按钮，窄卡片下换行挤压（截图可见），改为标签「组名」+ 图标按钮（aria-label
+保留全名）；验证脚本选择器从 `getByLabel("组")` 改为 `getByLabel("组名", { exact:
+true })`——非精确匹配会撞上「生成随机组名」「复制组名」两个按钮的 aria-label。

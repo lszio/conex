@@ -86,7 +86,7 @@ export async function uploadFile(file: File): Promise<SharedFile> {
     headers: {
       ...authHeaders(),
       "x-csrf-token": csrfToken,
-      "x-conex-file-name": encodeURIComponent(file.name),
+      "x-conex-file-name": encodeURIComponent(file.webkitRelativePath || file.name),
       "x-conex-file-type": encodeURIComponent(file.type || "application/octet-stream"),
       "content-type": "application/octet-stream",
     },

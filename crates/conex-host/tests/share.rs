@@ -82,6 +82,26 @@ impl Drop for Host {
 }
 
 async fn start() -> Host {
+    // Picking a port by bind-then-drop races with every other test spawning
+    // its own host at the same moment: a stolen port makes our child exit at
+    // bind while the readiness connect succeeds against the thief, and the
+    // first real request dies with ConnectionRefused. Retry on a fresh port;
+    // anything other than an address-in-use failure is a real bug and panics
+    // with the host log on the first attempt.
+    let mut last_error = String::new();
+    for _ in 0..5 {
+        match try_start().await {
+            Ok(host) => return host,
+            Err(error) => {
+                assert!(error.contains("in use"), "{error}");
+                last_error = error;
+            }
+        }
+    }
+    panic!("conex-host could not claim a free port after 5 attempts: {last_error}");
+}
+
+async fn try_start() -> Result<Host, String> {
     let (t_content, content_root) = tmp("content");
     let (t_session, session_root) = tmp("session");
     let (t_operation, operation_root) = tmp("operation");
@@ -122,23 +142,39 @@ max_sessions = 32\n",
         .spawn()
         .expect("spawn conex-host");
     let addr: SocketAddr = format!("127.0.0.1:{port}").parse().expect("addr");
+    let exited = |child: &mut std::process::Child| {
+        let status = child.try_wait().ok().flatten();
+        status.map(|status| {
+            let stderr = std::fs::read_to_string(&log_path).unwrap_or_default();
+            format!("conex-host exited with {status}: {stderr}\nconfig at {cfg_path:?}")
+        })
+    };
     for _ in 0..100 {
         if tokio::net::TcpStream::connect(addr).await.is_ok() {
-            return Host {
-                addr,
-                child,
-                _content: t_content,
-                _session: t_session,
-                _operation: t_operation,
+            // The connect may have reached the thief that took the port
+            // between our drop and our child's bind. A bind failure is
+            // immediate, so one quiet beat is enough to prove the port is
+            // really ours: a child that lost the race is gone by now.
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            return match exited(&mut child) {
+                Some(error) => Err(error),
+                None => Ok(Host {
+                    addr,
+                    child,
+                    _content: t_content,
+                    _session: t_session,
+                    _operation: t_operation,
+                }),
             };
         }
-        if let Ok(Some(status)) = child.try_wait() {
-            let stderr = std::fs::read_to_string(&log_path).unwrap_or_default();
-            panic!("conex-host exited with {status}: {stderr}\nconfig at {cfg_path:?}");
+        if let Some(error) = exited(&mut child) {
+            return Err(error);
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
-    panic!("conex-host did not become ready on {addr} (config at {cfg_path:?})");
+    Err(format!(
+        "conex-host did not become ready on {addr} (config at {cfg_path:?})"
+    ))
 }
 
 /// A visitor: its web session (cookie + csrf) and its live WSS link.
@@ -548,7 +584,9 @@ async fn a_cross_group_hello_is_refused_but_a_same_group_one_round_trips() {
     // every other length and counter in this protocol.
     assert_eq!(team["clientsOnline"].as_str(), Some("2"));
     assert_eq!(team["roundTrips"].as_str(), Some("2"), "both ends count");
-    assert_eq!(team["label"].as_str(), Some("team-a"));
+    // The group text is the join secret: stats rows carry the key only, the
+    // label is always empty on the wire.
+    assert_eq!(team["label"].as_str(), Some(""));
     assert_ne!(
         team["lastRoundTripMs"].as_str(),
         Some("0"),

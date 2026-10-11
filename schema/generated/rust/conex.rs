@@ -642,7 +642,9 @@ pub struct ClientProfile {
     /// identity: two clients may pick the same name.
     #[prost(string, tag = "1")]
     pub display_name: ::prost::alloc::string::String,
-    /// Optional free-form bucket the visitor can use to sort their own view.
+    /// The join secret of the visitor's group: knowledge of the name is the only
+    /// requirement to share with that group, so the host never projects it to
+    /// anyone but its owner (`client/profile` self). Empty in every listing row.
     #[prost(string, tag = "2")]
     pub group: ::prost::alloc::string::String,
     /// When false the client disappears from every other client's list.
@@ -742,8 +744,8 @@ pub struct GroupStatus {
     /// visitor chose and is not part of the key.
     #[prost(string, tag = "1")]
     pub group_key: ::prost::alloc::string::String,
-    /// The group's own label when every member declared the same one, empty when
-    /// members differ.
+    /// Always empty: the group text is the join secret and is never projected
+    /// into host-wide stats. Kept for wire compatibility.
     #[prost(string, tag = "2")]
     pub label: ::prost::alloc::string::String,
     #[prost(uint32, tag = "3")]

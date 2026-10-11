@@ -47,10 +47,9 @@ export interface Toast {
   ttlMs: number;
 }
 
-/** One row of `client/status`. */
+/** One row of `client/status`. The host never projects group text here. */
 export interface GroupRow {
   groupKey: string;
-  label: string;
   clientsOnline: number;
   lastRoundTripMs: number;
   avgRoundTripMs: number;
@@ -90,7 +89,7 @@ export function readCachedProfile(): CachedProfile | undefined {
     if (typeof parsed !== "object" || parsed === null) return undefined;
     return {
       displayName: typeof parsed.displayName === "string" ? parsed.displayName : "",
-      group: typeof parsed.group === "string" ? parsed.group : "",
+      group: typeof parsed.group === "string" && parsed.group ? parsed.group : "default",
       visible: parsed.visible !== false,
     };
   } catch {
@@ -145,7 +144,7 @@ export interface HelloPageState {
 const EMPTY_STATUS: StatusState = { clientsOnline: 0, groupsOnline: 0, groups: [] };
 
 export function useHelloPage(): HelloPageState {
-  const cached = useRef<CachedProfile>(readCachedProfile() ?? { displayName: "", group: "", visible: true });
+  const cached = useRef<CachedProfile>(readCachedProfile() ?? { displayName: "", group: "default", visible: true });
   const [connection, setConnection] = useState<ConnectionState>("connecting");
   const [detail, setDetail] = useState("正在取得会话…");
   const [clients, setClients] = useState<ClientSummary[]>([]);
@@ -198,7 +197,6 @@ export function useHelloPage(): HelloPageState {
         groupsOnline: Number(counters.groupsOnline ?? "0"),
         groups: (counters.groups ?? []).map((group) => ({
           groupKey: group.groupKey ?? "",
-          label: group.label ?? "",
           clientsOnline: Number(group.clientsOnline ?? "0"),
           lastRoundTripMs: Number(group.lastRoundTripMs ?? "0"),
           avgRoundTripMs: Number(group.avgRoundTripMs ?? "0"),

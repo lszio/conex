@@ -73,13 +73,12 @@ export function StatusPanel({
                     className="grid gap-2 rounded-md border border-[var(--color-border)] px-3 py-2.5 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] sm:items-center"
                   >
                     <div className="flex min-w-0 items-center gap-2">
-                      <span className="truncate text-sm font-medium">
-                        {group.label || "未命名分组"}
+                      {/* Group text is the join secret: stats only ever show
+                          the derived key, never the name a visitor typed. */}
+                      <span className="truncate font-mono text-xs text-[var(--color-muted-foreground)]">
+                        分组 {group.groupKey.slice(0, 8)}
                       </span>
                       {mine ? <Badge variant="default">你的组</Badge> : null}
-                      <span className="truncate font-mono text-xs text-[var(--color-muted-foreground)]">
-                        {group.groupKey.slice(0, 8)}
-                      </span>
                     </div>
                     <span className="text-xs text-[var(--color-muted-foreground)]">
                       {group.clientsOnline} 客户端
