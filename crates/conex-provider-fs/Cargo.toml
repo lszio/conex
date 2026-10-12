@@ -11,15 +11,15 @@ description = "conex provider exposing a read-only, capability-scoped filesystem
 async-trait.workspace = true
 bytes.workspace = true
 cap-std.workspace = true
-conex-core = { path = "../conex-core" }
-conex-proto = { path = "../conex-proto" }
-conex-source = { path = "../conex-source" }
+conex-core.workspace = true
+conex-proto.workspace = true
+conex-source.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
-conex-core = { path = "../conex-core" }
-conex-proto = { path = "../conex-proto" }
-conex-source = { path = "../conex-source" }
+conex-core.workspace = true
+conex-proto.workspace = true
+conex-source.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["macros", "rt"] }

@@ -11,7 +11,7 @@ description = "conex routing kernel: data-driven registry, method contracts, aut
 base64 = "0.22"
 async-trait.workspace = true
 bytes.workspace = true
-conex-proto = { path = "../conex-proto" }
+conex-proto.workspace = true
 http.workspace = true
 secrecy.workspace = true
 serde.workspace = true

@@ -12,10 +12,10 @@ path = "src/main.rs"
 
 [dependencies]
 prost.workspace = true
-conex-core = { path = "../conex-core" }
-conex-proto = { path = "../conex-proto" }
-conex-provider-fs = { path = "../conex-provider-fs" }
-conex-source = { path = "../conex-source" }
+conex-core.workspace = true
+conex-proto.workspace = true
+conex-provider-fs.workspace = true
+conex-source.workspace = true
 futures = "0.3"
 http = "1"
 rustls.workspace = true

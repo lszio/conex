@@ -21,6 +21,16 @@ authors = ["lszio <lszio@qq.com>"]
 repository = "https://github.com/lszio/conex"
 
 [workspace.dependencies]
+conex-proto = { path = "crates/conex-proto", version = "0.1.0" }
+conex-core = { path = "crates/conex-core", version = "0.1.0" }
+conex-source = { path = "crates/conex-source", version = "0.1.0" }
+conex-provider-fs = { path = "crates/conex-provider-fs", version = "0.1.0" }
+conex-transport-http = { path = "crates/conex-transport-http", version = "0.1.0" }
+conex-content = { path = "crates/conex-content", version = "0.1.0" }
+conex-provider-http-catalog = { path = "crates/conex-provider-http-catalog", version = "0.1.0" }
+conex-assembly = { path = "crates/conex-assembly", version = "0.1.0" }
+conex-agent = { path = "crates/conex-agent", version = "0.1.0" }
+conex-host = { path = "crates/conex-host", version = "0.1.0" }
 prost = "0.14"
 prost-build = "0.14"
 prost-types = "0.14"

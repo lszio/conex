@@ -10,8 +10,8 @@ description = "conex HTTP and JSON-RPC 2.0 transport for the broker plane"
 [dependencies]
 async-trait.workspace = true
 bytes.workspace = true
-conex-core = { path = "../conex-core" }
-conex-proto = { path = "../conex-proto" }
+conex-core.workspace = true
+conex-proto.workspace = true
 http.workspace = true
 http-body-util.workspace = true
 hyper.workspace = true

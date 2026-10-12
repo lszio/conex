@@ -8,9 +8,9 @@ repository.workspace = true
 description = "conex assembly root that wires providers into the host"
 
 [dependencies]
-conex-core = { path = "../conex-core" }
-conex-provider-fs = { path = "../conex-provider-fs" }
-conex-provider-http-catalog = { path = "../conex-provider-http-catalog" }
+conex-core.workspace = true
+conex-provider-fs.workspace = true
+conex-provider-http-catalog.workspace = true
 
 [dev-dependencies]
-conex-proto = { path = "../conex-proto" }
+conex-proto.workspace = true

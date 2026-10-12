@@ -8,7 +8,7 @@ repository.workspace = true
 description = "conex source capability abstractions and snapshots for the data-connection plane"
 
 [dependencies]
-conex-core = { path = "../conex-core" }
-conex-proto = { path = "../conex-proto" }
+conex-core.workspace = true
+conex-proto.workspace = true
 serde.workspace = true
 serde_json.workspace = true

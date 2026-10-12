@@ -10,8 +10,8 @@ description = "conex local persistent content store: CID-addressed blobs, stagin
 [dependencies]
 bytes.workspace = true
 cap-std.workspace = true
-conex-core = { path = "../conex-core" }
-conex-proto = { path = "../conex-proto" }
+conex-core.workspace = true
+conex-proto.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

@@ -18,12 +18,12 @@ axum-server.workspace = true
 base64 = "0.22"
 tempfile.workspace = true
 sha2.workspace = true
-conex-assembly = { path = "../conex-assembly" }
-conex-core = { path = "../conex-core" }
-conex-proto = { path = "../conex-proto" }
-conex-content = { path = "../conex-content" }
-conex-source = { path = "../conex-source" }
-conex-transport-http = { path = "../conex-transport-http" }
+conex-assembly.workspace = true
+conex-core.workspace = true
+conex-proto.workspace = true
+conex-content.workspace = true
+conex-source.workspace = true
+conex-transport-http.workspace = true
 futures = "0.3"
 hex.workspace = true
 pbjson-types.workspace = true
@@ -44,14 +44,14 @@ flate2 = { version = "1.1.10", default-features = false, features = ["rust_backe
 [dev-dependencies]
 async-trait.workspace = true
 bytes.workspace = true
-conex-transport-http = { path = "../conex-transport-http" }
+conex-transport-http.workspace = true
 hex.workspace = true
 http.workspace = true
 rcgen.workspace = true
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
-conex-core = { path = "../conex-core" }
-conex-provider-fs = { path = "../conex-provider-fs" }
-conex-proto = { path = "../conex-proto" }
+conex-core.workspace = true
+conex-provider-fs.workspace = true
+conex-proto.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time", "test-util", "net", "io-util", "signal"] }
 # Router tests drive the axum Router with oneshot; axum re-exports the
