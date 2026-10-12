@@ -3,12 +3,13 @@
 #
 # Registry publishing runs only when the matching secret exists:
 #   - CRATES_TOKEN: a crates.io API token → publishes every workspace crate
-#     in dependency order (`cargo publish` rewrites path deps to versions).
+#     in dependency order (crates.io then serves the .crate files).
 #   - NPM_TOKEN: an npmjs.com automation token → publishes @conex/sdk
 #     (scoped packages need the `conex` npm org to exist and --access public).
 # Without the secrets the GitHub Release still carries every artifact:
 # the SDK tarball installs with `npm install ./conex-sdk-0.1.0.tgz`, and the
-# crates can be fetched from the release page.
+# Rust crates install from source with
+# `cargo install --git https://github.com/lszio/conex conex-host`.
 name: release
 
 on:
@@ -60,18 +61,6 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/dist"
           npm pack --pack-destination "$GITHUB_WORKSPACE/dist"
 
-      - name: Package crates
-        run: |
-          # Dependency order: cargo publish rewrites path dependencies to
-          # version dependencies, so a crate must publish after its deps.
-          for p in conex-proto conex-core conex-source conex-provider-fs \
-                   conex-transport-http conex-content \
-                   conex-provider-http-catalog conex-assembly \
-                   conex-agent conex-host; do
-            cargo package -p "$p" --no-verify
-          done
-          cp target/package/*.crate dist/
-
       - name: Collect bundle artifacts
         run: |
           tar czf dist/conex-host-linux-amd64.tar.gz -C target/release conex-host conex-agent
@@ -83,6 +72,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
 
+      # Dependency order: cargo resolves each crate's workspace deps against
+      # crates.io, so a crate can only package/publish after its deps landed.
+      # The .crate files themselves are served by crates.io and are not
+      # attached to the release.
       - name: Publish crates to crates.io
         if: env.HAS_CRATES_TOKEN == 'true'
         env:
