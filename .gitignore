@@ -26,3 +26,4 @@ web/dist
 .env
 .env.*
 !.env.example
+sdk/typescript/dist
