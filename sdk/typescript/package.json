@@ -1,11 +1,28 @@
 {
   "name": "@conex/sdk",
-  "private": true,
-  "type": "module",
-  "exports": {
-    ".": "./src/index.ts"
+  "version": "0.1.0",
+  "description": "conex TypeScript SDK: broker-plane WSS client, content plane and shared protocol types",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lszio/conex.git",
+    "directory": "sdk/typescript"
   },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

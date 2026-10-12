@@ -1,0 +1,104 @@
+# Release pipeline: tag `v*` → full gate → artifacts → GitHub Release →
+# optional registry publishing.
+#
+# Registry publishing runs only when the matching secret exists:
+#   - CRATES_TOKEN: a crates.io API token → publishes every workspace crate
+#     in dependency order (`cargo publish` rewrites path deps to versions).
+#   - NPM_TOKEN: an npmjs.com automation token → publishes @conex/sdk
+#     (scoped packages need the `conex` npm org to exist and --access public).
+# Without the secrets the GitHub Release still carries every artifact:
+# the SDK tarball installs with `npm install ./conex-sdk-0.1.0.tgz`, and the
+# crates can be fetched from the release page.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      HAS_CRATES_TOKEN: ${{ secrets.CRATES_TOKEN != '' }}
+      HAS_NPM_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.0"
+
+      - name: protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "36.1"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install JS dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Gate (fmt, clippy, tests, conformance, e2e, generate check)
+        run: cargo xtask check
+
+      - name: Build host binaries
+        run: cargo build --release -p conex-host -p conex-agent
+
+      - name: Build web bundle
+        run: bun run build:web
+
+      - name: Build SDK package
+        run: |
+          cd sdk/typescript
+          bun run build
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          npm pack --pack-destination "$GITHUB_WORKSPACE/dist"
+
+      - name: Package crates
+        run: |
+          # Dependency order: cargo publish rewrites path dependencies to
+          # version dependencies, so a crate must publish after its deps.
+          for p in conex-proto conex-core conex-source conex-provider-fs \
+                   conex-transport-http conex-content \
+                   conex-provider-http-catalog conex-assembly \
+                   conex-agent conex-host; do
+            cargo package -p "$p" --no-verify
+          done
+          cp target/package/*.crate dist/
+
+      - name: Collect bundle artifacts
+        run: |
+          tar czf dist/conex-host-linux-amd64.tar.gz -C target/release conex-host conex-agent
+          tar czf dist/conex-web-dist.tar.gz -C web dist
+          ls -la dist/
+
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
+
+      - name: Publish crates to crates.io
+        if: env.HAS_CRATES_TOKEN == 'true'
+        env:
+          CARGO_REGISTRIES_CRATES_IO_TOKEN: ${{ secrets.CRATES_TOKEN }}
+        run: |
+          for p in conex-proto conex-core conex-source conex-provider-fs \
+                   conex-transport-http conex-content \
+                   conex-provider-http-catalog conex-assembly \
+                   conex-agent conex-host; do
+            cargo publish -p "$p" --no-verify
+          done
+
+      - name: Publish SDK to npm
+        if: env.HAS_NPM_TOKEN == 'true'
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npm config set //registry.npmjs.org/:_authToken "$NPM_TOKEN"
+          npm publish sdk/typescript --access public

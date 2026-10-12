@@ -7,7 +7,13 @@
     "noEmit": true,
     "resolveJsonModule": true,
     "esModuleInterop": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      // Tests import the package by name; resolve the source, not the built
+      // dist, so `tsc --noEmit` works on a fresh clone before any build.
+      "@conex/sdk": ["./src/index.ts"]
+    }
   },
   "include": ["src", "tests"]
 }

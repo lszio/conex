@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
+readme.workspace = true
 description = "conex local persistent content store: CID-addressed blobs, staging, commit and GC"
 
 [dependencies]

@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
+readme.workspace = true
 description = "conex protocol types generated from .proto sources: messages, method and error contracts, CIDs"
 
 [dependencies]

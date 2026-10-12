@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
+readme.workspace = true
 description = "conex private-side agent: outbound reverse connection, restricted workspace and upstream credentials"
 [[bin]]
 name = "conex-agent"

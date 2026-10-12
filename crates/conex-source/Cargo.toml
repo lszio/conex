@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
+readme.workspace = true
 description = "conex source capability abstractions and snapshots for the data-connection plane"
 
 [dependencies]

@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "declaration": true,
+    "declarationMap": false,
+    "sourceMap": true,
+    // DOM supplies the standard fetch/WebSocket types in the emitted .d.ts,
+    // so consumers do not need bun-types to resolve the SDK surface.
+    "lib": ["ES2022", "DOM"]
+  },
+  "include": ["src"]
+}

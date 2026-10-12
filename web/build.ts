@@ -44,6 +44,18 @@ const result = await Bun.build({
         });
       },
     },
+    {
+      // The workspace SDK resolves to its TypeScript source, not the
+      // published package exports: a fresh clone has no sdk dist, and the
+      // landing page must build (and be typechecked) against the same
+      // source the SDK's own tests run against.
+      name: "workspace-sdk",
+      setup(build) {
+        build.onResolve({ filter: /^@conex\/sdk$/ }, () => ({
+          path: join(root, "..", "sdk", "typescript", "src", "index.ts"),
+        }));
+      },
+    },
   ],
 });
 if (!result.success) {

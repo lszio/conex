@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
+readme.workspace = true
 description = "conex HTTP and JSON-RPC 2.0 transport for the broker plane"
 
 [dependencies]
