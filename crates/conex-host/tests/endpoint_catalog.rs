@@ -23,6 +23,7 @@ fn config(dir: &TempDir) -> HostConfig {
         tls: None,
         audit_file: None,
         audit_capacity: None,
+        share: None,
         tokens: vec![
             TokenConfig {
                 token_hash: "0".repeat(64),

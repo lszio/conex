@@ -341,6 +341,59 @@ pub fn build_router(config: &HostConfig) -> Result<Router, CallError> {
     if let Some(broker) = built.broker.as_ref() {
         broker.attach_ui_links(ui_links.clone());
     }
+    // The share scene: bytes on disk under its own root, metadata in memory.
+    // A host with no share root still serves the page, but every share route
+    // answers `unavailable` instead of falling back to a second engine.
+    let shares = match config.share_storage() {
+        Some((root, lease_ms)) => {
+            if !root.exists() {
+                std::fs::create_dir_all(&root).map_err(invalid)?;
+            }
+            let blocks =
+                crate::share_blocks::ShareBlocks::open(&root, lease_ms).map_err(invalid)?;
+            // A restart ends every connection, so nothing that survived holds
+            // the scene's bytes any more. Reclaiming here is what keeps a host
+            // from accumulating the previous run's files forever.
+            let reclaimed = blocks.reclaim_all();
+            if reclaimed > 0 {
+                tracing::info!(
+                    blocks = reclaimed,
+                    root = %root.display(),
+                    "share scene reclaimed blocks left by a previous run"
+                );
+            }
+            Arc::new(crate::share::ShareStore::backed(
+                blocks,
+                config.share_limits(),
+            ))
+        }
+        None => Arc::new(crate::share::ShareStore::new()),
+    };
+    let sweep_shares = shares.clone();
+    let sweep_clients = built.clients.clone();
+    tokio::spawn(async move {
+        // An expired clip is reclaimed even when nobody opens the scene again:
+        // waiting for a read would keep the bytes alive as long as the tab is.
+        let mut ticker = tokio::time::interval(Duration::from_secs(60));
+        ticker.tick().await;
+        loop {
+            ticker.tick().await;
+            let now = crate::agent::now_ms();
+            for dropped in sweep_shares.sweep_expired(now) {
+                sweep_shares.release(&dropped.root_cid);
+                // The group the clip belonged to learns it went away, so a page
+                // showing it does not wait for its next poll to drop the row.
+                sweep_clients.notify_group(
+                    &dropped.group_key,
+                    &dropped.owner_link_id,
+                    "conex/share-changed",
+                    &serde_json::json!({ "by": "" }),
+                );
+            }
+            sweep_shares.storage().map(|blocks| blocks.purge_expired());
+        }
+    });
+
     let http_state = Arc::new(HttpState {
         host: built.host.clone(),
         bindings: built.bindings.clone(),
@@ -351,7 +404,7 @@ pub fn build_router(config: &HostConfig) -> Result<Router, CallError> {
         web_auth,
         ui_links,
         clients: built.clients.clone(),
-        shares: Arc::new(crate::share::ShareStore::new()),
+        shares,
     });
     let mut base = build_p0_router();
     if built.broker.is_some() && built.host_side.is_some() {

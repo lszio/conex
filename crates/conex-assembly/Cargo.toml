@@ -6,6 +6,7 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 description = "conex assembly root that wires providers into the host"
+publish = false
 
 [dependencies]
 conex-core.workspace = true

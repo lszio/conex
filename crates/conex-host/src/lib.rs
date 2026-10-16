@@ -16,6 +16,7 @@ pub mod oidc_jwt;
 pub mod remote;
 pub mod serve;
 pub mod share;
+pub mod share_blocks;
 pub mod share_http;
 pub mod tickets;
 pub mod ui_links;

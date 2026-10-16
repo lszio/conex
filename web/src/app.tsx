@@ -130,6 +130,7 @@ export function App() {
           onShare={(picked) => void page.shareFiles(picked)}
           onWithdraw={(file) => void page.withdrawFile(file)}
           fileUrl={page.fileUrl}
+          previewUrl={page.previewFileUrl}
         />
 
         <details className="rounded-md border border-[var(--color-border)]">

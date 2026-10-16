@@ -75,6 +75,12 @@ pub struct HostConfig {
     /// instead of the dev-only code/PKCE pass-through.
     #[serde(default)]
     pub oidc: Option<OidcConfig>,
+    /// Landing-page share scene. The root is separate from `content_root` on
+    /// purpose: the blob channel garbage-collects what no committed root
+    /// reaches, and an in-flight upload is exactly that, so the two scenes
+    /// must not share a root or one would delete the other's staging.
+    #[serde(default)]
+    pub share: Option<ShareConfig>,
     /// Anonymous visitor sessions for the public landing page (M1.1). When
     /// set, browsers without a cookie get a read-only `ui` session bound to
     /// the configured principal/tenant; only the UI method whitelist
@@ -105,6 +111,55 @@ pub struct WebGuestConfig {
     /// Session issuance rate limit per rolling minute.
     #[serde(default = "default_guest_issue_per_minute")]
     pub max_issue_per_minute: u32,
+}
+
+/// The landing page file/clip scene: where bytes live and how much is allowed.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ShareConfig {
+    /// Persistent root for scene bytes. Defaults to a sibling of
+    /// `content_root`, so a host that already configures P1 gets a share root
+    /// without a second line.
+    #[serde(default)]
+    pub share_root: Option<PathBuf>,
+    /// How long a staged upload stays resumable.
+    #[serde(default = "default_share_lease_ms")]
+    pub lease_ms: u64,
+    /// Largest single item one client may offer.
+    #[serde(default = "default_max_file_bytes")]
+    pub max_file_bytes: u64,
+    /// Largest total one group may hold at once.
+    #[serde(default = "default_max_group_bytes")]
+    pub max_group_bytes: u64,
+    /// Most files one client may offer at a time.
+    #[serde(default = "default_max_files_per_client")]
+    pub max_files_per_client: usize,
+    /// Most clips one client may offer at once. Separate from the file count
+    /// so a busy clipboard cannot take the file scene's slots.
+    #[serde(default = "default_max_clips_per_client")]
+    pub max_clips_per_client: usize,
+    /// Clip lifetime in milliseconds.
+    #[serde(default = "default_clip_ttl_ms")]
+    pub clip_ttl_ms: u64,
+}
+
+fn default_share_lease_ms() -> u64 {
+    24 * 60 * 60 * 1000
+}
+fn default_max_file_bytes() -> u64 {
+    8 * 1024 * 1024
+}
+fn default_max_group_bytes() -> u64 {
+    32 * 1024 * 1024
+}
+fn default_max_files_per_client() -> usize {
+    32
+}
+fn default_max_clips_per_client() -> usize {
+    20
+}
+fn default_clip_ttl_ms() -> u64 {
+    10 * 60 * 1000
 }
 
 fn default_guest_principal() -> String {
@@ -259,6 +314,27 @@ impl HostConfig {
                         guest.tenant_id, policy.tenant_id, guest.principal_id
                     )));
                 }
+            }
+        }
+        if let Some(share) = &self.share {
+            if share.max_file_bytes == 0 {
+                return Err(invalid("share.max_file_bytes must be at least 1"));
+            }
+            if share.max_files_per_client == 0 {
+                return Err(invalid("share.max_files_per_client must be at least 1"));
+            }
+            if share.max_clips_per_client == 0 {
+                return Err(invalid("share.max_clips_per_client must be at least 1"));
+            }
+            if share.clip_ttl_ms == 0 {
+                return Err(invalid("share.clip_ttl_ms must be at least 1"));
+            }
+            if let Some((share_root, _)) = self.share_storage().as_ref()
+                && self.content_root.as_ref() == Some(share_root)
+            {
+                return Err(invalid(
+                    "share.share_root must not be content_root: the scenes reclaim differently",
+                ));
             }
         }
         if let Some(origin) = &self.web_origin
@@ -467,6 +543,51 @@ impl HostConfig {
             session: self.session_root.clone(),
             operation: self.operation_root.clone(),
         }
+    }
+
+    /// Share scene limits, with the host's own ceilings applied.
+    pub fn share_limits(&self) -> crate::share::ShareLimits {
+        let mut limits = crate::share::ShareLimits::default();
+        if let Some(share) = &self.share {
+            limits.max_file_bytes = share.max_file_bytes;
+            // A group always has room for one file: raising the per-file cap
+            // without touching the group cap would otherwise make the scene
+            // refuse every upload, and the error would not say why.
+            limits.max_group_bytes = share.max_group_bytes.max(share.max_file_bytes);
+            limits.max_files_per_client = share.max_files_per_client;
+            limits.max_clips_per_client = share.max_clips_per_client;
+            limits.clip_ttl_ms = share.clip_ttl_ms;
+        }
+        limits
+    }
+
+    /// Share root plus the lease a staged upload keeps.
+    ///
+    /// `None` when neither `[share] share_root` nor `content_root` is set,
+    /// which leaves the scene unavailable rather than writing to a path the
+    /// operator never named.
+    pub fn share_storage(&self) -> Option<(PathBuf, u64)> {
+        let lease_ms = self
+            .share
+            .as_ref()
+            .map_or(default_share_lease_ms(), |s| s.lease_ms);
+        if let Some(root) = self
+            .share
+            .as_ref()
+            .and_then(|share| share.share_root.clone())
+        {
+            return Some((root, lease_ms));
+        }
+        // A host that configures P1 gets a sibling share root by default.
+        self.content_root.as_ref().map(|content| {
+            (
+                content
+                    .parent()
+                    .map(|parent| parent.join("share"))
+                    .unwrap_or_else(|| content.join("share")),
+                lease_ms,
+            )
+        })
     }
 }
 

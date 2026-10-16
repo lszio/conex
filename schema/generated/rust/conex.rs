@@ -1342,6 +1342,243 @@ pub struct WebTicket {
     #[prost(uint64, tag = "10")]
     pub expires_at_ms: u64,
 }
+/// / One shared item, as the browser sees it. The host keeps this metadata and
+/// / nothing else: the bytes live in the content store, addressed by `root_cid`.
+/// /
+/// / `preview_bytes` is the host's own bound on a preview read — the number of
+/// / leading bytes a client may fetch to render a preview. It is 0 when the item
+/// / is not previewable, and never larger than the host's preview budget even
+/// / when the item itself is small.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ShareItem {
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    #[prost(enumeration = "ShareItemKind", tag = "2")]
+    pub kind: i32,
+    /// / A relative directory path (`dir/sub/file`) is kept as a display string.
+    /// / It is sanitized and never used as a filesystem path.
+    #[prost(string, tag = "3")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub mime: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "5")]
+    pub size_bytes: u64,
+    /// / CIDv1 raw / sha2-256 of the committed content, base32 lowercase text.
+    #[prost(string, tag = "6")]
+    pub root_cid: ::prost::alloc::string::String,
+    #[prost(string, tag = "7")]
+    pub owner_link_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "8")]
+    pub owner_name: ::prost::alloc::string::String,
+    /// / Host-derived isolation key. The group text is never projected.
+    #[prost(string, tag = "9")]
+    pub group_key: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "10")]
+    pub created_at_ms: u64,
+    #[prost(uint64, tag = "11")]
+    pub preview_bytes: u64,
+    /// / When true the host has decided the browser may render this inline; the
+    /// / MIME allow-list deliberately excludes anything that can carry script.
+    #[prost(bool, tag = "12")]
+    pub inline: bool,
+    /// / Clip expiry in epoch milliseconds; 0 for an ordinary file.
+    #[prost(uint64, tag = "13")]
+    pub expires_at_ms: u64,
+}
+/// / Begin a staged upload of one item.
+/// /
+/// / The client declares the CIDs of the chunks it is about to send, in order,
+/// / and the host derives the root CID itself from that list and the geometry.
+/// / Two things follow from that split:
+/// /
+/// /   * A staged upload is bound to a *content*, so a second attempt at the same
+/// /     content from the same owner finds the existing staging and reports how
+/// /     far it got, instead of starting over. Resume needs no client-side state
+/// /     beyond the file it already picked.
+/// /   * Every arriving chunk is checked against the entry the client declared
+/// /     before the store is touched, so a bad chunk is refused without leaving a
+/// /     half-written block behind.
+/// /
+/// / The manifest tree is *not* built here: the host owns the single
+/// / implementation of that rule (`conex_proto::cid`), and the browser only needs
+/// / sha2-256 of each chunk to declare them.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ShareUploadInitRequest {
+    #[prost(string, tag = "1")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub mime: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "3")]
+    pub size_bytes: u64,
+    /// / Must equal the protocol chunk size. Not negotiated: a second value is a
+    /// / second code path nobody tests.
+    #[prost(uint32, tag = "4")]
+    pub chunk_size: u32,
+    /// / One CID per chunk the client will send, in ascending order. Their count
+    /// / must be `ceil(size_bytes / chunk_size)`.
+    #[prost(string, repeated, tag = "5")]
+    pub chunk_cids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    #[prost(enumeration = "ShareItemKind", tag = "6")]
+    pub kind: i32,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ShareUploadInitResponse {
+    #[prost(string, tag = "1")]
+    pub upload_id: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "2")]
+    pub chunk_size: u32,
+    /// / How many chunks the host already holds for this upload. The client
+    /// / resumes from exactly here, which is what turns an interrupted upload into
+    /// / one number rather than a list of missing blocks.
+    #[prost(uint64, tag = "3")]
+    pub received_count: u64,
+    #[prost(uint64, tag = "4")]
+    pub lease_ms: u64,
+    #[prost(uint64, tag = "5")]
+    pub max_item_bytes: u64,
+}
+/// / Commit a staged upload. The host re-derives the root from the chunks it
+/// / actually received, so a commit can only ever name content this upload
+/// / delivered; it never trusts a block list from the caller.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ShareUploadCommitRequest {
+    #[prost(string, tag = "1")]
+    pub upload_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ShareUploadCommitResponse {
+    #[prost(message, optional, tag = "1")]
+    pub item: ::core::option::Option<ShareItem>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ShareUploadCancelRequest {
+    #[prost(string, tag = "1")]
+    pub upload_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ShareUploadCancelResponse {}
+/// / Progress of one staged upload, for a client that reconnected.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ShareUploadStatusResponse {
+    #[prost(string, tag = "1")]
+    pub upload_id: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "2")]
+    pub received_count: u64,
+    #[prost(uint64, tag = "3")]
+    pub received_bytes: u64,
+    #[prost(uint64, tag = "4")]
+    pub size_bytes: u64,
+}
+/// / Text offered from the clipboard. Body is plain text only: an HTML fragment
+/// / from the clipboard is refused rather than sanitized, because the item would
+/// / otherwise travel toward another visitor's session.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ShareClipboardTextRequest {
+    #[prost(string, tag = "1")]
+    pub text: ::prost::alloc::string::String,
+}
+/// / An image offered from the clipboard. Bytes travel through the ordinary
+/// / chunked upload path (`root_cid` from `ShareUploadInitRequest`); this
+/// / message exists so the route can apply the clip policy instead of the file
+/// / policy.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ShareClipboardImageRequest {
+    #[prost(string, tag = "1")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub mime: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "3")]
+    pub size_bytes: u64,
+    #[prost(string, tag = "4")]
+    pub root_cid: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ShareClipboardResponse {
+    #[prost(message, optional, tag = "1")]
+    pub item: ::core::option::Option<ShareItem>,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ShareListRequest {}
+/// / The limits travel with the listing so the page can render the real ceiling
+/// / instead of a hard-coded one.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ShareListResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub items: ::prost::alloc::vec::Vec<ShareItem>,
+    #[prost(uint64, tag = "2")]
+    pub max_item_bytes: u64,
+    #[prost(uint32, tag = "3")]
+    pub max_items_per_client: u32,
+    #[prost(uint32, tag = "4")]
+    pub max_clips_per_client: u32,
+    #[prost(uint64, tag = "5")]
+    pub clip_ttl_ms: u64,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ShareRemoveRequest {
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ShareRemoveResponse {}
+/// / Params of the `conex/share-changed` notification the host pushes to the
+/// / online links of one group after any write to the scene. It carries no
+/// / bytes and no group text: the recipient refreshes through the ordinary
+/// / listing path, which is where its own group is resolved.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ShareChangedNotification {
+    /// / The link that caused the change; empty when the host expired the item.
+    #[prost(string, tag = "1")]
+    pub owner_link_id: ::prost::alloc::string::String,
+    #[prost(enumeration = "ShareItemKind", tag = "2")]
+    pub kind: i32,
+    /// / "added", "removed" or "expired".
+    #[prost(string, tag = "3")]
+    pub change: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub item_id: ::prost::alloc::string::String,
+}
+/// / Params of the `conex/clip-added` notification. Pushed to the same group
+/// / except the owner, which already knows what it shared.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ClipAddedNotification {
+    #[prost(message, optional, tag = "1")]
+    pub item: ::core::option::Option<ShareItem>,
+}
+/// / Whether a shared item is an ordinary file or a clipboard item. A clip is
+/// / delivered through the same store and the same download path as a file, but
+/// / it is bounded, expires, and never survives a disconnect.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum ShareItemKind {
+    Unspecified = 0,
+    /// An ordinary file the visitor picked.
+    File = 1,
+    /// Text or an image the visitor explicitly offered from the clipboard.
+    Clip = 2,
+}
+impl ShareItemKind {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "SHARE_ITEM_KIND_UNSPECIFIED",
+            Self::File => "SHARE_ITEM_KIND_FILE",
+            Self::Clip => "SHARE_ITEM_KIND_CLIP",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "SHARE_ITEM_KIND_UNSPECIFIED" => Some(Self::Unspecified),
+            "SHARE_ITEM_KIND_FILE" => Some(Self::File),
+            "SHARE_ITEM_KIND_CLIP" => Some(Self::Clip),
+            _ => None,
+        }
+    }
+}
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ResourceSummary {
     #[prost(string, tag = "1")]

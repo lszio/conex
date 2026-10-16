@@ -7,7 +7,7 @@ use axum::body::Bytes;
 use axum::extract::DefaultBodyLimit;
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{get, head, post, put};
 use conex_core::{CallError, Host, Limits};
 use conex_proto;
 use conex_proto::wire::{ProtocolError, decode_wire, encode_wire};
@@ -83,8 +83,35 @@ pub fn attach_p1(base: Router) -> Router {
             post(crate::share_http::upload_file)
                 .layer(DefaultBodyLimit::max(crate::share_http::UPLOAD_BODY_LIMIT)),
         )
-        .route("/web/files/download", get(crate::share_http::download_file))
+        .route(
+            "/web/files/download",
+            get(crate::share_http::downloads::download_file),
+        )
         .route("/web/files/remove", post(crate::share_http::remove_file))
+        // Chunked upload with resume. The whole-body route above is the small
+        // convenience path; these five are the one worth resuming.
+        .route(
+            "/web/files/uploads",
+            post(crate::share_http::uploads::begin_upload),
+        )
+        .route(
+            "/web/files/uploads/{upload_id}/chunks/{index}",
+            put(crate::share_http::uploads::put_chunk).layer(DefaultBodyLimit::max(
+                crate::share_http::uploads::CHUNK_BODY_LIMIT,
+            )),
+        )
+        .route(
+            "/web/files/uploads/{upload_id}",
+            head(crate::share_http::uploads::upload_status),
+        )
+        .route(
+            "/web/files/uploads/{upload_id}/commit",
+            post(crate::share_http::uploads::commit_upload),
+        )
+        .route(
+            "/web/files/uploads/{upload_id}/cancel",
+            post(crate::share_http::uploads::cancel_upload),
+        )
         .route("/web/logout", post(crate::web_auth::logout))
         .route("/oidc/authorize", post(tickets::oidc_authorize))
         .route("/oidc/token", post(tickets::oidc_token))

@@ -6,6 +6,7 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 description = "conex local persistent content store: CID-addressed blobs, staging, commit and GC"
+publish = false
 
 [dependencies]
 bytes.workspace = true

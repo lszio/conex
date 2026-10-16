@@ -6,6 +6,7 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 description = "conex routing kernel: data-driven registry, method contracts, authorization ports and execution"
+publish = false
 
 [dependencies]
 base64 = "0.22"

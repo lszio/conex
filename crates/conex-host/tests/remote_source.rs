@@ -131,6 +131,7 @@ fn config(temp: &tempfile::TempDir) -> HostConfig {
         host_origin: Some("conex://test-host".into()),
         oidc: None,
         web_guest: None,
+        share: None,
     }
 }
 

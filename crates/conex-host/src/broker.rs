@@ -690,6 +690,9 @@ async fn blob_put(
             requested_lease_ms,
             owner.clone(),
             &resource_id,
+            // The P1 channel declares its leaves as it goes, so it has none up
+            // front; the share scene passes its declared list here.
+            &[],
         )
         .map_err(content_to_call)?;
     // On resume the upload carries the chunks already received; report them
@@ -1179,7 +1182,7 @@ fn execution_label(state: ExecutionState) -> &'static str {
 
 // -------------------- helpers --------------------
 
-fn content_to_call(error: conex_content::ContentError) -> CallError {
+pub(crate) fn content_to_call(error: conex_content::ContentError) -> CallError {
     CallError::new(
         error_code_for_content(error.bad_request_code()),
         format!("{error}"),

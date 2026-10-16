@@ -97,6 +97,17 @@ pub(crate) struct Refs {
     /// Leaf CIDs reachable from each committed root; the ownership proof set
     /// for `blob/get` and `blob/have` (plan M1.2).
     pub(crate) blocks_by_root: HashMap<String, std::collections::HashSet<String>>,
+    /// Live holders of each committed root, per caller of `hold_root`.
+    ///
+    /// A block refcount answers "how many committed roots reach this block";
+    /// a hold answers "how many *active* items still serve this root". They
+    /// are different questions and only the second one decides when bytes may
+    /// be freed: the same content offered twice has one root, and withdrawing
+    /// one offer must not delete the other's bytes.
+    ///
+    /// Deliberately in memory: a restart ends every holder's connection, so
+    /// what survives a restart is reclaimed by `reclaim_all_committed`.
+    pub(crate) root_holds: HashMap<String, u32>,
 }
 /// Validate a CID text form through the single protocol implementation
 /// (`conex_proto::cid::parse_cid`, design §5.3).
@@ -465,6 +476,13 @@ impl LocalBlockStore {
         };
         // Write `.blocks` and the record first; `.committed` is the commit point.
         Self::atomic_write(&blocks_path, serde_json::to_string(&objects)?.as_bytes())?;
+        // The reachable set is leaves first and derives the manifests second,
+        // so the byte order a range is served in is written out separately
+        // rather than sliced back out of the combined list.
+        Self::atomic_write(
+            &refs_dir.join(format!("{root_cid}.leaves")),
+            serde_json::to_string(&leaves)?.as_bytes(),
+        )?;
         Self::atomic_write(
             &refs_dir.join(format!("{root_cid}.record.json")),
             serde_json::to_string(&record)?.as_bytes(),
@@ -489,6 +507,145 @@ impl LocalBlockStore {
 
     pub fn has_commit(&self, root_cid: &str) -> bool {
         self.with_refs(|r| r.commits.contains_key(root_cid))
+    }
+
+    /// Path of one block inside this store's root.
+    ///
+    /// Exists so a caller can read a block without pulling it through this
+    /// struct: a streaming response reads block by block, and making the
+    /// browser wait for the whole item first would defeat the point. The CID is
+    /// validated first, so the path can only ever name a block this store
+    /// already holds — it is not a way to name an arbitrary file.
+    pub fn block_path(&self, cid: &str) -> Option<std::path::PathBuf> {
+        verify_cid(cid).ok()?;
+        if !self.has_block(cid).unwrap_or(false) {
+            return None;
+        }
+        Some(self.join(&cid_to_block_relpath(cid)))
+    }
+
+    /// Leaf CIDs of a committed root, in ascending chunk order.
+    ///
+    /// This is the order bytes are served in: a byte range maps onto a
+    /// contiguous run of these leaves. A root that predates the `.leaves`
+    /// file answers `UnknownCommit` rather than a guessed order.
+    pub fn leaves_of(&self, root_cid: &str) -> Result<Vec<String>, ContentError> {
+        verify_cid(root_cid)?;
+        let path = self.join(
+            Path::new("refs")
+                .join(format!("{root_cid}.leaves"))
+                .as_path(),
+        );
+        let text = fs::read_to_string(&path)
+            .map_err(|_| ContentError::UnknownCommit(root_cid.to_string()))?;
+        let leaves: Vec<String> = serde_json::from_str(&text)?;
+        for leaf in &leaves {
+            verify_cid(leaf)?;
+        }
+        Ok(leaves)
+    }
+
+    /// Drop one committed root and every block only that root referenced.
+    ///
+    /// Deduplication is by CID, so a block shared with another committed root
+    /// survives: the reference count is decremented first and only a count
+    /// that reaches zero frees the file. Returns the number of blocks freed.
+    ///
+    /// This is the targeted counterpart of `collect_garbage`, which only
+    /// reclaims what no committed root reaches. A caller that withdraws one
+    /// item needs this, because that root is still reachable from itself.
+    /// Callers normally go through `release_root`, which decides *when* this
+    /// runs; this is the mechanism it uses.
+    pub fn retract_root(&self, root_cid: &str) -> Result<usize, ContentError> {
+        verify_cid(root_cid)?;
+        let refs_dir = self.join(Path::new("refs"));
+        let objects_path = refs_dir.join(format!("{root_cid}.blocks"));
+        let text = fs::read_to_string(&objects_path)
+            .map_err(|_| ContentError::UnknownCommit(root_cid.to_string()))?;
+        let objects: Vec<String> = serde_json::from_str(&text)?;
+        let mut freed = 0;
+        for object in &objects {
+            let remaining = self.with_refs(|r| {
+                let count = r.counts.entry(object.clone()).or_insert(0);
+                *count = count.saturating_sub(1);
+                *count
+            });
+            if remaining > 0 {
+                continue;
+            }
+            let rel = cid_to_block_relpath(object);
+            if fs::remove_file(self.join(&rel)).is_ok() {
+                freed += 1;
+            }
+        }
+        self.with_refs(|r| {
+            for object in &objects {
+                r.counts.remove(object);
+                if let Some(set) = r.blocks_by_root.get_mut(root_cid) {
+                    set.remove(object);
+                }
+            }
+            r.blocks_by_root.remove(root_cid);
+            r.commits.remove(root_cid);
+        });
+        for suffix in [".blocks", ".leaves", ".record.json", ".committed"] {
+            let _ = fs::remove_file(refs_dir.join(format!("{root_cid}{suffix}")));
+        }
+        self.with_refs(|r| r.root_holds.remove(root_cid));
+        Ok(freed)
+    }
+
+    /// Register a live holder of an already-committed root.
+    ///
+    /// A commit that would be a repeat of an existing root is merged instead:
+    /// the caller adopts the committed root and holds it, so two items that
+    /// offer the same bytes stay independent offers of one address.
+    pub fn hold_root(&self, root_cid: &str) -> Result<(), ContentError> {
+        verify_cid(root_cid)?;
+        if !self.has_commit(root_cid) {
+            return Err(ContentError::UnknownCommit(root_cid.to_string()));
+        }
+        self.with_refs(|r| {
+            *r.root_holds.entry(root_cid.to_string()).or_insert(0) += 1;
+        });
+        Ok(())
+    }
+
+    /// Release one hold. The root's bytes are freed only when the last holder
+    /// lets go, which is what keeps a shared block alive for the item that
+    /// still serves it. Returns the number of blocks freed, if any.
+    ///
+    /// Releasing an unheld root is not an error: the caller asked for the root
+    /// to be gone, and it is.
+    pub fn release_root(&self, root_cid: &str) -> Result<usize, ContentError> {
+        verify_cid(root_cid)?;
+        let remaining = self.with_refs(|r| {
+            let count = r.root_holds.entry(root_cid.to_string()).or_insert(0);
+            *count = count.saturating_sub(1);
+            *count
+        });
+        if remaining > 0 {
+            return Ok(0);
+        }
+        if !self.has_commit(root_cid) {
+            return Ok(0);
+        }
+        self.retract_root(root_cid)
+    }
+
+    /// Retract every committed root and drop every hold.
+    ///
+    /// This is the restart boundary for a disposable scene: a reconnected
+    /// process has no live holders, so what survived is garbage. Staging is
+    /// not touched here — an interrupted upload is still resumable and is
+    /// reaped by `purge_expired_uploads` on its own lease.
+    pub fn reclaim_all_committed(&self) -> usize {
+        let roots: Vec<String> = self.with_refs(|r| r.commits.keys().cloned().collect());
+        let mut freed = 0;
+        for root in roots {
+            freed += self.retract_root(&root).unwrap_or(0);
+        }
+        freed
     }
 
     /// The caller may read a chunk only when it belongs to the reachable set

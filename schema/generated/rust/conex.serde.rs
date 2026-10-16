@@ -4727,6 +4727,97 @@ impl<'de> serde::Deserialize<'de> for ClientSummary {
         deserializer.deserialize_struct("conex.ClientSummary", FIELDS, GeneratedVisitor)
     }
 }
+impl serde::Serialize for ClipAddedNotification {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.item.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.ClipAddedNotification", len)?;
+        if let Some(v) = self.item.as_ref() {
+            struct_ser.serialize_field("item", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for ClipAddedNotification {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "item",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Item,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "item" => Ok(GeneratedField::Item),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = ClipAddedNotification;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.ClipAddedNotification")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<ClipAddedNotification, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut item__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Item => {
+                            if item__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("item"));
+                            }
+                            item__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(ClipAddedNotification {
+                    item: item__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.ClipAddedNotification", FIELDS, GeneratedVisitor)
+    }
+}
 impl serde::Serialize for CommittedTarget {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -11785,6 +11876,2154 @@ impl<'de> serde::Deserialize<'de> for SessionResumeResponse {
             }
         }
         deserializer.deserialize_struct("conex.SessionResumeResponse", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for ShareChangedNotification {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.owner_link_id.is_empty() {
+            len += 1;
+        }
+        if self.kind != 0 {
+            len += 1;
+        }
+        if !self.change.is_empty() {
+            len += 1;
+        }
+        if !self.item_id.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.ShareChangedNotification", len)?;
+        if !self.owner_link_id.is_empty() {
+            struct_ser.serialize_field("ownerLinkId", &self.owner_link_id)?;
+        }
+        if self.kind != 0 {
+            let v = ShareItemKind::try_from(self.kind)
+                .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", self.kind)))?;
+            struct_ser.serialize_field("kind", &v)?;
+        }
+        if !self.change.is_empty() {
+            struct_ser.serialize_field("change", &self.change)?;
+        }
+        if !self.item_id.is_empty() {
+            struct_ser.serialize_field("itemId", &self.item_id)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for ShareChangedNotification {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "owner_link_id",
+            "ownerLinkId",
+            "kind",
+            "change",
+            "item_id",
+            "itemId",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            OwnerLinkId,
+            Kind,
+            Change,
+            ItemId,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "ownerLinkId" | "owner_link_id" => Ok(GeneratedField::OwnerLinkId),
+                            "kind" => Ok(GeneratedField::Kind),
+                            "change" => Ok(GeneratedField::Change),
+                            "itemId" | "item_id" => Ok(GeneratedField::ItemId),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = ShareChangedNotification;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.ShareChangedNotification")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<ShareChangedNotification, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut owner_link_id__ = None;
+                let mut kind__ = None;
+                let mut change__ = None;
+                let mut item_id__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::OwnerLinkId => {
+                            if owner_link_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("ownerLinkId"));
+                            }
+                            owner_link_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Kind => {
+                            if kind__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("kind"));
+                            }
+                            kind__ = Some(map_.next_value::<ShareItemKind>()? as i32);
+                        }
+                        GeneratedField::Change => {
+                            if change__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("change"));
+                            }
+                            change__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ItemId => {
+                            if item_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("itemId"));
+                            }
+                            item_id__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(ShareChangedNotification {
+                    owner_link_id: owner_link_id__.unwrap_or_default(),
+                    kind: kind__.unwrap_or_default(),
+                    change: change__.unwrap_or_default(),
+                    item_id: item_id__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.ShareChangedNotification", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for ShareClipboardImageRequest {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.name.is_empty() {
+            len += 1;
+        }
+        if !self.mime.is_empty() {
+            len += 1;
+        }
+        if self.size_bytes != 0 {
+            len += 1;
+        }
+        if !self.root_cid.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.ShareClipboardImageRequest", len)?;
+        if !self.name.is_empty() {
+            struct_ser.serialize_field("name", &self.name)?;
+        }
+        if !self.mime.is_empty() {
+            struct_ser.serialize_field("mime", &self.mime)?;
+        }
+        if self.size_bytes != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("sizeBytes", ToString::to_string(&self.size_bytes).as_str())?;
+        }
+        if !self.root_cid.is_empty() {
+            struct_ser.serialize_field("rootCid", &self.root_cid)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for ShareClipboardImageRequest {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "name",
+            "mime",
+            "size_bytes",
+            "sizeBytes",
+            "root_cid",
+            "rootCid",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Name,
+            Mime,
+            SizeBytes,
+            RootCid,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "name" => Ok(GeneratedField::Name),
+                            "mime" => Ok(GeneratedField::Mime),
+                            "sizeBytes" | "size_bytes" => Ok(GeneratedField::SizeBytes),
+                            "rootCid" | "root_cid" => Ok(GeneratedField::RootCid),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = ShareClipboardImageRequest;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.ShareClipboardImageRequest")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<ShareClipboardImageRequest, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut name__ = None;
+                let mut mime__ = None;
+                let mut size_bytes__ = None;
+                let mut root_cid__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Name => {
+                            if name__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("name"));
+                            }
+                            name__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Mime => {
+                            if mime__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("mime"));
+                            }
+                            mime__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::SizeBytes => {
+                            if size_bytes__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("sizeBytes"));
+                            }
+                            size_bytes__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::RootCid => {
+                            if root_cid__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("rootCid"));
+                            }
+                            root_cid__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(ShareClipboardImageRequest {
+                    name: name__.unwrap_or_default(),
+                    mime: mime__.unwrap_or_default(),
+                    size_bytes: size_bytes__.unwrap_or_default(),
+                    root_cid: root_cid__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.ShareClipboardImageRequest", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for ShareClipboardResponse {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.item.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.ShareClipboardResponse", len)?;
+        if let Some(v) = self.item.as_ref() {
+            struct_ser.serialize_field("item", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for ShareClipboardResponse {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "item",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Item,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "item" => Ok(GeneratedField::Item),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = ShareClipboardResponse;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.ShareClipboardResponse")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<ShareClipboardResponse, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut item__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Item => {
+                            if item__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("item"));
+                            }
+                            item__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(ShareClipboardResponse {
+                    item: item__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.ShareClipboardResponse", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for ShareClipboardTextRequest {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.text.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.ShareClipboardTextRequest", len)?;
+        if !self.text.is_empty() {
+            struct_ser.serialize_field("text", &self.text)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for ShareClipboardTextRequest {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "text",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Text,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "text" => Ok(GeneratedField::Text),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = ShareClipboardTextRequest;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.ShareClipboardTextRequest")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<ShareClipboardTextRequest, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut text__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Text => {
+                            if text__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("text"));
+                            }
+                            text__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(ShareClipboardTextRequest {
+                    text: text__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.ShareClipboardTextRequest", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for ShareItem {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.id.is_empty() {
+            len += 1;
+        }
+        if self.kind != 0 {
+            len += 1;
+        }
+        if !self.name.is_empty() {
+            len += 1;
+        }
+        if !self.mime.is_empty() {
+            len += 1;
+        }
+        if self.size_bytes != 0 {
+            len += 1;
+        }
+        if !self.root_cid.is_empty() {
+            len += 1;
+        }
+        if !self.owner_link_id.is_empty() {
+            len += 1;
+        }
+        if !self.owner_name.is_empty() {
+            len += 1;
+        }
+        if !self.group_key.is_empty() {
+            len += 1;
+        }
+        if self.created_at_ms != 0 {
+            len += 1;
+        }
+        if self.preview_bytes != 0 {
+            len += 1;
+        }
+        if self.inline {
+            len += 1;
+        }
+        if self.expires_at_ms != 0 {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.ShareItem", len)?;
+        if !self.id.is_empty() {
+            struct_ser.serialize_field("id", &self.id)?;
+        }
+        if self.kind != 0 {
+            let v = ShareItemKind::try_from(self.kind)
+                .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", self.kind)))?;
+            struct_ser.serialize_field("kind", &v)?;
+        }
+        if !self.name.is_empty() {
+            struct_ser.serialize_field("name", &self.name)?;
+        }
+        if !self.mime.is_empty() {
+            struct_ser.serialize_field("mime", &self.mime)?;
+        }
+        if self.size_bytes != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("sizeBytes", ToString::to_string(&self.size_bytes).as_str())?;
+        }
+        if !self.root_cid.is_empty() {
+            struct_ser.serialize_field("rootCid", &self.root_cid)?;
+        }
+        if !self.owner_link_id.is_empty() {
+            struct_ser.serialize_field("ownerLinkId", &self.owner_link_id)?;
+        }
+        if !self.owner_name.is_empty() {
+            struct_ser.serialize_field("ownerName", &self.owner_name)?;
+        }
+        if !self.group_key.is_empty() {
+            struct_ser.serialize_field("groupKey", &self.group_key)?;
+        }
+        if self.created_at_ms != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("createdAtMs", ToString::to_string(&self.created_at_ms).as_str())?;
+        }
+        if self.preview_bytes != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("previewBytes", ToString::to_string(&self.preview_bytes).as_str())?;
+        }
+        if self.inline {
+            struct_ser.serialize_field("inline", &self.inline)?;
+        }
+        if self.expires_at_ms != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("expiresAtMs", ToString::to_string(&self.expires_at_ms).as_str())?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for ShareItem {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "id",
+            "kind",
+            "name",
+            "mime",
+            "size_bytes",
+            "sizeBytes",
+            "root_cid",
+            "rootCid",
+            "owner_link_id",
+            "ownerLinkId",
+            "owner_name",
+            "ownerName",
+            "group_key",
+            "groupKey",
+            "created_at_ms",
+            "createdAtMs",
+            "preview_bytes",
+            "previewBytes",
+            "inline",
+            "expires_at_ms",
+            "expiresAtMs",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Id,
+            Kind,
+            Name,
+            Mime,
+            SizeBytes,
+            RootCid,
+            OwnerLinkId,
+            OwnerName,
+            GroupKey,
+            CreatedAtMs,
+            PreviewBytes,
+            Inline,
+            ExpiresAtMs,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "id" => Ok(GeneratedField::Id),
+                            "kind" => Ok(GeneratedField::Kind),
+                            "name" => Ok(GeneratedField::Name),
+                            "mime" => Ok(GeneratedField::Mime),
+                            "sizeBytes" | "size_bytes" => Ok(GeneratedField::SizeBytes),
+                            "rootCid" | "root_cid" => Ok(GeneratedField::RootCid),
+                            "ownerLinkId" | "owner_link_id" => Ok(GeneratedField::OwnerLinkId),
+                            "ownerName" | "owner_name" => Ok(GeneratedField::OwnerName),
+                            "groupKey" | "group_key" => Ok(GeneratedField::GroupKey),
+                            "createdAtMs" | "created_at_ms" => Ok(GeneratedField::CreatedAtMs),
+                            "previewBytes" | "preview_bytes" => Ok(GeneratedField::PreviewBytes),
+                            "inline" => Ok(GeneratedField::Inline),
+                            "expiresAtMs" | "expires_at_ms" => Ok(GeneratedField::ExpiresAtMs),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = ShareItem;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.ShareItem")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<ShareItem, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut id__ = None;
+                let mut kind__ = None;
+                let mut name__ = None;
+                let mut mime__ = None;
+                let mut size_bytes__ = None;
+                let mut root_cid__ = None;
+                let mut owner_link_id__ = None;
+                let mut owner_name__ = None;
+                let mut group_key__ = None;
+                let mut created_at_ms__ = None;
+                let mut preview_bytes__ = None;
+                let mut inline__ = None;
+                let mut expires_at_ms__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Id => {
+                            if id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("id"));
+                            }
+                            id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Kind => {
+                            if kind__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("kind"));
+                            }
+                            kind__ = Some(map_.next_value::<ShareItemKind>()? as i32);
+                        }
+                        GeneratedField::Name => {
+                            if name__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("name"));
+                            }
+                            name__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Mime => {
+                            if mime__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("mime"));
+                            }
+                            mime__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::SizeBytes => {
+                            if size_bytes__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("sizeBytes"));
+                            }
+                            size_bytes__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::RootCid => {
+                            if root_cid__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("rootCid"));
+                            }
+                            root_cid__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::OwnerLinkId => {
+                            if owner_link_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("ownerLinkId"));
+                            }
+                            owner_link_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::OwnerName => {
+                            if owner_name__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("ownerName"));
+                            }
+                            owner_name__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::GroupKey => {
+                            if group_key__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("groupKey"));
+                            }
+                            group_key__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::CreatedAtMs => {
+                            if created_at_ms__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("createdAtMs"));
+                            }
+                            created_at_ms__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::PreviewBytes => {
+                            if preview_bytes__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("previewBytes"));
+                            }
+                            preview_bytes__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::Inline => {
+                            if inline__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("inline"));
+                            }
+                            inline__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ExpiresAtMs => {
+                            if expires_at_ms__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("expiresAtMs"));
+                            }
+                            expires_at_ms__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                    }
+                }
+                Ok(ShareItem {
+                    id: id__.unwrap_or_default(),
+                    kind: kind__.unwrap_or_default(),
+                    name: name__.unwrap_or_default(),
+                    mime: mime__.unwrap_or_default(),
+                    size_bytes: size_bytes__.unwrap_or_default(),
+                    root_cid: root_cid__.unwrap_or_default(),
+                    owner_link_id: owner_link_id__.unwrap_or_default(),
+                    owner_name: owner_name__.unwrap_or_default(),
+                    group_key: group_key__.unwrap_or_default(),
+                    created_at_ms: created_at_ms__.unwrap_or_default(),
+                    preview_bytes: preview_bytes__.unwrap_or_default(),
+                    inline: inline__.unwrap_or_default(),
+                    expires_at_ms: expires_at_ms__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.ShareItem", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for ShareItemKind {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let variant = match self {
+            Self::Unspecified => "SHARE_ITEM_KIND_UNSPECIFIED",
+            Self::File => "SHARE_ITEM_KIND_FILE",
+            Self::Clip => "SHARE_ITEM_KIND_CLIP",
+        };
+        serializer.serialize_str(variant)
+    }
+}
+impl<'de> serde::Deserialize<'de> for ShareItemKind {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "SHARE_ITEM_KIND_UNSPECIFIED",
+            "SHARE_ITEM_KIND_FILE",
+            "SHARE_ITEM_KIND_CLIP",
+        ];
+
+        struct GeneratedVisitor;
+
+        impl serde::de::Visitor<'_> for GeneratedVisitor {
+            type Value = ShareItemKind;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(formatter, "expected one of: {:?}", &FIELDS)
+            }
+
+            fn visit_i64<E>(self, v: i64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Signed(v), &self)
+                    })
+            }
+
+            fn visit_u64<E>(self, v: u64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Unsigned(v), &self)
+                    })
+            }
+
+            fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                match value {
+                    "SHARE_ITEM_KIND_UNSPECIFIED" => Ok(ShareItemKind::Unspecified),
+                    "SHARE_ITEM_KIND_FILE" => Ok(ShareItemKind::File),
+                    "SHARE_ITEM_KIND_CLIP" => Ok(ShareItemKind::Clip),
+                    _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
+                }
+            }
+        }
+        deserializer.deserialize_any(GeneratedVisitor)
+    }
+}
+impl serde::Serialize for ShareListRequest {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let len = 0;
+        let struct_ser = serializer.serialize_struct("conex.ShareListRequest", len)?;
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for ShareListRequest {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                            Err(serde::de::Error::unknown_field(value, FIELDS))
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = ShareListRequest;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.ShareListRequest")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<ShareListRequest, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                while map_.next_key::<GeneratedField>()?.is_some() {
+                    let _ = map_.next_value::<serde::de::IgnoredAny>()?;
+                }
+                Ok(ShareListRequest {
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.ShareListRequest", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for ShareListResponse {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.items.is_empty() {
+            len += 1;
+        }
+        if self.max_item_bytes != 0 {
+            len += 1;
+        }
+        if self.max_items_per_client != 0 {
+            len += 1;
+        }
+        if self.max_clips_per_client != 0 {
+            len += 1;
+        }
+        if self.clip_ttl_ms != 0 {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.ShareListResponse", len)?;
+        if !self.items.is_empty() {
+            struct_ser.serialize_field("items", &self.items)?;
+        }
+        if self.max_item_bytes != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("maxItemBytes", ToString::to_string(&self.max_item_bytes).as_str())?;
+        }
+        if self.max_items_per_client != 0 {
+            struct_ser.serialize_field("maxItemsPerClient", &self.max_items_per_client)?;
+        }
+        if self.max_clips_per_client != 0 {
+            struct_ser.serialize_field("maxClipsPerClient", &self.max_clips_per_client)?;
+        }
+        if self.clip_ttl_ms != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("clipTtlMs", ToString::to_string(&self.clip_ttl_ms).as_str())?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for ShareListResponse {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "items",
+            "max_item_bytes",
+            "maxItemBytes",
+            "max_items_per_client",
+            "maxItemsPerClient",
+            "max_clips_per_client",
+            "maxClipsPerClient",
+            "clip_ttl_ms",
+            "clipTtlMs",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Items,
+            MaxItemBytes,
+            MaxItemsPerClient,
+            MaxClipsPerClient,
+            ClipTtlMs,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "items" => Ok(GeneratedField::Items),
+                            "maxItemBytes" | "max_item_bytes" => Ok(GeneratedField::MaxItemBytes),
+                            "maxItemsPerClient" | "max_items_per_client" => Ok(GeneratedField::MaxItemsPerClient),
+                            "maxClipsPerClient" | "max_clips_per_client" => Ok(GeneratedField::MaxClipsPerClient),
+                            "clipTtlMs" | "clip_ttl_ms" => Ok(GeneratedField::ClipTtlMs),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = ShareListResponse;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.ShareListResponse")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<ShareListResponse, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut items__ = None;
+                let mut max_item_bytes__ = None;
+                let mut max_items_per_client__ = None;
+                let mut max_clips_per_client__ = None;
+                let mut clip_ttl_ms__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Items => {
+                            if items__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("items"));
+                            }
+                            items__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::MaxItemBytes => {
+                            if max_item_bytes__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("maxItemBytes"));
+                            }
+                            max_item_bytes__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::MaxItemsPerClient => {
+                            if max_items_per_client__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("maxItemsPerClient"));
+                            }
+                            max_items_per_client__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::MaxClipsPerClient => {
+                            if max_clips_per_client__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("maxClipsPerClient"));
+                            }
+                            max_clips_per_client__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::ClipTtlMs => {
+                            if clip_ttl_ms__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("clipTtlMs"));
+                            }
+                            clip_ttl_ms__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                    }
+                }
+                Ok(ShareListResponse {
+                    items: items__.unwrap_or_default(),
+                    max_item_bytes: max_item_bytes__.unwrap_or_default(),
+                    max_items_per_client: max_items_per_client__.unwrap_or_default(),
+                    max_clips_per_client: max_clips_per_client__.unwrap_or_default(),
+                    clip_ttl_ms: clip_ttl_ms__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.ShareListResponse", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for ShareRemoveRequest {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.id.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.ShareRemoveRequest", len)?;
+        if !self.id.is_empty() {
+            struct_ser.serialize_field("id", &self.id)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for ShareRemoveRequest {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "id",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Id,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "id" => Ok(GeneratedField::Id),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = ShareRemoveRequest;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.ShareRemoveRequest")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<ShareRemoveRequest, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut id__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Id => {
+                            if id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("id"));
+                            }
+                            id__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(ShareRemoveRequest {
+                    id: id__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.ShareRemoveRequest", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for ShareRemoveResponse {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let len = 0;
+        let struct_ser = serializer.serialize_struct("conex.ShareRemoveResponse", len)?;
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for ShareRemoveResponse {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                            Err(serde::de::Error::unknown_field(value, FIELDS))
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = ShareRemoveResponse;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.ShareRemoveResponse")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<ShareRemoveResponse, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                while map_.next_key::<GeneratedField>()?.is_some() {
+                    let _ = map_.next_value::<serde::de::IgnoredAny>()?;
+                }
+                Ok(ShareRemoveResponse {
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.ShareRemoveResponse", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for ShareUploadCancelRequest {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.upload_id.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.ShareUploadCancelRequest", len)?;
+        if !self.upload_id.is_empty() {
+            struct_ser.serialize_field("uploadId", &self.upload_id)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for ShareUploadCancelRequest {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "upload_id",
+            "uploadId",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            UploadId,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "uploadId" | "upload_id" => Ok(GeneratedField::UploadId),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = ShareUploadCancelRequest;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.ShareUploadCancelRequest")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<ShareUploadCancelRequest, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut upload_id__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::UploadId => {
+                            if upload_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("uploadId"));
+                            }
+                            upload_id__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(ShareUploadCancelRequest {
+                    upload_id: upload_id__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.ShareUploadCancelRequest", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for ShareUploadCancelResponse {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let len = 0;
+        let struct_ser = serializer.serialize_struct("conex.ShareUploadCancelResponse", len)?;
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for ShareUploadCancelResponse {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                            Err(serde::de::Error::unknown_field(value, FIELDS))
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = ShareUploadCancelResponse;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.ShareUploadCancelResponse")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<ShareUploadCancelResponse, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                while map_.next_key::<GeneratedField>()?.is_some() {
+                    let _ = map_.next_value::<serde::de::IgnoredAny>()?;
+                }
+                Ok(ShareUploadCancelResponse {
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.ShareUploadCancelResponse", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for ShareUploadCommitRequest {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.upload_id.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.ShareUploadCommitRequest", len)?;
+        if !self.upload_id.is_empty() {
+            struct_ser.serialize_field("uploadId", &self.upload_id)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for ShareUploadCommitRequest {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "upload_id",
+            "uploadId",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            UploadId,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "uploadId" | "upload_id" => Ok(GeneratedField::UploadId),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = ShareUploadCommitRequest;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.ShareUploadCommitRequest")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<ShareUploadCommitRequest, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut upload_id__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::UploadId => {
+                            if upload_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("uploadId"));
+                            }
+                            upload_id__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(ShareUploadCommitRequest {
+                    upload_id: upload_id__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.ShareUploadCommitRequest", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for ShareUploadCommitResponse {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.item.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.ShareUploadCommitResponse", len)?;
+        if let Some(v) = self.item.as_ref() {
+            struct_ser.serialize_field("item", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for ShareUploadCommitResponse {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "item",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Item,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "item" => Ok(GeneratedField::Item),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = ShareUploadCommitResponse;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.ShareUploadCommitResponse")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<ShareUploadCommitResponse, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut item__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Item => {
+                            if item__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("item"));
+                            }
+                            item__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(ShareUploadCommitResponse {
+                    item: item__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.ShareUploadCommitResponse", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for ShareUploadInitRequest {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.name.is_empty() {
+            len += 1;
+        }
+        if !self.mime.is_empty() {
+            len += 1;
+        }
+        if self.size_bytes != 0 {
+            len += 1;
+        }
+        if self.chunk_size != 0 {
+            len += 1;
+        }
+        if !self.chunk_cids.is_empty() {
+            len += 1;
+        }
+        if self.kind != 0 {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.ShareUploadInitRequest", len)?;
+        if !self.name.is_empty() {
+            struct_ser.serialize_field("name", &self.name)?;
+        }
+        if !self.mime.is_empty() {
+            struct_ser.serialize_field("mime", &self.mime)?;
+        }
+        if self.size_bytes != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("sizeBytes", ToString::to_string(&self.size_bytes).as_str())?;
+        }
+        if self.chunk_size != 0 {
+            struct_ser.serialize_field("chunkSize", &self.chunk_size)?;
+        }
+        if !self.chunk_cids.is_empty() {
+            struct_ser.serialize_field("chunkCids", &self.chunk_cids)?;
+        }
+        if self.kind != 0 {
+            let v = ShareItemKind::try_from(self.kind)
+                .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", self.kind)))?;
+            struct_ser.serialize_field("kind", &v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for ShareUploadInitRequest {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "name",
+            "mime",
+            "size_bytes",
+            "sizeBytes",
+            "chunk_size",
+            "chunkSize",
+            "chunk_cids",
+            "chunkCids",
+            "kind",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Name,
+            Mime,
+            SizeBytes,
+            ChunkSize,
+            ChunkCids,
+            Kind,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "name" => Ok(GeneratedField::Name),
+                            "mime" => Ok(GeneratedField::Mime),
+                            "sizeBytes" | "size_bytes" => Ok(GeneratedField::SizeBytes),
+                            "chunkSize" | "chunk_size" => Ok(GeneratedField::ChunkSize),
+                            "chunkCids" | "chunk_cids" => Ok(GeneratedField::ChunkCids),
+                            "kind" => Ok(GeneratedField::Kind),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = ShareUploadInitRequest;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.ShareUploadInitRequest")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<ShareUploadInitRequest, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut name__ = None;
+                let mut mime__ = None;
+                let mut size_bytes__ = None;
+                let mut chunk_size__ = None;
+                let mut chunk_cids__ = None;
+                let mut kind__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Name => {
+                            if name__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("name"));
+                            }
+                            name__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Mime => {
+                            if mime__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("mime"));
+                            }
+                            mime__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::SizeBytes => {
+                            if size_bytes__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("sizeBytes"));
+                            }
+                            size_bytes__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::ChunkSize => {
+                            if chunk_size__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("chunkSize"));
+                            }
+                            chunk_size__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::ChunkCids => {
+                            if chunk_cids__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("chunkCids"));
+                            }
+                            chunk_cids__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Kind => {
+                            if kind__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("kind"));
+                            }
+                            kind__ = Some(map_.next_value::<ShareItemKind>()? as i32);
+                        }
+                    }
+                }
+                Ok(ShareUploadInitRequest {
+                    name: name__.unwrap_or_default(),
+                    mime: mime__.unwrap_or_default(),
+                    size_bytes: size_bytes__.unwrap_or_default(),
+                    chunk_size: chunk_size__.unwrap_or_default(),
+                    chunk_cids: chunk_cids__.unwrap_or_default(),
+                    kind: kind__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.ShareUploadInitRequest", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for ShareUploadInitResponse {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.upload_id.is_empty() {
+            len += 1;
+        }
+        if self.chunk_size != 0 {
+            len += 1;
+        }
+        if self.received_count != 0 {
+            len += 1;
+        }
+        if self.lease_ms != 0 {
+            len += 1;
+        }
+        if self.max_item_bytes != 0 {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.ShareUploadInitResponse", len)?;
+        if !self.upload_id.is_empty() {
+            struct_ser.serialize_field("uploadId", &self.upload_id)?;
+        }
+        if self.chunk_size != 0 {
+            struct_ser.serialize_field("chunkSize", &self.chunk_size)?;
+        }
+        if self.received_count != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("receivedCount", ToString::to_string(&self.received_count).as_str())?;
+        }
+        if self.lease_ms != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("leaseMs", ToString::to_string(&self.lease_ms).as_str())?;
+        }
+        if self.max_item_bytes != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("maxItemBytes", ToString::to_string(&self.max_item_bytes).as_str())?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for ShareUploadInitResponse {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "upload_id",
+            "uploadId",
+            "chunk_size",
+            "chunkSize",
+            "received_count",
+            "receivedCount",
+            "lease_ms",
+            "leaseMs",
+            "max_item_bytes",
+            "maxItemBytes",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            UploadId,
+            ChunkSize,
+            ReceivedCount,
+            LeaseMs,
+            MaxItemBytes,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "uploadId" | "upload_id" => Ok(GeneratedField::UploadId),
+                            "chunkSize" | "chunk_size" => Ok(GeneratedField::ChunkSize),
+                            "receivedCount" | "received_count" => Ok(GeneratedField::ReceivedCount),
+                            "leaseMs" | "lease_ms" => Ok(GeneratedField::LeaseMs),
+                            "maxItemBytes" | "max_item_bytes" => Ok(GeneratedField::MaxItemBytes),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = ShareUploadInitResponse;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.ShareUploadInitResponse")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<ShareUploadInitResponse, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut upload_id__ = None;
+                let mut chunk_size__ = None;
+                let mut received_count__ = None;
+                let mut lease_ms__ = None;
+                let mut max_item_bytes__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::UploadId => {
+                            if upload_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("uploadId"));
+                            }
+                            upload_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ChunkSize => {
+                            if chunk_size__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("chunkSize"));
+                            }
+                            chunk_size__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::ReceivedCount => {
+                            if received_count__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("receivedCount"));
+                            }
+                            received_count__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::LeaseMs => {
+                            if lease_ms__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("leaseMs"));
+                            }
+                            lease_ms__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::MaxItemBytes => {
+                            if max_item_bytes__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("maxItemBytes"));
+                            }
+                            max_item_bytes__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                    }
+                }
+                Ok(ShareUploadInitResponse {
+                    upload_id: upload_id__.unwrap_or_default(),
+                    chunk_size: chunk_size__.unwrap_or_default(),
+                    received_count: received_count__.unwrap_or_default(),
+                    lease_ms: lease_ms__.unwrap_or_default(),
+                    max_item_bytes: max_item_bytes__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.ShareUploadInitResponse", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for ShareUploadStatusResponse {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.upload_id.is_empty() {
+            len += 1;
+        }
+        if self.received_count != 0 {
+            len += 1;
+        }
+        if self.received_bytes != 0 {
+            len += 1;
+        }
+        if self.size_bytes != 0 {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.ShareUploadStatusResponse", len)?;
+        if !self.upload_id.is_empty() {
+            struct_ser.serialize_field("uploadId", &self.upload_id)?;
+        }
+        if self.received_count != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("receivedCount", ToString::to_string(&self.received_count).as_str())?;
+        }
+        if self.received_bytes != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("receivedBytes", ToString::to_string(&self.received_bytes).as_str())?;
+        }
+        if self.size_bytes != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("sizeBytes", ToString::to_string(&self.size_bytes).as_str())?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for ShareUploadStatusResponse {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "upload_id",
+            "uploadId",
+            "received_count",
+            "receivedCount",
+            "received_bytes",
+            "receivedBytes",
+            "size_bytes",
+            "sizeBytes",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            UploadId,
+            ReceivedCount,
+            ReceivedBytes,
+            SizeBytes,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "uploadId" | "upload_id" => Ok(GeneratedField::UploadId),
+                            "receivedCount" | "received_count" => Ok(GeneratedField::ReceivedCount),
+                            "receivedBytes" | "received_bytes" => Ok(GeneratedField::ReceivedBytes),
+                            "sizeBytes" | "size_bytes" => Ok(GeneratedField::SizeBytes),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = ShareUploadStatusResponse;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.ShareUploadStatusResponse")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<ShareUploadStatusResponse, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut upload_id__ = None;
+                let mut received_count__ = None;
+                let mut received_bytes__ = None;
+                let mut size_bytes__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::UploadId => {
+                            if upload_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("uploadId"));
+                            }
+                            upload_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ReceivedCount => {
+                            if received_count__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("receivedCount"));
+                            }
+                            received_count__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::ReceivedBytes => {
+                            if received_bytes__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("receivedBytes"));
+                            }
+                            received_bytes__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::SizeBytes => {
+                            if size_bytes__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("sizeBytes"));
+                            }
+                            size_bytes__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                    }
+                }
+                Ok(ShareUploadStatusResponse {
+                    upload_id: upload_id__.unwrap_or_default(),
+                    received_count: received_count__.unwrap_or_default(),
+                    received_bytes: received_bytes__.unwrap_or_default(),
+                    size_bytes: size_bytes__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.ShareUploadStatusResponse", FIELDS, GeneratedVisitor)
     }
 }
 impl serde::Serialize for SlowConsumerSignal {

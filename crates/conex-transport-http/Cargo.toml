@@ -6,6 +6,7 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 description = "conex HTTP and JSON-RPC 2.0 transport for the broker plane"
+publish = false
 
 [dependencies]
 async-trait.workspace = true
