@@ -52,6 +52,17 @@ pub struct UploadState {
     /// `declared_size_bytes` at the write path.
     #[serde(default)]
     pub received_bytes: u64,
+    /// Leaf CIDs the client declared before sending any bytes, in ascending
+    /// order.
+    ///
+    /// The root CID is derived from this list, and each arriving chunk is
+    /// checked against its entry *before* the store is touched — which is what
+    /// turns a corrupt chunk into an immediate refusal instead of a root
+    /// mismatch discovered at commit, after every byte has been sent. It is
+    /// persisted with the receipt so a resumed upload can still be checked
+    /// after a restart. Empty for uploads that predate the declaration.
+    #[serde(default)]
+    pub declared_chunk_cids: Vec<String>,
 }
 
 impl UploadState {
@@ -81,7 +92,24 @@ impl UploadState {
             owner: Some(owner),
             resource_id: Some(resource_id),
             received_bytes: 0,
+            declared_chunk_cids: Vec::new(),
         }
+    }
+
+    /// Record what the client declared. Called once, at the start of the
+    /// upload, before any chunk arrives.
+    pub fn declare(&mut self, chunk_cids: Vec<String>) {
+        self.declared_chunk_cids = chunk_cids;
+    }
+
+    /// How many chunks the client said it would send.
+    pub fn declared_chunk_count(&self) -> usize {
+        self.declared_chunk_cids.len()
+    }
+
+    /// The CID the client declared for one index, if it declared one.
+    pub fn declared_chunk_cid(&self, index: usize) -> Option<&str> {
+        self.declared_chunk_cids.get(index).map(String::as_str)
     }
 
     pub fn is_expired(&self) -> bool {

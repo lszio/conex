@@ -6,6 +6,7 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 description = "conex provider exposing a read-only, capability-scoped filesystem root"
+publish = false
 
 [dependencies]
 async-trait.workspace = true

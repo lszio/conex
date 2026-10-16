@@ -1,15 +1,18 @@
 # Release pipeline: tag `v*` → full gate → artifacts → GitHub Release →
-# optional registry publishing.
+# optional SDK publishing.
 #
 # Registry publishing runs only when the matching secret exists:
-#   - CRATES_TOKEN: a crates.io API token → publishes every workspace crate
-#     in dependency order (crates.io then serves the .crate files).
 #   - NPM_TOKEN: an npmjs.com automation token → publishes @conex/sdk
 #     (scoped packages need the `conex` npm org to exist and --access public).
-# Without the secrets the GitHub Release still carries every artifact:
+# Without the secret the GitHub Release still carries every artifact:
 # the SDK tarball installs with `npm install ./conex-sdk-0.1.0.tgz`, and the
-# Rust crates install from source with
+# Rust binaries install from source with
 # `cargo install --git https://github.com/lszio/conex conex-host`.
+#
+# The workspace crates are deliberately not published to crates.io: every
+# manifest carries `publish = false`. Shipping the binaries is the release
+# tarball built here; the Rust API is not a supported interface.
+
 name: release
 
 on:
@@ -23,7 +26,6 @@ jobs:
   release:
     runs-on: ubuntu-latest
     env:
-      HAS_CRATES_TOKEN: ${{ secrets.CRATES_TOKEN != '' }}
       HAS_NPM_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
@@ -71,40 +73,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
-
-      # Dependency order: cargo resolves each crate's workspace deps against
-      # crates.io, so a crate can only package/publish after its deps landed.
-      # Already-published versions are skipped, which makes the step
-      # resumable: crates.io rate-limits bursts of NEW crates (429), so a
-      # failed run is retried by re-pushing the tag and the loop continues
-      # where it stopped. The .crate files themselves are served by crates.io
-      # and are not attached to the release.
-      - name: Publish crates to crates.io
-        if: env.HAS_CRATES_TOKEN == 'true'
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_TOKEN }}
-        run: |
-          crates="conex-proto conex-core conex-source conex-provider-fs \
-                  conex-transport-http conex-content \
-                  conex-provider-http-catalog conex-assembly \
-                  conex-agent conex-host"
-          published() {
-            curl -fsS --max-time 30 \
-              -H "User-Agent: conex-release (repo lszio/conex)" \
-              "https://crates.io/api/v1/crates/$1" 2>/dev/null |
-              jq -e '.crate.max_version == "0.1.0"' >/dev/null 2>&1
-          }
-          for attempt in 1 2 3 4 5 6; do
-            failed=0
-            for p in $crates; do
-              if published "$p"; then continue; fi
-              cargo publish -p "$p" --no-verify || failed=1
-            done
-            [ "$failed" = 0 ] && exit 0
-            echo "some crates failed (attempt $attempt); backing off 120s"
-            sleep 120
-          done
-          exit 1
 
       - name: Publish SDK to npm
         if: env.HAS_NPM_TOKEN == 'true'

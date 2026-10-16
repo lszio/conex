@@ -44,6 +44,8 @@ pub enum ContentError {
     UnsupportedPersistence(String),
     #[error("unknown pin: {0}")]
     UnknownPin(String),
+    #[error("unknown commit: {0}")]
+    UnknownCommit(String),
     #[error("unknown block: {0}")]
     UnknownBlock(String),
     #[error("capability path traversal blocked: {0}")]
@@ -73,6 +75,7 @@ impl ContentError {
             | ContentError::Manifest(_) => ErrorCode::BadBlob as i32,
             ContentError::UnknownUpload(_)
             | ContentError::UnknownBlock(_)
+            | ContentError::UnknownCommit(_)
             | ContentError::UnknownPin(_) => ErrorCode::UnknownProvider as i32,
             ContentError::Forbidden => ErrorCode::Forbidden as i32,
             ContentError::TooLarge { .. } => ErrorCode::PayloadTooLarge as i32,

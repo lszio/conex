@@ -6,6 +6,7 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 description = "conex provider reading a static JSON catalog over HTTP with whole-partition authorization"
+publish = false
 
 [dependencies]
 async-trait.workspace = true

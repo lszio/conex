@@ -188,37 +188,113 @@ linkId、名称或文件明细。`label` 恒为空字符串——组名是加入
 
 | 路由 | 方法 | 授权 | 用途 |
 |---|---|---|---|
-| `/web/files` | GET | cookie | 列出本组文件 |
+| `/web/files` | GET | cookie | 列出本组文件（只含元数据） |
 | `/web/files` | POST | cookie + Origin + CSRF | 共享一个文件（原始字节） |
-| `/web/files/download` | GET | cookie | 读取文件字节 |
+| `/web/files/download` | GET | cookie | 读取字节，可按 Range 取一段 |
 | `/web/files/remove` | POST | cookie + Origin + CSRF | 撤回自己提供的文件 |
+| `/web/files/uploads` | POST | cookie + Origin + CSRF | 声明并开始一个分块上传（或重新加入） |
+| `/web/files/uploads/{id}/chunks/{index}` | PUT | cookie + Origin + CSRF | 发送第 index 块 |
+| `/web/files/uploads/{id}` | HEAD | cookie | 该上传已收到多少块 |
+| `/web/files/uploads/{id}/commit` | POST | cookie + Origin + CSRF | 完成上传并加入本组 |
+| `/web/files/uploads/{id}/cancel` | POST | cookie + Origin + CSRF | 放弃上传 |
 
 读方法与 `/web/session`、`/content` 同规则（GET 是安全方法）；写方法是状态变更，
 必须校验精确匹配的 `web_origin` 与 CSRF nonce，与 `POST /web/logout` 一致。
 
-**文件 id 不是访问凭据。** `ShareStore::get` 以调用方 groupKey 过滤，跨组与不存在都
-返回 `None`，下载路由因此对两者都答 404——可区分的 403 会确认该 id 存在。上传路由的
-body 上限单独设为 8 MiB（`UPLOAD_BODY_LIMIT`），不放宽其他端点继承的 1 MiB JSON 上限。
+**分块上传按内容身份续传。** 客户端在发第一个字节之前先声明每个分块的 CID（浏览器用
+`crypto.subtle` 算 sha2-256，见 `web/src/lib/cid.ts`），主机据此用
+`conex_proto::cid::content_cid_for_parts` 派生 root CID，再开 staging。因此：
 
-**配额在存入前检查。** 单文件 ≤ 8 MiB、单组累计 ≤ 32 MiB、单客户端 ≤ 32 个文件。
-组的当前用量是新文件的计量基准，因此两个客户端竞争最后一段配额时不会都成功。
+- staging 绑定的是**内容**（owner + size + leaf CID 列表），不是一次传输尝试。同一份内容
+  从同一 owner 再次声明会**重新找到同一个 staging** 并返回已收块数——「网络中断」和
+  「标签页刷新」因此是同一个用例、同一段代码，客户端不需要保存任何上传状态。
+- 分块**只按顺序收**（`index` 必须等于已收计数）。单写方场景下顺序足够，而它把「从哪继续」
+  塌缩成一个整数；并行只会换来一个没人愿意 reconcile 的缺失集合。
+- 每个分块在落盘前对照**声明里那一个 index 的 CID** 校验，坏块立即拒绝、不写 receipt。
+  校验用的 CID 来自 receipt，不是请求头，否则客户端可在线谎报一个宽松的 CID 绕过它。
+- 上传前按**声明大小**拒超，而不是传完再拒。
+- uploadId 不是访问令牌：resume/chunk/commit/cancel 都由 `Owner{principal,tenant}` 把关，
+  另一个 principal 四项操作全部 `Forbidden`。
+- 已 commit / 已 cancel / 过期的 uploadId 与「从未存在」答同一个 404——可区分的答案就是探针。
+- 分块大小固定 `CHUNK_SIZE`（256 KiB），不协商。
 
-**提供者断开即回收。** WSS 循环在 `detach_writer` 之后调用 `ShareStore::remove_owner`：
-断开的客户端不再能提供文件，字节随之释放、组配额归还。`remove` 先校验归属再删除——
-先删后校验会让任何组内成员销毁别人的上传。
+**元数据在内存，字节在 content 存储。** `ShareStore` 只保留一行元数据（id、name、
+mime、size、`rootCid`、owner、groupKey、过期时刻），字节下沉到 `conex-content` 块存储，
+按 CID 寻址——与 P1 blob 通道同一套寻址、同一个 `content_cid` 函数。因此列表面响
+应永远不含字节，而一个 700 KiB 的预览只需读 256 KiB。`share_root` 独立于
+`content_root`（未配置时取 `content_root` 的兄弟目录，且禁止两者相同）：blob 通道的
+`collect_garbage` 会回收「不被任何 committed root 可达」的块，而在途上传正好长这样，
+共用一个 root 会让两个场景互相删掉对方的分块。share root **不做 GC**，只按 hold 与
+租约回收。
+
+**Item 的 ETag 是 root CID；列表的 ETag 是组内 id 的有序哈希。** 一个 item 的
+字节在 CID 上是不可变的，所以 `ETag: "bafkrei…"` 就是「这是这份内容」的陈述。一个
+列表的 ETag 由 `Sha256(group_key ‖ U+001F 分割的 id 列表 ‖ expiries ‖ sizes)` 派生：
+当任何一项被加、删、过期或改了大小，digest 就会变，因此 `If-None-Match` 让常态
+轮询降到一次 304。空组没有可校验的内容——返回无 ETag 完整 body，避免把「组为空」
+缓存成可观察的差分。
+
+**id 不是访问凭据。** `ShareStore::get` 以调用方 groupKey 过滤，跨组、不存在、已过期
+都返回 `None`，下载路由因此对三者答同一个 404——可区分的 403 会确认该 id 存在，过期
+与否也不是可观测事实。同理 `rootCid` 与 uploadId 都不是凭据：字节读取由 groupKey
+授权，staged upload 由 `Owner{principal,tenant}` 绑定。
+
+**同一份内容只有一个地址。** 两个人共享同一份字节得到同一个 `rootCid`，是**两个
+item 指向一个 root**。回收按 hold 计数：`hold_root` 在 commit 时加一，撤回或断线时
+`release_root` 减一，只有最后一个松手才真正删块。盲删会让另一个 item 读到空。
+
+**重启回收一切。** 场景是可丢弃的：重启意味着所有连接都已断开，上一轮遗留的
+committed root 在启动时全部 `reclaim_all_committed`；staging 不在此列——中断的上
+传仍可续传，按自己的租约到期清理。
+
+**配额在存入前检查。** 单文件、单组累计、单客户端文件数均可由 `[share]` 配置
+（默认 8 MiB / 32 MiB / 32），组上限低于单文件上限时自动跟随单文件上限——否则
+「只想放大单文件」会得到一条不说原因的拒绝。组的当前用量是新文件的计量基准，
+因此两个客户端竞争最后一段配额时不会都成功。
+
+**提供者断开即回收。** WSS 循环在 `detach_writer` 之后调用 `ShareStore::remove_owner`，
+再按返回的每个 item `release_root`：断开的客户端不再能提供文件，字节与组配额同时归还。
+`remove` 先校验归属再删除——先删后校验会让任何组内成员销毁别人的上传。
 
 **文件名可以是相对目录路径。** 目录上传把 `webkitRelativePath`（`dir/sub/file.png`）放
 进 `x-conex-file-name`；`ShareStore::sanitize_name` 按 `/` 分段清理——控制字符、`\\`、
 引号替换为 `_`，空段与 `.` 丢弃，`..` 展平为 `_`，总长截断 240 字符——名字仍是**显示
-字符串**，从不作为文件系统路径（字节在内存、按 id 键）。`Content-Disposition` 用最后
-一段 basename。页面按路径把每个提供者的文件渲染成目录树，列表视图用原生 `<details>`
-折叠，网格视图用目录瓦片下钻 + 面包屑；两种视图共享同一份树数据。
+字符串**，从不作为文件系统路径（字节按 CID 存在 content 存储）。`Content-Disposition`
+用最后一段 basename。页面按路径把每个提供者的文件渲染成目录树，列表视图用原生
+`<details>` 折叠，网格视图用目录瓦片下钻 + 面包屑；两种视图共享同一份树数据。
+
+**变更不是轮询出来的。** 写场景的请求触发一份 `conex/share-changed` 推送：
+到同组**除自己之外**的所有在线 tab。推送只到 actor 之外的链接，因为 actor 自己知道它写了什么。
+收到推送的页面立刻重新拉文件清单——不是等下一次轮询。同组列表（peer/status）
+**没有**推送路径：它不是被告知的，是被问的，所以那个轮询保持 3 秒。一个 30 s 的轮询
+可以服务被推送替代的「场景」，但不能同时服务「谁在线」。
+
+**预览按 Range 取头部。** 列表面响应带 `previewBytes`（= `min(size, 256 KiB)`，不可预览
+时为 0），页面据此构造 `?range=bytes=0-N` 发起预览请求。`/web/files/download` 同时接受
+`Range` 头与 `range` query（同一套解析）。
+
+Range 的三种回答必须分开，M1 曾把后两种混为一谈：
+
+| 请求 | 回答 | 依据 |
+|---|---|---|
+| 可满足的单 Range / 开放 / 后缀 Range | `206` + `Content-Range: bytes s-e/total` + `Content-Length` | RFC 7233 §4.1 |
+| 语法合法但无字节可满足（`bytes=999999-`、`bytes=-0`） | `416` + `Content-Range: bytes */total` + `Accept-Ranges` | RFC 7233 §4.4 |
+| 多 Range、畸形、`If-Range` 不匹配 | `200` 整个 item | RFC 7233 §4.1／§3.2 |
+
+「畸形答整个 item」不是为了宽容，是为了不泄露：一个上传失败和一个从未存在的 id 必须不可
+区分，一个乱写的头部也不该比它得到更多信息。`If-Range` 用 item 的 `ETag` 判定，而 `ETag`
+是 **root CID**：它命名内容而不是一次传输，同一份字节的两个 item 共享同一个 `ETag`——
+一个恢复中的 `<video>` 靠的是「关于内容的陈述」，不是一个传输编号。
+
+响应体**按块流式**：一次下载的内存成本是「一个块」而不是整个 item，流被丢弃时停止读后续
+块。`Content-Length` 必须声明完整长度，否则 `<video>`/`<audio>` 会把 `currentTime` 钳到 0，
+即使 Range 是好的。下载（不带 Range）是唯一拿全量的路径。
 
 **内联预览是 Host 的判定。** 只有不带活动内容的类型可内联（`text/plain`、
-`text/markdown`、`text/csv`、`application/json`、`application/pdf`、常见位图）；
-`text/html`、`image/svg+xml` 等一律 `attachment`，避免在他人会话里执行脚本。文本响应的
-`Content-Type` 必须带 `; charset=utf-8`，否则浏览器按默认编码解码，UTF-8 中文变乱码。
-文件名与 MIME 进响应头前必须过滤控制字符、引号与 CR/LF；文件名按
+`text/markdown`、`text/csv`、`application/json`、`application/pdf`、常见位图、常见
+音视频）；`text/html`、`image/svg+xml` 等一律 `attachment`，避免在他人会话里执行脚本。
+文本响应的 `Content-Type` 必须带 `; charset=utf-8`，否则浏览器按默认编码解码，UTF-8
+中文变乱码。文件名与 MIME 进响应头前必须过滤控制字符、引号与 CR/LF；文件名按
 `filename="ascii"` + `filename*=UTF-8''pct` 双写。
 
 **页面定位。** 首屏说明 conex 是什么（可嵌入的双向能力路由内核），消息与文件是它做的

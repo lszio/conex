@@ -10,10 +10,49 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ConexWsClient, type ClientSummary } from "@conex/sdk";
 
-import { listFiles, uploadFile, downloadFileUrl, removeFile, setCsrfToken, setLinkId, type SharedFile } from "@/lib/files";
+import {
+  listFiles,
+  listingLimits,
+  uploadFile,
+  uploadInChunks,
+  downloadFileUrl,
+  previewFileUrl,
+  removeFile,
+  setCsrfToken,
+  setLinkId,
+  type SharedFile,
+} from "@/lib/files";
 
 const CACHE_KEY = "conex.profile.v1";
-const POLL_MS = 3000;
+/** Above this size a file takes the resumable route: one request is cheaper
+ *  than five, but an interruption on a big file would cost the whole thing. */
+const CHUNKED_UPLOAD_THRESHOLD = 256 * 1024;
+
+function formatBytes(value: number): string {
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KiB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MiB`;
+}
+
+/** The host's per-item ceiling.
+ *
+ *  The limits arrive with the first full listing and are host configuration, so
+ *  they are remembered rather than re-read: a `304` carries no body, and a
+ *  caller that needed the limits would otherwise have to force a full read.
+ *  Zero means "the host never told us", which only happens before the first
+ *  successful listing. */
+function listingCeiling(): number {
+  return listingLimits()?.maxFileBytes ?? 0;
+}
+/** Fallback poll interval.
+ *
+ *  A push is the normal path: the host tells a tab about a scene change, and
+ *  this only runs when one was missed. It is therefore slow on purpose — a
+ *  three-second poll of every open tab is what it replaces, and nothing about
+ *  the scene would notice the difference at thirty. */
+const POLL_MS = 30_000;
+/** Peers and status have no push, so they are learned by asking. */
+const PEER_POLL_MS = 3_000;
 const LOG_LIMIT = 40;
 const TOAST_LIMIT = 6;
 
@@ -136,6 +175,8 @@ export interface HelloPageState {
   shareFiles: (files: FileList) => Promise<void>;
   withdrawFile: (file: SharedFile) => Promise<void>;
   fileUrl: (file: SharedFile) => string;
+  /** URL that reads only the head of an item, for in-page previews. */
+  previewFileUrl: (file: SharedFile) => string;
   refreshFiles: () => Promise<void>;
   /** Rerun after a group change, so the new group's peers load. */
   refreshPeers: () => Promise<void>;
@@ -217,7 +258,9 @@ export function useHelloPage(): HelloPageState {
   const refreshFiles = useCallback(async () => {
     try {
       const listing = await listFiles();
-      setFiles(listing.files);
+      // `null` is a `304`: the host says this tab already has the listing, so
+      // there is nothing to re-render and no reason to spend a body on it.
+      if (listing) setFiles(listing.files);
     } catch (error) {
       // Same rule as the client list: a backgrounded or reconnecting tab
       // fails this read for a moment. That is a transient fact, and pinning
@@ -231,6 +274,7 @@ export function useHelloPage(): HelloPageState {
   useEffect(() => {
     let cancelled = false;
     let poll = 0;
+    let filePoll = 0;
     // Refreshing when the tab comes back makes the list correct the instant
     // it is looked at. The poll alone used to skip hidden tabs, so a
     // backgrounded tab — the normal state for the first of two tabs — never
@@ -285,6 +329,15 @@ export function useHelloPage(): HelloPageState {
 
       const client = new ConexWsClient({ origin: location.origin, csrfToken: body.csrf, reconnect: true });
       clientRef.current = client;
+      // The host pushes a scene change, so a tab looking at the scene learns
+      // about it instead of waiting for the next poll. The listing is then
+      // re-read through the ordinary route, where this tab's group is resolved
+      // — the push itself carries no bytes and no group text.
+      client.onNotification((notification) => {
+        if (notification.method === "conex/share-changed") {
+          void refreshFiles();
+        }
+      });
       client.onEvent((event) => {
         if (event.phase === "ready") {
           setConnection("ready");
@@ -331,8 +384,17 @@ export function useHelloPage(): HelloPageState {
       await applyProfile(client, cached.current);
       await refresh();
       await refreshFiles();
+      // Two clocks, because two different things changed.
+      //
+      // Who is online is *not* pushed: a peer that just appeared is learned by
+      // asking, so that poll stays fast. The file scene *is* pushed, so its
+      // poll is the slow fallback for a notification that never arrived. Making
+      // one interval serve both either makes peers take half a minute to appear
+      // or keeps polling a scene that already told us.
       poll = window.setInterval(() => {
         void refresh();
+      }, PEER_POLL_MS);
+      filePoll = window.setInterval(() => {
         void refreshFiles();
       }, POLL_MS);
     };
@@ -350,6 +412,7 @@ export function useHelloPage(): HelloPageState {
     return () => {
       cancelled = true;
       window.clearInterval(poll);
+      window.clearInterval(filePoll);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
       clientRef.current?.close();
@@ -476,7 +539,27 @@ export function useHelloPage(): HelloPageState {
       let done = 0;
       for (const file of Array.from(picked)) {
         try {
-          await uploadFile(file);
+          // The scene's limits arrive with the listing, so the page reads the
+          // real ceiling rather than assuming one. A small file takes the
+          // one-request route; anything bigger takes the resumable one, because
+          // it is the case where an interruption would otherwise cost the
+          // whole file.
+          const limit = listingCeiling();
+          if (file.size > limit) {
+            throw new Error(`文件 ${formatBytes(file.size)} 超过上限 ${formatBytes(limit)}`);
+          }
+          if (file.size > CHUNKED_UPLOAD_THRESHOLD) {
+            await uploadInChunks(file, "file", {
+              onProgress: (progress) => {
+                const percent = Math.round((progress.sent / progress.total) * 100);
+                setShareNotice(
+                  `${progress.label}：${percent}%（${progress.sent}/${progress.total} 块）`,
+                );
+              },
+            });
+          } else {
+            await uploadFile(file);
+          }
           done += 1;
         } catch (error) {
           setShareNotice(
@@ -527,6 +610,7 @@ export function useHelloPage(): HelloPageState {
     shareFiles,
     withdrawFile,
     fileUrl: downloadFileUrl,
+    previewFileUrl: previewFileUrl,
     refreshFiles,
     refreshPeers: refreshFiles,
   };

@@ -6,6 +6,7 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 description = "conex protocol types generated from .proto sources: messages, method and error contracts, CIDs"
+publish = false
 
 [dependencies]
 cid.workspace = true

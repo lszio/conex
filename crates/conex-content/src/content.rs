@@ -39,6 +39,7 @@ impl ContentStore {
     /// Begin a new upload; the returned `Upload` handles the rest. The caller
     /// identity comes from the authenticated broker context, never the wire.
     #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)]
     pub fn begin_upload(
         &self,
         format_version: u32,
@@ -49,6 +50,7 @@ impl ContentStore {
         lease_ms: Option<u64>,
         owner: crate::receipt::Owner,
         resource_id: &str,
+        declared_chunk_cids: &[String],
     ) -> Result<Upload, ContentError> {
         let lease_ms = lease_ms.unwrap_or(self.default_lease_ms);
         // Resume an active staging upload with the same content identity so a
@@ -68,7 +70,7 @@ impl ContentStore {
             });
         }
         let upload_id = deterministic_id("upl", now_ms(), 0);
-        let state = UploadState::new(
+        let mut state = UploadState::new(
             upload_id.clone(),
             format_version,
             chunk_size,
@@ -79,6 +81,9 @@ impl ContentStore {
             owner,
             resource_id.to_string(),
         );
+        // What the caller declared about the content, kept with the receipt so
+        // a resumed upload is still checkable after a restart.
+        state.declare(declared_chunk_cids.to_vec());
         self.inner.record_upload(state.clone())?;
         Ok(Upload {
             store: self.inner.clone(),

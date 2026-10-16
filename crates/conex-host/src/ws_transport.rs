@@ -1009,7 +1009,11 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
         // host; without it a page that reconnects a few times would leave
         // every previous upload readable and charged to its group.
         if let Some(shares) = state.shares.as_ref() {
-            shares.remove_owner(link_id);
+            // The metadata goes first, because the items it returns name the
+            // roots whose bytes are now unserved.
+            for dropped in shares.remove_owner(link_id) {
+                shares.release(&dropped.root_cid);
+            }
         }
         clients.remove(link_id);
     }

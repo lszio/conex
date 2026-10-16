@@ -57,6 +57,8 @@ fn write_and_commit(store: &ContentStore, payload: &[u8]) -> String {
             Some(60_000),
             owner(),
             "notes/test",
+            // The P1 channel declares its leaves as it goes, so it has none up front.
+            &[],
         )
         .unwrap();
     for (i, chunk) in chunk_payload(payload, DEFAULT_CHUNK_SIZE)
@@ -233,6 +235,8 @@ fn one_gib_payload_roundtrips() {
             Some(3_600_000),
             owner(),
             "notes/test",
+            // The P1 channel declares its leaves as it goes, so it has none up front.
+            &[],
         )
         .unwrap();
     for (i, expected_cid) in leaf_cids.iter().enumerate() {

@@ -6,6 +6,7 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 description = "conex source capability abstractions and snapshots for the data-connection plane"
+publish = false
 
 [dependencies]
 conex-core.workspace = true

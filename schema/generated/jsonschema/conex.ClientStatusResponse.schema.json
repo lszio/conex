@@ -793,6 +793,15 @@
       ],
       "type": "object"
     },
+    "conex.ClipAddedNotification": {
+      "additionalProperties": false,
+      "properties": {
+        "item": {
+          "$ref": "#/$defs/conex.ShareItem"
+        }
+      },
+      "type": "object"
+    },
     "conex.CommittedTarget": {
       "additionalProperties": false,
       "properties": {
@@ -2246,6 +2255,362 @@
         "attachmentId",
         "newEpoch",
         "restoredWindowBytes"
+      ],
+      "type": "object"
+    },
+    "conex.ShareChangedNotification": {
+      "additionalProperties": false,
+      "properties": {
+        "change": {
+          "type": "string"
+        },
+        "itemId": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "SHARE_ITEM_KIND_UNSPECIFIED",
+            "SHARE_ITEM_KIND_FILE",
+            "SHARE_ITEM_KIND_CLIP"
+          ],
+          "type": "string"
+        },
+        "ownerLinkId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ownerLinkId",
+        "kind",
+        "change",
+        "itemId"
+      ],
+      "type": "object"
+    },
+    "conex.ShareClipboardImageRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "mime": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "rootCid": {
+          "type": "string"
+        },
+        "sizeBytes": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "mime",
+        "sizeBytes",
+        "rootCid"
+      ],
+      "type": "object"
+    },
+    "conex.ShareClipboardResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "item": {
+          "$ref": "#/$defs/conex.ShareItem"
+        }
+      },
+      "type": "object"
+    },
+    "conex.ShareClipboardTextRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "type": "object"
+    },
+    "conex.ShareItem": {
+      "additionalProperties": false,
+      "properties": {
+        "createdAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "expiresAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "groupKey": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "inline": {
+          "type": "boolean"
+        },
+        "kind": {
+          "enum": [
+            "SHARE_ITEM_KIND_UNSPECIFIED",
+            "SHARE_ITEM_KIND_FILE",
+            "SHARE_ITEM_KIND_CLIP"
+          ],
+          "type": "string"
+        },
+        "mime": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "ownerLinkId": {
+          "type": "string"
+        },
+        "ownerName": {
+          "type": "string"
+        },
+        "previewBytes": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "rootCid": {
+          "type": "string"
+        },
+        "sizeBytes": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "name",
+        "mime",
+        "sizeBytes",
+        "rootCid",
+        "ownerLinkId",
+        "ownerName",
+        "groupKey",
+        "createdAtMs",
+        "previewBytes",
+        "inline",
+        "expiresAtMs"
+      ],
+      "type": "object"
+    },
+    "conex.ShareListRequest": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    },
+    "conex.ShareListResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "clipTtlMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/conex.ShareItem"
+          },
+          "type": "array"
+        },
+        "maxClipsPerClient": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maxItemBytes": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "maxItemsPerClient": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "maxItemBytes",
+        "maxItemsPerClient",
+        "maxClipsPerClient",
+        "clipTtlMs"
+      ],
+      "type": "object"
+    },
+    "conex.ShareRemoveRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "conex.ShareRemoveResponse": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    },
+    "conex.ShareUploadCancelRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "uploadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "uploadId"
+      ],
+      "type": "object"
+    },
+    "conex.ShareUploadCancelResponse": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    },
+    "conex.ShareUploadCommitRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "uploadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "uploadId"
+      ],
+      "type": "object"
+    },
+    "conex.ShareUploadCommitResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "item": {
+          "$ref": "#/$defs/conex.ShareItem"
+        }
+      },
+      "type": "object"
+    },
+    "conex.ShareUploadInitRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "chunkCids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "chunkSize": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "kind": {
+          "enum": [
+            "SHARE_ITEM_KIND_UNSPECIFIED",
+            "SHARE_ITEM_KIND_FILE",
+            "SHARE_ITEM_KIND_CLIP"
+          ],
+          "type": "string"
+        },
+        "mime": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "sizeBytes": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "mime",
+        "sizeBytes",
+        "chunkSize",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "conex.ShareUploadInitResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "chunkSize": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "leaseMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "maxItemBytes": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "receivedCount": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "uploadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "uploadId",
+        "chunkSize",
+        "receivedCount",
+        "leaseMs",
+        "maxItemBytes"
+      ],
+      "type": "object"
+    },
+    "conex.ShareUploadStatusResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "receivedBytes": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "receivedCount": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "sizeBytes": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "uploadId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "uploadId",
+        "receivedCount",
+        "receivedBytes",
+        "sizeBytes"
       ],
       "type": "object"
     },

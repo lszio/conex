@@ -32,9 +32,12 @@ function bytes(value: number): string {
   return `${(value / (1024 * 1024)).toFixed(1)} MiB`;
 }
 
-/** Text previews are truncated: a multi-megabyte file must not be pulled into
- *  the DOM just because it happens to be readable. Download gets the rest. */
-const PREVIEW_LIMIT = 200 * 1024;
+/** A clip's remaining life, in the visitor's own words. */
+function formatExpiry(expiresAtMs: number): string {
+  const minutes = Math.max(1, Math.round((expiresAtMs - Date.now()) / 60000));
+  if (minutes < 60) return `${minutes} 分钟`;
+  return `${Math.round(minutes / 60)} 小时`;
+}
 
 function isText(file: SharedFile): boolean {
   return (
@@ -106,6 +109,7 @@ export function FileScene({
   onShare,
   onWithdraw,
   fileUrl,
+  previewUrl,
 }: {
   files: SharedFile[];
   selfLinkId: string;
@@ -115,6 +119,7 @@ export function FileScene({
   onShare: (picked: FileList) => void;
   onWithdraw: (file: SharedFile) => void;
   fileUrl: (file: SharedFile) => string;
+  previewUrl: (file: SharedFile) => string;
 }) {
   const picker = useRef<HTMLInputElement>(null);
   // One view mode for the whole scene: per-provider state would make the two
@@ -268,6 +273,7 @@ export function FileScene({
                       own={ownerId === selfLinkId}
                       onWithdraw={onWithdraw}
                       fileUrl={fileUrl}
+                      previewUrl={previewUrl}
                       depth={0}
                     />
                   ) : (
@@ -295,12 +301,14 @@ function TreeList({
   own,
   onWithdraw,
   fileUrl,
+  previewUrl,
   depth,
 }: {
   node: TreeNode;
   own: boolean;
   onWithdraw: (file: SharedFile) => void;
   fileUrl: (file: SharedFile) => string;
+  previewUrl: (file: SharedFile) => string;
   depth: number;
 }) {
   const dirs = [...node.dirs.entries()].sort((a, b) => a[0].localeCompare(b[0]));
@@ -336,6 +344,7 @@ function TreeList({
               own={own}
               onWithdraw={onWithdraw}
               fileUrl={fileUrl}
+              previewUrl={previewUrl}
               depth={depth + 1}
             />
           </details>
@@ -343,7 +352,13 @@ function TreeList({
       ))}
       {files.map((file) => (
         <li key={file.id}>
-          <FileRow file={file} own={own} onWithdraw={() => onWithdraw(file)} fileUrl={fileUrl} />
+          <FileRow
+            file={file}
+            own={own}
+            onWithdraw={() => onWithdraw(file)}
+            fileUrl={fileUrl}
+            previewUrl={previewUrl}
+          />
         </li>
       ))}
     </ul>
@@ -459,11 +474,13 @@ function FileRow({
   own,
   onWithdraw,
   fileUrl,
+  previewUrl,
 }: {
   file: SharedFile;
   own: boolean;
   onWithdraw: () => void;
   fileUrl: (file: SharedFile) => string;
+  previewUrl: (file: SharedFile) => string;
 }) {
   return (
     <div className="grid gap-2 rounded-md border border-[var(--color-border)] px-3 py-2.5">
@@ -494,7 +511,7 @@ function FileRow({
       </div>
       {isImage(file) ? (
         <img
-          src={fileUrl(file)}
+          src={previewUrl(file)}
           alt={`${file.name} 的预览`}
           className="max-h-64 w-fit rounded-md border border-[var(--color-border)]"
           loading="lazy"
@@ -502,7 +519,7 @@ function FileRow({
       ) : null}
       {isPdf(file) ? (
         <object
-          data={fileUrl(file)}
+          data={previewUrl(file)}
           type="application/pdf"
           className="h-64 w-full rounded-md border border-[var(--color-border)]"
           aria-label={`${file.name} 的预览`}
@@ -514,26 +531,38 @@ function FileRow({
           </a>
         </object>
       ) : null}
-      {isText(file) ? <TextPreview file={file} fileUrl={fileUrl} /> : null}
+      {isText(file) ? <TextPreview file={file} previewUrl={previewUrl} /> : null}
       {!file.inline ? (
         <p className="text-xs text-[var(--color-muted-foreground)]">
           {file.mime} 不在可预览范围内（可能携带活动内容），只提供下载。
+        </p>
+      ) : null}
+      {file.kind === "clip" && file.expiresAtMs > 0 ? (
+        <p className="text-xs text-[var(--color-muted-foreground)]">
+          剪贴板内容，{formatExpiry(file.expiresAtMs)}后自动清除。
         </p>
       ) : null}
     </div>
   );
 }
 
-function TextPreview({ file, fileUrl }: { file: SharedFile; fileUrl: (file: SharedFile) => string }) {
-  const url = fileUrl(file);
+function TextPreview({
+  file,
+  previewUrl,
+}: {
+  file: SharedFile;
+  previewUrl: (file: SharedFile) => string;
+}) {
+  const url = previewUrl(file);
   const [text, setText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // An oversized file is refused with a reason rather than pulled into the
-    // DOM; text is fetched, never inlined, so a hostile payload cannot be
-    // handed to React as markup.
-    if (file.size > PREVIEW_LIMIT) {
+    // The host decides how much is safe to preview (`previewBytes`) and how
+    // much of it this URL asks for, so a multi-gigabyte file is never pulled
+    // into the DOM just because it happens to be readable. Text is fetched,
+    // never inlined, so a hostile payload cannot be handed to React as markup.
+    if (file.previewBytes === 0) {
       setText(null);
       setError(null);
       return;
@@ -558,20 +587,26 @@ function TextPreview({ file, fileUrl }: { file: SharedFile; fileUrl: (file: Shar
     return () => {
       cancelled = true;
     };
-  }, [file.size, url]);
+  }, [file.previewBytes, url]);
 
+  const truncated = file.previewBytes > 0 && file.size > file.previewBytes;
   return (
     <details>
       <summary className="cursor-pointer text-xs text-[var(--color-muted-foreground)]">
         预览文本
       </summary>
       <p className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md bg-[var(--color-muted)] p-2 text-xs">
-        {file.size > PREVIEW_LIMIT
-          ? `文件 ${bytes(file.size)}，超过 ${bytes(PREVIEW_LIMIT)} 预览上限，请下载查看。`
+        {file.previewBytes === 0
+          ? `文件 ${bytes(file.size)}，主机未开放预览，请下载查看。`
           : error
             ? `预览失败：${error}`
             : (text ?? "读取中…")}
       </p>
+      {truncated ? (
+        <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">
+          仅预览前 {bytes(file.previewBytes)}，完整内容请下载。
+        </p>
+      ) : null}
     </details>
   );
 }

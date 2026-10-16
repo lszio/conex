@@ -78,6 +78,14 @@ export interface ConexWsEvent {
   summary?: string;
 }
 
+/** A notification the host pushed, with the method that named it. */
+export interface ConexNotification {
+  method: string;
+  params: Record<string, unknown>;
+}
+
+export type ConexNotificationListener = (notification: ConexNotification) => void;
+
 export interface ConexWsNegotiation {
   negotiationId: string;
   profileId: string;
@@ -157,6 +165,8 @@ export class ConexWsClient {
   private linkIdField?: string;
   private readonly listeners = new Set<ConexWsEventListener>();
   private readonly helloListeners = new Set<(hello: ConexHelloPush) => void>();
+  /// Notifications the SDK does not itself consume, for the caller to route.
+  private readonly notificationListeners = new Set<ConexNotificationListener>();
   private readonly pending = new Map<string, PendingCall>();
   /** Calls issued while the link was down, replayed in order on reconnect. */
   private readonly queued: QueuedCall[] = [];
@@ -504,7 +514,19 @@ export class ConexWsClient {
    * the timeout.
    */
   private handleServerNotification(message: JsonRpcMessage): boolean {
-    if (message.method !== "conex/client-hello") return false;
+    if (message.method !== "conex/client-hello") {
+      // A method this client does not answer itself is still meaningful to the
+      // page: the host pushes scene changes, and dropping them here would make
+      // a page that subscribed see nothing.
+      if (typeof message.method === "string") {
+        const pushed = {
+          method: message.method,
+          params: (message.params ?? {}) as Record<string, unknown>,
+        };
+        this.notificationListeners.forEach((listener) => listener(pushed));
+      }
+      return false;
+    }
     const params = (message.params ?? {}) as {
       replyId?: string;
       from?: string;
@@ -558,6 +580,22 @@ export class ConexWsClient {
   ): () => void {
     this.helloListeners.add(listener);
     return () => this.helloListeners.delete(listener);
+  }
+
+  /**
+   * Server-pushed notifications this client does not answer itself.
+   *
+   * `conex/client-hello` has its own subscriber because it carries a contract
+   * of its own; everything else the host pushes arrives here with the method
+   * name intact, so a caller can react to a scene changing rather than poll for
+   * it. Returns an unsubscribe function.
+   *
+   * A notification is not a request: there is no id to answer and nothing to
+   * wait for, so a listener that does its own refresh owns that entirely.
+   */
+  onNotification(listener: ConexNotificationListener): () => void {
+    this.notificationListeners.add(listener);
+    return () => this.notificationListeners.delete(listener);
   }
 
   private routeBusiness(message: JsonRpcMessage): void {

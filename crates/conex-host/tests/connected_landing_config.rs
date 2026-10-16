@@ -184,3 +184,113 @@ fn web_origin_must_be_a_bare_origin_without_userinfo_path_query_or_slash() {
         );
     }
 }
+
+#[test]
+fn share_limits_are_additive_and_defaulted() {
+    let (_dir, path) = write_config(base());
+    let config = HostConfig::load(&path).expect("config without [share] should parse");
+    assert!(config.share.is_none(), "the scene is opt-in by section");
+    // A host that configures P1 gets a sibling share root without a new line,
+    // and the limits stay at their defaults until an operator names them.
+    let limits = config.share_limits();
+    assert_eq!(limits.max_file_bytes, 8 * 1024 * 1024);
+    assert_eq!(limits.max_group_bytes, 32 * 1024 * 1024);
+    assert_eq!(limits.max_files_per_client, 32);
+    assert!(limits.max_clips_per_client > 0);
+    assert!(limits.clip_ttl_ms > 0);
+    assert!(
+        config.share_storage().is_none(),
+        "no content_root and no [share]: no bytes to put anywhere"
+    );
+}
+
+#[test]
+fn share_root_defaults_to_a_sibling_of_the_content_root() {
+    let body = base().replace(
+        "web_root = \".\"",
+        "content_root = \"/var/lib/conex/content\"\nsession_root = \"/var/lib/conex/session\"\noperation_root = \"/var/lib/conex/operation\"",
+    );
+    let (_dir, path) = write_config(&body);
+    let config = HostConfig::load(&path).expect("p1 config should parse");
+    let (root, lease_ms) = config.share_storage().expect("a share root is derived");
+    assert_eq!(root, std::path::Path::new("/var/lib/conex/share"));
+    assert!(lease_ms > 0);
+}
+
+#[test]
+fn a_named_share_root_is_used_instead_of_the_derived_one() {
+    let body = base().replace(
+        "web_root = \".\"",
+        "content_root = \"/var/lib/conex/content\"\nsession_root = \"/var/lib/conex/session\"\noperation_root = \"/var/lib/conex/operation\"\n\n[share]\nshare_root = \"/srv/conex/share\"\nmax_file_bytes = 1073741824\nmax_clips_per_client = 5\nclip_ttl_ms = 60000",
+    );
+    let (_dir, path) = write_config(&body);
+    let config = HostConfig::load(&path).expect("share config should parse");
+    let (root, _) = config.share_storage().expect("a share root is named");
+    assert_eq!(root, std::path::Path::new("/srv/conex/share"));
+    let limits = config.share_limits();
+    assert_eq!(limits.max_file_bytes, 1073741824);
+    assert_eq!(limits.max_clips_per_client, 5);
+    assert_eq!(limits.clip_ttl_ms, 60000);
+}
+
+#[test]
+fn the_share_root_may_not_be_the_content_root() {
+    // The two scenes reclaim differently: the blob channel's garbage collector
+    // takes blocks no committed root reaches, which is exactly what an
+    // in-flight upload looks like. One root would let either delete the
+    // other's staging.
+    let body = base().replace(
+        "web_root = \".\"",
+        "content_root = \"/var/lib/conex/content\"\nsession_root = \"/var/lib/conex/session\"\noperation_root = \"/var/lib/conex/operation\"\n\n[share]\nshare_root = \"/var/lib/conex/content\"",
+    );
+    let (_dir, path) = write_config(&body);
+    let error = HostConfig::load(&path).expect_err("a shared root must be refused");
+    assert!(
+        error.message().contains("share_root"),
+        "{:?}",
+        error.message()
+    );
+}
+
+#[test]
+fn a_group_cap_below_the_file_cap_follows_it_instead_of_refusing() {
+    // Raising the per-file cap without touching the group cap used to be a
+    // config error, which is a footgun: the operator meant "bigger files" and
+    // got a refusal that did not say why.
+    let body = base().replace(
+        "web_root = \".\"",
+        "content_root = \"/var/lib/conex/content\"\nsession_root = \"/var/lib/conex/session\"\noperation_root = \"/var/lib/conex/operation\"\n\n[share]\nshare_root = \"/tmp/s\"\nmax_file_bytes = 1073741824",
+    );
+    let (_dir, path) = write_config(&body);
+    let config = HostConfig::load(&path).expect("a bigger file cap should parse");
+    let limits = config.share_limits();
+    assert_eq!(limits.max_file_bytes, 1073741824);
+    assert_eq!(
+        limits.max_group_bytes, 1073741824,
+        "the group has room for one file"
+    );
+}
+
+#[test]
+fn share_limits_are_checked_for_sense_not_for_taste() {
+    for (section, needle) in [
+        (
+            "share_root = \"/tmp/s\"\nmax_file_bytes = 0",
+            "max_file_bytes",
+        ),
+        (
+            "share_root = \"/tmp/s\"\nmax_files_per_client = 0",
+            "max_files_per_client",
+        ),
+        (
+            "share_root = \"/tmp/s\"\nmax_clips_per_client = 0",
+            "max_clips_per_client",
+        ),
+        ("share_root = \"/tmp/s\"\nclip_ttl_ms = 0", "clip_ttl_ms"),
+    ] {
+        let body = base().replace("web_root = \".\"", &format!("content_root = \"/var/lib/conex/content\"\nsession_root = \"/var/lib/conex/session\"\noperation_root = \"/var/lib/conex/operation\"\n\n[share]\n{section}"));
+        let (_dir, path) = write_config(&body);
+        let error = HostConfig::load(&path).expect_err("an impossible limit must fail");
+        assert!(error.message().contains(needle), "{needle}: {error:?}");
+    }
+}

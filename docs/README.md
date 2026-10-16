@@ -23,6 +23,7 @@ conex 的文档按「规范 / 契约 / 计划 / 证据 / 操作」分层，每�
 | 计划 | [P1 执行计划](plans/2026-09-15-conex-p1.md) | 下一步：P1 范围、P1-01 细化、里程碑 | 开始下一步工作 |
 | 计划 | [中心服务与交互落地页](plans/2026-09-20-conex-connected-landing.md) | 已确认 A 拓扑：浏览器连接中心 Host，私有 Agent 反连；含安全接入、真实路由、页面和验收 | 实施多地服务连接展示时 |
 | 计划 | [多主机数据服务与公共内容页面优化](plans/2026-10-01-conex-multi-host-content.md) | M0–M6 工作包：契约冻结、权限修复、通用内容传输、Notez 接入、媒体展示及跨主机验收；M0–M5 已实施 | 推进多主机全类型数据公开浏览时 |
+| 计划 | [落地页文件传输、预览与剪贴板共享优化](plans/2026-10-13-conex-share-transfer.md) | M0–M6 工作包：契约冻结、字节下沉块存储、分块断点续传、Range 预览、推送替代轮询、剪贴板共享 | 改造文件场景性能、支持大文件或加剪贴板共享时 |
 | 证据 | [多主机内容验证记录](verification/multi-host-content.md) | M0–M5 实际交付、测试文件索引、已知缺口（M4/M6 未开始、fmt 全仓债） | 验收、排障、追溯契约变更 |
 | 契约 | [Connected landing](contracts/connected-landing.md) | 中心 Host、浏览器会话/ticket、Agent 反连与只读端点目录的 L01 冻结契约 | 实施 connected landing 或校验信任边界时 |
 | 计划 | [P0 执行计划（归档）](plans/archive/2026-09-15-conex-p0.md) | 已完成的 P0 计划：冻结决定、任务→提交→证据、遗留缺口 | 追溯 P0 决策 |

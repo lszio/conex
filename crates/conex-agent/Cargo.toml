@@ -6,6 +6,8 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 description = "conex private-side agent: outbound reverse connection, restricted workspace and upstream credentials"
+publish = false
+
 [[bin]]
 name = "conex-agent"
 path = "src/main.rs"

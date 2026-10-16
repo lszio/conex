@@ -6,6 +6,7 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 description = "conex standalone host process: wiring, listener, policy, credentials and audit sink"
+publish = false
 
 [[bin]]
 name = "conex-host"

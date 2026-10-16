@@ -23,6 +23,7 @@ use serde_json::Map;
 use sha2::{Digest, Sha256};
 use tokio::sync::{mpsc, oneshot};
 
+use conex_content::Owner as ContentOwner;
 use conex_core::CallError;
 use conex_proto;
 
@@ -240,6 +241,19 @@ impl ClientEntry {
     pub fn round_trips(&self) -> u64 {
         self.round_trips
     }
+
+    /// Ownership credentials for the content store.
+    ///
+    /// The link says which tab is speaking; the principal and tenant say whose
+    /// storage that tab may touch. A staged upload is bound to this pair, so a
+    /// tab that reconnects under the same principal resumes its own staging
+    /// and nobody else's.
+    pub fn owner(&self) -> ContentOwner {
+        ContentOwner {
+            principal_id: self.principal_id.clone(),
+            tenant_id: self.tenant_id.clone(),
+        }
+    }
 }
 
 struct ClientState {
@@ -425,6 +439,69 @@ impl ClientRegistry {
                 entry.group_key == own_key && (entry.profile.visible || entry.link_id == caller)
             })
             .collect()
+    }
+
+    /// Push a notification to every online link of one group except `except`.
+    ///
+    /// This is how a scene change reaches the page that is looking at it: a
+    /// listing that only changes on a write should not have to be polled to be
+    /// seen. The actor is excluded because it already knows — its own write is
+    /// what triggered this, and answering it again would make the page refresh
+    /// twice for one action.
+    ///
+    /// Each frame is counted against the same budget the writer drains, so a
+    /// push cannot fill another link's queue. The frame is dropped rather than
+    /// queued when a link is busy: the page falls back to its own polling, so a
+    /// dropped notification costs freshness, never correctness.
+    pub fn notify_group(
+        &self,
+        group_key: &str,
+        except: &str,
+        method: &str,
+        params: &serde_json::Value,
+    ) -> usize {
+        let mut delivered = 0;
+        for entry in self.list_for_group_key(group_key) {
+            if entry.link_id == except {
+                continue;
+            }
+            let payload = serde_json::json!({
+                "jsonrpc": "2.0",
+                "method": method,
+                "params": params,
+            });
+            let Ok(text) = serde_json::to_string(&payload) else {
+                continue;
+            };
+            let bytes = text.len();
+            let Some(tx) = self.outbound(&entry.link_id) else {
+                continue;
+            };
+            if tx.try_send(Message::Text(text.into()), bytes) {
+                delivered += 1;
+            }
+        }
+        delivered
+    }
+
+    /// Every link of one group, visible or not.
+    ///
+    /// A notification is not a directory listing: a client that hides itself
+    /// from the list still wants to see its group's files move, and the group
+    /// key is the isolation boundary either way.
+    fn list_for_group_key(&self, group_key: &str) -> Vec<ClientEntry> {
+        self.list()
+            .into_iter()
+            .filter(|entry| entry.group_key == group_key)
+            .collect()
+    }
+
+    /// The link's outbound channel, if its socket is up. A writer-less link is
+    /// a tab that is gone, and it is not pushed to.
+    fn outbound(&self, link_id: &str) -> Option<Outbound> {
+        let guard = self.by_link.lock().expect("client registry poisoned");
+        let state = guard.get(link_id)?;
+        state.lock().expect("client state poisoned").tx.clone()
     }
 
     /// True when both links exist under the same group key. Addressability
