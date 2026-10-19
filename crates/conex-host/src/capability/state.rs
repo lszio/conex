@@ -1193,23 +1193,19 @@ impl StateRelay {
     async fn terminate(&self, hop: &str, error: conex_proto::Error) {
         let (sub, link) = {
             let mut inner = self.inner.lock().await;
-            let Some(sub) = inner.by_hop.get(hop).cloned() else {
+            let Some(sub) = inner.remove_hop(hop) else {
                 return;
             };
-            let Some(link) = inner
+            let link = inner
                 .consumers
                 .get(&sub.consumer_generation)
-                .map(|consumer| consumer.link.clone())
-            else {
-                inner.remove_hop(hop);
-                return;
-            };
+                .map(|consumer| consumer.link.clone());
             (sub, link)
         };
+        self.cancel_subscription_upstream(hop, &sub).await;
+        let Some(link) = link else { return };
         let Ok(end_input) = state_end_input(&sub.consumer_subscription_id, &error) else {
-            // 固定终止码总是合法（parse_state_end_error 自检）；防御性兜底。
-            let mut inner = self.inner.lock().await;
-            inner.remove_hop(hop);
+            // Fixed terminal errors are validated by state_end_input.
             return;
         };
         let message =
@@ -1217,20 +1213,39 @@ impl StateRelay {
         if !link.send_s1_state_control(&message) {
             link.close();
             self.drop_consumer(sub.consumer_generation).await;
-            return;
         }
-        {
-            let mut inner = self.inner.lock().await;
-            inner.remove_hop(hop);
-        }
-        // 释放上游观察者（尽力，固定注册代次；end 由中心生成的路径需要
-        // 通知提供端停止，提供端自己发的 end 无副作用）。
-        self.cancel_hop_upstream(hop).await;
+        // The mapping was removed atomically before either delivery await.
     }
 
     async fn drop_consumer(&self, generation: u64) {
-        let mut inner = self.inner.lock().await;
-        inner.drop_consumer(generation);
+        let subscriptions = {
+            let mut inner = self.inner.lock().await;
+            inner.drop_consumer(generation)
+        };
+        for (hop, sub) in subscriptions {
+            self.cancel_subscription_upstream(&hop, &sub).await;
+        }
+    }
+
+    async fn cancel_subscription_upstream(&self, hop: &str, sub: &Subscription) {
+        let upstream = {
+            let inner = self.inner.lock().await;
+            inner
+                .links
+                .get(&(sub.target_node.clone(), sub.target_generation))
+                .cloned()
+        };
+        if let Some(link) = upstream {
+            link.send_s1_control(control_message(
+                &new_registration_id(),
+                METHOD_STATE_UNSUBSCRIBE,
+                &sub.upstream_context,
+                json!({ "subscriptionId": hop }),
+                1,
+            ))
+            .await;
+            link.cancel_hop(hop).await;
+        }
     }
 }
 
@@ -1265,17 +1280,19 @@ impl StateInner {
             .sum()
     }
 
-    fn drop_consumer(&mut self, generation: u64) {
+    fn drop_consumer(&mut self, generation: u64) -> Vec<(String, Subscription)> {
         let hops: Vec<String> = self
             .by_hop
             .iter()
             .filter(|(_, sub)| sub.consumer_generation == generation)
             .map(|(hop, _)| hop.clone())
             .collect();
-        for hop in hops {
-            self.remove_hop(&hop);
-        }
+        let subscriptions = hops
+            .into_iter()
+            .filter_map(|hop| self.remove_hop(&hop).map(|sub| (hop, sub)))
+            .collect();
         self.consumers.remove(&generation);
+        subscriptions
     }
 }
 

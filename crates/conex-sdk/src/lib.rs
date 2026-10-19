@@ -16,16 +16,16 @@ pub use state::{StateEvent, StateLease, StateObserver, Subscription};
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 /// Retains the generated machine-readable Error, including diagnostic/details fields.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Error(pub conex_proto::Error);
+pub struct Error(pub Box<conex_proto::Error>);
 impl Error {
     pub fn new(code: ErrorCode, message: impl Into<String>, execution: &str, retry: &str) -> Self {
-        Self(conex_proto::Error {
+        Self(Box::new(conex_proto::Error {
             code: code as i32,
             message: message.into(),
             execution: execution.into(),
             retry: retry.into(),
             ..Default::default()
-        })
+        }))
     }
     pub fn code(&self) -> i32 {
         self.0.code
@@ -40,13 +40,13 @@ impl Error {
         Self::new(ErrorCode::BadRequest, message, "not_started", "never")
     }
     pub(crate) fn protocol(error: conex_proto::wire::ProtocolError) -> Self {
-        Self(conex_proto::Error {
+        Self(Box::new(conex_proto::Error {
             code: error.rpc_code,
             message: error.message,
             execution: "not_started".into(),
             retry: "never".into(),
             ..Default::default()
-        })
+        }))
     }
     pub(crate) fn decode(error: impl std::fmt::Display) -> Self {
         Self::bad_request(error.to_string())

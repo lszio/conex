@@ -222,11 +222,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Local exposure ceiling: the two statically approved service principals
     // (this node and the peer) may reach the whole contract.
-    let mut exposure = Exposure::default();
-    exposure.principals = BTreeSet::from([endpoint.clone(), peer.clone()]);
-    exposure.tenants = BTreeSet::from([space.clone()]);
-    exposure.methods = BTreeSet::from(["counter/read".into(), "counter/add".into()]);
-    exposure.states = BTreeSet::from(["counter/value".into()]);
+    let exposure = Exposure {
+        principals: BTreeSet::from([endpoint.clone(), peer.clone()]),
+        tenants: BTreeSet::from([space.clone()]),
+        methods: BTreeSet::from(["counter/read".into(), "counter/add".into()]),
+        states: BTreeSet::from(["counter/value".into()]),
+    };
 
     let mut connect = ConnectOptions::new(&url, &token);
     connect.allow_loopback_ws = true;

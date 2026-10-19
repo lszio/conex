@@ -10,6 +10,8 @@ npm install @conex/sdk
 
 S1 uses JSON WSS with `conex/hello` → `conex/ready`. Enable it explicitly with `capabilities: { contracts, providers? }`. Contracts are **preinstalled** parsers, method execution metadata (`read_only` or `non_replayable`), and state-value parsers; registration never installs schemas or grants permission. Use generated types and the shared generated-schema validator for domain payloads:
 
+S1 currently uses static Host approvals plus mandatory provider-local authorization. It is restricted development functionality: **do not expose a public multi-user service before S4 identity governance**. HTTP is consumer-only; it cannot publish modules or subscribe to state. See the [three-process example](../../examples/s1/README.md), [runbook](../../docs/runbooks/s1-capabilities.md), and [observed verification](../../docs/verification/s1-capabilities.md). The symmetric Rust SDK is `crates/conex-sdk`, independent of `conex-host`.
+
 ```ts
 import {
   ConexWsClient, AtomicState, validateDomainSchema,

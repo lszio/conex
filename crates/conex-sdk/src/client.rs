@@ -718,6 +718,13 @@ fn validate_client_envelope(bytes: &[u8]) -> Result<()> {
     p::wire::validate_message(&message).map_err(Error::protocol)?;
     wire::validate_frame(&message, wire::Boundary::Client).map_err(Error::protocol)
 }
+
+struct StateDelivery {
+    updates: mpsc::Receiver<Queued<p::StateSample>>,
+    terminal: watch::Receiver<Option<Error>>,
+    stopped: Arc<AtomicBool>,
+    slot: OwnedSemaphorePermit,
+}
 async fn handshake<S>(
     ws: &mut tokio_tungstenite::WebSocketStream<S>,
     method: &str,
@@ -746,9 +753,9 @@ where
                             Ok(raw.get("result").cloned().unwrap_or(Value::Null))
                         }
                         Some(Body::Failure(f)) if f.request_id.as_deref() == Some(id.as_str()) => {
-                            Err(Error(
+                            Err(Error(Box::new(
                                 f.error.ok_or_else(|| Error::bad_request("missing error"))?,
-                            ))
+                            )))
                         }
                         _ => Err(Error::bad_request("unexpected handshake frame")),
                     };
@@ -876,10 +883,10 @@ impl Core {
                 None
             }
         });
-        if let Some(key) = opening {
-            if let Some(pending) = tables.pending.remove(&key) {
-                let _ = pending.tx.send(Err(error));
-            }
+        if let Some(key) = opening
+            && let Some(pending) = tables.pending.remove(&key)
+        {
+            let _ = pending.tx.send(Err(error));
         }
     }
     pub(crate) fn begin_unsubscribe(
@@ -1082,24 +1089,24 @@ impl Core {
         });
         let checked = checked.map_err(|error| {
             // A valid remote failure is already definite; malformed success cannot establish it.
-            if success_frame && pending.sent {
-                if let PendingKind::Invoke { execution, .. } = &pending.kind {
-                    return execution.uncertain(
-                        p::ErrorCode::Unavailable,
-                        format!("untrusted invoke result: {}", error.0.message),
-                    );
-                }
+            if success_frame
+                && pending.sent
+                && let PendingKind::Invoke { execution, .. } = &pending.kind
+            {
+                return execution.uncertain(
+                    p::ErrorCode::Unavailable,
+                    format!("untrusted invoke result: {}", error.0.message),
+                );
             }
             error
         });
         let mut cleanup = None;
-        if let PendingKind::Subscribe(id) = &pending.kind {
-            if let Err(error) = &checked {
-                if let Some(state) = tables.consumers.remove(id) {
-                    state.end(error.clone());
-                    cleanup = Some((state.target, id.clone()));
-                }
-            }
+        if let PendingKind::Subscribe(id) = &pending.kind
+            && let Err(error) = &checked
+            && let Some(state) = tables.consumers.remove(id)
+        {
+            state.end(error.clone());
+            cleanup = Some((state.target, id.clone()));
         }
         if matches!(&pending.kind, PendingKind::Register { .. }) && checked.is_err() {
             self.shutdown();
@@ -1128,8 +1135,9 @@ impl Core {
             return Err(Error::bad_request("state registration scope mismatch"));
         }
         if method == "state/end" {
-            let error =
-                Error(wire::parse_state_end_error(&input["error"]).map_err(Error::protocol)?);
+            let error = Error(Box::new(
+                wire::parse_state_end_error(&input["error"]).map_err(Error::protocol)?,
+            ));
             if let Some(state) = tables.consumers.remove(id) {
                 state.end(error);
             }
@@ -1283,7 +1291,7 @@ async fn owner<S>(
                         } else {
                             match message.body {
                                 Some(Body::Success(s)) => reader_core.complete(s.request_id, Ok(raw.get("result").cloned().unwrap_or(Value::Null))),
-                                Some(Body::Failure(f)) => match (f.request_id, f.error) { (Some(id), Some(error)) => reader_core.complete(id, Err(Error(error))), _ => Err(Error::bad_request("unassociated failure")) },
+                                Some(Body::Failure(f)) => match (f.request_id, f.error) { (Some(id), Some(error)) => reader_core.complete(id, Err(Error(Box::new(error)))), _ => Err(Error::bad_request("unassociated failure")) },
                                 _ => Err(Error::bad_request("unsupported frame")),
                             }
                         };
@@ -1634,10 +1642,12 @@ impl Core {
                                         &ctx,
                                         &descriptor.value_schema,
                                         lease,
-                                        updates_rx,
-                                        terminal_rx,
-                                        stop,
-                                        slot,
+                                        StateDelivery {
+                                            updates: updates_rx,
+                                            terminal: terminal_rx,
+                                            stopped: stop,
+                                            slot,
+                                        },
                                     )
                                     .await;
                                 if result.is_err() {
@@ -1693,11 +1703,14 @@ impl Core {
         context: &p::RequestContext,
         schema: &str,
         lease: StateLease,
-        mut updates: mpsc::Receiver<Queued<p::StateSample>>,
-        mut terminal: watch::Receiver<Option<Error>>,
-        stopped: Arc<AtomicBool>,
-        slot: OwnedSemaphorePermit,
+        delivery: StateDelivery,
     ) -> Result<()> {
+        let StateDelivery {
+            mut updates,
+            mut terminal,
+            stopped,
+            slot,
+        } = delivery;
         let snapshot = wire::state_sample_json(&lease.snapshot).map_err(Error::protocol)?;
         capability::validate(schema, &snapshot["value"])?;
         let mut sequence = Sequence::new(lease.snapshot.revision);

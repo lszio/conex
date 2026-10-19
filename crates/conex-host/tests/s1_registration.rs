@@ -788,7 +788,7 @@ async fn sdk_bootstrap_negotiates_authenticated_identity_and_enforces_lower_fram
     let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/wss"))
         .await
         .unwrap();
-    let provides = vec![
+    let provides = [
         "module/invoke",
         "module/cancel",
         "state/subscribe",

@@ -455,10 +455,10 @@ impl ModuleRegistry {
         key: &ModuleKey,
     ) -> Option<(String, String)> {
         for state in nodes.values() {
-            if let Some(record) = state.modules.get(key) {
-                if record.node_id != node_id {
-                    return Some((record.space_id.clone(), record.provider_endpoint_id.clone()));
-                }
+            if let Some(record) = state.modules.get(key)
+                && record.node_id != node_id
+            {
+                return Some((record.space_id.clone(), record.provider_endpoint_id.clone()));
             }
         }
         None

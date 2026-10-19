@@ -401,6 +401,39 @@ async fn route_s1_state_notification(
         .await;
 }
 
+/// Invalid state payloads must end their owned subscription, not leave it
+/// silently alive. Keep the wire/identity/context boundary intact; only the
+/// state payload checks are delegated to the relay's ownership-first path.
+async fn route_rejected_state_update(state: &WssState, generation: u64, bytes: &[u8]) -> bool {
+    let Ok(message) = conex_proto::wire::decode_wire_for_boundary(bytes, Boundary::Client) else {
+        return false;
+    };
+    if validate_message(&message).is_err() {
+        return false;
+    }
+    let Some(conex_proto::message::Body::Notification(notification)) = message.body.as_ref() else {
+        return false;
+    };
+    if notification.method != conex_proto::capability::METHOD_STATE_UPDATE {
+        return false;
+    }
+    let Some(params) = notification.params.as_ref() else {
+        return false;
+    };
+    if params.timeout_budget_ms != 0
+        || conex_proto::capability::validate_context(
+            &notification.method,
+            params.context.as_ref(),
+            Boundary::Client,
+        )
+        .is_err()
+    {
+        return false;
+    }
+    route_s1_state_notification(state, generation, notification).await;
+    true
+}
+
 /// Generated SDKs wrap bootstrap input in CallParams; the core bootstrap
 /// state machine also serves the original flat P1 handshake.
 fn normalize_bootstrap(text: &str) -> Result<BootstrapFrame, BootstrapError> {
@@ -728,6 +761,9 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                         let message = match decode_frame(text.as_bytes(), Boundary::Client) {
                             Ok(message) => message,
                             Err(error) => {
+                                if route_rejected_state_update(&state, generation, text.as_bytes()).await {
+                                    continue;
+                                }
                                 let failure = wire_failure(
                                     error.request_id,
                                     conex_proto::ErrorCode::try_from(error.rpc_code)
@@ -884,7 +920,7 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                             // T04：快照成功响应入消费者队列后，状态中继才放行
                             // 该订阅的 update（B2 屏障，契约 §8.1 两跳同规则）。
                             let is_subscribe_ok =
-                                matches!(&result, Ok(_)) && method == "state/subscribe";
+                                result.is_ok() && method == "state/subscribe";
                             let response = conex_proto::Message {
                                 body: Some(match result {
                                     Ok(value) => conex_proto::message::Body::Success(conex_proto::Success {
@@ -1098,7 +1134,7 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                             // T04：快照成功响应入消费者队列后，状态中继才放行
                             // 该订阅的 update（B2 屏障，契约 §8.1 两跳同规则）。
                             let is_subscribe_ok =
-                                matches!(&result, Ok(_)) && method == "state/subscribe";
+                                result.is_ok() && method == "state/subscribe";
                             let response = conex_proto::Message {
                                 body: Some(match result {
                                     Ok(value) => conex_proto::message::Body::Success(conex_proto::Success {

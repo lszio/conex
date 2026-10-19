@@ -13,11 +13,22 @@ use tokio_tungstenite::{
     accept_hdr_async,
     tungstenite::{
         Message,
-        handshake::server::{Request, Response},
+        handshake::server::{Callback, ErrorResponse, Request, Response},
     },
 };
 
 type Ws = tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>;
+
+struct JsonProfile;
+impl Callback for JsonProfile {
+    fn on_request(self, _: &Request, mut response: Response) -> Result<Response, ErrorResponse> {
+        response.headers_mut().insert(
+            "sec-websocket-protocol",
+            "conex-jsonrpc2-wss".parse().unwrap(),
+        );
+        Ok(response)
+    }
+}
 
 const REG: &str = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
 fn contract() -> Arc<Contract> {
@@ -73,15 +84,7 @@ async fn ws_peer() -> (String, tokio::task::JoinHandle<Ws>) {
     let limits = json!({"maxFrameBytes":262144,"maxInflight":8,"maxQueuedBytes":1048576,"timeoutMs":2000,"maxSubscriptions":8,"maxModules":8});
     let peer = tokio::spawn(async move {
         let (tcp, _) = listener.accept().await.unwrap();
-        let mut ws = accept_hdr_async(tcp, |_: &Request, mut response: Response| {
-            response.headers_mut().insert(
-                "sec-websocket-protocol",
-                "conex-jsonrpc2-wss".parse().unwrap(),
-            );
-            Ok(response)
-        })
-        .await
-        .unwrap();
+        let mut ws = accept_hdr_async(tcp, JsonProfile).await.unwrap();
         let hello: Value =
             serde_json::from_str(ws.next().await.unwrap().unwrap().to_text().unwrap()).unwrap();
         let methods = hello["params"]["input"]["requires"].clone();

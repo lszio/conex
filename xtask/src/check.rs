@@ -1,4 +1,4 @@
-//! Aggregate the full P0 gate; a non-zero step fails the whole run.
+//! Aggregate the protocol and SDK gates; a non-zero step fails the whole run.
 use std::path::Path;
 use std::process::Command;
 
@@ -51,9 +51,24 @@ const STEPS: &[Step] = &[
         ],
     ),
     (
+        "conformance s1",
+        "cargo",
+        &[
+            "xtask",
+            "conformance",
+            "--vectors",
+            "conformance/vectors/s1",
+        ],
+    ),
+    (
         "end-to-end (real host + sdk)",
         "cargo",
         &["xtask", "e2e", "--suite", "p0-ts"],
+    ),
+    (
+        "S1 capabilities (real host + TS/Rust SDKs)",
+        "cargo",
+        &["xtask", "e2e", "--suite", "s1-capabilities"],
     ),
 ];
 

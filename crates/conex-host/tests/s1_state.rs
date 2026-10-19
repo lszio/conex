@@ -341,16 +341,11 @@ impl TestLink {
     /// 把已入队 mpsc 帧同步移进累积列表（不跨 await 持锁）。
     fn drain(&self) {
         let mut rx = self.rx.lock().expect("rx poisoned");
-        loop {
-            match rx.try_recv() {
-                Ok((message, _)) => {
-                    if let Message::Text(text) = message
-                        && let Ok(value) = serde_json::from_str::<Value>(&text)
-                    {
-                        self.frames.lock().expect("frames poisoned").push(value);
-                    }
-                }
-                Err(_) => break,
+        while let Ok((message, _)) = rx.try_recv() {
+            if let Message::Text(text) = message
+                && let Ok(value) = serde_json::from_str::<Value>(&text)
+            {
+                self.frames.lock().expect("frames poisoned").push(value);
             }
         }
     }
@@ -1752,5 +1747,162 @@ async fn grey_window_overflow_delivers_end_after_snapshot() {
         "completed"
     );
     assert!(consumer.updates().await.is_empty());
+    assert_eq!(relay.subscriptions_len().await, 0);
+}
+
+/// T04 步骤 6（A09 SUPPORT）：控制预留空间与总上限——数据打满水位
+/// （max_queued - max_frame）后 state/end 仍借预留控制空间投递
+/// （slow_consumer，不误关 Link）；控制空间也打满时 end 无法入队 →
+/// 关闭消费者 Link 并终结其全部剩余订阅（契约 §9；真实进程侧见
+/// xtask s1_e2e A09 的批量有序投递与独立节点仍可读写）。
+#[tokio::test]
+async fn control_reserve_and_full_control_space_close_consumer() {
+    let Setup {
+        broker,
+        relay,
+        registration_id,
+        provider,
+        consumer,
+    } = setup().await;
+    let hop0 = establish_active(
+        &broker,
+        &relay,
+        &provider,
+        &registration_id,
+        SUB_0,
+        REQ_0,
+        0,
+    )
+    .await;
+    let hop1 = establish_active(
+        &broker,
+        &relay,
+        &provider,
+        &registration_id,
+        SUB_1,
+        REQ_1,
+        1,
+    )
+    .await;
+    assert_eq!(relay.subscriptions_len().await, 2);
+
+    // 1. 数据空间打满（水位 = max_queued - max_frame）：活动更新无法入队 →
+    //    slow_consumer end 借控制预留空间交付，不投递更新帧、不关 Link。
+    let watermark = consumer.link.state_data_watermark();
+    consumer.queued.store(watermark, Ordering::Release);
+    relay
+        .on_notification(
+            11,
+            conex_proto::capability::METHOD_STATE_UPDATE,
+            &provider_context(&registration_id),
+            &update_input(&hop0, "1", "1", 1, "current"),
+        )
+        .await;
+    wait_until(|| consumer.count("state/end") > 0).await;
+    assert!(
+        consumer.updates().await.is_empty(),
+        "data-full: no update frame delivered"
+    );
+    let ends = consumer.ends().await;
+    assert_eq!(ends.len(), 1);
+    assert_eq!(
+        ends[0]["params"]["input"]["error"]["code"],
+        "ERROR_CODE_SLOW_CONSUMER"
+    );
+    assert_eq!(
+        relay.subscriptions_len().await,
+        1,
+        "only the overflowing subscription ended"
+    );
+    let ends_after_step1 = ends.len();
+
+    // 2. 控制空间也打满（TestLink::new 的 max_queued=1MiB）：剩余订阅的
+    //    end 无法入队 → 关闭 Link 并 drop_consumer，全部剩余订阅终结。
+    consumer.queued.store(1024 * 1024, Ordering::Release);
+    relay
+        .on_notification(
+            11,
+            conex_proto::capability::METHOD_STATE_UPDATE,
+            &provider_context(&registration_id),
+            &update_input(&hop1, "1", "1", 1, "current"),
+        )
+        .await;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    while relay.subscriptions_len().await != 0 {
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "consumer subscriptions did not drain after control overflow"
+        );
+        tokio::time::sleep(Duration::from_millis(2)).await;
+    }
+    assert_eq!(
+        consumer.ends().await.len(),
+        ends_after_step1,
+        "control-full: no additional end frame could be enqueued"
+    );
+}
+
+/// Ending one subscription and losing the consumer both release the exact
+/// provider-side observers; neither cleanup may resurrect or target a sibling.
+#[tokio::test]
+async fn terminal_and_disconnect_release_provider_observers() {
+    let Setup {
+        broker,
+        relay,
+        registration_id,
+        provider,
+        consumer,
+    } = setup().await;
+    let first = establish_active(
+        &broker,
+        &relay,
+        &provider,
+        &registration_id,
+        SUB_0,
+        REQ_0,
+        0,
+    )
+    .await;
+    let second = establish_active(
+        &broker,
+        &relay,
+        &provider,
+        &registration_id,
+        SUB_1,
+        REQ_1,
+        1,
+    )
+    .await;
+    relay
+        .on_notification(
+            11,
+            conex_proto::capability::METHOD_STATE_UPDATE,
+            &provider_context(&registration_id),
+            &update_input(&first, "2", "1", 1, "current"),
+        )
+        .await;
+    let cleanup = provider.method_frames("state/unsubscribe").await;
+    assert_eq!(
+        cleanup
+            .iter()
+            .map(|frame| frame["params"]["input"]["subscriptionId"].clone())
+            .collect::<Vec<_>>(),
+        vec![json!(first)]
+    );
+    assert_eq!(relay.subscriptions_len().await, 1);
+    assert_eq!(
+        consumer.ends().await[0]["params"]["input"]["subscriptionId"],
+        SUB_0
+    );
+    relay.consumer_disconnected(21).await;
+    relay.consumer_disconnected(21).await;
+    let cleanup = provider.method_frames("state/unsubscribe").await;
+    assert_eq!(
+        cleanup
+            .iter()
+            .map(|frame| frame["params"]["input"]["subscriptionId"].clone())
+            .collect::<Vec<_>>(),
+        vec![json!(first), json!(second)]
+    );
     assert_eq!(relay.subscriptions_len().await, 0);
 }

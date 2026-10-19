@@ -111,10 +111,8 @@ pub fn from_config(config: &CapabilityConfig) -> Result<Arc<ModuleRegistry>, Cal
     let approvals = ApprovalSet::new(publish, consume);
     approvals
         .validate_contracts(&contracts)
-        .map_err(|error| invalid_config(error))?;
-    approvals
-        .validate_keys()
-        .map_err(|error| invalid_config(error))?;
+        .map_err(invalid_config)?;
+    approvals.validate_keys().map_err(invalid_config)?;
     Ok(ModuleRegistry::new(contracts, Arc::new(approvals)))
 }
 

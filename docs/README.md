@@ -4,9 +4,9 @@ conex 的文档按「规范 / 契约 / 计划 / 证据 / 操作」分层，每�
 
 ## 目标架构（2026-10-17）
 
-已确认 [目标架构](design/2026-10-17-conex-architecture.md)：协议优先、TS/JS 与 Rust 对称 SDK、插件组合、默认中心拓扑和独立 Astro 工作台。[迁移盘点](design/2026-10-17-conex-migration-assessment.md) 区分源码可复用机制、待调整边界和缺口；新架构尚未实施。下方阶段状态是现有实现的历史记录，不是新架构交付证明，旧路线图不自动成为新方向的执行顺序。
+已确认 [目标架构](design/2026-10-17-conex-architecture.md)：协议优先、TS/JS 与 Rust 对称 SDK、插件组合、默认中心拓扑和独立 Astro 工作台。[迁移盘点](design/2026-10-17-conex-migration-assessment.md) 区分源码可复用机制、待调整边界和缺口；S1 正在按切片验收，插件运行时、身份治理与 Astro 工作台尚未交付。下方历史阶段状态不自动成为新方向的执行顺序。
 
-[S1 双向能力与状态订阅契约](contracts/s1-capabilities.md) 已写为待评审设计，定义注册代次、调用取消、快照/更新顺序和跨语言验收；尚未实施，不替代现有已生效方法。
+[S1 双向能力与状态订阅契约](contracts/s1-capabilities.md) 定义注册代次、调用取消、快照/更新顺序和跨语言验收；实现状态以 [S1 验证记录](verification/s1-capabilities.md) 为准，操作见 [S1 运行手册](runbooks/s1-capabilities.md)。共同传输为 JSON WSS，HTTP 不支持订阅；静态批准仅用于受限开发，S4 完成前禁止公开多用户使用。
 
 [S1 实施计划](plans/2026-10-17-conex-s1.md) 已拆为九个文件级任务，并录入 Paca conex 项目（Epic CNX-1，S1 CNX-3，首项 CNX-7）；S2–S5 作为有验收边界的路线 Story，尚未实施。
 
@@ -27,8 +27,10 @@ conex 的文档按「规范 / 契约 / 计划 / 证据 / 操作」分层，每�
 |---|---|---|---|
 | 规范 | [目标架构](design/2026-10-17-conex-architecture.md) | 当前产品模型、组件边界、安全与切片验收 | 新方向设计与实施前必读 |
 | 盘点 | [迁移盘点](design/2026-10-17-conex-migration-assessment.md) | 静态源码证据与保留、调整、移除范围 | 制定迁移实施计划时 |
-| 契约草案 | [S1 双向能力与状态订阅](contracts/s1-capabilities.md) | 通用注册、调用、取消、状态快照与更新、限额和验收场景 | S1 schema 与代码实施前评审 |
+| 契约 | [S1 双向能力与状态订阅](contracts/s1-capabilities.md) | 通用注册、调用、取消、状态快照与更新、限额和验收场景 | S1 实施、对接与验收 |
 | 计划 | [S1 实施计划](plans/2026-10-17-conex-s1.md) | 九个任务、A01–A12 覆盖、依赖与 Paca 编号 | 从 CNX-7 开始执行 |
+| 证据 | [S1 验证记录](verification/s1-capabilities.md) | 真实命令、A01–A12 跨进程与 SUPPORT 行为证据、总门禁状态 | 验收与排障 |
+| 操作 | [S1 运行手册](runbooks/s1-capabilities.md) | TS/Rust 三进程样例、静态批准、HTTP 限制、取消和未知结果 | 本机联调与 SDK 接入 |
 | 历史设计 | [旧设计](design/2026-09-14-conex-design.md) | 现有实现的设计依据与历史阶段验收 | 追溯既有 wire 与实现决定时 |
 | 契约 | [P0 wire 契约](contracts/p0-wire.md) | `conex-jsonrpc2-http` 信封、参数、错误码、HTTP 行为 | 实现或对接 wire 时 |
 | 计划 | [路线图](plans/2026-09-15-conex-roadmap.md) | P0–P4 阶段、依赖与工作包 | 了解全局与推进顺序 |

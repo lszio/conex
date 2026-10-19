@@ -780,6 +780,38 @@ async fn queued_cancel_requests_and_never_sends() {
     );
 }
 
+/// T03 步骤 6（A05 SUPPORT）：排队期预算耗尽——请求在发出前已超预算，
+/// 结算 timeout/not_started/safe，零业务帧，路由记录不残留
+/// （契约 §7.2 “排队期间预算耗尽”一行；真实进程侧见 xtask s1_e2e A05）。
+#[tokio::test]
+async fn queued_budget_exhaustion_settles_not_started_and_never_sends() {
+    let Setup {
+        broker,
+        router,
+        registration_id,
+        provider,
+    } = setup().await;
+    let mut call = read_invoke(
+        &caller("alice"),
+        21,
+        REQ_C,
+        &registration_id,
+        LONG_BUDGET,
+        None,
+    );
+    // 请求已排队到预算耗尽才到达路由器：越过发送边界前必须拒绝。
+    call.deadline = Instant::now() - Duration::from_millis(10);
+    let error = broker.invoke(call).await.unwrap_err();
+    assert_eq!(error.code_enum(), Some(conex_proto::ErrorCode::Timeout));
+    assert_eq!(error.wire().execution, "not_started");
+    assert_eq!(error.wire().retry, "safe");
+    assert!(
+        provider.frames().await.is_empty(),
+        "expired queued budget never sends, not even control"
+    );
+    assert_eq!(router.pending_len().await, 0);
+}
+
 /// T03 步骤 5+6（A05/A06）：已发送取消转发一条独立 module/cancel 控制帧，
 /// 目标固定在原注册代次；新注册接管目录后不 redirect；原 invoke 仍由自己
 /// 的回复结算。

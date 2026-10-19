@@ -321,8 +321,25 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
         p1_provides.dedup();
     }
     if broker.is_some() {
+        // S1 nodes need no legacy endpoint installation. Bootstrap advertises
+        // protocol support for every authenticated static-token tenant;
+        // capability approvals still authorize each business operation.
+        for token in &config.tokens {
+            capabilities.entry(token.tenant_id.clone()).or_default();
+        }
         for values in capabilities.values_mut() {
-            values.extend(p1_provides.iter().cloned());
+            values.extend(
+                p1_provides
+                    .iter()
+                    .filter(|method| {
+                        !conex_proto::capability::is_s1_method(method)
+                            || matches!(
+                                method.as_str(),
+                                "module/list" | "module/invoke" | "module/cancel"
+                            )
+                    })
+                    .cloned(),
+            );
             values.sort();
             values.dedup();
         }
