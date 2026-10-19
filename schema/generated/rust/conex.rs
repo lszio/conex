@@ -25,6 +25,11 @@ pub struct Limits {
     pub max_queued_bytes: u32,
     #[prost(uint32, tag = "4")]
     pub timeout_ms: u32,
+    /// S1 订阅与注册上限（契约 §9）：必须为正整数，不能用 0 表示无限。
+    #[prost(uint32, tag = "5")]
+    pub max_subscriptions: u32,
+    #[prost(uint32, tag = "6")]
+    pub max_modules: u32,
 }
 /// 连接平面。P0 只允许 broker；relay 可识别但拒绝使用。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -581,6 +586,179 @@ impl PersistenceLevel {
             _ => None,
         }
     }
+}
+/// module/register input（§6.1）：Node→中心，原子发布一个已批准模块。
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ModuleRegisterInput {
+    #[prost(string, tag = "1")]
+    pub space_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub integration_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub provider_endpoint_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub contract_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ModuleRegisterResult {
+    #[prost(string, tag = "1")]
+    pub registration_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub provider_endpoint_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub space_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub integration_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub contract_id: ::prost::alloc::string::String,
+}
+/// module/unregister input（§6.2）：撤销当前连接拥有的精确注册。
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ModuleUnregisterInput {
+    #[prost(string, tag = "1")]
+    pub provider_endpoint_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub registration_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ModuleUnregisterResult {
+    #[prost(bool, tag = "1")]
+    pub removed: bool,
+}
+/// module/list input（§6.3）：发现当前可见模块。
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ModuleListInput {
+    #[prost(string, tag = "1")]
+    pub space_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ModuleInfo {
+    #[prost(string, tag = "1")]
+    pub provider_endpoint_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub registration_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub space_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub integration_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub contract_id: ::prost::alloc::string::String,
+    #[prost(string, repeated, tag = "6")]
+    pub methods: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    #[prost(string, repeated, tag = "7")]
+    pub states: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ModuleListResult {
+    #[prost(message, repeated, tag = "1")]
+    pub modules: ::prost::alloc::vec::Vec<ModuleInfo>,
+}
+/// module/invoke input（§7.1）：输出为契约 typed-value，由具体契约校验。
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ModuleInvokeInput {
+    #[prost(string, tag = "1")]
+    pub method: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "2")]
+    pub argument: ::core::option::Option<::pbjson_types::Value>,
+}
+/// module/cancel input（§7.3）：requestId 指原 invoke 的 JSON-RPC 请求 ID。
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ModuleCancelInput {
+    #[prost(string, tag = "1")]
+    pub request_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ModuleCancelResult {
+    #[prost(bool, tag = "1")]
+    pub requested: bool,
+}
+/// state/subscribe input（§8.1）。
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct StateSubscribeInput {
+    #[prost(string, tag = "1")]
+    pub subscription_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub state: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "3")]
+    pub argument: ::core::option::Option<::pbjson_types::Value>,
+}
+/// 完整状态采样；revision/sampledAtMs 为 uint64 十进制字符串（§8.1）。
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct StateSample {
+    #[prost(uint64, tag = "1")]
+    pub revision: u64,
+    #[prost(message, optional, tag = "2")]
+    pub value: ::core::option::Option<::pbjson_types::Value>,
+    #[prost(uint64, tag = "3")]
+    pub sampled_at_ms: u64,
+    /// "current" | "stale"（字符串避免生成大写枚举名）
+    #[prost(string, tag = "4")]
+    pub quality: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct StateSubscribeResult {
+    #[prost(string, tag = "1")]
+    pub subscription_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub registration_id: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "3")]
+    pub snapshot: ::core::option::Option<StateSample>,
+}
+/// state/unsubscribe input（§8.3）。
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct StateUnsubscribeInput {
+    #[prost(string, tag = "1")]
+    pub subscription_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct StateUnsubscribeResult {
+    #[prost(bool, tag = "1")]
+    pub removed: bool,
+}
+/// state/update 通知 input（§8.2）：seq 从 "1" 开始逐个加一。
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct StateUpdateInput {
+    #[prost(string, tag = "1")]
+    pub subscription_id: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "2")]
+    pub seq: u64,
+    #[prost(message, optional, tag = "3")]
+    pub sample: ::core::option::Option<StateSample>,
+}
+/// state/end 通知 input（§8.3）：error 是生成类型 Error 的 JSON 表示
+/// （code 为枚举名，如 ERROR_CODE_SLOW_CONSUMER），不是 JSON-RPC Failure 的
+/// 数值 code + data 形状。订阅终止必须显式携带 execution="completed"；
+/// forbidden 的 retry="never"，其余允许的终止原因 retry="safe"。
+/// 严格 JSON Schema 所要求的标量字段由边界编码器显式写出（包括空诊断字符串）。
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct StateEndInput {
+    #[prost(string, tag = "1")]
+    pub subscription_id: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "2")]
+    pub error: ::core::option::Option<Error>,
+}
+/// counter/read 的 argument 必须为空对象 {}。
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CounterReadInput {}
+/// counter/add 的 argument；delta 为 int32，溢出前返回 bad_request。
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CounterAddInput {
+    #[prost(int32, tag = "1")]
+    pub delta: i32,
+}
+/// counter/read 与 counter/add 的成功结果。
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CounterResult {
+    #[prost(int32, tag = "1")]
+    pub count: i32,
+    #[prost(uint64, tag = "2")]
+    pub revision: u64,
+}
+/// 状态源 counter/value 的 sample.value。
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CounterStateValue {
+    #[prost(int32, tag = "1")]
+    pub count: i32,
 }
 /// Connection panel messages (L10). Real-time view of every browser link and
 /// every reverse-connected agent link on the host. Only ui role callers can
@@ -1149,6 +1327,12 @@ pub struct RequestContext {
     pub principal_id: ::prost::alloc::string::String,
     #[prost(string, tag = "5")]
     pub tenant_id: ::prost::alloc::string::String,
+    /// S1 模块上下文（契约 §5.2）：调用/订阅目标所在 Space 与注册实例。
+    /// 客户端不得自行填充 principal/tenant，但必须携带这两个标识。
+    #[prost(string, tag = "6")]
+    pub space_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "7")]
+    pub registration_id: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Success {

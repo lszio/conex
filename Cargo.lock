@@ -534,6 +534,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "conex-sdk"
+version = "0.1.0"
+dependencies = [
+ "conex-proto",
+ "futures",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite 0.30.0",
+]
+
+[[package]]
 name = "conex-source"
 version = "0.1.0"
 dependencies = [

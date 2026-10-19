@@ -67,7 +67,15 @@ export interface RequestContext {
    * frames that carry no user identity.
    */
   principalId?: string | undefined;
-  tenantId?: string | undefined;
+  tenantId?:
+    | string
+    | undefined;
+  /**
+   * S1 模块上下文（契约 §5.2）：调用/订阅目标所在 Space 与注册实例。
+   * 客户端不得自行填充 principal/tenant，但必须携带这两个标识。
+   */
+  spaceId?: string | undefined;
+  registrationId?: string | undefined;
 }
 
 export interface Success {
@@ -568,7 +576,15 @@ export const CallParams: MessageFns<CallParams> = {
 };
 
 function createBaseRequestContext(): RequestContext {
-  return { providerEndpointId: "", plane: 0, bindingId: undefined, principalId: "", tenantId: "" };
+  return {
+    providerEndpointId: "",
+    plane: 0,
+    bindingId: undefined,
+    principalId: "",
+    tenantId: "",
+    spaceId: "",
+    registrationId: "",
+  };
 }
 
 export const RequestContext: MessageFns<RequestContext> = {
@@ -587,6 +603,12 @@ export const RequestContext: MessageFns<RequestContext> = {
     }
     if (message.tenantId !== undefined && message.tenantId !== "") {
       writer.uint32(42).string(message.tenantId);
+    }
+    if (message.spaceId !== undefined && message.spaceId !== "") {
+      writer.uint32(50).string(message.spaceId);
+    }
+    if (message.registrationId !== undefined && message.registrationId !== "") {
+      writer.uint32(58).string(message.registrationId);
     }
     return writer;
   },
@@ -644,6 +666,22 @@ export const RequestContext: MessageFns<RequestContext> = {
             message.tenantId = reader.string();
             continue;
           }
+          case 6: {
+            if (tag !== 50) {
+              break;
+            }
+
+            message.spaceId = reader.string();
+            continue;
+          }
+          case 7: {
+            if (tag !== 58) {
+              break;
+            }
+
+            message.registrationId = reader.string();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -679,6 +717,16 @@ export const RequestContext: MessageFns<RequestContext> = {
         : isSet(object.tenant_id)
         ? globalThis.String(object.tenant_id)
         : "",
+      spaceId: isSet(object.spaceId)
+        ? globalThis.String(object.spaceId)
+        : isSet(object.space_id)
+        ? globalThis.String(object.space_id)
+        : "",
+      registrationId: isSet(object.registrationId)
+        ? globalThis.String(object.registrationId)
+        : isSet(object.registration_id)
+        ? globalThis.String(object.registration_id)
+        : "",
     };
   },
 
@@ -699,6 +747,12 @@ export const RequestContext: MessageFns<RequestContext> = {
     if (message.tenantId !== undefined && message.tenantId !== "") {
       obj.tenantId = message.tenantId;
     }
+    if (message.spaceId !== undefined && message.spaceId !== "") {
+      obj.spaceId = message.spaceId;
+    }
+    if (message.registrationId !== undefined && message.registrationId !== "") {
+      obj.registrationId = message.registrationId;
+    }
     return obj;
   },
 
@@ -712,6 +766,8 @@ export const RequestContext: MessageFns<RequestContext> = {
     message.bindingId = object.bindingId ?? undefined;
     message.principalId = object.principalId ?? "";
     message.tenantId = object.tenantId ?? "";
+    message.spaceId = object.spaceId ?? "";
+    message.registrationId = object.registrationId ?? "";
     return message;
   },
 };

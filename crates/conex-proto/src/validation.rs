@@ -16,6 +16,21 @@ pub fn validate(schema: &Value, instance: &Value) -> Result<(), String> {
     let defs = schema.get("$defs").cloned().unwrap_or(Value::Null);
     let mut errors = Vec::new();
     validate_node(schema, instance, &defs, "$", &mut errors);
+    finish(errors)
+}
+
+/// Validate `instance` against the message named by `message` inside a shared
+/// `$defs` table. Generated S1 schema documents embed the *same* full table
+/// and differ only in the root `$ref`, so the S1 boundary resolves the target
+/// message directly instead of embedding one document per message.
+pub fn validate_against(defs: &Value, message: &str, instance: &Value) -> Result<(), String> {
+    let root = serde_json::json!({ "$ref": format!("#/$defs/{message}") });
+    let mut errors = Vec::new();
+    validate_node(&root, instance, defs, "$", &mut errors);
+    finish(errors)
+}
+
+fn finish(errors: Vec<String>) -> Result<(), String> {
     if errors.is_empty() {
         Ok(())
     } else {
@@ -86,14 +101,16 @@ fn validate_node(
             }
         }
     }
-    if let Some(n) = instance.as_i64() {
-        if let Some(min) = obj.get("minimum").and_then(Value::as_i64) {
+    // protobuf.Value carries numbers as f64, including integral int32 inputs.
+    // Generated numeric bounds are int32/u32 and exactly representable as f64.
+    if let Some(n) = instance.as_f64() {
+        if let Some(min) = obj.get("minimum").and_then(Value::as_f64) {
             if n < min {
                 errors.push(format!("{path}: below minimum"));
                 ok = false;
             }
         }
-        if let Some(max) = obj.get("maximum").and_then(Value::as_i64) {
+        if let Some(max) = obj.get("maximum").and_then(Value::as_f64) {
             if n > max {
                 errors.push(format!("{path}: above maximum"));
                 ok = false;
@@ -185,7 +202,9 @@ fn type_matches(t: &Value, v: &Value) -> bool {
             "object" => v.is_object(),
             "array" => v.is_array(),
             "string" => v.is_string(),
-            "integer" => v.is_i64() || v.is_u64(),
+            "integer" => v
+                .as_f64()
+                .is_some_and(|n| n.is_finite() && n.fract() == 0.0),
             "number" => v.is_number(),
             "boolean" => v.is_boolean(),
             "null" => v.is_null(),

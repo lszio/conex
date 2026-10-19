@@ -132,6 +132,7 @@ fn config(temp: &tempfile::TempDir) -> HostConfig {
         oidc: None,
         web_guest: None,
         share: None,
+        capabilities: None,
     }
 }
 
@@ -147,7 +148,7 @@ async fn link(
     let (tx, rx) = mpsc::channel(8);
     let pending = Arc::new(PendingRequests::new(generation));
     let queue = Arc::new(AtomicUsize::new(0));
-    let remote = RemoteLink::new(generation, tx, queue, pending.clone(), 1_048_576);
+    let remote = RemoteLink::new(generation, tx, queue, pending.clone(), 1_048_576, 262_144);
     let side = built.host_side.as_ref().expect("p1 side");
     side.connections.stage(agent, generation, remote).await;
     // The test config pairs each agent (agent-a/agent-b) with its same-named

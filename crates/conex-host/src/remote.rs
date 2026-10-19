@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use axum::extract::ws::Message;
 use conex_core::{CallContext, CallError, CallResult, ExecutionIo, Handler, Installation, Route};
 use conex_proto;
+use conex_proto::wire::encode_wire;
 use serde_json::Value;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
@@ -25,6 +26,10 @@ pub struct RemoteLink {
     queued_bytes: Arc<AtomicUsize>,
     pending: Arc<PendingRequests>,
     max_queued: usize,
+    /// 协商的帧上限；S1 状态数据水位 = max_queued - max_frame（契约 §9：
+    /// maxQueuedBytes 中预留 maxFrameBytes 作为有界控制空间，数据不能
+    /// 消耗保留空间）。
+    max_frame: usize,
     ready: Arc<AtomicBool>,
     close: Option<UnboundedSender<()>>,
 }
@@ -36,8 +41,17 @@ impl RemoteLink {
         queued_bytes: Arc<AtomicUsize>,
         pending: Arc<PendingRequests>,
         max_queued: usize,
+        max_frame: usize,
     ) -> Self {
-        Self::with_close(generation, tx, queued_bytes, pending, max_queued, None)
+        Self::with_close(
+            generation,
+            tx,
+            queued_bytes,
+            pending,
+            max_queued,
+            max_frame,
+            None,
+        )
     }
 
     pub fn with_close(
@@ -46,6 +60,7 @@ impl RemoteLink {
         queued_bytes: Arc<AtomicUsize>,
         pending: Arc<PendingRequests>,
         max_queued: usize,
+        max_frame: usize,
         close: Option<UnboundedSender<()>>,
     ) -> Self {
         Self {
@@ -54,12 +69,13 @@ impl RemoteLink {
             queued_bytes,
             pending,
             max_queued,
+            max_frame,
             ready: Arc::new(AtomicBool::new(false)),
             close,
         }
     }
 
-    fn close(&self) {
+    pub fn close(&self) {
         if let Some(close) = &self.close {
             let _ = close.send(());
         }
@@ -105,6 +121,8 @@ impl RemoteLink {
                         // bind snapshot cursors per principal (plan M2).
                         principal_id: caller.principal_id.clone(),
                         tenant_id: caller.tenant_id.clone(),
+                        space_id: String::new(),
+                        registration_id: String::new(),
                     }),
                     timeout_budget_ms: deadline
                         .saturating_duration_since(Instant::now())
@@ -181,6 +199,8 @@ impl RemoteLink {
                         binding_id: None,
                         principal_id: caller.principal_id.clone(),
                         tenant_id: caller.tenant_id.clone(),
+                        space_id: String::new(),
+                        registration_id: String::new(),
                     }),
                     timeout_budget_ms: deadline
                         .saturating_duration_since(Instant::now())
@@ -219,6 +239,127 @@ impl RemoteLink {
                 Err(timeout())
             }
         }
+    }
+
+    /// S1 转发准备（T03）：在提供端链上注册每跳转发 ID 的回复通道。返回
+    /// 的 oneshot 由调用路由消费；调用方随后调用 [`RemoteLink::send_s1_frame`]
+    /// 实际发送，并在发送前复查取消语义（排队取消不执行）。
+    pub async fn register_s1_hop(
+        &self,
+        hop_id: &str,
+    ) -> CallResult<tokio::sync::oneshot::Receiver<CallResult<crate::ws_transport::AgentReply>>>
+    {
+        self.pending.register(hop_id).await
+    }
+
+    /// S1 转发发送（T03）：同步入队中心盖章的 JSON 文本请求帧（两个 SDK
+    /// 都用 `conex-jsonrpc2-wss` 文本信封；与遗留 M2 的 protobuf 二进制
+    /// 路径无关）。入队失败返回错误且未发送——调用方决定 hop 清理。
+    #[allow(clippy::too_many_arguments)]
+    pub fn send_s1_frame(
+        &self,
+        hop_id: &str,
+        context: conex_proto::RequestContext,
+        method: &str,
+        input: Value,
+        timeout_budget_ms: u32,
+    ) -> CallResult<()> {
+        let message = conex_proto::Message {
+            body: Some(conex_proto::message::Body::Request(conex_proto::Request {
+                request_id: hop_id.to_owned(),
+                method: method.to_owned(),
+                params: Some(conex_proto::CallParams {
+                    context: Some(context),
+                    timeout_budget_ms,
+                    input: Some(
+                        serde_json::from_value(input)
+                            .map_err(|_| bad("s1 forwarded input cannot be encoded"))?,
+                    ),
+                }),
+            })),
+        };
+        let bytes = encode_wire(&message)
+            .map_err(|error| CallError::new(conex_proto::ErrorCode::BadRequest, error.message))?;
+        let text = String::from_utf8_lossy(&bytes).into_owned();
+        if !enqueue_message(
+            &self.tx,
+            &self.queued_bytes,
+            self.max_queued,
+            Message::Text(text.into()),
+        ) {
+            return Err(CallError::new(
+                conex_proto::ErrorCode::QuotaExceeded,
+                "remote provider queue is full",
+            ));
+        }
+        Ok(())
+    }
+
+    /// S1 尽力取消/控制帧（T03）：不注册回复通道（回复被中心丢弃），
+    /// 队列满或链路失效时静默失败——取消只是尽力而为，原 invoke 的结果
+    /// 由原 hop 的回复结算。
+    pub async fn send_s1_control(&self, message: conex_proto::Message) {
+        let Ok(bytes) = encode_wire(&message) else {
+            return;
+        };
+        let text = String::from_utf8_lossy(&bytes).into_owned();
+        let _ = enqueue_message(
+            &self.tx,
+            &self.queued_bytes,
+            self.max_queued,
+            Message::Text(text.into()),
+        );
+    }
+
+    /// 移除一个转发 hop 的回复通道（超时/清理时调用）；迟到回复被丢弃。
+    pub async fn cancel_hop(&self, hop_id: &str) {
+        self.pending.cancel(self.generation, hop_id).await;
+    }
+
+    /// S1 状态数据水位（契约 §9）：数据帧只能占用 max_queued - max_frame，
+    /// 控制预留空间不可被数据消耗。
+    pub fn state_data_watermark(&self) -> usize {
+        self.max_queued.saturating_sub(self.max_frame)
+    }
+
+    /// 当前 socket 队列积压字节（含控制预留区），用于 opening 缓冲计入
+    /// maxQueuedBytes 的预算判断。
+    pub fn queued_bytes(&self) -> usize {
+        self.queued_bytes.load(Ordering::Acquire)
+    }
+
+    pub fn max_frame(&self) -> usize {
+        self.max_frame
+    }
+
+    /// 编码一个 S1 状态数据帧（update/快照）并入队；只允许占用水位
+    /// max_queued - max_frame，返回是否成功（失败 = 数据空间已满）。
+    pub fn send_s1_state_data(&self, message: &conex_proto::Message) -> bool {
+        let Ok(bytes) = encode_wire(message) else {
+            return false;
+        };
+        let text = String::from_utf8_lossy(&bytes).into_owned();
+        enqueue_message(
+            &self.tx,
+            &self.queued_bytes,
+            self.state_data_watermark(),
+            Message::Text(text.into()),
+        )
+    }
+
+    /// 编码一个 S1 状态控制帧（state/end）并入队；可占用完整 max_queued
+    /// （含控制预留），控制空间仍共享总上限，返回是否成功。
+    pub fn send_s1_state_control(&self, message: &conex_proto::Message) -> bool {
+        let Ok(bytes) = encode_wire(message) else {
+            return false;
+        };
+        let text = String::from_utf8_lossy(&bytes).into_owned();
+        enqueue_message(
+            &self.tx,
+            &self.queued_bytes,
+            self.max_queued,
+            Message::Text(text.into()),
+        )
     }
 }
 

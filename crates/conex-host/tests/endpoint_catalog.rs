@@ -114,6 +114,7 @@ fn config(dir: &TempDir) -> HostConfig {
         host_origin: Some("conex://broker.local".into()),
         oidc: None,
         web_guest: None,
+        capabilities: None,
     }
 }
 
@@ -199,6 +200,12 @@ async fn broker_endpoint_list_strictly_decodes_input_and_hides_other_principals(
         deadline: Instant::now() + Duration::from_secs(1),
         role: "service".into(),
         link_id: None,
+        generation: 0,
+        max_frame_bytes: conex_core::Limits::default().max_frame_bytes,
+        request_id: String::new(),
+        binding_id: None,
+        space_id: String::new(),
+        registration_id: String::new(),
     };
     let result = broker.invoke(base()).await.unwrap();
     let result: conex_proto::EndpointListResult = serde_json::from_value(result).unwrap();
@@ -229,6 +236,7 @@ async fn catalog_reflects_remote_ready_state() {
         Arc::new(AtomicUsize::new(0)),
         Arc::new(conex_host::ws_transport::PendingRequests::new(7)),
         1024,
+        512,
     );
     side.stage_connection("agent-a", link).await;
     side.activate_connection("agent-a", 7, &["notes-remote".to_string()])
@@ -279,6 +287,12 @@ async fn connection_list_isolates_guest_visitors_and_hides_agent_links() {
         deadline: Instant::now() + Duration::from_secs(1),
         role: "ui".into(),
         link_id: Some(link_id),
+        generation: 0,
+        max_frame_bytes: conex_core::Limits::default().max_frame_bytes,
+        request_id: String::new(),
+        binding_id: None,
+        space_id: String::new(),
+        registration_id: String::new(),
     };
 
     let result = broker

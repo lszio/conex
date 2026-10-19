@@ -11,6 +11,7 @@ members = [
     "crates/conex-content",
     "xtask",
     "crates/conex-agent",
+    "crates/conex-sdk",
 ]
 
 [workspace.package]
@@ -22,6 +23,7 @@ repository = "https://github.com/lszio/conex"
 
 [workspace.dependencies]
 conex-proto = { path = "crates/conex-proto", version = "0.1.0" }
+conex-sdk = { path = "crates/conex-sdk", version = "0.1.0" }
 conex-core = { path = "crates/conex-core", version = "0.1.0" }
 conex-source = { path = "crates/conex-source", version = "0.1.0" }
 conex-provider-fs = { path = "crates/conex-provider-fs", version = "0.1.0" }

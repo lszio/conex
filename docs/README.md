@@ -2,6 +2,14 @@
 
 conex 的文档按「规范 / 契约 / 计划 / 证据 / 操作」分层，每类只有一个权威来源。本页是入口；根 [README](../README.md) 是项目门面：项目介绍、三条上手路径、架构、性能参考、开发门禁与贡献约定。
 
+## 目标架构（2026-10-17）
+
+已确认 [目标架构](design/2026-10-17-conex-architecture.md)：协议优先、TS/JS 与 Rust 对称 SDK、插件组合、默认中心拓扑和独立 Astro 工作台。[迁移盘点](design/2026-10-17-conex-migration-assessment.md) 区分源码可复用机制、待调整边界和缺口；新架构尚未实施。下方阶段状态是现有实现的历史记录，不是新架构交付证明，旧路线图不自动成为新方向的执行顺序。
+
+[S1 双向能力与状态订阅契约](contracts/s1-capabilities.md) 已写为待评审设计，定义注册代次、调用取消、快照/更新顺序和跨语言验收；尚未实施，不替代现有已生效方法。
+
+[S1 实施计划](plans/2026-10-17-conex-s1.md) 已拆为九个文件级任务，并录入 Paca conex 项目（Epic CNX-1，S1 CNX-3，首项 CNX-7）；S2–S5 作为有验收边界的路线 Story，尚未实施。
+
 ## 状态（2026-10-04 复核）
 
 - **P0 已交付**（提交 `e649ded`）：broker 只读数据连接，JSON-RPC/HTTP 与 inproc 共用同一授权执行路径；fs 与 HTTP catalog 两个 provider；TypeScript consumer；P0 门禁与 CI。
@@ -17,7 +25,11 @@ conex 的文档按「规范 / 契约 / 计划 / 证据 / 操作」分层，每�
 
 | 类别 | 文档 | 作用 | 何时读 |
 |---|---|---|---|
-| 规范 | [设计 v6](design/2026-09-14-conex-design.md) | 唯一权威设计与分阶段验收 | 改契约、加能力前必读 |
+| 规范 | [目标架构](design/2026-10-17-conex-architecture.md) | 当前产品模型、组件边界、安全与切片验收 | 新方向设计与实施前必读 |
+| 盘点 | [迁移盘点](design/2026-10-17-conex-migration-assessment.md) | 静态源码证据与保留、调整、移除范围 | 制定迁移实施计划时 |
+| 契约草案 | [S1 双向能力与状态订阅](contracts/s1-capabilities.md) | 通用注册、调用、取消、状态快照与更新、限额和验收场景 | S1 schema 与代码实施前评审 |
+| 计划 | [S1 实施计划](plans/2026-10-17-conex-s1.md) | 九个任务、A01–A12 覆盖、依赖与 Paca 编号 | 从 CNX-7 开始执行 |
+| 历史设计 | [旧设计](design/2026-09-14-conex-design.md) | 现有实现的设计依据与历史阶段验收 | 追溯既有 wire 与实现决定时 |
 | 契约 | [P0 wire 契约](contracts/p0-wire.md) | `conex-jsonrpc2-http` 信封、参数、错误码、HTTP 行为 | 实现或对接 wire 时 |
 | 计划 | [路线图](plans/2026-09-15-conex-roadmap.md) | P0–P4 阶段、依赖与工作包 | 了解全局与推进顺序 |
 | 计划 | [P1 执行计划](plans/2026-09-15-conex-p1.md) | 下一步：P1 范围、P1-01 细化、里程碑 | 开始下一步工作 |
@@ -36,9 +48,9 @@ conex 的文档按「规范 / 契约 / 计划 / 证据 / 操作」分层，每�
 
 ## 阅读顺序
 
-1. **了解项目**：根 [README](../README.md) → 本页 → 设计 §0–§2 → 运行手册。
-2. **上手实现**：设计 §4–§8 → [P0 wire 契约](contracts/p0-wire.md) → 对应阶段计划。
-3. **验收与审计**：阶段验证记录 → 设计 §14 对应阶段验收项。
+1. **了解新方向**：根 [README](../README.md) → [目标架构](design/2026-10-17-conex-architecture.md) → [迁移盘点](design/2026-10-17-conex-migration-assessment.md)。
+2. **维护现有实现**：对应 wire 契约 → [旧设计](design/2026-09-14-conex-design.md) → 运行手册；迁移前不把新目标当作已生效 wire。
+3. **验收与审计**：对应阶段验证记录 → 目标架构的切片验收；静态盘点不替代运行证据。
 
 ## 文档规则
 

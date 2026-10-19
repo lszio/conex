@@ -88,6 +88,81 @@ pub struct HostConfig {
     /// Absent (`None`) keeps the host closed to anonymous visitors.
     #[serde(default)]
     pub web_guest: Option<WebGuestConfig>,
+    /// S1 预安装契约与静态批准（docs/contracts/s1-capabilities.md §4）。
+    /// 配置装载时校验：批准必须引用已安装契约，模块键全局唯一；未知即拒绝。
+    /// 仅在 P1 后端（content/session/operation root）就绪时生效。
+    #[serde(default)]
+    pub capabilities: Option<CapabilityConfig>,
+}
+
+/// S1 静态批准与预安装契约（docs/plans/2026-10-17-conex-s1.md T02）。
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CapabilityConfig {
+    /// 随软件安装的契约描述（安装期数据，不是运行时上传）。
+    #[serde(default)]
+    pub contracts: Vec<ContractConfig>,
+    /// Node 可发布的精确 `(spaceId, integrationId, providerEndpointId,
+    /// contractId)` 元组；未声明即拒绝（默认 deny）。
+    #[serde(default)]
+    pub publish: Vec<PublishApprovalConfig>,
+    /// Principal 可发现/调用/订阅的目标与契约成员；缺省表示整个契约。
+    #[serde(default)]
+    pub consume: Vec<ConsumeApprovalConfig>,
+}
+
+/// 预安装契约描述（§4、§6.1）：typed 方法与状态源。
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ContractConfig {
+    pub contract_id: String,
+    #[serde(default)]
+    pub methods: Vec<MethodConfig>,
+    #[serde(default)]
+    pub states: Vec<StateConfig>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MethodConfig {
+    pub name: String,
+    pub input_schema: String,
+    pub output_schema: String,
+    pub action: String,
+    /// 只接受 `read_only` 与 `non_replayable`；其他执行类别在装载时显式
+    /// 拒绝，不允许悄悄降级成 read_only。
+    pub execution: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StateConfig {
+    pub name: String,
+    pub value_schema: String,
+    pub action: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PublishApprovalConfig {
+    pub node_id: String,
+    pub space_id: String,
+    pub integration_id: String,
+    pub provider_endpoint_id: String,
+    pub contract_id: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ConsumeApprovalConfig {
+    pub principal_id: String,
+    pub space_id: String,
+    pub provider_endpoint_id: String,
+    pub contract_id: String,
+    #[serde(default)]
+    pub methods: Option<Vec<String>>,
+    #[serde(default)]
+    pub states: Option<Vec<String>>,
 }
 
 /// Anonymous visitor policy. Quotas here are independent of the per-principal

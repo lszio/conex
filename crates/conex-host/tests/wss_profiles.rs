@@ -311,6 +311,8 @@ async fn wss_protobuf_profile_round_trip() {
             binding_id: None,
             principal_id: String::new(),
             tenant_id: String::new(),
+            space_id: String::new(),
+            registration_id: String::new(),
         }),
         timeout_budget_ms: 8000,
         input: Some(fields.into()),

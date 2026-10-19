@@ -9,6 +9,8 @@
 #![forbid(unsafe_code)]
 
 #[cfg(has_conex)]
+pub mod capability;
+#[cfg(has_conex)]
 pub mod cid;
 pub mod validation;
 #[cfg(has_conex)]

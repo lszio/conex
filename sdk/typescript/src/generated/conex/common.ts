@@ -227,7 +227,12 @@ export interface Limits {
   maxFrameBytes?: number | undefined;
   maxInflight?: number | undefined;
   maxQueuedBytes?: number | undefined;
-  timeoutMs?: number | undefined;
+  timeoutMs?:
+    | number
+    | undefined;
+  /** S1 订阅与注册上限（契约 §9）：必须为正整数，不能用 0 表示无限。 */
+  maxSubscriptions?: number | undefined;
+  maxModules?: number | undefined;
 }
 
 function createBaseError(): Error {
@@ -384,7 +389,7 @@ export const Error: MessageFns<Error> = {
 };
 
 function createBaseLimits(): Limits {
-  return { maxFrameBytes: 0, maxInflight: 0, maxQueuedBytes: 0, timeoutMs: 0 };
+  return { maxFrameBytes: 0, maxInflight: 0, maxQueuedBytes: 0, timeoutMs: 0, maxSubscriptions: 0, maxModules: 0 };
 }
 
 export const Limits: MessageFns<Limits> = {
@@ -400,6 +405,12 @@ export const Limits: MessageFns<Limits> = {
     }
     if (message.timeoutMs !== undefined && message.timeoutMs !== 0) {
       writer.uint32(32).uint32(message.timeoutMs);
+    }
+    if (message.maxSubscriptions !== undefined && message.maxSubscriptions !== 0) {
+      writer.uint32(40).uint32(message.maxSubscriptions);
+    }
+    if (message.maxModules !== undefined && message.maxModules !== 0) {
+      writer.uint32(48).uint32(message.maxModules);
     }
     return writer;
   },
@@ -449,6 +460,22 @@ export const Limits: MessageFns<Limits> = {
             message.timeoutMs = reader.uint32();
             continue;
           }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.maxSubscriptions = reader.uint32();
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.maxModules = reader.uint32();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -483,6 +510,16 @@ export const Limits: MessageFns<Limits> = {
         : isSet(object.timeout_ms)
         ? globalThis.Number(object.timeout_ms)
         : 0,
+      maxSubscriptions: isSet(object.maxSubscriptions)
+        ? globalThis.Number(object.maxSubscriptions)
+        : isSet(object.max_subscriptions)
+        ? globalThis.Number(object.max_subscriptions)
+        : 0,
+      maxModules: isSet(object.maxModules)
+        ? globalThis.Number(object.maxModules)
+        : isSet(object.max_modules)
+        ? globalThis.Number(object.max_modules)
+        : 0,
     };
   },
 
@@ -500,6 +537,12 @@ export const Limits: MessageFns<Limits> = {
     if (message.timeoutMs !== undefined && message.timeoutMs !== 0) {
       obj.timeoutMs = Math.round(message.timeoutMs);
     }
+    if (message.maxSubscriptions !== undefined && message.maxSubscriptions !== 0) {
+      obj.maxSubscriptions = Math.round(message.maxSubscriptions);
+    }
+    if (message.maxModules !== undefined && message.maxModules !== 0) {
+      obj.maxModules = Math.round(message.maxModules);
+    }
     return obj;
   },
 
@@ -512,6 +555,8 @@ export const Limits: MessageFns<Limits> = {
     message.maxInflight = object.maxInflight ?? 0;
     message.maxQueuedBytes = object.maxQueuedBytes ?? 0;
     message.timeoutMs = object.timeoutMs ?? 0;
+    message.maxSubscriptions = object.maxSubscriptions ?? 0;
+    message.maxModules = object.maxModules ?? 0;
     return message;
   },
 };

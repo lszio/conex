@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package conex;
+
+// conex.counter 领域契约（docs/contracts/s1-capabilities.md §10）：
+// TS 与 Rust 两个独立进程内计数器模块共享同一预安装契约。
+// T01 仅定义结构类型；计数器运行时由后续任务实现。
+//
+// counter/read 与 counter/add 的结果包含 count:int32 与
+// revision:uint64（JSON 十进制字符串）；状态源 counter/value 的
+// sample.value 为 CounterStateValue。
+
+// counter/read 的 argument 必须为空对象 {}。
+message CounterReadInput {}
+
+// counter/add 的 argument；delta 为 int32，溢出前返回 bad_request。
+message CounterAddInput {
+  int32 delta = 1;
+}
+
+// counter/read 与 counter/add 的成功结果。
+message CounterResult {
+  int32 count = 1;
+  uint64 revision = 2;
+}
+
+// 状态源 counter/value 的 sample.value。
+message CounterStateValue {
+  int32 count = 1;
+}

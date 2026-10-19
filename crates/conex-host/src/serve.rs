@@ -256,6 +256,29 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
     // One client registry per process: the broker lists and addresses, the
     // WSS loop registers writers and reads pongs, both hold the same Arc.
     let clients = Arc::new(crate::clients::ClientRegistry::new());
+    // S1 static approvals validate at config load against the preinstalled
+    // contract registry; unknown/undeclared approvals are denied. The broker
+    // (and thus module dispatch) only exists with P1 backends, so a
+    // capabilities table without them is a config error instead of a dead
+    // section.
+    let capability_registry = match config.capabilities.as_ref() {
+        Some(cap) if p1_active => Some(crate::capability::from_config(cap)?),
+        Some(_) => {
+            return Err(invalid(
+                "capabilities require content_root/session_root/operation_root",
+            ));
+        }
+        None => None,
+    };
+    // S1 调用路由（T03）：与注册表共享同一授权/契约实例；提供端链由每个
+    // WSS 连接在建立/断开时登记（ws_transport）。
+    let call_router = capability_registry
+        .as_ref()
+        .map(|registry| crate::capability::CallRouter::new(registry.clone()));
+    // S1 状态中继（T04）：订阅表/交付链同样按连接登记（ws_transport）。
+    let state_relay = capability_registry
+        .as_ref()
+        .map(|registry| crate::capability::StateRelay::new(registry.clone()));
     let broker = if p1_active {
         let deps = BrokerDeps {
             content: content_store.clone(),
@@ -270,17 +293,33 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
                 .map(|guest| guest.principal_id.clone()),
             clients: Some(clients.clone()),
             remote: host_side.as_ref().map(|side| side.connections.clone()),
+            capabilities: capability_registry.clone(),
+            calls: call_router.clone(),
+            state: state_relay.clone(),
         };
         Some(Arc::new(Broker::new(host.clone(), deps)))
     } else {
         None
     };
 
-    let p1_provides: Vec<String> = if broker.is_some() {
+    let mut p1_provides: Vec<String> = if broker.is_some() {
         P1_PROVIDES.iter().map(|s| s.to_string()).collect()
     } else {
         Vec::new()
     };
+    // S1 SDK 协商要求中心在 hello.provides 中声明全部七个 S1 请求方法
+    // （docs/contracts/s1-capabilities.md §4.2）；只有配置了能力注册表才
+    // 声明，避免对没有 S1 的主机撒谎。
+    if capability_registry.is_some() {
+        p1_provides.extend(
+            conex_proto::capability::S1_METHODS
+                .iter()
+                .filter(|method| conex_proto::capability::is_s1_request(method))
+                .map(|method| method.to_string()),
+        );
+        p1_provides.sort();
+        p1_provides.dedup();
+    }
     if broker.is_some() {
         for values in capabilities.values_mut() {
             values.extend(p1_provides.iter().cloned());
@@ -288,7 +327,6 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
             values.dedup();
         }
     }
-
     let bindings = Arc::new(BindingStore::new(
         PROFILE_ID,
         config.audience(),

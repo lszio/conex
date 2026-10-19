@@ -147,6 +147,15 @@ async fn rpc(
         Ok(message) => message,
         Err(error) => return protocol_error(&error),
     };
+    // S1 HTTP 语义（T03）：与方法表形状（请求形态/预算/context/客户端身份
+    // 禁令）先于业务执行；HTTP 只接受 directory/invoke/cancel，register 与
+    // state/* 在进入业务前显式拒绝（unsupported_capability），不建假订阅。
+    if let Err(error) =
+        conex_proto::capability::validate_frame(&message, conex_proto::capability::Boundary::Client)
+            .and_then(|()| conex_proto::capability::validate_http_frame(&message))
+    {
+        return protocol_error(&error);
+    }
     match message.body {
         Some(conex_proto::message::Body::Notification(notification)) => {
             handle_notification(&state, &inbound, notification).await;
@@ -267,6 +276,16 @@ async fn handle_request(
             deadline: tokio::time::Instant::now() + timeout,
             role: inbound.role.clone(),
             link_id: None,
+            // HTTP 无连接代次（S1 注册不走 HTTP）；帧上限取服务端默认，
+            // T03 接入 HTTP 目录/调用时按 binding 协商覆盖。
+            generation: 0,
+            max_frame_bytes: conex_core::Limits::default().max_frame_bytes,
+            // T03：源关联 = bindingId + 本帧 requestId（binding 归属已在
+            // 上面校验）；调用目标复制自 context，只作定位。
+            request_id: request.request_id.clone(),
+            binding_id: Some(binding_id.clone()),
+            space_id: context.space_id.clone(),
+            registration_id: context.registration_id.clone(),
         };
         return match broker.invoke(call).await {
             Ok(value) => success(&request_id, value),
@@ -296,6 +315,11 @@ fn is_p1_method(method: &str) -> bool {
         || method.starts_with("session/")
         || method.starts_with("operation/")
         || method.starts_with("agent/")
+        // S1（T03）：HTTP 支持 module/list|invoke|cancel；register/unregister
+        // 与 state/* 由上述 wire 门拒绝，未拒绝的 S1 方法经 broker 返回
+        // 显式 unsupported_capability，不落回 P0 host。
+        || method.starts_with("module/")
+        || method.starts_with("state/")
 }
 
 async fn handle_notification(
@@ -472,5 +496,8 @@ pub fn wire_limits(limits: Limits) -> conex_proto::Limits {
         max_inflight: limits.max_inflight,
         max_queued_bytes: limits.max_queued_bytes,
         timeout_ms: limits.timeout_ms,
+        // S1 订阅/注册上限由 T02+ 的配置装载填实际值；0 = 尚未协商 S1 能力。
+        max_subscriptions: 0,
+        max_modules: 0,
     }
 }

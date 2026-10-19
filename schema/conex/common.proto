@@ -54,4 +54,7 @@ message Limits {
   uint32 max_inflight = 2;
   uint32 max_queued_bytes = 3;
   uint32 timeout_ms = 4;
+  // S1 订阅与注册上限（契约 §9）：必须为正整数，不能用 0 表示无限。
+  uint32 max_subscriptions = 5;
+  uint32 max_modules = 6;
 }

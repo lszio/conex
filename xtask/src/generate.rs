@@ -97,6 +97,11 @@ fn generate(root: &Path, schema_dir: &Path, ts_dir: &Path, protos: &[PathBuf]) -
 
     schema::build(&bytes, &schema_dir.join("jsonschema"))?;
     generate_ts(root, ts_dir, &includes, protos)?;
+    // Ship the same descriptor-derived schema with the browser SDK; no parallel field catalogue.
+    fs::copy(
+        schema_dir.join("jsonschema/conex.ModuleRegisterInput.schema.json"),
+        ts_dir.join("schema.json"),
+    )?;
     Ok(())
 }
 

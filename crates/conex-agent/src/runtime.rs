@@ -295,6 +295,8 @@ fn control_request(method: &str, input: Value, request_id: &str) -> conex_proto:
                     binding_id: None,
                     principal_id: String::new(),
                     tenant_id: String::new(),
+                    space_id: String::new(),
+                    registration_id: String::new(),
                 }),
                 timeout_budget_ms: 8_000,
                 input: Some(serde_json::from_value(input).unwrap_or_default()),

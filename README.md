@@ -7,9 +7,11 @@
 一个中心 host 统一做认证、授权、端点目录与路由；文件、HTTP 目录、反向连接的 agent
 作为 provider 接入同一份契约。Rust 内核 + TypeScript SDK + 一个能真连真跑的工作台。
 
+**方向已确认（2026-10-17）：** 协议优先，提供 TS/JS 与 Rust 对称 SDK、插件运行时及独立 Astro 工作台；默认中心连接，模块能力可以组合。见 [目标架构](docs/design/2026-10-17-conex-architecture.md) 与 [迁移盘点](docs/design/2026-10-17-conex-migration-assessment.md)。这是目标设计，不是已交付状态；下方描述现有实现。
+
 **当前状态（2026-10-11）：** 落地页是**工作台**：顶部状态栏常驻本标签页的名字、短链接、分组 key 与在线数，面板切换内容。**一个标签页就是一个客户端**——链接在取 WSS 票据时铸造，同一浏览器的两个标签页共享 cookie 却是两个独立客户端，文件归属也按链接区分。问候从消息泡泡改为右上角提示；`client/hello` 带 `payload` 时是**提问**：目标 SDK 不自动确认，回答由提示里的「确认并回复」回传。`group` 是**隔离键兼加入凭据**（SHA-256 派生）：不同组互相不可见、不可问候、不可访问文件，组名文本永不投影给他人（`client/list`/`client/status` 一律置空），页面默认组名 `default`、可随机生成、复制分享组名即邀请。共享文件支持**相对目录路径**：目录上传保留目录结构，页面按提供者渲染目录树，列表/网格两种视图。`client/status` 报出每组实测延迟（未测量显示「尚未测量」而非 0 ms）。实测首屏 4.1s → 0.54s（bundle 827KB 未压缩 → 104KB gzip），后台标签页不再被保活策略踢下线。契约见 [connected-landing §10](docs/contracts/connected-landing.md)，证据见 [工作台验证记录](docs/verification/landing-page.md)。P0、P1、Connected landing、多主机内容 M0–M5 已交付。剩余 M4（Notez 接入）与 M6（验收收口）…
 
-[在线工作台](https://conex.lszio.space) · [文档导航](docs/README.md) · [设计 v6](docs/design/2026-09-14-conex-design.md)
+[在线工作台](https://conex.lszio.space) · [文档导航](docs/README.md) · [目标架构](docs/design/2026-10-17-conex-architecture.md)
 
 </div>
 
@@ -258,7 +260,7 @@ cargo xtask check                     # 上面全部 + fmt + clippy -D warnings
   不把计划的 "Expected" 复制成结果。契约变更同步 `docs/contracts/*.md`。
 - **不提交秘密**：配置里只放 SHA-256 摘要与占位值，不提交真实 token、私钥或证书。
 
-加一个 provider 的完整清单（设计 §2.2 的扩展验收）：
+加一个现有 provider 的清单（[旧设计 §2.2](docs/design/2026-09-14-conex-design.md) 的扩展验收）：
 
 1. 在 `schema/conex/` 里扩展方法契约（若需要新消息）；
 2. 实现 provider，注册进 `crates/conex-assembly` 的装配根；
@@ -266,6 +268,8 @@ cargo xtask check                     # 上面全部 + fmt + clippy -D warnings
 4. 第二个 provider **不得**改动 `conex-core` 的执行分支——加内核分支即验收失败。
 
 ## 路线图
+
+新方向按 [目标架构 §11](docs/design/2026-10-17-conex-architecture.md) 的 S1–S5 切片推进，均未在本次文档整理中实施。下表保留既有阶段记录，不是新方向的执行顺序。
 
 | 阶段 | 范围 | 状态 |
 |---|---|---|
@@ -278,15 +282,18 @@ cargo xtask check                     # 上面全部 + fmt + clippy -D warnings
 | P3 | 自有空间加密历史、可选发现与受控中继 | ⏳ 未开始 |
 | P4 | 单项生产能力（HA、更多承载） | ⏳ 未开始 |
 
-完整的阶段依赖与工作包见 [路线图](docs/plans/2026-09-15-conex-roadmap.md)；
-当前正在推进的工作见 [多主机内容计划](docs/plans/2026-10-01-conex-multi-host-content.md)。
+旧阶段依赖与工作包见 [历史路线图](docs/plans/2026-09-15-conex-roadmap.md) 和 [多主机内容计划](docs/plans/2026-10-01-conex-multi-host-content.md)；新实施计划须先对照 [迁移盘点](docs/design/2026-10-17-conex-migration-assessment.md)。
 
 ## 文档
 
 | 文档 | 内容 |
 |---|---|
 | [docs/README.md](docs/README.md) | 文档导航入口（规范 / 契约 / 计划 / 证据 / 操作） |
-| [设计 v6](docs/design/2026-09-14-conex-design.md) | 唯一权威设计与分阶段验收 |
+| [目标架构](docs/design/2026-10-17-conex-architecture.md) | 当前方向、组件边界、权限模型和切片验收 |
+| [迁移盘点](docs/design/2026-10-17-conex-migration-assessment.md) | 源码可见机制与保留、调整、移除范围 |
+| [S1 契约草案](docs/contracts/s1-capabilities.md) | 待评审：双向注册、调用取消、状态订阅和跨语言验收；未实施 |
+| [S1 实施计划](docs/plans/2026-10-17-conex-s1.md) | 九个文件级任务、A01–A12 验收与 Paca 登记（Epic CNX-1） |
+| [旧设计](docs/design/2026-09-14-conex-design.md) | 既有实现与历史阶段设计依据 |
 | [P0 wire 契约](docs/contracts/p0-wire.md) | JSON-RPC 2.0 信封、参数、错误码、HTTP 行为 |
 | [Connected landing 契约](docs/contracts/connected-landing.md) | 中心 host、浏览器会话/ticket、agent 反连、客户端契约 |
 | [P1 契约](docs/contracts/p1-stream.md) | Stream 信用/ACK/重放状态机（blob / operation / session 同目录） |

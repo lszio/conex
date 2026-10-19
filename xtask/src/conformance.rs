@@ -18,6 +18,7 @@ pub fn run(vectors: &str) -> Result<()> {
     let steps: Vec<(&str, &str, Vec<&str>)> = match vectors {
         "conformance/vectors/p0" => p0_steps(),
         "conformance/vectors/p1" => p1_steps(),
+        "conformance/vectors/s1" => s1_steps(),
         other => bail!("no conformance step set for {other}"),
     };
     for (name, program, args) in steps {
@@ -115,6 +116,22 @@ fn p1_steps() -> Vec<(&'static str, &'static str, Vec<&'static str>)> {
             "rust conex-core session",
             "cargo",
             vec!["test", "-p", "conex-core", "--test", "session"],
+        ),
+    ]
+}
+
+/// S1: both languages exercise the same complete boundary vectors.
+fn s1_steps() -> Vec<(&'static str, &'static str, Vec<&'static str>)> {
+    vec![
+        (
+            "rust s1 vectors",
+            "cargo",
+            vec!["test", "-p", "conex-proto", "--test", "s1_capabilities"],
+        ),
+        (
+            "ts s1 vectors",
+            "bun",
+            vec!["test", "sdk/typescript/tests/s1_wire.test.ts"],
         ),
     ]
 }

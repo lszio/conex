@@ -1,0 +1,96 @@
+# Development-only static approval for the S1 two-counter sample
+# (docs/plans/2026-10-17-conex-s1.md T07). Not a production config.
+#
+# Token digests: each `token_hash` is the lowercase hex SHA-256 of the
+# plaintext bearer token. The plaintexts live only in the run environment
+# (CONEX_TOKEN); the nodes never print them.
+#
+# The two hashes below were generated from the dev-only plaintexts:
+#   printf %s "conex-s1-dev-token-ts"   | sha256sum  -> see [[tokens]] 1
+#   printf %s "conex-s1-dev-token-rust" | sha256sum  -> see [[tokens]] 2
+# To use different tokens, regenerate each digest and export the matching
+# plaintext in the environment before starting a node:
+#   printf %s "$TOKEN" | sha256sum
+
+listen = "127.0.0.1:8788"
+allow_loopback_http = true
+audience = "conex.dev"
+
+# P1 persistence roots are required for the S1 capability registry. Relative
+# paths resolve against the directory the host process is started from and are
+# created on startup; ignored by git via examples/s1/.gitignore.
+content_root = "examples/s1/.runtime/content"
+session_root = "examples/s1/.runtime/session"
+operation_root = "examples/s1/.runtime/operation"
+
+# Two distinct service identities. `principal_id` is the node identity matched
+# against [capabilities].publish.node_id; audience must equal the top-level
+# `audience`.
+[[tokens]]
+token_hash = "d4caba8e785cee6a9bc51f5e47ca9e2227998876539d99b1ffbef028364a28ce"
+principal_id = "counter-ts"
+tenant_id = "dev"
+audience = "conex.dev"
+role = "service"
+
+[[tokens]]
+token_hash = "fbe92e8a573eac2f5b66305b607e91bcc4b6a2aade2b1748ec33c4f3f9420700"
+principal_id = "counter-rust"
+tenant_id = "dev"
+audience = "conex.dev"
+role = "service"
+
+[capabilities]
+
+# Preinstalled contract conex.counter (counter shapes:
+# conex.CounterReadInput / CounterAddInput / CounterResult / CounterStateValue).
+[[capabilities.contracts]]
+contract_id = "conex.counter"
+
+[[capabilities.contracts.methods]]
+name = "counter/read"
+input_schema = "conex.CounterReadInput"
+output_schema = "conex.CounterResult"
+action = "counter.read"
+execution = "read_only"
+
+[[capabilities.contracts.methods]]
+name = "counter/add"
+input_schema = "conex.CounterAddInput"
+output_schema = "conex.CounterResult"
+action = "counter.add"
+execution = "non_replayable"
+
+[[capabilities.contracts.states]]
+name = "counter/value"
+value_schema = "conex.CounterStateValue"
+action = "counter.value"
+
+# One approved publisher per node; the module key (space, providerEndpointId)
+# is globally unique.
+[[capabilities.publish]]
+node_id = "counter-ts"
+space_id = "dev"
+integration_id = "integration"
+provider_endpoint_id = "counter-ts"
+contract_id = "conex.counter"
+
+[[capabilities.publish]]
+node_id = "counter-rust"
+space_id = "dev"
+integration_id = "integration"
+provider_endpoint_id = "counter-rust"
+contract_id = "conex.counter"
+
+# Each node may consume the peer: whole contract (methods + state).
+[[capabilities.consume]]
+principal_id = "counter-ts"
+space_id = "dev"
+provider_endpoint_id = "counter-rust"
+contract_id = "conex.counter"
+
+[[capabilities.consume]]
+principal_id = "counter-rust"
+space_id = "dev"
+provider_endpoint_id = "counter-ts"
+contract_id = "conex.counter"

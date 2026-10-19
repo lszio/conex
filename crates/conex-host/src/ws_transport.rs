@@ -38,6 +38,7 @@ use conex_core::transport_ws::{
 };
 use conex_core::{CallContext, CallError, CallResult, Limits, MethodContract};
 use conex_proto;
+use conex_proto::capability::{Boundary, decode_frame};
 use conex_proto::cid;
 use conex_proto::wire::{ProtocolError, decode_wire, encode_wire, validate_message};
 use prost::Message as _; // conex_proto::Message decode/encode for protobuf frames
@@ -210,7 +211,8 @@ pub async fn ws_handler(
     axum::extract::State(state): axum::extract::State<Arc<WssState>>,
 ) -> impl IntoResponse {
     let max_frame = usize::try_from(state.limits.max_frame_bytes).unwrap_or(usize::MAX);
-    ws.max_frame_size(max_frame)
+    ws.protocols(WSS_PROFILES.iter().map(|profile| profile.as_str()))
+        .max_frame_size(max_frame)
         .max_message_size(max_frame)
         .on_upgrade(move |socket| handle_connection(socket, state))
 }
@@ -364,19 +366,143 @@ pub async fn ws_handler_with_state(
     }
     let wss_state = Arc::new(wss_state);
     let max_frame = usize::try_from(wss_state.limits.max_frame_bytes).unwrap_or(usize::MAX);
-    ws.max_frame_size(max_frame)
+    ws.protocols(WSS_PROFILES.iter().map(|profile| profile.as_str()))
+        .max_frame_size(max_frame)
         .max_message_size(max_frame)
         .on_upgrade(move |socket| handle_connection(socket, wss_state))
         .into_response()
 }
+/// S1 状态通知路由（T04，契约 §8.2/§8.3）：提供端链上的 state/update 与
+/// state/end 通知按 hop subscriptionId 归属订阅，经状态中继校验 seq/
+/// revision/sample 后向消费者交付。无 id 的通知本就不回响应；非 S1 通知
+/// 与缺少 params 的帧按既有规则直接丢弃。
+async fn route_s1_state_notification(
+    state: &WssState,
+    generation: u64,
+    notification: &conex_proto::Notification,
+) {
+    if !conex_proto::capability::is_s1_notification(&notification.method) {
+        return;
+    }
+    let Some(relay) = state.broker.deps().state.as_ref() else {
+        return;
+    };
+    let Some(params) = notification.params.as_ref() else {
+        return;
+    };
+    let context = params.context.clone().unwrap_or_default();
+    let input = params
+        .input
+        .as_ref()
+        .map(crate::http::pbjson_to_json)
+        .unwrap_or(Value::Null);
+    relay
+        .on_notification(generation, &notification.method, &context, &input)
+        .await;
+}
+
+/// Generated SDKs wrap bootstrap input in CallParams; the core bootstrap
+/// state machine also serves the original flat P1 handshake.
+fn normalize_bootstrap(text: &str) -> Result<BootstrapFrame, BootstrapError> {
+    let mut envelope: Value = serde_json::from_str(text)
+        .map_err(|error| BootstrapError::MalformedEnvelope(error.to_string()))?;
+    if envelope
+        .get("params")
+        .is_some_and(|params| params.get("input").is_some())
+    {
+        let message = decode_frame(text.as_bytes(), Boundary::Client)
+            .map_err(|error| BootstrapError::MalformedEnvelope(error.message))?;
+        if envelope["params"]["context"]
+            .as_object()
+            .is_some_and(|context| {
+                context.contains_key("principalId") || context.contains_key("tenantId")
+            })
+        {
+            return Err(BootstrapError::MalformedEnvelope(
+                "clients must not supply principalId or tenantId".into(),
+            ));
+        }
+        let Some(conex_proto::message::Body::Request(request)) = message.body else {
+            return Err(BootstrapError::MalformedEnvelope(
+                "bootstrap must be a request".into(),
+            ));
+        };
+        let input = envelope["params"]["input"].take();
+        let params = match request.method.as_str() {
+            "conex/hello" => {
+                let request: conex_proto::HelloRequest = serde_json::from_value(input)
+                    .map_err(|error| BootstrapError::MalformedEnvelope(error.to_string()))?;
+                json!({
+                    "profileId": request.profile_id,
+                    "plane": plane_name(conex_proto::Plane::try_from(request.plane)
+                        .unwrap_or(conex_proto::Plane::Unspecified)),
+                    "provides": request.provides,
+                    "requires": request.requires,
+                })
+            }
+            "conex/ready" => {
+                let request: conex_proto::ReadyRequest = serde_json::from_value(input)
+                    .map_err(|error| BootstrapError::MalformedEnvelope(error.to_string()))?;
+                json!({
+                    "negotiationId": request.negotiation_id,
+                    "profileId": request.profile_id,
+                    "plane": plane_name(conex_proto::Plane::try_from(request.plane)
+                        .unwrap_or(conex_proto::Plane::Unspecified)),
+                    "provides": request.provides,
+                    "limits": request.limits,
+                })
+            }
+            _ => return Err(BootstrapError::UnknownMethod(request.method)),
+        };
+        envelope["params"] = params;
+        return Ok(BootstrapFrame {
+            json: envelope.to_string(),
+        });
+    }
+    Ok(BootstrapFrame {
+        json: text.to_owned(),
+    })
+}
+
 async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
     let (mut sender, mut receiver) = socket.split();
+    let s1_configured = state.broker.deps().capabilities.is_some();
+    let mut server_provides = state.server_provides.clone();
+    if s1_configured && state.role != "ui" {
+        server_provides.extend(
+            conex_proto::capability::S1_METHODS
+                .into_iter()
+                .filter(|method| conex_proto::capability::is_s1_request(method))
+                .map(str::to_owned),
+        );
+    }
     let mut handshake = ServerHandshake::new_with_profiles_and_capabilities(
         &state.supported_profiles,
         conex_proto::Plane::Broker,
-        state.server_provides.clone(),
-        random_identity(),
+        server_provides,
+        if s1_configured {
+            crate::capability::registry::new_registration_id()
+        } else {
+            random_identity()
+        },
     );
+    if s1_configured {
+        handshake.configure_s1(
+            conex_proto::Limits {
+                max_frame_bytes: state.limits.max_frame_bytes,
+                max_inflight: state.limits.max_inflight,
+                max_queued_bytes: state.limits.max_queued_bytes,
+                timeout_ms: state.limits.timeout_ms,
+                max_subscriptions: crate::capability::DEFAULT_MAX_SUBSCRIPTIONS as u32,
+                max_modules: crate::capability::DEFAULT_MAX_MODULES as u32,
+            },
+            conex_proto::LinkIdentity {
+                link_id: crate::capability::registry::new_registration_id(),
+                peer_id: state.caller.principal_id.clone(),
+                tenant_id: state.caller.tenant_id.clone(),
+            },
+        );
+    }
     let handshake_result = tokio::time::timeout(
         StdDuration::from_millis(conex_core::transport_ws::DEFAULT_HANDSHAKE_TIMEOUT_MS),
         async {
@@ -392,9 +518,7 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                         if text.len() > conex_core::transport_ws::MAX_BOOTSTRAP_MESSAGE_BYTES {
                             return Err(BootstrapError::BufferExceeded);
                         }
-                        let response = handshake.ingest(BootstrapFrame {
-                            json: text.to_string(),
-                        })?;
+                        let response = handshake.ingest(normalize_bootstrap(&text)?)?;
                         sender
                             .send(Message::Text(response.json.into()))
                             .await
@@ -437,16 +561,22 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
             return;
         }
     };
+    let limits = handshake.limits();
     if let (Some(registry), Some(link_id)) = (state.ui_links.as_ref(), state.ui_link_id.as_ref()) {
         registry.touch(link_id);
     }
 
     let generation = NEXT_GENERATION.fetch_add(1, Ordering::Relaxed);
+    if limits.max_modules > 0
+        && let Some(registry) = state.broker.deps().capabilities.as_ref()
+    {
+        registry.configure_link(generation, limits.max_modules);
+    }
     let pending = Arc::new(PendingRequests::new(generation));
-    let max_queued = usize::try_from(state.limits.max_queued_bytes).unwrap_or(usize::MAX);
-    let max_frame = usize::try_from(state.limits.max_frame_bytes).unwrap_or(usize::MAX);
+    let max_queued = usize::try_from(limits.max_queued_bytes).unwrap_or(usize::MAX);
+    let max_frame = usize::try_from(limits.max_frame_bytes).unwrap_or(usize::MAX);
     let queued_bytes = Arc::new(AtomicUsize::new(0));
-    let queue_capacity = usize::try_from(state.limits.max_inflight.max(1))
+    let queue_capacity = usize::try_from(limits.max_inflight.max(1))
         .unwrap_or(usize::MAX)
         .saturating_mul(2);
     let (out_tx, mut out_rx) = mpsc::channel::<(Message, usize)>(queue_capacity);
@@ -457,8 +587,29 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
         queued_bytes.clone(),
         pending.clone(),
         max_queued,
+        max_frame,
         Some(close_tx.clone()),
     );
+    // S1 提供端链登记（T03）：无论角色，连接即具备被调用的可能性；实际
+    // 路由只命中注册记录中的 (node, 代次)，未注册的连接不会收到业务帧。
+    if let Some(calls) = state.broker.deps().calls.as_ref() {
+        calls
+            .attach(&state.caller.principal_id, generation, remote_link.clone())
+            .await;
+    }
+    // S1 状态中继（T04）：同一连接既登记为提供端 hop 链（转发订阅/取消），
+    // 也登记为消费者交付链（快照响应后的 update/end 送达）。
+    if let Some(relay) = state.broker.deps().state.as_ref() {
+        relay
+            .attach(&state.caller.principal_id, generation, remote_link.clone())
+            .await;
+        relay.attach_consumer(generation, remote_link.clone()).await;
+        if limits.max_subscriptions > 0 {
+            relay
+                .configure_consumer(generation, limits.max_subscriptions)
+                .await;
+        }
+    }
     if state.role == "agent"
         && let Some(side) = &state.host_side
     {
@@ -490,9 +641,15 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
             crate::clients::Outbound::new(out_tx.clone(), queued_bytes.clone()),
         );
     }
+    // 契约 §9：预留其中一个在途槽给 cancel/unsubscribe，普通请求不能占用
+    // 该槽；普通并发容量 = max_inflight - 1（至少保留 1 槽，不建无界控制队列）。
     let inflight = Arc::new(Semaphore::new(
-        usize::try_from(state.limits.max_inflight.max(1)).unwrap_or(1),
+        usize::try_from(limits.max_inflight.max(1))
+            .unwrap_or(1)
+            .saturating_sub(1)
+            .max(1),
     ));
+    let control_slot = Arc::new(Semaphore::new(1));
     let mut dispatch_tasks = JoinSet::new();
     let last_pong = Arc::new(Mutex::new(Instant::now()));
     let mut heartbeat = interval_at(
@@ -511,7 +668,7 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                     Message::Ping(bytes) | Message::Pong(bytes) => bytes.len(),
                     Message::Close(_) => 0,
                 };
-                if frame_len > usize::try_from(state.limits.max_frame_bytes).unwrap_or(usize::MAX) {
+                if frame_len > max_frame {
                     let failure = conex_proto::Message {
                         body: Some(conex_proto::message::Body::Failure(conex_proto::Failure {
                             request_id: None,
@@ -568,7 +725,7 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                             }
                             continue;
                         }
-                        let message = match decode_wire(text.as_bytes()) {
+                        let message = match decode_frame(text.as_bytes(), Boundary::Client) {
                             Ok(message) => message,
                             Err(error) => {
                                 let failure = wire_failure(
@@ -625,14 +782,8 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                 if let Some(id) = failure.request_id.as_ref() {
                                     let error = failure
                                         .error
-                                        .as_ref()
-                                        .map(|error| {
-                                            CallError::new(
-                                                conex_proto::ErrorCode::try_from(error.code)
-                                                    .unwrap_or(conex_proto::ErrorCode::BadRequest),
-                                                error.message.clone(),
-                                            )
-                                        })
+                                        .clone()
+                                        .map(CallError::from_wire)
                                         .unwrap_or_else(|| {
                                             CallError::new(
                                                 conex_proto::ErrorCode::BadRequest,
@@ -644,7 +795,11 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                 continue;
                             }
                             Some(conex_proto::message::Body::Request(_)) => {}
-                            Some(conex_proto::message::Body::Notification(_)) | None => continue,
+                            Some(conex_proto::message::Body::Notification(notification)) => {
+                                route_s1_state_notification(&state, generation, notification).await;
+                                continue;
+                            }
+                            None => continue,
                         }
                         let frame = match broker_frame_from_message(message) {
                             Ok(Some(frame)) => frame,
@@ -687,7 +842,15 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                             continue;
                         }
                         let request_id = frame.request_id.clone();
-                        let permit = match inflight.clone().try_acquire_owned() {
+                        // T04: response_enqueued 键（response 帧移走 request_id
+                        // 后仍需按消费者请求 ID 找到 opening）。
+                        let subscribe_key = request_id.clone();
+                        let slot = if matches!(frame.method.as_str(), "module/cancel" | "state/unsubscribe") {
+                            control_slot.clone()
+                        } else {
+                            inflight.clone()
+                        };
+                        let permit = match slot.try_acquire_owned() {
                             Ok(permit) => permit,
                             Err(_) => {
                                 let failure = conex_proto::Message {
@@ -716,7 +879,12 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                         let task_queued = queued_bytes.clone();
                         let close_task = close_tx.clone();
                         dispatch_tasks.spawn(async move {
-                            let result = dispatch_business(&task_state, frame, business_profile, generation).await;
+                            let method = frame.method.clone();
+                            let result = dispatch_business(&task_state, frame, business_profile, generation, limits).await;
+                            // T04：快照成功响应入消费者队列后，状态中继才放行
+                            // 该订阅的 update（B2 屏障，契约 §8.1 两跳同规则）。
+                            let is_subscribe_ok =
+                                matches!(&result, Ok(_)) && method == "state/subscribe";
                             let response = conex_proto::Message {
                                 body: Some(match result {
                                     Ok(value) => conex_proto::message::Body::Success(conex_proto::Success {
@@ -729,6 +897,7 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                     }),
                                 }),
                             };
+                            let mut response_enqueued = false;
                             if let Ok(bytes) = encode_wire(&response) {
                                 if bytes.len() > max_frame
                                     || !enqueue_message(
@@ -739,9 +908,16 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                     )
                                 {
                                     let _ = close_task.send(());
+                                } else {
+                                    response_enqueued = true;
                                 }
                             } else {
                                 let _ = close_task.send(());
+                            }
+                            if response_enqueued && is_subscribe_ok
+                                && let Some(relay) = task_state.broker.deps().state.as_ref()
+                            {
+                                relay.response_enqueued(generation, &subscribe_key).await;
                             }
                             drop(permit);
                         });
@@ -820,14 +996,8 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                 if let Some(id) = failure.request_id.as_ref() {
                                     let error = failure
                                         .error
-                                        .as_ref()
-                                        .map(|error| {
-                                            CallError::new(
-                                                conex_proto::ErrorCode::try_from(error.code)
-                                                    .unwrap_or(conex_proto::ErrorCode::BadRequest),
-                                                error.message.clone(),
-                                            )
-                                        })
+                                        .clone()
+                                        .map(CallError::from_wire)
                                         .unwrap_or_else(|| {
                                             CallError::new(
                                                 conex_proto::ErrorCode::BadRequest,
@@ -836,6 +1006,10 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                         });
                                     let _ = pending.route(generation, id, Err(error)).await;
                                 }
+                                continue;
+                            }
+                            Some(conex_proto::message::Body::Notification(notification)) => {
+                                route_s1_state_notification(&state, generation, notification).await;
                                 continue;
                             }
                             _ => {}
@@ -882,7 +1056,15 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                             continue;
                         }
                         let request_id = frame.request_id.clone();
-                        let permit = match inflight.clone().try_acquire_owned() {
+                        // T04: response_enqueued 键（response 帧移走 request_id
+                        // 后仍需按消费者请求 ID 找到 opening）。
+                        let subscribe_key = request_id.clone();
+                        let slot = if matches!(frame.method.as_str(), "module/cancel" | "state/unsubscribe") {
+                            control_slot.clone()
+                        } else {
+                            inflight.clone()
+                        };
+                        let permit = match slot.try_acquire_owned() {
                             Ok(permit) => permit,
                             Err(_) => {
                                 let failure = conex_proto::Message {
@@ -911,7 +1093,12 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                         let task_queued = queued_bytes.clone();
                         let close_task = close_tx.clone();
                         dispatch_tasks.spawn(async move {
-                            let result = dispatch_business(&task_state, frame, business_profile, generation).await;
+                            let method = frame.method.clone();
+                            let result = dispatch_business(&task_state, frame, business_profile, generation, limits).await;
+                            // T04：快照成功响应入消费者队列后，状态中继才放行
+                            // 该订阅的 update（B2 屏障，契约 §8.1 两跳同规则）。
+                            let is_subscribe_ok =
+                                matches!(&result, Ok(_)) && method == "state/subscribe";
                             let response = conex_proto::Message {
                                 body: Some(match result {
                                     Ok(value) => conex_proto::message::Body::Success(conex_proto::Success {
@@ -924,17 +1111,25 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                     }),
                                 }),
                             };
+                            let mut response_enqueued = false;
                             let mut buf = Vec::new();
-                            if response.encode(&mut buf).is_err()
-                                || buf.len() > max_frame
-                                || !enqueue_message(
+                            if response.encode(&mut buf).is_ok()
+                                && buf.len() <= max_frame
+                                && enqueue_message(
                                     &task_tx,
                                     &task_queued,
                                     max_queued,
                                     Message::Binary(buf.into()),
                                 )
                             {
+                                response_enqueued = true;
+                            } else {
                                 let _ = close_task.send(());
+                            }
+                            if response_enqueued && is_subscribe_ok
+                                && let Some(relay) = task_state.broker.deps().state.as_ref()
+                            {
+                                relay.response_enqueued(generation, &subscribe_key).await;
                             }
                             drop(permit);
                         });
@@ -997,6 +1192,25 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
         side.connections
             .remove(&state.caller.principal_id, generation)
             .await;
+    }
+    // S1 模块注册随连接代次清理：旧代次的断线 cleanup 绝不删除新代次的
+    // 注册（fence 在注册表内判定，调用方无需比较代次）。
+    if let Some(modules) = state.broker.deps().capabilities.as_ref() {
+        modules.disconnect(&state.caller.principal_id, generation);
+    }
+    // S1 调用路由清理（T03）：移除本连接作为提供端的链（代次精确），并
+    // 释放以本连接为消费者的全部源关联——已发送的调用尽力转发取消到固定
+    // 代次；本地记录删除不是远端取消。
+    if let Some(calls) = state.broker.deps().calls.as_ref() {
+        calls.detach(&state.caller.principal_id, generation).await;
+        calls.cleanup_source(generation).await;
+    }
+    // S1 状态中继清理（T04）：以本连接为提供端的订阅按 unavailable 终结并
+    // 向消费者交付 end；以本连接为消费者的订阅直接释放（消费者断线由 SDK
+    // 本地终结，host 不再投递）。代次精确，旧代次 cleanup 不影响新代次。
+    if let Some(relay) = state.broker.deps().state.as_ref() {
+        relay.detach(&state.caller.principal_id, generation).await;
+        relay.consumer_disconnected(generation).await;
     }
     let _ = writer.await;
     pending.fail_all().await;
@@ -1078,6 +1292,16 @@ fn broker_frame_from_message(message: conex_proto::Message) -> CallResult<Option
                 .as_ref()
                 .map(|p| p.timeout_budget_ms)
                 .unwrap_or(0),
+            // S1 调用/取消目标：复制自客户端 context，只作定位；转发时以
+            // 注册记录为准（T03）。
+            space_id: context
+                .as_ref()
+                .map(|c| c.space_id.clone())
+                .unwrap_or_default(),
+            registration_id: context
+                .as_ref()
+                .map(|c| c.registration_id.clone())
+                .unwrap_or_default(),
         },
         params: Some(input),
     };
@@ -1128,11 +1352,7 @@ fn client_answer(text: &str) -> Option<ClientPong> {
 }
 
 fn to_wire_error(error: &CallError) -> conex_proto::Error {
-    conex_proto::Error {
-        code: error.code(),
-        message: error.message().to_string(),
-        ..Default::default()
-    }
+    error.wire().clone()
 }
 fn wire_failure(
     request_id: Option<String>,
@@ -1225,6 +1445,7 @@ async fn dispatch_business(
     frame: BrokerFrame,
     business_profile: ProfileId,
     generation: u64,
+    limits: conex_proto::Limits,
 ) -> CallResult<Value> {
     if state.role == "ui"
         && state
@@ -1263,13 +1484,20 @@ async fn dispatch_business(
         None
     };
     let result = async {
-        if state.role == "agent" {
+        // T03：agent 角色不再限制为单向 register+heartbeat——`module/*`
+        // 是通用 S1 能力（提供端可注册、消费者可调用），走同一 broker 路由；
+        // 遗留 agent 控制方法仍走 M2 入口。T04：`state/*`（订阅/退订）同样
+        // 对任意 WSS 角色开放（节点既提供又消费状态）。
+        if state.role == "agent"
+            && !frame.method.starts_with("module/")
+            && !frame.method.starts_with("state/")
+        {
             return dispatch_agent(state, frame, generation).await;
         }
         if frame.method.starts_with("stream/") {
-            return handle_stream(state, &frame, business_profile).await;
+            return handle_stream(state, &frame, business_profile, generation, limits).await;
         }
-        dispatch_rpc(state, frame).await
+        dispatch_rpc(state, frame, generation, limits).await
     }
     .await;
     if let Some((registry, link_id)) = tracked_link {
@@ -1386,13 +1614,26 @@ async fn dispatch_agent(
 
 /// Broker RPC dispatch for a non-stream business frame. Identity comes from
 /// the authenticated upgrade, never from the frame.
-async fn dispatch_rpc(state: &WssState, frame: BrokerFrame) -> CallResult<Value> {
+async fn dispatch_rpc(
+    state: &WssState,
+    frame: BrokerFrame,
+    generation: u64,
+    limits: conex_proto::Limits,
+) -> CallResult<Value> {
+    if conex_proto::capability::is_s1_request(&frame.method)
+        && frame.context.timeout_budget_ms > limits.timeout_ms
+    {
+        return Err(CallError::new(
+            conex_proto::ErrorCode::BadRequest,
+            "timeoutBudgetMs exceeds negotiated limit",
+        ));
+    }
     let caller = state.caller.clone();
     let timeout_ms = frame
         .context
         .timeout_budget_ms
         .max(1)
-        .min(state.limits.timeout_ms.max(1));
+        .min(limits.timeout_ms.max(1));
     let timeout = StdDuration::from_millis(u64::from(timeout_ms));
     let deadline = Instant::now() + timeout;
     let input = frame
@@ -1408,6 +1649,15 @@ async fn dispatch_rpc(state: &WssState, frame: BrokerFrame) -> CallResult<Value>
         deadline,
         role: state.role.clone(),
         link_id: state.ui_link_id.clone(),
+        // S1 模块注册/撤销以连接代次作 fence；列表以协商帧上限拒绝超帧。
+        generation,
+        max_frame_bytes: limits.max_frame_bytes,
+        // T03：源关联键（连接代次 + 帧 requestId）、HTTP binding 源（WSS
+        // 恒 None）与调用目标（定位用；转发以登记记录为准）。
+        request_id: frame.request_id.clone(),
+        binding_id: None,
+        space_id: frame.context.space_id.clone(),
+        registration_id: frame.context.registration_id.clone(),
     };
     state.broker.invoke(call.clone()).await
 }
@@ -1420,6 +1670,8 @@ async fn handle_stream(
     state: &WssState,
     frame: &BrokerFrame,
     business_profile: ProfileId,
+    generation: u64,
+    limits: conex_proto::Limits,
 ) -> CallResult<Value> {
     let input = frame
         .params
@@ -1547,7 +1799,7 @@ async fn handle_stream(
                     "agent control methods cannot be carried in stream frames",
                 ));
             }
-            let result = dispatch_rpc(state, inner).await?;
+            let result = dispatch_rpc(state, inner, generation, limits).await?;
             json!({
                 "streamId": stream_frame.stream_id,
                 "seq": stream_frame.seq.to_string(),
@@ -1712,6 +1964,34 @@ fn _unused_upgrade_marker(_: CallContext) {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bootstrap_normalizes_generated_call_params_without_relaxing_client_boundary() {
+        let envelope = json!({
+            "jsonrpc": "2.0",
+            "id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+            "method": "conex/hello",
+            "params": {
+                "context": {"plane": "broker"},
+                "timeoutBudgetMs": 8000,
+                "input": {
+                    "profileId": "conex-jsonrpc2-wss",
+                    "plane": "PLANE_BROKER",
+                    "provides": [],
+                    "requires": ["module/list"]
+                }
+            }
+        });
+        let frame = normalize_bootstrap(&envelope.to_string()).unwrap();
+        let flat: Value = serde_json::from_str(&frame.json).unwrap();
+        assert_eq!(flat["params"]["plane"], "broker");
+        assert_eq!(flat["params"]["requires"], json!(["module/list"]));
+        let mut forged = envelope;
+        forged["params"]["context"]["principalId"] = json!("other");
+        assert!(normalize_bootstrap(&forged.to_string()).is_err());
+        let frame = normalize_bootstrap(&flat.to_string()).unwrap();
+        assert_eq!(serde_json::from_str::<Value>(&frame.json).unwrap(), flat);
+    }
 
     #[tokio::test]
     async fn pending_routes_generation_and_request_id_without_cross_delivery() {

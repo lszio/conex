@@ -202,5 +202,8 @@ fn wire_limits(limits: Limits) -> conex_proto::Limits {
         max_inflight: limits.max_inflight,
         max_queued_bytes: limits.max_queued_bytes,
         timeout_ms: limits.timeout_ms,
+        // S1 订阅/注册上限由 T02+ 的配置装载填实际值；0 = 尚未协商 S1 能力。
+        max_subscriptions: 0,
+        max_modules: 0,
     }
 }

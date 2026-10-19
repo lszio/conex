@@ -12,7 +12,7 @@
 use std::collections::HashSet;
 
 use serde::Deserialize;
-use serde::de::{self, MapAccess, Visitor};
+use serde::de::{self, MapAccess, SeqAccess, Visitor};
 use serde_json::{Map, Value};
 
 const EXECUTION_VALUES: [&str; 3] = ["not_started", "completed", "unknown"];
@@ -56,6 +56,80 @@ struct RawEnvelope {
     params: Option<Value>,
     result: Option<Value>,
     error: Option<Value>,
+}
+
+/// JSON value parse that rejects duplicate keys at *every* object level.
+///
+/// serde_json's `Map` silently keeps the last value for a repeated key, so a
+/// plain `Value` parse drops duplicates before the strict decode can see them.
+/// `decode_wire` parses through this visitor first; nested `params/context/
+/// input` duplicates then fail exactly like envelope-level ones (S1 §5.2).
+struct StrictValue(Value);
+
+struct StrictVisitor;
+
+impl<'de> Visitor<'de> for StrictVisitor {
+    type Value = Value;
+    fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("a JSON value")
+    }
+    fn visit_bool<E>(self, v: bool) -> Result<Value, E> {
+        Ok(Value::Bool(v))
+    }
+    fn visit_i64<E>(self, v: i64) -> Result<Value, E> {
+        Ok(Value::Number(v.into()))
+    }
+    fn visit_u64<E>(self, v: u64) -> Result<Value, E> {
+        Ok(Value::Number(v.into()))
+    }
+    fn visit_f64<E: de::Error>(self, v: f64) -> Result<Value, E> {
+        serde_json::Number::from_f64(v)
+            .map(Value::Number)
+            .ok_or_else(|| de::Error::custom("f64 cannot be represented in JSON"))
+    }
+    fn visit_str<E>(self, v: &str) -> Result<Value, E> {
+        Ok(Value::String(v.to_string()))
+    }
+    fn visit_string<E>(self, v: String) -> Result<Value, E> {
+        Ok(Value::String(v))
+    }
+    fn visit_unit<E>(self) -> Result<Value, E> {
+        Ok(Value::Null)
+    }
+    fn visit_seq<A>(self, mut seq: A) -> Result<Value, A::Error>
+    where
+        A: SeqAccess<'de>,
+    {
+        let mut out = Vec::new();
+        while let Some(item) = seq.next_element::<StrictValue>()? {
+            out.push(item.0);
+        }
+        Ok(Value::Array(out))
+    }
+    fn visit_map<A>(self, mut map: A) -> Result<Value, A::Error>
+    where
+        A: MapAccess<'de>,
+    {
+        let mut out = Map::new();
+        let mut seen: HashSet<String> = HashSet::new();
+        while let Some(key) = map.next_key::<String>()? {
+            if !seen.insert(key.clone()) {
+                return Err(de::Error::custom(format!("duplicate field {key}")));
+            }
+            let value = map.next_value::<StrictValue>()?;
+            out.insert(key, value.0);
+        }
+        Ok(Value::Object(out))
+    }
+}
+
+impl<'de> Deserialize<'de> for StrictValue {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(StrictValue(deserializer.deserialize_any(StrictVisitor)?))
+    }
 }
 
 impl<'de> Deserialize<'de> for RawEnvelope {
@@ -113,7 +187,69 @@ impl<'de> Deserialize<'de> for RawEnvelope {
 }
 
 pub fn decode_wire(bytes: &[u8]) -> Result<crate::Message, ProtocolError> {
-    let raw: RawEnvelope = serde_json::from_slice(bytes).map_err(|e| {
+    decode_wire_for_boundary(bytes, crate::capability::Boundary::Host)
+}
+
+/// Decode raw S1 context presence before proto3 scalar defaults erase it.
+pub fn decode_wire_for_boundary(
+    bytes: &[u8],
+    boundary: crate::capability::Boundary,
+) -> Result<crate::Message, ProtocolError> {
+    let strict: StrictValue = serde_json::from_slice(bytes).map_err(|e| {
+        ProtocolError::new(
+            crate::ErrorCode::ParseError as i32,
+            None,
+            format!("invalid JSON-RPC envelope: {e}"),
+        )
+    })?;
+    if let Some(method) = strict.0.get("method").and_then(Value::as_str) {
+        if crate::capability::is_s1_method(method) {
+            if let Some(context) = strict
+                .0
+                .get("params")
+                .and_then(|p| p.get("context"))
+                .and_then(Value::as_object)
+            {
+                for (key, value) in context {
+                    if !value.is_string() {
+                        return Err(ProtocolError::bad_request(
+                            None,
+                            format!("context.{key} must be a string"),
+                        ));
+                    }
+                }
+                if boundary == crate::capability::Boundary::Client
+                    && (context.contains_key("principalId") || context.contains_key("tenantId"))
+                {
+                    return Err(ProtocolError::bad_request(
+                        None,
+                        "clients must not supply principalId or tenantId",
+                    ));
+                }
+                if matches!(
+                    method,
+                    "module/register" | "module/unregister" | "module/list"
+                ) && [
+                    "providerEndpointId",
+                    "spaceId",
+                    "registrationId",
+                    "principalId",
+                    "tenantId",
+                ]
+                .iter()
+                .any(|k| context.contains_key(*k))
+                {
+                    return Err(ProtocolError::bad_request(
+                        None,
+                        "control context only permits plane/bindingId",
+                    ));
+                }
+            }
+        }
+    }
+    // 从已做重复键检测的 Value 树二次映射语义层（StrictValue 已拒绝任何深度的
+    // 重复键，包括 params/context/input 内部）。
+    let raw: RawEnvelope = serde_json::from_value(strict.0).map_err(|e| {
         ProtocolError::new(
             crate::ErrorCode::ParseError as i32,
             None,
@@ -139,7 +275,7 @@ pub fn decode_wire(bytes: &[u8]) -> Result<crate::Message, ProtocolError> {
         let params_value = raw.params.clone().ok_or_else(|| {
             ProtocolError::bad_request(None, "request or notification requires params")
         })?;
-        let params = parse_call_params(&params_value, None)?;
+        let params = parse_call_params(&params_value, None, Some(&method))?;
         match raw.id.clone() {
             None => Ok(crate::Message {
                 body: Some(crate::message::Body::Notification(crate::Notification {
@@ -236,7 +372,10 @@ pub fn encode_wire(message: &crate::Message) -> Result<Vec<u8>, ProtocolError> {
         crate::message::Body::Request(r) => {
             out.insert("id".into(), Value::String(r.request_id.clone()));
             out.insert("method".into(), Value::String(r.method.clone()));
-            out.insert("params".into(), call_params_to_json(r.params.as_ref())?);
+            out.insert(
+                "params".into(),
+                call_params_to_json(r.params.as_ref(), Some(&r.method))?,
+            );
         }
         crate::message::Body::Success(s) => {
             out.insert("id".into(), Value::String(s.request_id.clone()));
@@ -261,7 +400,10 @@ pub fn encode_wire(message: &crate::Message) -> Result<Vec<u8>, ProtocolError> {
         }
         crate::message::Body::Notification(n) => {
             out.insert("method".into(), Value::String(n.method.clone()));
-            out.insert("params".into(), call_params_to_json(n.params.as_ref())?);
+            out.insert(
+                "params".into(),
+                call_params_to_json(n.params.as_ref(), Some(&n.method))?,
+            );
         }
         crate::message::Body::DataChunk(_) => {
             // JSON Profile 不承载数据帧（与 validate 对称）；字节走
@@ -300,7 +442,7 @@ pub fn validate_message(message: &crate::Message) -> Result<(), ProtocolError> {
             let params = r.params.as_ref().ok_or_else(|| {
                 ProtocolError::bad_request(Some(r.request_id.clone()), "request requires params")
             })?;
-            validate_params(params, Some(r.request_id.clone()))?;
+            validate_params(params, Some(r.request_id.clone()), Some(r.method.as_str()))?;
         }
         crate::message::Body::Success(s) => {
             if !is_ulid(&s.request_id) {
@@ -344,7 +486,7 @@ pub fn validate_message(message: &crate::Message) -> Result<(), ProtocolError> {
                 .params
                 .as_ref()
                 .ok_or_else(|| ProtocolError::bad_request(None, "notification requires params"))?;
-            validate_params(params, None)?;
+            validate_params(params, None, Some(n.method.as_str()))?;
         }
         crate::message::Body::DataChunk(_) => {
             // JSON Profile 不承载数据帧；字节走 protobuf 二进制 Profile。
@@ -360,6 +502,7 @@ pub fn validate_message(message: &crate::Message) -> Result<(), ProtocolError> {
 fn validate_params(
     params: &crate::CallParams,
     request_id: Option<String>,
+    method: Option<&str>,
 ) -> Result<(), ProtocolError> {
     let context = params
         .context
@@ -372,10 +515,21 @@ fn validate_params(
             "P0 only supports the broker plane",
         ));
     }
-    if params.timeout_budget_ms == 0 {
+    let s1_notification = method
+        .map(crate::capability::is_s1_notification)
+        .unwrap_or(false);
+    if params.timeout_budget_ms == 0 && !s1_notification {
         return Err(ProtocolError::bad_request(
             request_id,
             "timeoutBudgetMs must be greater than 0",
+        ));
+    }
+    // S1 通知（state/update、state/end）省略预算并以 input 携带订阅标识与样本；
+    // 信封默认 0 不表示合法请求预算（契约 §5.2）。
+    if s1_notification && params.input.is_none() {
+        return Err(ProtocolError::bad_request(
+            request_id,
+            "S1 notifications require input",
         ));
     }
     Ok(())
@@ -385,8 +539,8 @@ fn validate_params(
 #[serde(deny_unknown_fields)]
 struct RawCallParams {
     context: RawContext,
-    #[serde(rename = "timeoutBudgetMs", default)]
-    timeout_budget_ms: u32,
+    #[serde(rename = "timeoutBudgetMs")]
+    timeout_budget_ms: Option<u32>,
     #[serde(default)]
     input: Option<Value>,
 }
@@ -394,8 +548,10 @@ struct RawCallParams {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RawContext {
-    #[serde(rename = "providerEndpointId")]
-    provider_endpoint_id: String,
+    // S1 控制方法（register/unregister/list）的 context 只含 plane/bindingId，
+    // 由 capability::validate_context 按方法强制字段规则；这里对 P0 不收紧。
+    #[serde(rename = "providerEndpointId", default)]
+    provider_endpoint_id: Option<String>,
     plane: String,
     #[serde(rename = "bindingId", default)]
     binding_id: Option<String>,
@@ -403,15 +559,49 @@ struct RawContext {
     principal_id: Option<String>,
     #[serde(rename = "tenantId", default)]
     tenant_id: Option<String>,
+    #[serde(rename = "spaceId", default)]
+    space_id: Option<String>,
+    #[serde(rename = "registrationId", default)]
+    registration_id: Option<String>,
 }
 
 fn parse_call_params(
     value: &Value,
     request_id: Option<String>,
+    method: Option<&str>,
 ) -> Result<crate::CallParams, ProtocolError> {
     let raw: RawCallParams = serde_json::from_value(value.clone()).map_err(|e| {
         ProtocolError::bad_request(request_id.clone(), format!("invalid params: {e}"))
     })?;
+    if let Some(method) = method {
+        if crate::capability::is_s1_notification(method) {
+            // S1 通知固定为 {context, input}，必须省略 timeoutBudgetMs（§5.2）。
+            if value.get("timeoutBudgetMs").is_some() {
+                return Err(ProtocolError::bad_request(
+                    request_id,
+                    "S1 notifications must omit timeoutBudgetMs",
+                ));
+            }
+            if raw.input.is_none() {
+                return Err(ProtocolError::bad_request(
+                    request_id,
+                    "S1 notifications require input",
+                ));
+            }
+        }
+    }
+    if method.is_some_and(crate::capability::is_s1_method) {
+        if let Some(context) = value.get("context").and_then(Value::as_object) {
+            for (key, scalar) in context {
+                if !scalar.is_string() {
+                    return Err(ProtocolError::bad_request(
+                        request_id.clone(),
+                        format!("context.{key} must be a string"),
+                    ));
+                }
+            }
+        }
+    }
     let plane = match raw.context.plane.as_str() {
         "broker" => crate::Plane::Broker as i32,
         "relay" => crate::Plane::Relay as i32,
@@ -431,13 +621,15 @@ fn parse_call_params(
     };
     Ok(crate::CallParams {
         context: Some(crate::RequestContext {
-            provider_endpoint_id: raw.context.provider_endpoint_id,
+            provider_endpoint_id: raw.context.provider_endpoint_id.unwrap_or_default(),
             plane,
             binding_id: raw.context.binding_id,
             principal_id: raw.context.principal_id.unwrap_or_default(),
             tenant_id: raw.context.tenant_id.unwrap_or_default(),
+            space_id: raw.context.space_id.unwrap_or_default(),
+            registration_id: raw.context.registration_id.unwrap_or_default(),
         }),
-        timeout_budget_ms: raw.timeout_budget_ms,
+        timeout_budget_ms: raw.timeout_budget_ms.unwrap_or(0),
         input,
     })
 }
@@ -504,17 +696,25 @@ fn parse_error(value: &Value, request_id: Option<String>) -> Result<crate::Error
     })
 }
 
-fn call_params_to_json(params: Option<&crate::CallParams>) -> Result<Value, ProtocolError> {
+fn call_params_to_json(
+    params: Option<&crate::CallParams>,
+    method: Option<&str>,
+) -> Result<Value, ProtocolError> {
     let params = params.ok_or_else(|| ProtocolError::bad_request(None, "params is required"))?;
     let context = params
         .context
         .as_ref()
         .ok_or_else(|| ProtocolError::bad_request(None, "context is required"))?;
     let mut ctx = Map::new();
-    ctx.insert(
-        "providerEndpointId".into(),
-        Value::String(context.provider_endpoint_id.clone()),
-    );
+    if !matches!(
+        method,
+        Some("module/register" | "module/unregister" | "module/list")
+    ) {
+        ctx.insert(
+            "providerEndpointId".into(),
+            Value::String(context.provider_endpoint_id.clone()),
+        );
+    }
     ctx.insert(
         "plane".into(),
         Value::String(plane_name(context.plane).into()),
@@ -531,12 +731,27 @@ fn call_params_to_json(params: Option<&crate::CallParams>) -> Result<Value, Prot
     if !context.tenant_id.is_empty() {
         ctx.insert("tenantId".into(), Value::String(context.tenant_id.clone()));
     }
+    if !context.space_id.is_empty() {
+        ctx.insert("spaceId".into(), Value::String(context.space_id.clone()));
+    }
+    if !context.registration_id.is_empty() {
+        ctx.insert(
+            "registrationId".into(),
+            Value::String(context.registration_id.clone()),
+        );
+    }
     let mut out = Map::new();
     out.insert("context".into(), Value::Object(ctx));
-    out.insert(
-        "timeoutBudgetMs".into(),
-        Value::Number(params.timeout_budget_ms.into()),
-    );
+    // S1 通知（state/update、state/end）线上省略 timeoutBudgetMs（契约 §5.2）。
+    let s1_notification = method
+        .map(crate::capability::is_s1_notification)
+        .unwrap_or(false);
+    if !s1_notification {
+        out.insert(
+            "timeoutBudgetMs".into(),
+            Value::Number(params.timeout_budget_ms.into()),
+        );
+    }
     if let Some(input) = &params.input {
         out.insert("input".into(), value_to_json(input)?);
     }
@@ -572,14 +787,33 @@ fn error_to_json(error: Option<&crate::Error>) -> Result<Value, ProtocolError> {
     Ok(Value::Object(out))
 }
 
-fn value_to_json(value: &pbjson_types::Value) -> Result<Value, ProtocolError> {
-    serde_json::to_value(value).map_err(|e| {
+pub(crate) fn value_to_json(value: &pbjson_types::Value) -> Result<Value, ProtocolError> {
+    fn normalize_numbers(value: &mut Value) {
+        match value {
+            Value::Number(number) => {
+                if let Some(float) = number.as_f64()
+                    && float.fract() == 0.0
+                    && float.abs() < 9_007_199_254_740_992.0
+                {
+                    *number = (float as i64).into();
+                }
+            }
+            Value::Array(items) => items.iter_mut().for_each(normalize_numbers),
+            Value::Object(fields) => fields.values_mut().for_each(normalize_numbers),
+            _ => {}
+        }
+    }
+
+    let mut json = serde_json::to_value(value).map_err(|e| {
         ProtocolError::new(
             crate::ErrorCode::Internal as i32,
             None,
             format!("value encode error: {e}"),
         )
-    })
+    })?;
+    // Protobuf Value stores numbers as f64; typed integer decoders reject 3.0.
+    normalize_numbers(&mut json);
+    Ok(json)
 }
 
 fn plane_name(plane: i32) -> &'static str {

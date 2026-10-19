@@ -35,6 +35,19 @@ pub struct BrokerCall {
     /// Web session link of the caller when the transport knows it; lets
     /// `connection/list` isolate anonymous visitors (plan M1.1).
     pub link_id: Option<String>,
+    /// WSS Link 代次（S1 模块注册/撤销/清理 fence；HTTP 为 0）。
+    pub generation: u64,
+    /// 本连接协商的帧字节上限；S1 module/list 编码超限显式 payload_too_large。
+    pub max_frame_bytes: u32,
+    /// 当前帧的 JSON-RPC 请求 ID（T03 源关联键的一部分；HTTP/WSS 都填）。
+    pub request_id: String,
+    /// HTTP binding 源（T03）：S1 源关联按 bindingId + requestId 定位；
+    /// WSS 帧为 None（源是连接代次）。
+    pub binding_id: Option<String>,
+    /// S1 调用目标（来自调用方 context；定位用，转发以登记记录为准）。
+    pub space_id: String,
+    /// S1 调用目标 registrationId（ULID；与活动注册不符 → stale_revision）。
+    pub registration_id: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -46,6 +59,9 @@ pub struct BrokerContext {
     pub plane: i32,
     pub binding_id: Option<String>,
     pub timeout_budget_ms: u32,
+    /// S1 调用/取消目标（T03，来自 RequestContext space_id/registration_id）。
+    pub space_id: String,
+    pub registration_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -76,6 +92,15 @@ pub struct BrokerDeps {
     /// M3: reverse-agent links used to fetch remote content slices after the
     /// policy-authorized probe.
     pub remote: Option<Arc<crate::remote::RemoteConnections>>,
+    /// S1 模块注册表（静态批准 + 预安装契约 + 代次 fence）。`None` 时
+    /// `module/*` 返回 unavailable；`state/*` 由 T04 接入。
+    pub capabilities: Option<Arc<crate::capability::ModuleRegistry>>,
+    /// S1 调用路由（T03）：提供端 Link 表 + 源→转发关联。`None` 时
+    /// `module/invoke|cancel` 返回 unavailable。
+    pub calls: Option<Arc<crate::capability::CallRouter>>,
+    /// S1 状态中继（T04）：opening/active 订阅表 + 有序有界交付。`None` 时
+    /// `state/*` 返回 unavailable。
+    pub state: Option<Arc<crate::capability::StateRelay>>,
 }
 
 pub struct Broker {
@@ -145,6 +170,12 @@ impl Broker {
         }
         if call.method.starts_with("client/") {
             return self.dispatch_client(&call).await;
+        }
+        if call.method.starts_with("module/") {
+            return self.dispatch_module(&call).await;
+        }
+        if call.method.starts_with("state/") {
+            return self.dispatch_state(&call).await;
         }
         let duration = call.deadline.saturating_duration_since(Instant::now());
         self.host
@@ -531,6 +562,183 @@ impl Broker {
             other => Err(CallError::new(
                 conex_proto::ErrorCode::BadRequest,
                 format!("unknown client method: {other}"),
+            )),
+        }
+    }
+
+    /// S1 模块注册/撤销/发现（T02）与调用/取消（T03）。注册只走 WSS（HTTP
+    /// 由 `capability::validate_http_frame` 在入口拒绝）；invoke/cancel 经
+    /// `CallRouter` 向提供端固定代次转发，支持任意 WSS 节点既提供又消费。
+    async fn dispatch_module(&self, call: &BrokerCall) -> CallResult<Value> {
+        let registry = self
+            .deps
+            .capabilities
+            .clone()
+            .ok_or_else(|| unavailable("S1 capability registry is not configured"))?;
+        match call.method.as_str() {
+            "module/register" => {
+                let map = object(&call.input)?;
+                let request = crate::capability::ModuleRequest {
+                    space_id: crate::agent::require_string(map, "spaceId")?.to_string(),
+                    integration_id: crate::agent::require_string(map, "integrationId")?.to_string(),
+                    provider_endpoint_id: crate::agent::require_string(map, "providerEndpointId")?
+                        .to_string(),
+                    contract_id: crate::agent::require_string(map, "contractId")?.to_string(),
+                };
+                // wire 冻结：注册参数无逐成员声明字段；提供端（SDK 本地强制
+                // handler 完整性后）声明的即批准契约的完整成员集。失败的
+                // 注册不改动旧代次，健康旧连接不受影响。
+                let handlers = registry
+                    .handler_declaration(&request.contract_id)
+                    .map_err(crate::capability::ModuleError::into_call)?;
+                let record = registry
+                    .register(
+                        &call.caller.principal_id,
+                        call.generation,
+                        request,
+                        &handlers,
+                    )
+                    .map_err(crate::capability::ModuleError::into_call)?;
+                // T04：首个注册成功激活新代次、替换同一 Node 的旧发布——
+                // 旧代次上的订阅以 stale_revision 终结（契约 §8.3）。同代次
+                // 追加注册 record.generation 不变，relay 按 < record.generation
+                // 过滤，天然无操作。
+                if let Some(relay) = self.deps.state.as_ref() {
+                    relay
+                        .end_stale_generation(&call.caller.principal_id, record.generation)
+                        .await;
+                }
+                Ok(json!({
+                    "registrationId": record.registration_id,
+                    "providerEndpointId": record.provider_endpoint_id,
+                    "spaceId": record.space_id,
+                    "integrationId": record.integration_id,
+                    "contractId": record.contract_id,
+                }))
+            }
+            "module/unregister" => {
+                let map = object(&call.input)?;
+                let provider_endpoint_id =
+                    crate::agent::require_string(map, "providerEndpointId")?.to_string();
+                let registration_id =
+                    crate::agent::require_string(map, "registrationId")?.to_string();
+                let removed = registry
+                    .unregister(
+                        &call.caller.principal_id,
+                        call.generation,
+                        &provider_endpoint_id,
+                        &registration_id,
+                    )
+                    .map_err(crate::capability::ModuleError::into_call)?;
+                // T04：模块撤销先禁止新路由，再结束订阅并请求取消在途调用
+                // （契约 §6.2）；该注册的订阅以 unavailable 终结。
+                if removed && let Some(relay) = self.deps.state.as_ref() {
+                    relay.end_registration(&registration_id).await;
+                }
+                Ok(json!({ "removed": removed }))
+            }
+            "module/list" => {
+                let map = object(&call.input)?;
+                let space_id = crate::agent::require_string(map, "spaceId")?.to_string();
+                registry
+                    .list(
+                        &call.caller.principal_id,
+                        &space_id,
+                        call.max_frame_bytes as usize,
+                    )
+                    .map_err(crate::capability::ModuleError::into_call)
+            }
+            "module/invoke" => {
+                let router = self
+                    .deps
+                    .calls
+                    .clone()
+                    .ok_or_else(|| unavailable("S1 call routing is not configured"))?;
+                let source = match &call.binding_id {
+                    Some(binding_id) => crate::capability::SourceKey::http(
+                        binding_id.clone(),
+                        call.request_id.clone(),
+                    ),
+                    None => {
+                        crate::capability::SourceKey::link(call.generation, call.request_id.clone())
+                    }
+                };
+                router
+                    .invoke(
+                        &call.caller,
+                        source,
+                        &call.endpoint_id,
+                        &call.space_id,
+                        &call.registration_id,
+                        call.input.clone(),
+                        call.deadline,
+                    )
+                    .await
+            }
+            "module/cancel" => {
+                let router = self
+                    .deps
+                    .calls
+                    .clone()
+                    .ok_or_else(|| unavailable("S1 call routing is not configured"))?;
+                let map = object(&call.input)?;
+                let target_request_id = crate::agent::require_string(map, "requestId")?.to_string();
+                // 取消按原 invoke 的 requestId 定位（同一源 scope），本帧的
+                // JSON-RPC id 只用于 {requested} 回复。
+                let source = match &call.binding_id {
+                    Some(binding_id) => crate::capability::SourceKey::http(
+                        binding_id.clone(),
+                        target_request_id.clone(),
+                    ),
+                    None => crate::capability::SourceKey::link(call.generation, target_request_id),
+                };
+                router.cancel(source, call.deadline).await
+            }
+            other => Err(CallError::new(
+                conex_proto::ErrorCode::UnknownMethod,
+                format!("unknown module method: {other}"),
+            )),
+        }
+    }
+
+    /// S1 状态订阅/退订（T04，契约 §8）。update/end 是通知，在 WSS 入站
+    /// 循环直接路由给状态中继（本函数只处理带 id 的请求）。
+    async fn dispatch_state(&self, call: &BrokerCall) -> CallResult<Value> {
+        let relay = self.deps.state.clone().ok_or_else(|| {
+            CallError::new(
+                conex_proto::ErrorCode::UnsupportedCapability,
+                "S1 state relay is not configured",
+            )
+        })?;
+        match call.method.as_str() {
+            "state/subscribe" => {
+                let map = object(&call.input)?;
+                let subscription_id = require_string(map, "subscriptionId")?.to_string();
+                let state = require_string(map, "state")?.to_string();
+                let argument = map.get("argument").cloned().unwrap_or(Value::Null);
+                relay
+                    .subscribe(
+                        &call.caller,
+                        call.generation,
+                        &call.request_id,
+                        &call.endpoint_id,
+                        &call.space_id,
+                        &call.registration_id,
+                        &state,
+                        subscription_id,
+                        argument,
+                        call.deadline,
+                    )
+                    .await
+            }
+            "state/unsubscribe" => {
+                let map = object(&call.input)?;
+                let subscription_id = require_string(map, "subscriptionId")?.to_string();
+                relay.unsubscribe(call.generation, &subscription_id).await
+            }
+            other => Err(CallError::new(
+                conex_proto::ErrorCode::UnknownMethod,
+                format!("unknown state method: {other}"),
             )),
         }
     }

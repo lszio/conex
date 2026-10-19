@@ -1,0 +1,415 @@
+{
+  "cases": [
+    {
+      "name": "register_accept",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"module/register\",\"params\":{\"context\":{\"plane\":\"broker\"},\"timeoutBudgetMs\":8000,\"input\":{\"spaceId\":\"dev\",\"integrationId\":\"counter\",\"providerEndpointId\":\"counter-rust\",\"contractId\":\"conex.counter\"}}}",
+      "expect": { "kind": "request", "method": "module/register", "requestId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "accept": true }
+    },
+    {
+      "name": "unregister_accept",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FA1\",\"method\":\"module/unregister\",\"params\":{\"context\":{\"plane\":\"broker\"},\"timeoutBudgetMs\":8000,\"input\":{\"providerEndpointId\":\"counter-rust\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"}}}",
+      "expect": { "kind": "request", "method": "module/unregister", "accept": true }
+    },
+    {
+      "name": "list_accept",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FA2\",\"method\":\"module/list\",\"params\":{\"context\":{\"plane\":\"broker\",\"bindingId\":\"bnd-http\"},\"timeoutBudgetMs\":8000,\"input\":{\"spaceId\":\"dev\"}}}",
+      "expect": { "kind": "request", "method": "module/list", "accept": true }
+    },
+    {
+      "name": "invoke_accept",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"module/invoke\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"timeoutBudgetMs\":8000,\"input\":{\"method\":\"counter/add\",\"argument\":{\"delta\":1}}}}",
+      "expect": { "kind": "request", "method": "module/invoke", "accept": true }
+    },
+    {
+      "name": "cancel_accept",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FA3\",\"method\":\"module/cancel\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"timeoutBudgetMs\":8000,\"input\":{\"requestId\":\"01ARZ3NDEKTSV4RRFFQ69G5FA0\"}}}",
+      "expect": { "kind": "request", "method": "module/cancel", "accept": true }
+    },
+    {
+      "name": "subscribe_accept",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAY\",\"method\":\"state/subscribe\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"timeoutBudgetMs\":8000,\"input\":{\"subscriptionId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAX\",\"state\":\"counter/value\",\"argument\":{}}}}",
+      "expect": { "kind": "request", "method": "state/subscribe", "accept": true }
+    },
+    {
+      "name": "unsubscribe_accept",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FA4\",\"method\":\"state/unsubscribe\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"timeoutBudgetMs\":8000,\"input\":{\"subscriptionId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAX\"}}}",
+      "expect": { "kind": "request", "method": "state/unsubscribe", "accept": true }
+    },
+    {
+      "name": "update_accept",
+      "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"state/update\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"input\":{\"subscriptionId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAX\",\"seq\":\"1\",\"sample\":{\"revision\":\"2\",\"value\":{\"count\":2},\"sampledAtMs\":\"1792195201000\",\"quality\":\"current\"}}}}",
+      "expect": { "kind": "notification", "method": "state/update", "accept": true }
+    },
+    {
+      "name": "update_u64_max_accept",
+      "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"state/update\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"input\":{\"subscriptionId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAX\",\"seq\":\"18446744073709551615\",\"sample\":{\"revision\":\"18446744073709551614\",\"value\":null,\"sampledAtMs\":\"1792195201000\",\"quality\":\"stale\"}}}}",
+      "expect": { "kind": "notification", "method": "state/update", "accept": true }
+    },
+    {
+      "name": "end_accept",
+      "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"state/end\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"input\":{\"subscriptionId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAX\",\"error\":{\"code\":\"ERROR_CODE_SLOW_CONSUMER\",\"message\":\"queue full\",\"diagnosticId\":\"d1\",\"execution\":\"completed\",\"retry\":\"safe\"}}}}",
+      "expect": { "kind": "notification", "method": "state/end", "accept": true }
+    },
+    {
+      "name": "batch_rejected",
+      "wire": "[{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"module/list\",\"params\":{\"context\":{\"plane\":\"broker\"},\"timeoutBudgetMs\":8000,\"input\":{\"spaceId\":\"dev\"}}}]",
+      "expect": { "errorCode": -32700, "accept": false }
+    },
+    {
+      "name": "duplicate_envelope_field",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"module/list\",\"method\":\"module/invoke\",\"params\":{\"context\":{\"plane\":\"broker\"},\"timeoutBudgetMs\":8000,\"input\":{\"spaceId\":\"dev\"}}}",
+      "expect": { "errorCode": -32700, "accept": false }
+    },
+    {
+      "name": "duplicate_params_field",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"module/invoke\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"context\":{\"plane\":\"broker\"},\"timeoutBudgetMs\":8000,\"input\":{\"method\":\"counter/read\",\"argument\":{}}}}",
+      "expect": { "errorCode": -32700, "accept": false }
+    },
+    {
+      "name": "duplicate_input_field",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"module/invoke\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"timeoutBudgetMs\":8000,\"input\":{\"method\":\"counter/read\",\"method\":\"counter/add\",\"argument\":{}}}}",
+      "expect": { "errorCode": -32700, "accept": false }
+    },
+    {
+      "name": "unknown_context_field",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"module/invoke\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\",\"foo\":1},\"timeoutBudgetMs\":8000,\"input\":{\"method\":\"counter/read\",\"argument\":{}}}}",
+      "expect": { "errorCode": -32602, "accept": false }
+    },
+    {
+      "name": "missing_context",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"module/invoke\",\"params\":{\"timeoutBudgetMs\":8000,\"input\":{\"method\":\"counter/read\",\"argument\":{}}}}",
+      "expect": { "errorCode": -32602, "accept": false }
+    },
+    {
+      "name": "invoke_missing_registration",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"module/invoke\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\"},\"timeoutBudgetMs\":8000,\"input\":{\"method\":\"counter/read\",\"argument\":{}}}}",
+      "expect": { "errorCode": -32602, "accept": false }
+    },
+    {
+      "name": "invoke_missing_space",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"module/invoke\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"timeoutBudgetMs\":8000,\"input\":{\"method\":\"counter/read\",\"argument\":{}}}}",
+      "expect": { "errorCode": -32602, "accept": false }
+    },
+    {
+      "name": "register_context_carries_endpoint",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"module/register\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\"},\"timeoutBudgetMs\":8000,\"input\":{\"spaceId\":\"dev\",\"integrationId\":\"counter\",\"providerEndpointId\":\"counter-rust\",\"contractId\":\"conex.counter\"}}}",
+      "expect": { "errorCode": -32602, "accept": false }
+    },
+    {
+      "name": "client_principal_rejected",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"module/invoke\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\",\"principalId\":\"spoofed\"},\"timeoutBudgetMs\":8000,\"input\":{\"method\":\"counter/read\",\"argument\":{}}}}",
+      "expect": { "errorCode": -32602, "accept": false, "hostAccept": true }
+    },
+    {
+      "name": "client_tenant_rejected",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"state/subscribe\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\",\"tenantId\":\"tenant-1\"},\"timeoutBudgetMs\":8000,\"input\":{\"subscriptionId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAX\",\"state\":\"counter/value\",\"argument\":{}}}}",
+      "expect": { "errorCode": -32602, "accept": false, "hostAccept": true }
+    },
+    {
+      "name": "missing_budget",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"module/invoke\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"input\":{\"method\":\"counter/read\",\"argument\":{}}}}",
+      "expect": { "errorCode": -32602, "accept": false }
+    },
+    {
+      "name": "zero_budget",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"module/invoke\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"timeoutBudgetMs\":0,\"input\":{\"method\":\"counter/read\",\"argument\":{}}}}",
+      "expect": { "errorCode": -32602, "accept": false }
+    },
+    {
+      "name": "update_with_budget",
+      "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"state/update\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"timeoutBudgetMs\":8000,\"input\":{\"subscriptionId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAX\",\"seq\":\"1\",\"sample\":{\"revision\":\"2\",\"value\":{\"count\":2},\"sampledAtMs\":\"1792195201000\",\"quality\":\"current\"}}}}",
+      "expect": { "errorCode": -32602, "accept": false }
+    },
+    {
+      "name": "update_with_id",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"state/update\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"input\":{\"subscriptionId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAX\",\"seq\":\"1\",\"sample\":{\"revision\":\"2\",\"value\":{\"count\":2},\"sampledAtMs\":\"1792195201000\",\"quality\":\"current\"}}}}",
+      "expect": { "errorCode": -32602, "accept": false }
+    },
+    {
+      "name": "register_as_notification",
+      "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"module/register\",\"params\":{\"context\":{\"plane\":\"broker\"},\"input\":{\"spaceId\":\"dev\",\"integrationId\":\"counter\",\"providerEndpointId\":\"counter-rust\",\"contractId\":\"conex.counter\"}}}",
+      "expect": { "errorCode": -32602, "accept": false }
+    },
+    {
+      "name": "update_missing_input",
+      "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"state/update\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"}}}",
+      "expect": { "errorCode": -32602, "accept": false }
+    },
+    {
+      "name": "invoke_missing_input",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"module/invoke\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"timeoutBudgetMs\":8000}}",
+      "expect": { "errorCode": -32602, "accept": false }
+    },
+    {
+      "name": "invoke_unknown_input_field",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"module/invoke\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"timeoutBudgetMs\":8000,\"input\":{\"method\":\"counter/read\",\"argument\":{},\"extra\":1}}}",
+      "expect": { "errorCode": -32602, "accept": false }
+    },
+    {
+      "name": "context_registration_not_ulid",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"module/invoke\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"reg-123\"},\"timeoutBudgetMs\":8000,\"input\":{\"method\":\"counter/read\",\"argument\":{}}}}",
+      "expect": { "errorCode": -32602, "accept": false }
+    },
+    {
+      "name": "cancel_request_id_not_ulid",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FA3\",\"method\":\"module/cancel\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"timeoutBudgetMs\":8000,\"input\":{\"requestId\":\"req-1\"}}}",
+      "expect": { "errorCode": -32602, "accept": false }
+    },
+    {
+      "name": "revision_js_number",
+      "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"state/update\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"input\":{\"subscriptionId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAX\",\"seq\":\"1\",\"sample\":{\"revision\":2,\"value\":{\"count\":2},\"sampledAtMs\":\"1792195201000\",\"quality\":\"current\"}}}}",
+      "expect": { "errorCode": -32602, "accept": false }
+    },
+    {
+      "name": "revision_over_u64",
+      "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"state/update\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"input\":{\"subscriptionId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAX\",\"seq\":\"1\",\"sample\":{\"revision\":\"18446744073709551616\",\"value\":{\"count\":2},\"sampledAtMs\":\"1792195201000\",\"quality\":\"current\"}}}}",
+      "expect": { "errorCode": -32602, "accept": false }
+    },
+    {
+      "name": "revision_leading_zero",
+      "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"state/update\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"input\":{\"subscriptionId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAX\",\"seq\":\"1\",\"sample\":{\"revision\":\"007\",\"value\":{\"count\":2},\"sampledAtMs\":\"1792195201000\",\"quality\":\"current\"}}}}",
+      "expect": { "errorCode": -32602, "accept": false }
+    },
+    {
+      "name": "revision_negative",
+      "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"state/update\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"input\":{\"subscriptionId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAX\",\"seq\":\"1\",\"sample\":{\"revision\":\"-1\",\"value\":{\"count\":2},\"sampledAtMs\":\"1792195201000\",\"quality\":\"current\"}}}}",
+      "expect": { "errorCode": -32602, "accept": false }
+    },
+    {
+      "name": "seq_number",
+      "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"state/update\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"input\":{\"subscriptionId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAX\",\"seq\":1,\"sample\":{\"revision\":\"2\",\"value\":{\"count\":2},\"sampledAtMs\":\"1792195201000\",\"quality\":\"current\"}}}}",
+      "expect": { "errorCode": -32602, "accept": false }
+    },
+    {
+      "name": "quality_bogus",
+      "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"state/update\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"input\":{\"subscriptionId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAX\",\"seq\":\"1\",\"sample\":{\"revision\":\"2\",\"value\":{\"count\":2},\"sampledAtMs\":\"1792195201000\",\"quality\":\"fresh\"}}}}",
+      "expect": { "errorCode": -32602, "accept": false }
+    },
+    {
+      "name": "end_error_numeric_code",
+      "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"state/end\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"input\":{\"subscriptionId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAX\",\"error\":{\"code\":-32015,\"message\":\"queue full\"}}}}",
+      "expect": { "errorCode": -32602, "accept": false }
+    },
+    {
+      "name": "end_error_unknown_code",
+      "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"state/end\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"input\":{\"subscriptionId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAX\",\"error\":{\"code\":\"ERROR_CODE_FROBNICATE\",\"message\":\"boom\"}}}}",
+      "expect": { "errorCode": -32602, "accept": false }
+    },
+    {
+      "name": "end_error_jsonrpc_shape",
+      "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"state/end\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"input\":{\"subscriptionId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAX\",\"error\":{\"code\":\"ERROR_CODE_SLOW_CONSUMER\",\"message\":\"queue full\",\"data\":{\"code\":\"slow_consumer\"}}}}}",
+      "expect": { "errorCode": -32602, "accept": false }
+    },
+    {
+      "name": "end_error_unspecified",
+      "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"state/end\",\"params\":{\"context\":{\"providerEndpointId\":\"counter-rust\",\"plane\":\"broker\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"input\":{\"subscriptionId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAX\",\"error\":{\"code\":\"ERROR_CODE_UNSPECIFIED\"}}}}",
+      "expect": { "errorCode": -32602, "accept": false }
+    },
+    {
+      "name": "subscribe_result_accept",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAY\",\"result\":{\"subscriptionId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAX\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\",\"snapshot\":{\"revision\":\"18446744073709551615\",\"value\":{\"count\":1},\"sampledAtMs\":\"1792195200000\",\"quality\":\"current\"}}}",
+      "expect": { "kind": "success", "method": "state/subscribe", "accept": true }
+    },
+    {
+      "name": "subscribe_result_bad_snapshot",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAY\",\"result\":{\"subscriptionId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAX\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\",\"snapshot\":{\"revision\":1,\"value\":{\"count\":1},\"sampledAtMs\":\"1792195200000\",\"quality\":\"current\"}}}",
+      "expect": { "kind": "success", "method": "state/subscribe", "errorCode": -32602, "accept": false }
+    },
+    {
+      "name": "register_result_accept",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"result\":{\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\",\"providerEndpointId\":\"counter-rust\",\"spaceId\":\"dev\",\"integrationId\":\"counter\",\"contractId\":\"conex.counter\"}}",
+      "expect": { "kind": "success", "method": "module/register", "accept": true }
+    },
+    {
+      "name": "unregister_result_accept",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FA1\",\"result\":{\"removed\":true}}",
+      "expect": { "kind": "success", "method": "module/unregister", "accept": true }
+    },
+    {
+      "name": "cancel_result_accept",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FA3\",\"result\":{\"requested\":true}}",
+      "expect": { "kind": "success", "method": "module/cancel", "accept": true }
+    },
+    {
+      "name": "list_result_accept",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FA2\",\"result\":{\"modules\":[{\"providerEndpointId\":\"counter-ts\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FA1\",\"spaceId\":\"dev\",\"integrationId\":\"counter\",\"contractId\":\"conex.counter\",\"methods\":[\"counter/read\",\"counter/add\"],\"states\":[\"counter/value\"]}]}}",
+      "expect": { "kind": "success", "method": "module/list", "accept": true }
+    },
+    {
+      "name": "register_result_bad_registration_id",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"result\":{\"registrationId\":\"not-a-ulid\",\"providerEndpointId\":\"counter-rust\",\"spaceId\":\"dev\",\"integrationId\":\"counter\",\"contractId\":\"conex.counter\"}}",
+      "expect": { "kind": "success", "method": "module/register", "errorCode": -32602, "accept": false }
+    }
+    ,{
+      "name": "unknown_envelope_prototype_key",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"result\":{},\"__proto__\":{}}",
+      "expect": { "accept": false, "errorCode": -32700 }
+    },
+    {
+      "name": "escaped_duplicate_nested_key",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"module/invoke\",\"params\":{\"context\":{\"plane\":\"broker\",\"providerEndpointId\":\"counter\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"timeoutBudgetMs\":1,\"input\":{\"method\":\"counter/add\",\"argument\":{\"delta\":1,\"\\u0064elta\":2}}}}",
+      "expect": { "accept": false, "errorCode": -32700 }
+    },
+    {
+      "name": "unknown_input_constructor",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"module/list\",\"params\":{\"context\":{\"plane\":\"broker\"},\"timeoutBudgetMs\":1,\"input\":{\"spaceId\":\"dev\",\"constructor\":{}}}}",
+      "expect": { "accept": false, "errorCode": -32602 }
+    },
+    {
+      "name": "unknown_params_constructor",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"module/list\",\"params\":{\"context\":{\"plane\":\"broker\"},\"timeoutBudgetMs\":1,\"input\":{\"spaceId\":\"dev\"},\"constructor\":{}}}",
+      "expect": { "accept": false, "errorCode": -32602 }
+    },
+    {
+      "name": "unknown_context_proto",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"module/list\",\"params\":{\"context\":{\"plane\":\"broker\",\"__proto__\":\"x\"},\"timeoutBudgetMs\":1,\"input\":{\"spaceId\":\"dev\"}}}",
+      "expect": { "accept": false, "errorCode": -32602 }
+    },
+    {
+      "name": "client_empty_principal_presence",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"module/invoke\",\"params\":{\"context\":{\"plane\":\"broker\",\"providerEndpointId\":\"counter\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\",\"principalId\":\"\"},\"timeoutBudgetMs\":1,\"input\":{\"method\":\"counter/read\",\"argument\":{}}}}",
+      "expect": { "accept": false, "errorCode": -32602, "hostAccept": true }
+    },
+    {
+      "name": "host_null_identity_scalar",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"module/invoke\",\"params\":{\"context\":{\"plane\":\"broker\",\"providerEndpointId\":\"counter\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\",\"tenantId\":null},\"timeoutBudgetMs\":1,\"input\":{\"method\":\"counter/read\",\"argument\":{}}}}",
+      "expect": { "accept": false, "errorCode": -32602, "hostAccept": false }
+    },
+    {
+      "name": "control_empty_endpoint_presence",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"module/list\",\"params\":{\"context\":{\"plane\":\"broker\",\"providerEndpointId\":\"\"},\"timeoutBudgetMs\":1,\"input\":{\"spaceId\":\"dev\"}}}",
+      "expect": { "accept": false, "errorCode": -32602 }
+    },
+    {
+      "name": "null_input_rejected",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"module/list\",\"params\":{\"context\":{\"plane\":\"broker\"},\"timeoutBudgetMs\":1,\"input\":null}}",
+      "expect": { "accept": false, "errorCode": -32602 }
+    },
+    {
+      "name": "invoke_missing_argument",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"module/invoke\",\"params\":{\"context\":{\"plane\":\"broker\",\"providerEndpointId\":\"counter\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"timeoutBudgetMs\":1,\"input\":{\"method\":\"counter/read\"}}}",
+      "expect": { "accept": false, "errorCode": -32602 }
+    },
+    {
+      "name": "malformed_escaped_key",
+      "wire": "{\"jsonrpc\":\"2.0\",\"\\uZZZZ\":0}",
+      "expect": { "accept": false, "errorCode": -32700 }
+    },
+    {
+      "name": "non_finite_json_number",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"result\":1e400}",
+      "expect": { "accept": false, "errorCode": -32700 }
+    },
+    {
+      "name": "end_missing_execution",
+      "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"state/end\",\"params\":{\"context\":{\"plane\":\"broker\",\"providerEndpointId\":\"counter\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"input\":{\"subscriptionId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAX\",\"error\":{\"code\":\"ERROR_CODE_UNAVAILABLE\",\"message\":\"lost\",\"diagnosticId\":\"\",\"retry\":\"safe\"}}}}",
+      "expect": { "accept": false, "errorCode": -32602 }
+    },
+    {
+      "name": "end_forbidden_never",
+      "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"state/end\",\"params\":{\"context\":{\"plane\":\"broker\",\"providerEndpointId\":\"counter\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"input\":{\"subscriptionId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAX\",\"error\":{\"code\":\"ERROR_CODE_FORBIDDEN\",\"message\":\"revoked\",\"diagnosticId\":\"\",\"execution\":\"completed\",\"retry\":\"never\"}}}}",
+      "expect": { "accept": true, "kind": "notification", "method": "state/end" }
+    },
+    {
+      "name": "end_forbidden_safe_rejected",
+      "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"state/end\",\"params\":{\"context\":{\"plane\":\"broker\",\"providerEndpointId\":\"counter\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"input\":{\"subscriptionId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAX\",\"error\":{\"code\":\"ERROR_CODE_FORBIDDEN\",\"message\":\"revoked\",\"diagnosticId\":\"\",\"execution\":\"completed\",\"retry\":\"safe\"}}}}",
+      "expect": { "accept": false, "errorCode": -32602 }
+    },
+    {
+      "name": "end_unknown_execution_rejected",
+      "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"state/end\",\"params\":{\"context\":{\"plane\":\"broker\",\"providerEndpointId\":\"counter\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"input\":{\"subscriptionId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAX\",\"error\":{\"code\":\"ERROR_CODE_UNAVAILABLE\",\"message\":\"lost\",\"diagnosticId\":\"\",\"execution\":\"unknown\",\"retry\":\"safe\"}}}}",
+      "expect": { "accept": false, "errorCode": -32602 }
+    },
+    {
+      "name": "end_business_reason_rejected",
+      "wire": "{\"jsonrpc\":\"2.0\",\"method\":\"state/end\",\"params\":{\"context\":{\"plane\":\"broker\",\"providerEndpointId\":\"counter\",\"spaceId\":\"dev\",\"registrationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAW\"},\"input\":{\"subscriptionId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAX\",\"error\":{\"code\":\"ERROR_CODE_TIMEOUT\",\"message\":\"lost\",\"diagnosticId\":\"\",\"execution\":\"completed\",\"retry\":\"safe\"}}}}",
+      "expect": { "accept": false, "errorCode": -32602 }
+    },
+    {
+      "name": "http_list_accept",
+      "transport": "http",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"module/list\",\"params\":{\"context\":{\"plane\":\"broker\",\"bindingId\":\"bound\"},\"timeoutBudgetMs\":1,\"input\":{\"spaceId\":\"dev\"}}}",
+      "expect": { "accept": true, "kind": "request", "method": "module/list" }
+    },
+    {
+      "name": "http_register_rejected",
+      "transport": "http",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"module/register\",\"params\":{\"context\":{\"plane\":\"broker\",\"bindingId\":\"bound\"},\"timeoutBudgetMs\":1,\"input\":{\"spaceId\":\"dev\",\"integrationId\":\"counter\",\"providerEndpointId\":\"counter\",\"contractId\":\"conex.counter\"}}}",
+      "expect": { "accept": false, "errorCode": -32004 }
+    },
+    {
+      "name": "http_list_missing_binding",
+      "transport": "http",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"method\":\"module/list\",\"params\":{\"context\":{\"plane\":\"broker\"},\"timeoutBudgetMs\":1,\"input\":{\"spaceId\":\"dev\"}}}",
+      "expect": { "accept": false, "errorCode": -32602 }
+    },
+    {
+      "name": "unsubscribe_result_false",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"result\":{\"removed\":false}}",
+      "expect": { "accept": true, "kind": "success", "method": "state/unsubscribe" }
+    },
+    {
+      "name": "unsubscribe_result_null",
+      "wire": "{\"jsonrpc\":\"2.0\",\"id\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"result\":{\"removed\":null}}",
+      "expect": { "accept": false, "errorCode": -32602, "method": "state/unsubscribe" }
+    }
+  ],
+  "limits": [
+    {
+      "name": "s1_defaults_ok",
+      "json": { "maxFrameBytes": 262144, "maxInflight": 32, "maxQueuedBytes": 1048576, "timeoutMs": 8000, "maxSubscriptions": 64, "maxModules": 64 },
+      "accept": true
+    },
+    {
+      "name": "zero_subscriptions",
+      "json": { "maxFrameBytes": 262144, "maxInflight": 32, "maxQueuedBytes": 1048576, "timeoutMs": 8000, "maxSubscriptions": 0, "maxModules": 64 },
+      "accept": false
+    },
+    {
+      "name": "zero_modules",
+      "json": { "maxFrameBytes": 262144, "maxInflight": 32, "maxQueuedBytes": 1048576, "timeoutMs": 8000, "maxSubscriptions": 64, "maxModules": 0 },
+      "accept": false
+    },
+    {
+      "name": "missing_subscriptions",
+      "json": { "maxFrameBytes": 262144, "maxInflight": 32, "maxQueuedBytes": 1048576, "timeoutMs": 8000, "maxModules": 64 },
+      "accept": false
+    },
+    {
+      "name": "negative_modules",
+      "json": { "maxFrameBytes": 262144, "maxInflight": 32, "maxQueuedBytes": 1048576, "timeoutMs": 8000, "maxSubscriptions": 64, "maxModules": -1 },
+      "accept": false
+    }
+    ,{ "name": "zero_frame", "json": { "maxFrameBytes": 0, "maxInflight": 2, "maxQueuedBytes": 2, "timeoutMs": 1, "maxSubscriptions": 1, "maxModules": 1 }, "accept": false },
+    { "name": "zero_inflight", "json": { "maxFrameBytes": 1, "maxInflight": 0, "maxQueuedBytes": 2, "timeoutMs": 1, "maxSubscriptions": 1, "maxModules": 1 }, "accept": false },
+    { "name": "zero_queue", "json": { "maxFrameBytes": 1, "maxInflight": 2, "maxQueuedBytes": 0, "timeoutMs": 1, "maxSubscriptions": 1, "maxModules": 1 }, "accept": false },
+    { "name": "zero_timeout", "json": { "maxFrameBytes": 1, "maxInflight": 2, "maxQueuedBytes": 2, "timeoutMs": 0, "maxSubscriptions": 1, "maxModules": 1 }, "accept": false },
+    { "name": "no_control_slot", "json": { "maxFrameBytes": 1, "maxInflight": 1, "maxQueuedBytes": 2, "timeoutMs": 1, "maxSubscriptions": 1, "maxModules": 1 }, "accept": false },
+    { "name": "no_control_bytes", "json": { "maxFrameBytes": 2, "maxInflight": 2, "maxQueuedBytes": 3, "timeoutMs": 1, "maxSubscriptions": 1, "maxModules": 1 }, "accept": false },
+    { "name": "minimum_control_capacity", "json": { "maxFrameBytes": 1, "maxInflight": 2, "maxQueuedBytes": 2, "timeoutMs": 1, "maxSubscriptions": 1, "maxModules": 1 }, "accept": true },
+    { "name": "u32_maximum", "json": { "maxFrameBytes": 2147483647, "maxInflight": 4294967295, "maxQueuedBytes": 4294967295, "timeoutMs": 4294967295, "maxSubscriptions": 4294967295, "maxModules": 4294967295 }, "accept": true },
+    { "name": "overflow_control_bytes", "json": { "maxFrameBytes": 2147483648, "maxInflight": 2, "maxQueuedBytes": 4294967295, "timeoutMs": 1, "maxSubscriptions": 1, "maxModules": 1 }, "accept": false },
+    { "name": "over_u32_modules", "json": { "maxFrameBytes": 1, "maxInflight": 2, "maxQueuedBytes": 2, "timeoutMs": 1, "maxSubscriptions": 1, "maxModules": 4294967296 }, "accept": false },
+    { "name": "fractional_timeout", "json": { "maxFrameBytes": 1, "maxInflight": 2, "maxQueuedBytes": 2, "timeoutMs": 1.5, "maxSubscriptions": 1, "maxModules": 1 }, "accept": false },
+    { "name": "string_timeout", "json": { "maxFrameBytes": 1, "maxInflight": 2, "maxQueuedBytes": 2, "timeoutMs": "1", "maxSubscriptions": 1, "maxModules": 1 }, "accept": false }
+  ],
+  "counterArguments": [
+    { "name": "add_delta_ok", "schema": "conex.CounterAddInput", "argument": { "delta": 5 }, "accept": true },
+    { "name": "add_delta_negative_ok", "schema": "conex.CounterAddInput", "argument": { "delta": -1 }, "accept": true },
+    { "name": "add_delta_overflow", "schema": "conex.CounterAddInput", "argument": { "delta": 2147483648 }, "accept": false },
+    { "name": "add_delta_below_min", "schema": "conex.CounterAddInput", "argument": { "delta": -2147483649 }, "accept": false },
+    { "name": "add_delta_unknown_field", "schema": "conex.CounterAddInput", "argument": { "delta": 1, "extra": 2 }, "accept": false },
+    { "name": "add_delta_string", "schema": "conex.CounterAddInput", "argument": { "delta": "5" }, "accept": false },
+    { "name": "read_empty", "schema": "conex.CounterReadInput", "argument": {}, "accept": true },
+    { "name": "read_unknown_field", "schema": "conex.CounterReadInput", "argument": { "count": 1 }, "accept": false },
+    { "name": "state_value_ok", "schema": "conex.CounterStateValue", "argument": { "count": 7 }, "accept": true },
+    { "name": "state_value_overflow", "schema": "conex.CounterStateValue", "argument": { "count": 2147483648 }, "accept": false },
+    { "name": "state_value_string", "schema": "conex.CounterStateValue", "argument": { "count": "7" }, "accept": false },
+    { "name": "add_null_input", "schema": "conex.CounterAddInput", "argument": null, "accept": false },
+    { "name": "add_null_delta", "schema": "conex.CounterAddInput", "argument": { "delta": null }, "accept": false },
+    { "name": "add_delta_u64_bypasses_i64", "schema": "conex.CounterAddInput", "argument": { "delta": 18446744073709551615 }, "accept": false },
+    { "name": "counter_result_u64_exact", "schema": "conex.CounterResult", "argument": { "count": -2147483648, "revision": "9007199254740993" }, "accept": true },
+    { "name": "counter_result_noncanonical_revision", "schema": "conex.CounterResult", "argument": { "count": 0, "revision": "00" }, "accept": false },
+    { "name": "counter_result_numeric_revision", "schema": "conex.CounterResult", "argument": { "count": 0, "revision": 1 }, "accept": false }
+  ]
+}

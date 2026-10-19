@@ -6,6 +6,7 @@
 
 pub mod aggregate;
 pub mod audit;
+pub mod capability;
 pub mod contracts;
 pub mod execution;
 pub mod host;

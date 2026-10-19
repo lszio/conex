@@ -6,6 +6,7 @@ pub mod audit_file;
 pub mod auth;
 pub mod binding;
 pub mod broker;
+pub mod capability;
 pub mod catalog;
 pub mod clients;
 pub mod config;

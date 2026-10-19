@@ -1,0 +1,16 @@
+[package]
+name = "conex-sdk"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Embeddable symmetric conex S1 JSON WebSocket SDK"
+
+[dependencies]
+conex-proto.workspace = true
+futures = "0.3"
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tokio-tungstenite = { version = "0.30.0", features = ["rustls-tls-native-roots"] }

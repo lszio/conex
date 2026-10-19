@@ -53,6 +53,10 @@ message RequestContext {
   // frames that carry no user identity.
   string principal_id = 4;
   string tenant_id = 5;
+  // S1 模块上下文（契约 §5.2）：调用/订阅目标所在 Space 与注册实例。
+  // 客户端不得自行填充 principal/tenant，但必须携带这两个标识。
+  string space_id = 6;
+  string registration_id = 7;
 }
 
 message Success {

@@ -168,16 +168,26 @@ fn default_limits() -> conex_proto::Limits {
         max_inflight: 4,
         max_queued_bytes: 8_388_608,
         timeout_ms: 8_000,
+        // Legacy bootstrap has no module or subscription capabilities.
+        max_subscriptions: 0,
+        max_modules: 0,
     }
 }
 
 fn limits_json(limits: conex_proto::Limits) -> serde_json::Value {
-    serde_json::json!({
+    let mut value = serde_json::json!({
         "maxFrameBytes": limits.max_frame_bytes,
         "maxInflight": limits.max_inflight,
         "maxQueuedBytes": limits.max_queued_bytes,
         "timeoutMs": limits.timeout_ms,
-    })
+    });
+    if limits.max_subscriptions != 0 {
+        value["maxSubscriptions"] = limits.max_subscriptions.into();
+    }
+    if limits.max_modules != 0 {
+        value["maxModules"] = limits.max_modules.into();
+    }
+    value
 }
 
 fn limits_from_json(value: &serde_json::Value) -> Result<conex_proto::Limits, BootstrapError> {
@@ -194,6 +204,16 @@ fn limits_from_json(value: &serde_json::Value) -> Result<conex_proto::Limits, Bo
         max_inflight: number("maxInflight")?,
         max_queued_bytes: number("maxQueuedBytes")?,
         timeout_ms: number("timeoutMs")?,
+        max_subscriptions: value
+            .get("maxSubscriptions")
+            .map(|_| number("maxSubscriptions"))
+            .transpose()?
+            .unwrap_or(0),
+        max_modules: value
+            .get("maxModules")
+            .map(|_| number("maxModules"))
+            .transpose()?
+            .unwrap_or(0),
     })
 }
 
@@ -271,6 +291,8 @@ pub struct ServerHandshake {
     server_capabilities: conex_proto::NegotiatedCapabilities,
     link_identity: conex_proto::LinkIdentity,
     limits: conex_proto::Limits,
+    /// S1 ready confirms the client's own hello declarations, not the host's.
+    s1_client_provides: Option<Vec<String>>,
 }
 
 impl ServerHandshake {
@@ -321,7 +343,23 @@ impl ServerHandshake {
                 tenant_id: String::new(),
             },
             limits: default_limits(),
+            s1_client_provides: None,
         }
+    }
+
+    /// Supply host limits and authenticated link identity before ingesting hello.
+    pub fn configure_s1(
+        &mut self,
+        limits: conex_proto::Limits,
+        identity: conex_proto::LinkIdentity,
+    ) {
+        self.limits = limits;
+        self.link_identity = identity;
+    }
+
+    /// Offered limits before ready, negotiated limits after successful ready.
+    pub fn limits(&self) -> conex_proto::Limits {
+        self.limits
     }
 
     pub fn state(&self) -> &BootstrapState {
@@ -388,23 +426,49 @@ impl ServerHandshake {
         {
             return Err(BootstrapError::UnsupportedCapability(missing.clone()));
         }
+        let s1 = req.requires.iter().any(|method| {
+            matches!(
+                method.as_str(),
+                "module/register"
+                    | "module/unregister"
+                    | "module/list"
+                    | "module/invoke"
+                    | "module/cancel"
+                    | "state/subscribe"
+                    | "state/unsubscribe"
+            )
+        });
+        if s1 {
+            conex_proto::capability::validate_limits(&self.limits)
+                .map_err(|_| BootstrapError::LimitsMismatch)?;
+            if !conex_proto::wire::is_ulid(&self.negotiation_id) {
+                return Err(BootstrapError::MalformedEnvelope(
+                    "S1 bindingId must be a ULID".into(),
+                ));
+            }
+        }
+        let limits = if s1 { self.limits } else { default_limits() };
         let response = conex_proto::HelloResponse {
-            binding_id: String::new(),
+            binding_id: self.negotiation_id.clone(),
             expires_in_ms: 0,
             profile_id: negotiated.as_str().to_owned(),
             plane: self.server_plane as i32,
             provides: self.server_capabilities.provides.clone(),
             rejected_capabilities: Vec::new(),
-            limits: Some(self.limits),
+            limits: Some(limits),
         };
-        let response = serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": value.get("id").cloned().unwrap_or(serde_json::Value::Null),
-            "result": {
+        let result = if s1 {
+            let mut result = serde_json::to_value(&response)
+                .map_err(|e| BootstrapError::MalformedEnvelope(e.to_string()))?;
+            // Explicit zero satisfies the generated JSON schema's required scalar.
+            result["expiresInMs"] = response.expires_in_ms.into();
+            result
+        } else {
+            serde_json::json!({
                 "negotiationId": self.negotiation_id,
                 "profileId": response.profile_id,
-                "plane": plane_name(conex_proto::Plane::try_from(response.plane).unwrap_or(self.server_plane)),
-                "limits": limits_json(response.limits.unwrap_or_else(default_limits)),
+                "plane": plane_name(self.server_plane),
+                "limits": limits_json(limits),
                 "provides": response.provides,
                 "requires": self.server_capabilities.requires,
                 "linkIdentity": {
@@ -412,7 +476,12 @@ impl ServerHandshake {
                     "peerId": self.link_identity.peer_id,
                     "tenantId": self.link_identity.tenant_id,
                 },
-            }
+            })
+        };
+        let response = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": value.get("id").cloned().unwrap_or(serde_json::Value::Null),
+            "result": result,
         });
         let json = serde_json::to_string(&response)
             .map_err(|e| BootstrapError::MalformedEnvelope(e.to_string()))?;
@@ -420,6 +489,8 @@ impl ServerHandshake {
             return Err(BootstrapError::BufferExceeded);
         }
         self.agreed_profile = Some(negotiated);
+        self.limits = limits;
+        self.s1_client_provides = s1.then_some(req.provides);
         self.state = BootstrapState::AwaitingReady;
         Ok(BootstrapFrame { json })
     }
@@ -483,17 +554,43 @@ impl ServerHandshake {
                 server: plane_name(self.server_plane).to_string(),
             });
         }
-        if req.provides != self.server_capabilities.provides {
-            let missing = self
-                .server_capabilities
-                .provides
+        let expected_provides = self
+            .s1_client_provides
+            .as_ref()
+            .unwrap_or(&self.server_capabilities.provides);
+        let provides_match = if self.s1_client_provides.is_some() {
+            expected_provides
+                .iter()
+                .all(|capability| req.provides.contains(capability))
+                && req
+                    .provides
+                    .iter()
+                    .all(|capability| expected_provides.contains(capability))
+        } else {
+            req.provides == *expected_provides
+        };
+        if !provides_match {
+            let missing = expected_provides
                 .iter()
                 .find(|capability| !req.provides.contains(capability))
                 .cloned()
                 .unwrap_or_else(|| "capability set mismatch".into());
             return Err(BootstrapError::UnsupportedCapability(missing));
         }
-        if req.limits.as_ref().ok_or(BootstrapError::LimitsMismatch)? != &self.limits {
+        let limits = req.limits.ok_or(BootstrapError::LimitsMismatch)?;
+        if self.s1_client_provides.is_some() {
+            conex_proto::capability::validate_limits(&limits)
+                .map_err(|_| BootstrapError::LimitsMismatch)?;
+            if limits.max_frame_bytes > self.limits.max_frame_bytes
+                || limits.max_inflight > self.limits.max_inflight
+                || limits.max_queued_bytes > self.limits.max_queued_bytes
+                || limits.timeout_ms > self.limits.timeout_ms
+                || limits.max_subscriptions > self.limits.max_subscriptions
+                || limits.max_modules > self.limits.max_modules
+            {
+                return Err(BootstrapError::LimitsMismatch);
+            }
+        } else if limits != self.limits {
             return Err(BootstrapError::LimitsMismatch);
         }
         let ready_response = conex_proto::ReadyResponse {
@@ -501,32 +598,38 @@ impl ServerHandshake {
             profile_id: agreed.as_str().to_owned(),
             plane: self.server_plane as i32,
             provides: self.server_capabilities.provides.clone(),
-            limits: Some(self.limits),
+            limits: Some(limits),
             link_identity: Some(self.link_identity.clone()),
         };
-        let identity = ready_response.link_identity.clone().unwrap_or_default();
+        let result = if self.s1_client_provides.is_some() {
+            serde_json::to_value(&ready_response)
+                .map_err(|e| BootstrapError::MalformedEnvelope(e.to_string()))?
+        } else {
+            serde_json::json!({
+                "negotiationId": ready_response.negotiation_id,
+                "profileId": ready_response.profile_id,
+                "plane": plane_name(self.server_plane),
+                "provides": ready_response.provides,
+                "requires": self.server_capabilities.requires,
+                "limits": limits_json(limits),
+                "linkIdentity": {
+                    "linkId": self.link_identity.link_id,
+                    "peerId": self.link_identity.peer_id,
+                    "tenantId": self.link_identity.tenant_id,
+                },
+            })
+        };
         let response = serde_json::json!({
             "jsonrpc": "2.0",
             "id": value.get("id").cloned().unwrap_or(serde_json::Value::Null),
-            "result": {
-                "negotiationId": ready_response.negotiation_id,
-                "profileId": ready_response.profile_id,
-                "plane": plane_name(conex_proto::Plane::try_from(ready_response.plane).unwrap_or(self.server_plane)),
-                "provides": ready_response.provides,
-                "requires": self.server_capabilities.requires,
-                "limits": limits_json(ready_response.limits.unwrap_or_else(default_limits)),
-                "linkIdentity": {
-                    "linkId": identity.link_id,
-                    "peerId": identity.peer_id,
-                    "tenantId": identity.tenant_id,
-                },
-            }
+            "result": result,
         });
         let json = serde_json::to_string(&response)
             .map_err(|e| BootstrapError::MalformedEnvelope(e.to_string()))?;
         if json.len() > MAX_BOOTSTRAP_MESSAGE_BYTES {
             return Err(BootstrapError::BufferExceeded);
         }
+        self.limits = limits;
         self.state = BootstrapState::Ready {
             profile: agreed,
             negotiation_id: self.negotiation_id.clone(),
@@ -1128,5 +1231,183 @@ mod tests {
             }),
             Err(BootstrapError::UnsupportedCapability(_))
         ));
+    }
+
+    fn s1_handshake() -> (ServerHandshake, serde_json::Value, Vec<String>) {
+        let id = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
+        let mut server = ServerHandshake::new_with_profiles_and_capabilities(
+            &[ProfileId::JsonRpc2Wss],
+            conex_proto::Plane::Broker,
+            [
+                "agent/heartbeat",
+                "module/list",
+                "module/invoke",
+                "state/subscribe",
+            ]
+            .map(str::to_owned)
+            .to_vec(),
+            id.into(),
+        );
+        server.configure_s1(
+            conex_proto::Limits {
+                max_subscriptions: 64,
+                max_modules: 32,
+                ..default_limits()
+            },
+            conex_proto::LinkIdentity {
+                link_id: id.into(),
+                peer_id: "node-a".into(),
+                tenant_id: "tenant-a".into(),
+            },
+        );
+        let provides = ["module/invoke", "state/subscribe"]
+            .map(str::to_owned)
+            .to_vec();
+        let hello = server
+            .ingest(BootstrapFrame {
+                json: serde_json::json!({
+                    "jsonrpc": "2.0", "id": id, "method": "conex/hello",
+                    "params": {
+                        "profileId": "conex-jsonrpc2-wss", "plane": "broker",
+                        "provides": provides, "requires": ["module/list"],
+                    },
+                })
+                .to_string(),
+            })
+            .unwrap();
+        (server, serde_json::from_str(&hello.json).unwrap(), provides)
+    }
+
+    fn s1_ready(
+        hello: &serde_json::Value,
+        provides: &[String],
+        limits: serde_json::Value,
+    ) -> BootstrapFrame {
+        BootstrapFrame {
+            json: serde_json::json!({
+                "jsonrpc": "2.0", "id": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "method": "conex/ready",
+                "params": {
+                    "negotiationId": hello["result"]["bindingId"],
+                    "profileId": "conex-jsonrpc2-wss", "plane": "broker",
+                    "provides": provides, "limits": limits,
+                },
+            })
+            .to_string(),
+        }
+    }
+
+    #[test]
+    fn s1_accepts_asymmetric_provides_and_six_lowered_limits() {
+        let (mut server, hello, mut provides) = s1_handshake();
+        let typed: conex_proto::HelloResponse =
+            serde_json::from_value(hello["result"].clone()).unwrap();
+        assert!(conex_proto::wire::is_ulid(&typed.binding_id));
+        assert_eq!(typed.limits, Some(server.limits()));
+        assert_ne!(typed.provides, provides);
+        let lowered = conex_proto::Limits {
+            max_frame_bytes: 524_288,
+            max_inflight: 2,
+            max_queued_bytes: 4_194_304,
+            timeout_ms: 4_000,
+            max_subscriptions: 16,
+            max_modules: 8,
+        };
+        provides.reverse();
+        let response = server
+            .ingest(s1_ready(&hello, &provides, limits_json(lowered)))
+            .unwrap();
+        let value: serde_json::Value = serde_json::from_str(&response.json).unwrap();
+        let ready: conex_proto::ReadyResponse =
+            serde_json::from_value(value["result"].clone()).unwrap();
+        assert_eq!(ready.negotiation_id, typed.binding_id);
+        assert_eq!(ready.provides, typed.provides);
+        assert_eq!(ready.limits, Some(lowered));
+        assert_eq!(server.limits(), lowered);
+        assert_eq!(ready.link_identity.as_ref(), Some(server.link_identity()));
+        assert!(matches!(server.state(), BootstrapState::Ready { .. }));
+    }
+
+    #[test]
+    fn s1_rejects_raised_missing_or_zero_limits() {
+        for field in [
+            "maxFrameBytes",
+            "maxInflight",
+            "maxQueuedBytes",
+            "timeoutMs",
+            "maxSubscriptions",
+            "maxModules",
+        ] {
+            for invalid in 0..3 {
+                let (mut server, hello, provides) = s1_handshake();
+                let offered = server.limits();
+                let mut limits = hello["result"]["limits"].clone();
+                match invalid {
+                    0 => limits[field] = serde_json::json!(limits[field].as_u64().unwrap() + 1),
+                    1 => {
+                        limits.as_object_mut().unwrap().remove(field);
+                    }
+                    _ => limits[field] = serde_json::json!(0),
+                }
+                assert!(
+                    server.ingest(s1_ready(&hello, &provides, limits)).is_err(),
+                    "{field}"
+                );
+                assert_eq!(server.limits(), offered);
+                assert!(matches!(server.state(), BootstrapState::AwaitingReady));
+            }
+        }
+    }
+
+    #[test]
+    fn s1_rejects_changed_client_provides() {
+        let (mut server, hello, _) = s1_handshake();
+        let provides = vec!["module/invoke".into()];
+        assert!(matches!(
+            server.ingest(s1_ready(
+                &hello,
+                &provides,
+                hello["result"]["limits"].clone()
+            )),
+            Err(BootstrapError::UnsupportedCapability(_))
+        ));
+    }
+
+    #[test]
+    fn legacy_limits_omit_s1_fields_and_default_them_to_zero() {
+        let limits = limits_json(default_limits());
+        assert!(limits.get("maxSubscriptions").is_none());
+        assert!(limits.get("maxModules").is_none());
+        assert_eq!(limits_from_json(&limits).unwrap(), default_limits());
+    }
+
+    #[test]
+    fn s1_configured_server_preserves_legacy_limit_echo() {
+        let mut server = ServerHandshake::new(ProfileId::JsonRpc2Wss, conex_proto::Plane::Broker);
+        server.configure_s1(
+            conex_proto::Limits {
+                max_subscriptions: 64,
+                max_modules: 32,
+                ..default_limits()
+            },
+            conex_proto::LinkIdentity::default(),
+        );
+        let mut client = ClientHandshake::new();
+        let hello = client
+            .build_hello(
+                ProfileId::JsonRpc2Wss,
+                conex_proto::Plane::Broker,
+                vec![],
+                vec![],
+            )
+            .unwrap();
+        let hello_result = server.ingest(hello).unwrap();
+        let ready = client.ingest(hello_result).unwrap();
+        assert_eq!(ready.limits, Some(default_limits()));
+        let ready_result = server
+            .ingest(client.build_ready_frame(&ready).unwrap())
+            .unwrap();
+        client.ingest(ready_result).unwrap();
+        assert_eq!(server.limits(), default_limits());
+        assert!(matches!(server.state(), BootstrapState::Ready { .. }));
     }
 }

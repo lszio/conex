@@ -79,6 +79,9 @@ async fn make_broker(
         host_origin: Some("conex://broker.local".into()),
         guest_principal: None,
         remote: None,
+        capabilities: None,
+        calls: None,
+        state: None,
     };
     Arc::new(Broker::new(host, deps))
 }
@@ -115,6 +118,12 @@ async fn invoke(
             deadline: deadline(),
             role: "service".into(),
             link_id: None,
+            generation: 0,
+            max_frame_bytes: conex_core::Limits::default().max_frame_bytes,
+            request_id: String::new(),
+            binding_id: None,
+            space_id: String::new(),
+            registration_id: String::new(),
         })
         .await
         .expect("broker call")
@@ -253,6 +262,12 @@ async fn session_lifecycle_and_binding_mismatch() {
             deadline: deadline(),
             role: "service".into(),
             link_id: None,
+            generation: 0,
+            max_frame_bytes: conex_core::Limits::default().max_frame_bytes,
+            request_id: String::new(),
+            binding_id: None,
+            space_id: String::new(),
+            registration_id: String::new(),
         })
         .await
         .expect_err("binding mismatch must reject");

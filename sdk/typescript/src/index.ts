@@ -40,3 +40,14 @@ export {
   AgentLinkSummary,
 } from "./generated/conex/dashboard";
 export * from "./ws-client";
+export type {
+  CapabilityContract, CapabilityOptions, ExecutionClass, MethodContract, StateContract,
+  ModuleReference, ModuleProvider, VerifiedContext, Invocation, InvokeOptions,
+} from "./capability";
+export { AtomicState } from "./state";
+export type { Sample, StateObserver, StateOpening, StateProvider, StateSubscription } from "./state";
+export type {
+  ModuleRegisterInput, ModuleRegisterResult, ModuleInfo, ModuleListInput, ModuleListResult,
+  ModuleInvokeInput, ModuleCancelInput, ModuleCancelResult, StateSample,
+  StateSubscribeInput, StateSubscribeResult, StateUpdateInput, StateEndInput,
+} from "./generated/conex/capability";

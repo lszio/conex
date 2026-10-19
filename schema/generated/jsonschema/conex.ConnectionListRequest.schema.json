@@ -899,6 +899,59 @@
       },
       "type": "object"
     },
+    "conex.CounterAddInput": {
+      "additionalProperties": false,
+      "properties": {
+        "delta": {
+          "maximum": 2147483647,
+          "minimum": -2147483648,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "delta"
+      ],
+      "type": "object"
+    },
+    "conex.CounterReadInput": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    },
+    "conex.CounterResult": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "maximum": 2147483647,
+          "minimum": -2147483648,
+          "type": "integer"
+        },
+        "revision": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "count",
+        "revision"
+      ],
+      "type": "object"
+    },
+    "conex.CounterStateValue": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "maximum": 2147483647,
+          "minimum": -2147483648,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "count"
+      ],
+      "type": "object"
+    },
     "conex.DataChunk": {
       "additionalProperties": false,
       "properties": {
@@ -1256,7 +1309,17 @@
           "minimum": 0,
           "type": "integer"
         },
+        "maxModules": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
         "maxQueuedBytes": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maxSubscriptions": {
           "maximum": 4294967295,
           "minimum": 0,
           "type": "integer"
@@ -1271,7 +1334,9 @@
         "maxFrameBytes",
         "maxInflight",
         "maxQueuedBytes",
-        "timeoutMs"
+        "timeoutMs",
+        "maxSubscriptions",
+        "maxModules"
       ],
       "type": "object"
     },
@@ -1578,6 +1643,187 @@
           "$ref": "#/$defs/conex.Success"
         }
       },
+      "type": "object"
+    },
+    "conex.ModuleCancelInput": {
+      "additionalProperties": false,
+      "properties": {
+        "requestId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "requestId"
+      ],
+      "type": "object"
+    },
+    "conex.ModuleCancelResult": {
+      "additionalProperties": false,
+      "properties": {
+        "requested": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "requested"
+      ],
+      "type": "object"
+    },
+    "conex.ModuleInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "contractId": {
+          "type": "string"
+        },
+        "integrationId": {
+          "type": "string"
+        },
+        "methods": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "providerEndpointId": {
+          "type": "string"
+        },
+        "registrationId": {
+          "type": "string"
+        },
+        "spaceId": {
+          "type": "string"
+        },
+        "states": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "providerEndpointId",
+        "registrationId",
+        "spaceId",
+        "integrationId",
+        "contractId"
+      ],
+      "type": "object"
+    },
+    "conex.ModuleInvokeInput": {
+      "additionalProperties": false,
+      "properties": {
+        "argument": {},
+        "method": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "method"
+      ],
+      "type": "object"
+    },
+    "conex.ModuleListInput": {
+      "additionalProperties": false,
+      "properties": {
+        "spaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "spaceId"
+      ],
+      "type": "object"
+    },
+    "conex.ModuleListResult": {
+      "additionalProperties": false,
+      "properties": {
+        "modules": {
+          "items": {
+            "$ref": "#/$defs/conex.ModuleInfo"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "conex.ModuleRegisterInput": {
+      "additionalProperties": false,
+      "properties": {
+        "contractId": {
+          "type": "string"
+        },
+        "integrationId": {
+          "type": "string"
+        },
+        "providerEndpointId": {
+          "type": "string"
+        },
+        "spaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "spaceId",
+        "integrationId",
+        "providerEndpointId",
+        "contractId"
+      ],
+      "type": "object"
+    },
+    "conex.ModuleRegisterResult": {
+      "additionalProperties": false,
+      "properties": {
+        "contractId": {
+          "type": "string"
+        },
+        "integrationId": {
+          "type": "string"
+        },
+        "providerEndpointId": {
+          "type": "string"
+        },
+        "registrationId": {
+          "type": "string"
+        },
+        "spaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "registrationId",
+        "providerEndpointId",
+        "spaceId",
+        "integrationId",
+        "contractId"
+      ],
+      "type": "object"
+    },
+    "conex.ModuleUnregisterInput": {
+      "additionalProperties": false,
+      "properties": {
+        "providerEndpointId": {
+          "type": "string"
+        },
+        "registrationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "providerEndpointId",
+        "registrationId"
+      ],
+      "type": "object"
+    },
+    "conex.ModuleUnregisterResult": {
+      "additionalProperties": false,
+      "properties": {
+        "removed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "removed"
+      ],
       "type": "object"
     },
     "conex.NegotiatedCapabilities": {
@@ -1938,6 +2184,12 @@
         "providerEndpointId": {
           "type": "string"
         },
+        "registrationId": {
+          "type": "string"
+        },
+        "spaceId": {
+          "type": "string"
+        },
         "tenantId": {
           "type": "string"
         }
@@ -1946,7 +2198,9 @@
         "providerEndpointId",
         "plane",
         "principalId",
-        "tenantId"
+        "tenantId",
+        "spaceId",
+        "registrationId"
       ],
       "type": "object"
     },
@@ -2738,6 +2992,127 @@
           "type": "string"
         }
       },
+      "type": "object"
+    },
+    "conex.StateEndInput": {
+      "additionalProperties": false,
+      "properties": {
+        "error": {
+          "$ref": "#/$defs/conex.Error"
+        },
+        "subscriptionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "subscriptionId"
+      ],
+      "type": "object"
+    },
+    "conex.StateSample": {
+      "additionalProperties": false,
+      "properties": {
+        "quality": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "sampledAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "value": {}
+      },
+      "required": [
+        "revision",
+        "sampledAtMs",
+        "quality"
+      ],
+      "type": "object"
+    },
+    "conex.StateSubscribeInput": {
+      "additionalProperties": false,
+      "properties": {
+        "argument": {},
+        "state": {
+          "type": "string"
+        },
+        "subscriptionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "subscriptionId",
+        "state"
+      ],
+      "type": "object"
+    },
+    "conex.StateSubscribeResult": {
+      "additionalProperties": false,
+      "properties": {
+        "registrationId": {
+          "type": "string"
+        },
+        "snapshot": {
+          "$ref": "#/$defs/conex.StateSample"
+        },
+        "subscriptionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "subscriptionId",
+        "registrationId"
+      ],
+      "type": "object"
+    },
+    "conex.StateUnsubscribeInput": {
+      "additionalProperties": false,
+      "properties": {
+        "subscriptionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "subscriptionId"
+      ],
+      "type": "object"
+    },
+    "conex.StateUnsubscribeResult": {
+      "additionalProperties": false,
+      "properties": {
+        "removed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "removed"
+      ],
+      "type": "object"
+    },
+    "conex.StateUpdateInput": {
+      "additionalProperties": false,
+      "properties": {
+        "sample": {
+          "$ref": "#/$defs/conex.StateSample"
+        },
+        "seq": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "subscriptionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "subscriptionId",
+        "seq"
+      ],
       "type": "object"
     },
     "conex.StreamAckRequest": {

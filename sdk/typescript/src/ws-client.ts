@@ -1,5 +1,12 @@
+import { CapabilitySession } from "./capability";
+import type { CapabilityOptions, Invocation, InvokeOptions, ModuleReference } from "./capability";
+import type { ModuleRegisterInput } from "./generated/conex/capability";
+import type { Sample, StateSubscription } from "./state";
 import { ConexError, toConexError } from "./errors";
 import type { Limits } from "./generated/conex/common";
+import { Plane } from "./generated/conex/common";
+import { HelloRequest, ReadyRequest } from "./generated/conex/control";
+import { isUlid, validateDomainSchema } from "./s1-wire";
 import type { LinkIdentity } from "./generated/conex/control";
 import { mintUlid } from "./client";
 import type {
@@ -29,10 +36,6 @@ const DEFAULT_TIMEOUT_MS = 8000;
 const DEFAULT_TICKET_PATH = "/tickets";
 const DEFAULT_WS_PATH = "/wss";
 const MAX_FRAME_BYTES = 1024 * 1024;
-/// Calls that may wait for a reconnect. A page polls on a timer, so a long
-/// outage must not turn into an unbounded pile of resends that all arrive at
-/// once when the link comes back.
-const MAX_QUEUED_CALLS = 32;
 const RECONNECT_DELAY_MS = 100;
 
 type WebSocketHandler = (event: { data: unknown }) => void;
@@ -43,6 +46,7 @@ export interface WebSocketLike {
   onerror: (() => void) | null;
   onclose: (() => void) | null;
   send(data: string): void;
+  readonly bufferedAmount?: number;
   close(): void;
 }
 
@@ -68,6 +72,11 @@ export interface ConexWsClientOptions {
   timeoutMs?: number;
   WebSocket?: WebSocketConstructor;
   fetch?: WsFetch;
+  /** Enable S1 only with preinstalled contracts. Browser UI mode needs no modules. */
+  capabilities?: CapabilityOptions;
+  tokenProvider?: () => Promise<string>;
+  /** Service WebSocket authentication: Bun/Node headers, never a query token. */
+  createWebSocket?: (url: string, headers: Readonly<Record<string, string>>) => WebSocketLike;
 }
 
 export interface ConexWsEvent {
@@ -100,21 +109,12 @@ export type ConexWsEventListener = (event: ConexWsEvent) => void;
 
 interface PendingCall {
   method: string;
-  /** The exact frame that was sent, kept so a reconnect can resend it. */
   message: string;
   resolve: (value: unknown) => void;
   reject: (reason: unknown) => void;
   timer: ReturnType<typeof setTimeout>;
 }
 
-/** A call that survived a disconnect and is waiting for the next link. */
-interface QueuedCall {
-  id: string;
-  method: string;
-  message: string;
-  resolve: (value: unknown) => void;
-  reject: (reason: unknown) => void;
-}
 
 interface Ticket {
   value: string;
@@ -168,10 +168,11 @@ export class ConexWsClient {
   /// Notifications the SDK does not itself consume, for the caller to route.
   private readonly notificationListeners = new Set<ConexNotificationListener>();
   private readonly pending = new Map<string, PendingCall>();
-  /** Calls issued while the link was down, replayed in order on reconnect. */
-  private readonly queued: QueuedCall[] = [];
   private closed = false;
   private handshake?: { step: "hello" | "ready"; helloId: string; negotiationId: string; helloResult?: Record<string, unknown> };
+  private readonly s1?: CapabilitySession;
+  private readonly tokenProvider?: () => Promise<string>;
+  private readonly createWebSocket?: ConexWsClientOptions["createWebSocket"];
 
   constructor(options: ConexWsClientOptions) {
     this.origin = options.origin;
@@ -182,7 +183,21 @@ export class ConexWsClient {
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.fetchImpl = options.fetch ?? ((url, init) => globalThis.fetch(url, init));
     this.WebSocketImpl = options.WebSocket ?? (globalThis.WebSocket as unknown as WebSocketConstructor);
-    if (!this.WebSocketImpl) {
+    this.tokenProvider = options.tokenProvider;
+    this.createWebSocket = options.createWebSocket;
+    if (this.tokenProvider && !this.createWebSocket) throw new Error("service auth requires createWebSocket with Authorization headers");
+    if (options.capabilities) this.s1 = new CapabilitySession(options.capabilities, mintUlid, (text, control) => {
+      if (!this.socket || this.currentState !== "ready") throw new Error("socket not ready");
+      const limits = this.negotiationResult!.limits;
+      const bytes = new TextEncoder().encode(text).byteLength;
+      const ceiling = limits.maxQueuedBytes! - (control ? 0 : limits.maxFrameBytes!);
+      if ((this.socket.bufferedAmount ?? 0) + (this.s1?.queuedBytes ?? 0) + bytes > ceiling) throw new ConexError("socket queue full", { code: -32015 });
+      this.socket.send(text);
+    }, () => {
+      const socket = this.socket;
+      if (socket) { this.handleTransportClose(socket); socket.close(); }
+    }, () => this.socket?.bufferedAmount ?? 0);
+    if (!this.WebSocketImpl && !this.createWebSocket) {
       throw new Error("WebSocket is not available");
     }
   }
@@ -226,6 +241,31 @@ export class ConexWsClient {
     });
     this.connectPromise = tracked;
     return tracked;
+  }
+
+  publishModule(module: Required<ModuleRegisterInput>): Promise<ModuleReference> {
+    if (!this.s1) throw new ConexError("S1 not configured", { code: -32004 });
+    return this.s1.publish(module);
+  }
+
+  unpublishModule(reference: ModuleReference): Promise<{ removed: boolean }> {
+    if (!this.s1) throw new ConexError("S1 not configured", { code: -32004 });
+    return this.s1.unpublish(reference);
+  }
+
+  listModules(spaceId: string): Promise<ModuleReference[]> {
+    if (!this.s1) throw new ConexError("S1 not configured", { code: -32004 });
+    return this.s1.listModules(spaceId);
+  }
+
+  invoke<I, O>(reference: ModuleReference, method: string, argument: I, options?: InvokeOptions): Invocation<O> {
+    if (!this.s1) throw new ConexError("S1 not configured", { code: -32004 });
+    return this.s1.invoke<I, O>(reference, method, argument, options);
+  }
+
+  subscribe<I, T>(reference: ModuleReference, state: string, argument: I, update: (sample: Sample<T>) => void, options?: InvokeOptions): StateSubscription<T> {
+    if (!this.s1) throw new ConexError("S1 not configured", { code: -32004 });
+    return this.s1.subscribe(reference, state, argument, update, options);
   }
 
   listEndpoints(input: EndpointListRequest = {}): Promise<EndpointListResult> {
@@ -313,12 +353,7 @@ export class ConexWsClient {
     this.currentState = "closed";
     this.emit({ phase: "closed", summary: "client closed" });
     this.rejectPending(new ConexError("client is closed", { code: -32011 }));
-    // Queued calls are waiting for a link that will never come, so they are
-    // failed here too; otherwise their promises would never settle.
-    for (const call of this.queued) {
-      call.reject(new ConexError("client is closed", { code: -32011 }));
-    }
-    this.queued.length = 0;
+    this.s1?.disconnected();
     const socket = this.socket;
     this.socket = undefined;
     try {
@@ -330,20 +365,23 @@ export class ConexWsClient {
   private async establish(reconnecting: boolean): Promise<void> {
     if (this.closed) throw new ConexError("client is closed", { code: -32011 });
     this.setState(reconnecting ? "reconnecting" : "authenticating");
-    const ticket = await this.getTicket(reconnecting);
+    const token = await this.tokenProvider?.();
+    const ticket = this.tokenProvider ? undefined : await this.getTicket(reconnecting);
     if (this.closed) throw new ConexError("client is closed", { code: -32011 });
     this.setState("connecting");
-    const socket = new this.WebSocketImpl(this.websocketUrl(ticket));
+    const socket = this.createWebSocket
+      ? this.createWebSocket(this.websocketUrl(ticket), token ? { Authorization: "Bearer " + token } : {})
+      : new this.WebSocketImpl(this.websocketUrl(ticket));
+    if (this.s1 && (typeof socket.bufferedAmount !== "number" || !Number.isFinite(socket.bufferedAmount) || socket.bufferedAmount < 0)) {
+      socket.close();
+      throw new Error("S1 WebSocket must expose bufferedAmount");
+    }
     this.socket = socket;
     this.setState("negotiating");
     await this.negotiate(socket);
     if (this.closed || this.socket !== socket) throw new ConexError("client is closed", { code: -32011 });
     this.setState("ready");
     this.emit({ phase: "ready", summary: "ready" });
-    // The link is back: anything the outage interrupted goes out now, before
-    // the page issues its next poll, so the visitor sees one refresh instead
-    // of an error followed by a stale list.
-    this.flushQueued();
   }
 
   private getTicket(force = false): Promise<string> {
@@ -409,11 +447,17 @@ export class ConexWsClient {
     };
     socket.onopen = () => {
       try {
+        const hello = this.s1 ? HelloRequest.toJSON({
+          profileId: PROFILE_ID, plane: Plane.PLANE_BROKER,
+          provides: this.s1.provides, requires: this.s1.requires,
+        }) : undefined;
         socket.send(JSON.stringify({
           jsonrpc: "2.0",
           id: helloId,
           method: "conex/hello",
-          params: { profileId: PROFILE_ID, plane: PLANE, provides: [], requires: [] },
+          params: this.s1
+            ? { context: { plane: PLANE }, timeoutBudgetMs: this.timeoutMs, input: hello }
+            : { profileId: PROFILE_ID, plane: PLANE, provides: [], requires: [] },
         }));
       } catch (error) {
         fail(new ConexError("websocket send failed", { details: String(error) }));
@@ -436,6 +480,7 @@ export class ConexWsClient {
         return;
       }
       if (this.currentState !== "negotiating") {
+        if (this.s1?.receive(event.data)) return;
         // A server-initiated hello carries no id: it must be answered as a
         // notification, then surfaced so the page can show it.
         if (message.id === undefined && typeof message.method === "string") {
@@ -469,36 +514,66 @@ export class ConexWsClient {
     if (message.error) throw errorFrom(message.error);
     if (!message.result || typeof message.result !== "object") throw new ConexError("websocket handshake result is missing", { code: -32600 });
     const result = message.result as Record<string, unknown>;
+    const plane = this.s1 ? "PLANE_BROKER" : PLANE;
     if (handshake.step === "hello") {
-      if (typeof result.negotiationId !== "string" || result.profileId !== PROFILE_ID || result.plane !== PLANE) {
+      if (this.s1) validateDomainSchema("conex.HelloResponse", result);
+      const negotiationId = this.s1 ? result.bindingId : result.negotiationId;
+      if (typeof negotiationId !== "string" || result.profileId !== PROFILE_ID || result.plane !== plane
+        || (this.s1 && (!isUlid(negotiationId) || (result.rejectedCapabilities as unknown[] | undefined)?.length))) {
         throw new ConexError("invalid websocket hello result", { code: -32600 });
       }
       if (!Array.isArray(result.provides) || !result.limits) throw new ConexError("invalid websocket hello capabilities", { code: -32600 });
+      this.s1?.ready(stringArray(result.provides, "provides"), result.limits);
       const readyId = mintUlid();
       handshake.step = "ready";
-      handshake.negotiationId = result.negotiationId;
+      handshake.negotiationId = negotiationId;
       handshake.helloResult = result;
+      const ready = {
+        negotiationId,
+        profileId: PROFILE_ID,
+        plane: Plane.PLANE_BROKER,
+        provides: this.s1?.provides,
+        limits: normalizeLimits(result.limits),
+      };
       socket.send(JSON.stringify({
         jsonrpc: "2.0",
         id: readyId,
         method: "conex/ready",
-        params: {
-          negotiationId: result.negotiationId,
-          profileId: PROFILE_ID,
-          plane: PLANE,
-          provides: result.provides,
-          limits: result.limits,
-        },
+        params: this.s1
+          ? { context: { plane: PLANE }, timeoutBudgetMs: this.timeoutMs, input: ReadyRequest.toJSON(ready) }
+          : {
+            negotiationId,
+            profileId: PROFILE_ID,
+            plane: PLANE,
+            provides: result.provides,
+            limits: result.limits,
+          },
       }));
       handshake.helloId = readyId;
-      this.emit({ phase: "ready", requestId: readyId, method: "conex/ready", summary: "sent" });
+      // Not "ready": the connection still cannot carry business frames until the ready result lands.
+      this.emit({ phase: "request", requestId: readyId, method: "conex/ready", summary: "sent" });
       return;
     }
     if (message.id !== handshake.helloId) throw new ConexError("unexpected websocket ready response", { code: -32600 });
-    if (result.negotiationId !== handshake.negotiationId || result.profileId !== PROFILE_ID || result.plane !== PLANE) {
+    if (this.s1) validateDomainSchema("conex.ReadyResponse", result);
+    if (result.negotiationId !== handshake.negotiationId || result.profileId !== PROFILE_ID || result.plane !== plane) {
       throw new ConexError("invalid websocket ready result", { code: -32600 });
     }
+    if (this.s1) {
+      const identity = normalizeIdentity(result.linkIdentity);
+      if (!identity?.linkId || !isUlid(identity.linkId) || !identity.peerId || !identity.tenantId) {
+        throw new ConexError("missing authenticated hub identity", { code: -32600 });
+      }
+      const offered = normalizeLimits(handshake.helloResult?.limits);
+      const final = normalizeLimits(result.limits);
+      for (const field of Object.keys(offered) as (keyof Limits)[]) {
+        if (final[field] === undefined || final[field]! > offered[field]!) {
+          throw new ConexError("ready raised negotiated limits", { code: -32600 });
+        }
+      }
+    }
     this.negotiationResult = buildNegotiation(result, handshake.helloResult);
+    this.s1?.ready(this.negotiationResult.provides, result.limits);
     succeed();
   }
 
@@ -654,14 +729,8 @@ export class ConexWsClient {
     if (this.socket !== socket || this.closed) return;
     this.socket = undefined;
     this.negotiationResult = undefined;
-    // A call that was in flight when the socket dropped is not a failed call.
-    // The reconnect re-opens the link, and these are ordinary read calls
-    // (list clients, list files) that are valid a moment later, so they are
-    // put back on the queue and sent again once the link is ready. Failing
-    // them here instead is what made a backgrounded tab look broken: the
-    // page's poll loop threw on every tick and the visitor saw an error
-    // rather than a slow refresh.
-    this.requeuePending();
+    this.s1?.disconnected();
+    this.rejectPending(new ConexError("websocket connection lost", { code: -32005, execution: "unknown", retry: "never" }));
     this.emit({ phase: "close", summary: "transport closed" });
     if (!this.reconnectEnabled) {
       this.rejectPending(new ConexError("websocket connection closed", { code: -32000 }));
@@ -672,51 +741,6 @@ export class ConexWsClient {
     this.scheduleReconnect();
   }
 
-  /**
-   * Move in-flight calls back onto the queue for the next connection.
-   *
-   * Their timers keep running, so a call that never gets an answer still
-   * times out on its own budget instead of hanging forever.
-   */
-  private requeuePending(): void {
-    if (this.queued.length >= MAX_QUEUED_CALLS) {
-      this.rejectPending(
-        new ConexError("too many calls queued while reconnecting", { code: -32012 }),
-      );
-      return;
-    }
-    for (const [id, call] of this.pending) {
-      this.queued.push({
-        id,
-        method: call.method,
-        message: call.message,
-        resolve: call.resolve,
-        reject: call.reject,
-      });
-      this.pending.delete(id);
-    }
-  }
-
-  /** Send whatever survived a reconnect, oldest first. */
-  private flushQueued(): void {
-    while (this.queued.length > 0) {
-      const next = this.queued[0];
-      if (!this.socket) return;
-      this.queued.shift();
-      const timer = setTimeout(() => {
-        this.pending.delete(next.id);
-        next.reject(new ConexError("websocket request timed out", { code: -32006 }));
-      }, this.timeoutMs);
-      this.pending.set(next.id, { ...next, resolve: next.resolve, reject: next.reject, timer });
-      try {
-        this.socket.send(next.message);
-      } catch (error) {
-        clearTimeout(timer);
-        this.pending.delete(next.id);
-        next.reject(toConexError(error));
-      }
-    }
-  }
 
   private scheduleReconnect(): void {
     if (this.reconnectTimer || this.closed) return;
@@ -755,10 +779,10 @@ export class ConexWsClient {
     }
   }
 
-  private websocketUrl(ticket: string): string {
+  private websocketUrl(ticket?: string): string {
     const url = new URL(this.wsPath, this.origin);
-    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-    url.searchParams.set("ticket", ticket);
+    url.protocol = url.protocol === "https:" || url.protocol === "wss:" ? "wss:" : "ws:";
+    if (ticket) url.searchParams.set("ticket", ticket);
     return url.toString();
   }
 }
@@ -816,6 +840,9 @@ function normalizeLimits(value: unknown): Limits {
       throw new ConexError(`invalid websocket limits.${field}`, { code: -32600 });
     }
     limits[field] = record[field];
+  }
+  for (const field of ["maxSubscriptions", "maxModules"] as const) {
+    if (typeof record[field] === "number") limits[field] = record[field];
   }
   return limits;
 }

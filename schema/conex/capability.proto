@@ -1,0 +1,124 @@
+syntax = "proto3";
+
+package conex;
+
+import "google/protobuf/struct.proto";
+import "conex/common.proto";
+
+// S1 通用能力方法（docs/contracts/s1-capabilities.md §5-§8）：module/register、
+// module/unregister、module/list、module/invoke、module/cancel、
+// state/subscribe、state/unsubscribe，以及通知 state/update、state/end。
+//
+// 业务 payload 经 JSON 信封的 params.input（google.protobuf.Value）承载，
+// 并在边界按本文件生成的 JSON Schema 严格校验；信封本身见 rpc.proto。
+// uint64 字段（revision/sampledAtMs/seq）在 JSON 线上必须是规范十进制字符串
+// （"0" 或不带前导零、不超过 u64::MAX），不能用 JS Number；编码/解码边界见
+// crates/conex-proto/src/capability.rs 与 sdk/typescript/src/s1-wire.ts。
+// quality 是 "current"|"stale" 字符串而非 proto enum，线上保持小写（§8.1）。
+
+// module/register input（§6.1）：Node→中心，原子发布一个已批准模块。
+message ModuleRegisterInput {
+  string space_id = 1;
+  string integration_id = 2;
+  string provider_endpoint_id = 3;
+  string contract_id = 4;
+}
+
+message ModuleRegisterResult {
+  string registration_id = 1;
+  string provider_endpoint_id = 2;
+  string space_id = 3;
+  string integration_id = 4;
+  string contract_id = 5;
+}
+
+// module/unregister input（§6.2）：撤销当前连接拥有的精确注册。
+message ModuleUnregisterInput {
+  string provider_endpoint_id = 1;
+  string registration_id = 2;
+}
+
+message ModuleUnregisterResult {
+  bool removed = 1;
+}
+
+// module/list input（§6.3）：发现当前可见模块。
+message ModuleListInput {
+  string space_id = 1;
+}
+
+message ModuleInfo {
+  string provider_endpoint_id = 1;
+  string registration_id = 2;
+  string space_id = 3;
+  string integration_id = 4;
+  string contract_id = 5;
+  repeated string methods = 6;
+  repeated string states = 7;
+}
+
+message ModuleListResult {
+  repeated ModuleInfo modules = 1;
+}
+
+// module/invoke input（§7.1）：输出为契约 typed-value，由具体契约校验。
+message ModuleInvokeInput {
+  string method = 1;
+  google.protobuf.Value argument = 2;
+}
+
+// module/cancel input（§7.3）：requestId 指原 invoke 的 JSON-RPC 请求 ID。
+message ModuleCancelInput {
+  string request_id = 1;
+}
+
+message ModuleCancelResult {
+  bool requested = 1;
+}
+
+// state/subscribe input（§8.1）。
+message StateSubscribeInput {
+  string subscription_id = 1;
+  string state = 2;
+  google.protobuf.Value argument = 3;
+}
+
+// 完整状态采样；revision/sampledAtMs 为 uint64 十进制字符串（§8.1）。
+message StateSample {
+  uint64 revision = 1;
+  google.protobuf.Value value = 2;
+  uint64 sampled_at_ms = 3;
+  string quality = 4; // "current" | "stale"（字符串避免生成大写枚举名）
+}
+
+message StateSubscribeResult {
+  string subscription_id = 1;
+  string registration_id = 2;
+  StateSample snapshot = 3;
+}
+
+// state/unsubscribe input（§8.3）。
+message StateUnsubscribeInput {
+  string subscription_id = 1;
+}
+
+message StateUnsubscribeResult {
+  bool removed = 1;
+}
+
+// state/update 通知 input（§8.2）：seq 从 "1" 开始逐个加一。
+message StateUpdateInput {
+  string subscription_id = 1;
+  uint64 seq = 2;
+  StateSample sample = 3;
+}
+
+// state/end 通知 input（§8.3）：error 是生成类型 Error 的 JSON 表示
+// （code 为枚举名，如 ERROR_CODE_SLOW_CONSUMER），不是 JSON-RPC Failure 的
+// 数值 code + data 形状。订阅终止必须显式携带 execution="completed"；
+// forbidden 的 retry="never"，其余允许的终止原因 retry="safe"。
+// 严格 JSON Schema 所要求的标量字段由边界编码器显式写出（包括空诊断字符串）。
+message StateEndInput {
+  string subscription_id = 1;
+  Error error = 2;
+}
