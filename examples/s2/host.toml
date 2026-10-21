@@ -1,0 +1,143 @@
+# Development-only static approval for the S2 dual-instance plugin sample
+# (docs/contracts/s2-plugins.md §5–§7, plan 2026-10-19-conex-s2.md §6 U03).
+# Not a production config. Format and env conventions follow examples/s1/host.toml.
+#
+# Token digests: each `token_hash` is the lowercase hex SHA-256 of the
+# plaintext bearer token. The plaintexts live only in the run environment
+# (CONEX_TOKEN); nodes never print them.
+#   printf %s "conex-s2-dev-token-rust" | sha256sum  -> [[tokens]] 1
+#   printf %s "conex-s2-dev-token-ts"   | sha256sum  -> [[tokens]] 2
+
+listen = "127.0.0.1:8789"
+allow_loopback_http = true
+audience = "conex.dev"
+
+# P1 persistence roots are required for the capability registry. Relative
+# paths resolve against the directory the host process is started from and are
+# created on startup; ignored by git via examples/s2/.gitignore.
+content_root = "examples/s2/.runtime/content"
+session_root = "examples/s2/.runtime/session"
+operation_root = "examples/s2/.runtime/operation"
+
+# Two service identities, one per plugin instance (instance = connection).
+# Each process opens a second consumer link under the same principal.
+[[tokens]]
+token_hash = "f03397fa3b5140a2bcda44722286d1f4fa1cdcef1a30696ff5540c87e276a1c5"
+principal_id = "s2-rust"
+tenant_id = "dev"
+audience = "conex.dev"
+role = "service"
+
+[[tokens]]
+token_hash = "1945420a2c3c7fed3c395a204ffa7ab8d703d8a2c173213ec2ea76c379d0f28e"
+principal_id = "s2-ts"
+tenant_id = "dev"
+audience = "conex.dev"
+role = "service"
+
+[capabilities]
+
+# Preinstalled contract conex.counter (same shapes as the S1 sample:
+# conex.CounterReadInput / CounterAddInput / CounterResult / CounterStateValue).
+[[capabilities.contracts]]
+contract_id = "conex.counter"
+
+[[capabilities.contracts.methods]]
+name = "counter/read"
+input_schema = "conex.CounterReadInput"
+output_schema = "conex.CounterResult"
+action = "counter.read"
+execution = "read_only"
+
+[[capabilities.contracts.methods]]
+name = "counter/add"
+input_schema = "conex.CounterAddInput"
+output_schema = "conex.CounterResult"
+action = "counter.add"
+execution = "non_replayable"
+
+[[capabilities.contracts.states]]
+name = "counter/value"
+value_schema = "conex.CounterStateValue"
+action = "counter.value"
+
+# One approved publisher per instance module: the Rust instance (prefix
+# s2-rust) publishes counter + derived-counter, likewise the TS instance.
+[[capabilities.publish]]
+node_id = "s2-rust"
+space_id = "dev"
+integration_id = "integration"
+provider_endpoint_id = "s2-rust-counter"
+contract_id = "conex.counter"
+
+[[capabilities.publish]]
+node_id = "s2-rust"
+space_id = "dev"
+integration_id = "integration"
+provider_endpoint_id = "s2-rust-derived-counter"
+contract_id = "conex.counter"
+
+[[capabilities.publish]]
+node_id = "s2-ts"
+space_id = "dev"
+integration_id = "integration"
+provider_endpoint_id = "s2-ts-counter"
+contract_id = "conex.counter"
+
+[[capabilities.publish]]
+node_id = "s2-ts"
+space_id = "dev"
+integration_id = "integration"
+provider_endpoint_id = "s2-ts-derived-counter"
+contract_id = "conex.counter"
+
+# Both principals may consume every endpoint (whole contract), including
+# their own instance's modules: each process also runs a consumer link for
+# its own acceptance observations.
+[[capabilities.consume]]
+principal_id = "s2-rust"
+space_id = "dev"
+provider_endpoint_id = "s2-rust-counter"
+contract_id = "conex.counter"
+
+[[capabilities.consume]]
+principal_id = "s2-rust"
+space_id = "dev"
+provider_endpoint_id = "s2-rust-derived-counter"
+contract_id = "conex.counter"
+
+[[capabilities.consume]]
+principal_id = "s2-rust"
+space_id = "dev"
+provider_endpoint_id = "s2-ts-counter"
+contract_id = "conex.counter"
+
+[[capabilities.consume]]
+principal_id = "s2-rust"
+space_id = "dev"
+provider_endpoint_id = "s2-ts-derived-counter"
+contract_id = "conex.counter"
+
+[[capabilities.consume]]
+principal_id = "s2-ts"
+space_id = "dev"
+provider_endpoint_id = "s2-rust-counter"
+contract_id = "conex.counter"
+
+[[capabilities.consume]]
+principal_id = "s2-ts"
+space_id = "dev"
+provider_endpoint_id = "s2-rust-derived-counter"
+contract_id = "conex.counter"
+
+[[capabilities.consume]]
+principal_id = "s2-ts"
+space_id = "dev"
+provider_endpoint_id = "s2-ts-counter"
+contract_id = "conex.counter"
+
+[[capabilities.consume]]
+principal_id = "s2-ts"
+space_id = "dev"
+provider_endpoint_id = "s2-ts-derived-counter"
+contract_id = "conex.counter"

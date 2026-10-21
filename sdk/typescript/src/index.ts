@@ -40,6 +40,7 @@ export {
   AgentLinkSummary,
 } from "./generated/conex/dashboard";
 export * from "./ws-client";
+export * from "./plugin";
 export type {
   CapabilityContract, CapabilityOptions, ExecutionClass, MethodContract, StateContract,
   ModuleReference, ModuleProvider, VerifiedContext, Invocation, InvokeOptions,

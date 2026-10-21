@@ -7,6 +7,7 @@ mod e2e;
 mod generate;
 mod landing_demo;
 mod s1_e2e;
+mod s2_e2e;
 mod schema;
 
 use std::process::ExitCode;

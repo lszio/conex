@@ -12,6 +12,10 @@ S1 uses JSON WSS with `conex/hello` → `conex/ready`. Enable it explicitly with
 
 S1 currently uses static Host approvals plus mandatory provider-local authorization. It is restricted development functionality: **do not expose a public multi-user service before S4 identity governance**. HTTP is consumer-only; it cannot publish modules or subscribe to state. See the [three-process example](../../examples/s1/README.md), [runbook](../../docs/runbooks/s1-capabilities.md), and [observed verification](../../docs/verification/s1-capabilities.md). The symmetric Rust SDK is `crates/conex-sdk`, independent of `conex-host`.
 
+## S2: plugin runtime (`definePlugin` / `Instance`)
+
+A plugin class composes modules inside your process: one instance is exactly one S1 connection; local dependencies are in-process handles, explicit remote bindings pin a dependency name to a peer module's `ModuleRef`, and derived modules republish under the same contract with their own revision sequence. Missing or circular dependencies are rejected with typed local errors before any network frame; `stop()` is idempotent and releases in reverse topology order. See the [dual-instance example](../../examples/s2/README.md), [runbook](../../docs/runbooks/s2-plugins.md), and [observed verification](../../docs/verification/s2-plugins.md).
+
 ```ts
 import {
   ConexWsClient, AtomicState, validateDomainSchema,

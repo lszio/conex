@@ -4,11 +4,13 @@ conex 的文档按「规范 / 契约 / 计划 / 证据 / 操作」分层，每�
 
 ## 目标架构（2026-10-17）
 
-已确认 [目标架构](design/2026-10-17-conex-architecture.md)：协议优先、TS/JS 与 Rust 对称 SDK、插件组合、默认中心拓扑和独立 Astro 工作台。[迁移盘点](design/2026-10-17-conex-migration-assessment.md) 区分源码可复用机制、待调整边界和缺口；S1 正在按切片验收，插件运行时、身份治理与 Astro 工作台尚未交付。下方历史阶段状态不自动成为新方向的执行顺序。
+已确认 [目标架构](design/2026-10-17-conex-architecture.md)：协议优先、TS/JS 与 Rust 对称 SDK、插件组合、默认中心拓扑和独立 Astro 工作台。[迁移盘点](design/2026-10-17-conex-migration-assessment.md) 区分源码可复用机制、待调整边界和缺口；S1、S2（插件运行时）已按切片验收，身份治理与 Astro 工作台尚未交付。下方历史阶段状态不自动成为新方向的执行顺序。
 
 [S1 双向能力与状态订阅契约](contracts/s1-capabilities.md) 定义注册代次、调用取消、快照/更新顺序和跨语言验收；实现状态以 [S1 验证记录](verification/s1-capabilities.md) 为准，操作见 [S1 运行手册](runbooks/s1-capabilities.md)。共同传输为 JSON WSS，HTTP 不支持订阅；静态批准仅用于受限开发，S4 完成前禁止公开多用户使用。
 
-[S1 实施计划](plans/2026-10-17-conex-s1.md) 已拆为九个文件级任务，并录入 Paca conex 项目（Epic CNX-1，S1 CNX-3，首项 CNX-7）；S2–S5 作为有验收边界的路线 Story，尚未实施。
+[S2 插件运行时与能力组合契约](contracts/s2-plugins.md) 定义插件/实例/本地依赖/显式远程绑定与派生模块；实现状态以 [S2 验证记录](verification/s2-plugins.md) 为准，操作见 [S2 运行手册](runbooks/s2-plugins.md)，双实例样例见 [examples/s2](../examples/s2/README.md)。
+
+[S1 实施计划](plans/2026-10-17-conex-s1.md) 已拆为九个文件级任务，并录入 Paca conex 项目（Epic CNX-1，S1 CNX-3，首项 CNX-7）；[S2 实施计划](plans/2026-10-19-conex-s2.md)（Epic CNX-2）已按 U01–U04 收口，S3–S5 仍是有验收边界的路线 Story。
 
 ## 状态（2026-10-04 复核）
 
@@ -31,6 +33,9 @@ conex 的文档按「规范 / 契约 / 计划 / 证据 / 操作」分层，每�
 | 计划 | [S1 实施计划](plans/2026-10-17-conex-s1.md) | 九个任务、A01–A12 覆盖、依赖与 Paca 编号 | 从 CNX-7 开始执行 |
 | 证据 | [S1 验证记录](verification/s1-capabilities.md) | 真实命令、A01–A12 跨进程与 SUPPORT 行为证据、总门禁状态 | 验收与排障 |
 | 操作 | [S1 运行手册](runbooks/s1-capabilities.md) | TS/Rust 三进程样例、静态批准、HTTP 限制、取消和未知结果 | 本机联调与 SDK 接入 |
+| 契约 | [S2 插件运行时与能力组合](contracts/s2-plugins.md) | 插件/实例、本地 DI、显式远程绑定、派生模块、停止释放与 S2-A01…A08 | S2 实施、对接与验收 |
+| 证据 | [S2 验证记录](verification/s2-plugins.md) | s2-plugins e2e 实际输出、总门禁状态、遗留边界 | 验收与排障 |
+| 操作 | [S2 运行手册](runbooks/s2-plugins.md) | 双实例插件样例三进程、组合拒绝与新代次排障 | 本机联调与插件接入 |
 | 历史设计 | [旧设计](design/2026-09-14-conex-design.md) | 现有实现的设计依据与历史阶段验收 | 追溯既有 wire 与实现决定时 |
 | 契约 | [P0 wire 契约](contracts/p0-wire.md) | `conex-jsonrpc2-http` 信封、参数、错误码、HTTP 行为 | 实现或对接 wire 时 |
 | 计划 | [路线图](plans/2026-09-15-conex-roadmap.md) | P0–P4 阶段、依赖与工作包 | 了解全局与推进顺序 |

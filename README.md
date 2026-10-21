@@ -9,7 +9,9 @@
 
 **方向已确认（2026-10-17）：** 协议优先，提供 TS/JS 与 Rust 对称 SDK、插件运行时及独立 Astro 工作台；默认中心连接，模块能力可以组合。见 [目标架构](docs/design/2026-10-17-conex-architecture.md) 与 [迁移盘点](docs/design/2026-10-17-conex-migration-assessment.md)。这是目标设计，不是已交付状态；下方描述现有实现。
 
-**S1 实施：** TS/JS 与独立 Rust SDK 已实现同连接发布/发现/调用/取消/状态订阅。共同传输为 JSON WSS；HTTP 仅消费目录/调用/取消，不支持订阅。使用预安装契约和静态批准，**S4 完成前禁止公开多用户使用**。见 [三进程样例](examples/s1/README.md)、[运行手册](docs/runbooks/s1-capabilities.md) 与 [实际验证记录](docs/verification/s1-capabilities.md)；插件运行时及 Astro 工作台仍是后续切片。
+**S1 实施：** TS/JS 与独立 Rust SDK 已实现同连接发布/发现/调用/取消/状态订阅。共同传输为 JSON WSS；HTTP 仅消费目录/调用/取消，不支持订阅。使用预安装契约和静态批准，**S4 完成前禁止公开多用户使用**。见 [三进程样例](examples/s1/README.md)、[运行手册](docs/runbooks/s1-capabilities.md) 与 [实际验证记录](docs/verification/s1-capabilities.md)。
+
+**S2 实施：** 插件运行时已交付：同一插件类可多实例并存（一实例 = 一条连接），本地依赖进程内注入、显式远程绑定 `ModuleRef`、派生模块同契约再发布；缺失/循环依赖启动前类型化拒绝，停止逆序释放，断开不复活。TS（`definePlugin`/`Instance`）与 Rust（`Plugin`/`Instance`）对称，中心零改动。见 [双实例样例](examples/s2/README.md)、[运行手册](docs/runbooks/s2-plugins.md) 与 [实际验证记录](docs/verification/s2-plugins.md)；Astro 工作台仍是后续切片。
 
 **当前状态（2026-10-11）：** 落地页是**工作台**：顶部状态栏常驻本标签页的名字、短链接、分组 key 与在线数，面板切换内容。**一个标签页就是一个客户端**——链接在取 WSS 票据时铸造，同一浏览器的两个标签页共享 cookie 却是两个独立客户端，文件归属也按链接区分。问候从消息泡泡改为右上角提示；`client/hello` 带 `payload` 时是**提问**：目标 SDK 不自动确认，回答由提示里的「确认并回复」回传。`group` 是**隔离键兼加入凭据**（SHA-256 派生）：不同组互相不可见、不可问候、不可访问文件，组名文本永不投影给他人（`client/list`/`client/status` 一律置空），页面默认组名 `default`、可随机生成、复制分享组名即邀请。共享文件支持**相对目录路径**：目录上传保留目录结构，页面按提供者渲染目录树，列表/网格两种视图。`client/status` 报出每组实测延迟（未测量显示「尚未测量」而非 0 ms）。实测首屏 4.1s → 0.54s（bundle 827KB 未压缩 → 104KB gzip），后台标签页不再被保活策略踢下线。契约见 [connected-landing §10](docs/contracts/connected-landing.md)，证据见 [工作台验证记录](docs/verification/landing-page.md)。P0、P1、Connected landing、多主机内容 M0–M5 已交付。剩余 M4（Notez 接入）与 M6（验收收口）…
 
@@ -224,6 +226,7 @@ cargo xtask conformance --vectors conformance/vectors/p1
 cargo xtask conformance --vectors conformance/vectors/s1
 cargo xtask e2e --suite p0-ts
 cargo xtask e2e --suite s1-capabilities
+cargo xtask e2e --suite s2-plugins
 cargo xtask check                     # 上面全部 + fmt + clippy -D warnings
 ```
 
@@ -234,6 +237,7 @@ cargo xtask check                     # 上面全部 + fmt + clippy -D warnings
 |---|---|
 | `cargo xtask e2e --suite p0-ts` | 真实 Rust host + Bun SDK 的 fs 读写路径 |
 | `cargo xtask e2e --suite s1-capabilities` | 真实 Host + TS/Rust 对称 SDK，A01–A12 与明确标记的 SUPPORT 行为回归 |
+| `cargo xtask e2e --suite s2-plugins` | 真实 Host + 双实例插件样本 + 变体进程，S2-A01…A08 |
 | `cargo xtask e2e --suite p1-stream-1gib` | 1 GiB 经 Stream 弱网续传 |
 | `cargo xtask e2e --suite connected-landing` | 三进程拓扑、agent 生命周期 |
 | `cargo xtask e2e --suite connected-landing-web` | 浏览器端连接与票据 |

@@ -5,6 +5,7 @@
 #![forbid(unsafe_code)]
 pub mod capability;
 pub mod client;
+pub mod plugin;
 pub mod state;
 pub use capability::{
     Cancellation, Contract, Execution, Exposure, InvocationContext, Method, ModuleRef, State,
@@ -12,6 +13,10 @@ pub use capability::{
 pub use client::{Call, CallControl, Client, ConnectOptions};
 pub use conex_proto as proto;
 use conex_proto::ErrorCode;
+pub use plugin::{
+    Deps, Instance, InstanceConfig, ModuleContext, ModuleDecl, Plugin, PluginError, RemoteBinding,
+    RemoteDep, Service, StartedModule, StopOutcome,
+};
 pub use state::{StateEvent, StateLease, StateObserver, Subscription};
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 /// Retains the generated machine-readable Error, including diagnostic/details fields.

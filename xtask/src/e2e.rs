@@ -16,6 +16,7 @@ pub fn run(suite: &str) -> Result<()> {
         "connected-landing-web" => run_connected_landing_web(),
         "connected-landing-connections" => run_connected_landing_connections(),
         "s1-capabilities" => crate::s1_e2e::run(),
+        "s2-plugins" => crate::s2_e2e::run(),
         other => bail!("unknown e2e suite: {other}"),
     }
 }

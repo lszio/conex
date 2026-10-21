@@ -70,6 +70,11 @@ const STEPS: &[Step] = &[
         "cargo",
         &["xtask", "e2e", "--suite", "s1-capabilities"],
     ),
+    (
+        "S2 plugins (real host + plugin runtimes)",
+        "cargo",
+        &["xtask", "e2e", "--suite", "s2-plugins"],
+    ),
 ];
 
 pub fn run() -> Result<()> {
