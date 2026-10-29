@@ -2,20 +2,20 @@
 
 # conex
 
-**connect + nexus —— 可嵌入的双向能力路由内核**
+**connect + nexus —— 私有、分布式、可扩展的能力组合平台**
 
-一个中心 host 统一做认证、授权、端点目录与路由；文件、HTTP 目录、反向连接的 agent
-作为 provider 接入同一份契约。Rust 内核 + TypeScript SDK + 一个能真连真跑的工作台。
+让独立模块与已有服务通过契约连接和组合，由不同客户端统一观察和操作。
+首个目标应用是个人工作台：Agent 对话与关系图谱、服务器状态，MVP 同时支持 Web 与 Emacs。
 
-**方向已确认（2026-10-17）：** 协议优先，提供 TS/JS 与 Rust 对称 SDK、插件运行时及独立 Astro 工作台；默认中心连接，模块能力可以组合。见 [目标架构](docs/design/2026-10-17-conex-architecture.md) 与 [迁移盘点](docs/design/2026-10-17-conex-migration-assessment.md)。这是目标设计，不是已交付状态；下方描述现有实现。
+**目标基线已确认（2026-10-29）：** 单用户私有、自治节点、协调入口；私网节点主动 WSS 接入公网，支持获准直连与转发。领域契约连接 OMP/Codex 等适配器和不同客户端，组合可以继续导出能力。见 [MVP 架构基线](docs/design/2026-10-29-conex-private-platform.md) 与 [实施总计划](docs/plans/2026-10-29-conex-private-mvp.md)。**这是目标，不是已交付能力**；下方演示、命令与证据描述现有实现。
 
-**S1 实施：** TS/JS 与独立 Rust SDK 已实现同连接发布/发现/调用/取消/状态订阅。共同传输为 JSON WSS；HTTP 仅消费目录/调用/取消，不支持订阅。使用预安装契约和静态批准，**S4 完成前禁止公开多用户使用**。见 [三进程样例](examples/s1/README.md)、[运行手册](docs/runbooks/s1-capabilities.md) 与 [实际验证记录](docs/verification/s1-capabilities.md)。
+**S1 既有实现：** TS/JS 与独立 Rust SDK 已实现同连接发布/发现/调用/取消/状态订阅。共同传输为 JSON WSS；HTTP 仅消费目录/调用/取消，不支持订阅。使用预安装契约和静态批准，不代表新私有平台的节点侧离线授权已经完成；禁止据此公开多用户服务。见 [三进程样例](examples/s1/README.md)、[运行手册](docs/runbooks/s1-capabilities.md) 与 [实际验证记录](docs/verification/s1-capabilities.md)。
 
-**S2 实施：** 插件运行时已交付：同一插件类可多实例并存（一实例 = 一条连接），本地依赖进程内注入、显式远程绑定 `ModuleRef`、派生模块同契约再发布；缺失/循环依赖启动前类型化拒绝，停止逆序释放，断开不复活。TS（`definePlugin`/`Instance`）与 Rust（`Plugin`/`Instance`）对称，中心零改动。见 [双实例样例](examples/s2/README.md)、[运行手册](docs/runbooks/s2-plugins.md) 与 [实际验证记录](docs/verification/s2-plugins.md)；Astro 工作台仍是后续切片。
+**S2 既有实现：** 插件运行时已交付：同一插件类可多实例并存（一实例 = 一条连接），本地依赖进程内注入、显式远程绑定 `ModuleRef`、派生模块同契约再发布；缺失/循环依赖启动前类型化拒绝，停止逆序释放，断开不复活。TS（`definePlugin`/`Instance`）与 Rust（`Plugin`/`Instance`）对称，中心零改动。见 [双实例样例](examples/s2/README.md)、[运行手册](docs/runbooks/s2-plugins.md) 与 [实际验证记录](docs/verification/s2-plugins.md)。其连接绑定生命周期需要迁移，不能直接声称支持自治节点；新方向不要求为此迁移到 Astro。
 
 **当前状态（2026-10-11）：** 落地页是**工作台**：顶部状态栏常驻本标签页的名字、短链接、分组 key 与在线数，面板切换内容。**一个标签页就是一个客户端**——链接在取 WSS 票据时铸造，同一浏览器的两个标签页共享 cookie 却是两个独立客户端，文件归属也按链接区分。问候从消息泡泡改为右上角提示；`client/hello` 带 `payload` 时是**提问**：目标 SDK 不自动确认，回答由提示里的「确认并回复」回传。`group` 是**隔离键兼加入凭据**（SHA-256 派生）：不同组互相不可见、不可问候、不可访问文件，组名文本永不投影给他人（`client/list`/`client/status` 一律置空），页面默认组名 `default`、可随机生成、复制分享组名即邀请。共享文件支持**相对目录路径**：目录上传保留目录结构，页面按提供者渲染目录树，列表/网格两种视图。`client/status` 报出每组实测延迟（未测量显示「尚未测量」而非 0 ms）。实测首屏 4.1s → 0.54s（bundle 827KB 未压缩 → 104KB gzip），后台标签页不再被保活策略踢下线。契约见 [connected-landing §10](docs/contracts/connected-landing.md)，证据见 [工作台验证记录](docs/verification/landing-page.md)。P0、P1、Connected landing、多主机内容 M0–M5 已交付。剩余 M4（Notez 接入）与 M6（验收收口）…
 
-[在线工作台](https://conex.lszio.space) · [文档导航](docs/README.md) · [目标架构](docs/design/2026-10-17-conex-architecture.md)
+[现有在线演示](https://conex.lszio.space) · [文档导航](docs/README.md) · [MVP 架构基线](docs/design/2026-10-29-conex-private-platform.md)
 
 </div>
 
@@ -34,14 +34,15 @@
 
 ## 这是什么
 
-中心服务要接多个异构供给方，同时不能把调用者的身份、私有侧凭据和回调边界一起交出去。
-conex 解决的是这一层：
+Conex 的目标是把分散的能力组合成应用，而不是要求所有服务搬进同一宿主：
 
-- **双向**——私有侧 agent 主动出站 WebSocket 反连中心，不开放入站端口，秘密值留在自己这侧。
-- **数据导向**——按注册键定位构造器、方法契约与处理器，业务主路径不按 provider 名字分支。
-  第二个 provider 走与第一个完全相同的装配路径。
-- **契约先行**——一份 `.proto` 派生 Rust、TypeScript 与 JSON Schema；跨语言共享向量验证一致性。
-- **失败诚实**——未实现、不可用、权限拒绝、结果未知、传输中断是不同的错误码，不合并。
+- **契约与组合**——模块显式连接依赖，组合仍可发布普通能力；语言、进程与 UI 不成为业务耦合。
+- **私有分布式**——私网节点主动连出，中心协调和可选转发；直连与本地运行不以中心在线为生命条件。
+- **领域与适配器**——Agent、服务器等领域契约连接具体实现；OMP、Codex 适配器不直接依赖图谱或对话组件。
+- **多客户端**——Web 与 Emacs 使用同一协议；Desktop、Mobile 后续扩展。
+- **失败诚实**——拒绝、不可用、状态过期、结果未知、传输中断分别表达，不自动重放副作用操作。
+
+上述自治、Agent 领域、多客户端及路径授权仍属 MVP 实施目标。当前已交付基础是中心式路由、契约与 SDK、插件组合和下述 hello/share 演示。
 
 工作台里发生的事都是真实的：在线客户端列表、hello 往返延迟、提问—回答往返、同组文件共享，
 跑在一个真实的 `conex-host` 进程上，没有模拟数据。
@@ -137,6 +138,8 @@ client.close();
 | 容器化部署 | 单镜像多阶段构建，基础镜像按 digest 固定；Dokploy compose 栈 | [Dokploy 运行手册](docs/runbooks/dokploy.md) |
 
 ## 架构
+
+以下是**现有实现结构**；目标角色、对象与安全边界以 [2026-10-29 架构基线](docs/design/2026-10-29-conex-private-platform.md) 为准，不把旧图当成已完成迁移。
 
 ```
                  ┌──────────────────────────────────────────┐
@@ -248,9 +251,8 @@ cargo xtask check                     # 上面全部 + fmt + clippy -D warnings
 
 ## 贡献
 
-**在动手之前先开一个 issue 或 PR 描述你想做什么**，尤其是契约变更——
-设计 §0 的硬要求是「扩展在已定义契约内只新增实现与注册项；增加新语义需演化契约」。
-先看 [设计 v6](docs/design/2026-09-14-conex-design.md) 与对应 [docs/contracts/](docs/contracts/)。
+**在动手之前先说明变更范围**，尤其是契约变更：扩展在已定义契约内新增实现与注册项；增加新语义先演化契约，再迁移调用方。
+先读 [当前架构基线](docs/design/2026-10-29-conex-private-platform.md)、[实施总计划](docs/plans/2026-10-29-conex-private-mvp.md) 与对应 [wire 契约](docs/contracts/)；旧设计用于追溯现有实现，不再决定新方向。
 
 约定（仓库已在执行）：
 
@@ -278,7 +280,7 @@ cargo xtask check                     # 上面全部 + fmt + clippy -D warnings
 
 ## 路线图
 
-新方向按 [目标架构 §11](docs/design/2026-10-17-conex-architecture.md) 的 S1–S5 切片推进，均未在本次文档整理中实施。下表保留既有阶段记录，不是新方向的执行顺序。
+当前推进顺序以 [私有 MVP 实施总计划](docs/plans/2026-10-29-conex-private-mvp.md) 为准：契约与协议探针 → 自治节点/事件与存储 → Agent 适配器 → 安全直连和转发 → Web/Emacs → 组合与全链路验收。工作包尚未实施；下表仅保留既有阶段记录，不是新方向的执行顺序。
 
 | 阶段 | 范围 | 状态 |
 |---|---|---|
@@ -291,17 +293,18 @@ cargo xtask check                     # 上面全部 + fmt + clippy -D warnings
 | P3 | 自有空间加密历史、可选发现与受控中继 | ⏳ 未开始 |
 | P4 | 单项生产能力（HA、更多承载） | ⏳ 未开始 |
 
-旧阶段依赖与工作包见 [历史路线图](docs/plans/2026-09-15-conex-roadmap.md) 和 [多主机内容计划](docs/plans/2026-10-01-conex-multi-host-content.md)；新实施计划须先对照 [迁移盘点](docs/design/2026-10-17-conex-migration-assessment.md)。
+旧阶段依赖与工作包见 [历史路线图](docs/plans/2026-09-15-conex-roadmap.md) 和 [多主机内容计划](docs/plans/2026-10-01-conex-multi-host-content.md)；历史未交付项不自动成为本轮前置条件。复用约束见 [当前架构基线 §13](docs/design/2026-10-29-conex-private-platform.md#13-现有实现复用与迁移原则)。
 
 ## 文档
 
 | 文档 | 内容 |
 |---|---|
 | [docs/README.md](docs/README.md) | 文档导航入口（规范 / 契约 / 计划 / 证据 / 操作） |
-| [目标架构](docs/design/2026-10-17-conex-architecture.md) | 当前方向、组件边界、权限模型和切片验收 |
-| [迁移盘点](docs/design/2026-10-17-conex-migration-assessment.md) | 源码可见机制与保留、调整、移除范围 |
-| [S1 契约草案](docs/contracts/s1-capabilities.md) | 待评审：双向注册、调用取消、状态订阅和跨语言验收；未实施 |
-| [S1 实施计划](docs/plans/2026-10-17-conex-s1.md) | 九个文件级任务、A01–A12 验收与 Paca 登记（Epic CNX-1） |
+| [MVP 架构基线](docs/design/2026-10-29-conex-private-platform.md) | 当前定位、领域与运行边界、双客户端、安全及 A01–A16 验收 |
+| [MVP 实施总计划](docs/plans/2026-10-29-conex-private-mvp.md) | 迁移盘点、工作包、依赖与验收覆盖；尚未实施 |
+| [首批执行计划](docs/plans/2026-10-29-conex-mvp-p0.md) | 契约冻结、真实协议探针与进入实现的门槛 |
+| [上一版架构](docs/design/2026-10-17-conex-architecture.md) / [旧迁移盘点](docs/design/2026-10-17-conex-migration-assessment.md) | 历史决策与当时的静态证据，不代表当前缺口 |
+| [S1 契约](docs/contracts/s1-capabilities.md) / [实施计划](docs/plans/2026-10-17-conex-s1.md) | 现有双向注册、调用取消、状态订阅；状态以验证记录为准 |
 | [旧设计](docs/design/2026-09-14-conex-design.md) | 既有实现与历史阶段设计依据 |
 | [P0 wire 契约](docs/contracts/p0-wire.md) | JSON-RPC 2.0 信封、参数、错误码、HTTP 行为 |
 | [Connected landing 契约](docs/contracts/connected-landing.md) | 中心 host、浏览器会话/ticket、agent 反连、客户端契约 |
