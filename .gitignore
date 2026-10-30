@@ -27,3 +27,6 @@ web/dist
 .env.*
 !.env.example
 sdk/typescript/dist
+
+# macOS AppleDouble sidecars (non-APFS volume); .DS_Store is already above.
+._*
