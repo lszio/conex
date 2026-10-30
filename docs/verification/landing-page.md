@@ -1,7 +1,7 @@
 # hello 页面与客户端契约验证记录
 
-> 对应分支 `landing`（提交 `d03cd06`）。本文只记录**实际执行并通过**的结果。
-> 前一版内容浏览页面的记录见 git 历史；那一版的部署故障根因另见 §附。
+> 当前上线为 `dev` 的 `fa75832`，2026-10-19 加入 Authentik 受限入口，实测见 §9。此前 `landing`（`d03cd06`）及后续工作台验证保留为历史记录，不能把其公开免登录状态当作当前部署。
+> 本文只记录实际观察；此次没有新增 S1 UI、没有完成 S4 内部授权。
 
 ## 1. 页面
 
@@ -470,3 +470,34 @@ carry_directory_paths`）、SDK 29 pass / 0 fail。
 带文字的按钮，窄卡片下换行挤压（截图可见），改为标签「组名」+ 图标按钮（aria-label
 保留全名）；验证脚本选择器从 `getByLabel("组")` 改为 `getByLabel("组名", { exact:
 true })`——非精确匹配会撞上「生成随机组名」「复制组名」两个按钮的 aria-label。
+
+## 9. Authentik 受限部署（2026-10-19）
+
+### 部署与访问策略
+
+- 地址：<https://conex.lszio.space>；Dokploy Application `fEKm9C8gzoKBXN94LAFq4`，跟踪 `dev`、`autoDeploy=true`。
+- 实际执行 `dokploy application deploy --applicationId fEKm9C8gzoKBXN94LAFq4`，deployment=`jK6vNSoBQuufkoEqKSc-J`，最终 `status=done`。
+- 从实际 Dokploy checkout 读取 HEAD：`fa7583242db2b1abd703d7c2405a556903509b55`；运行容器 `34b80f254299`，镜像 `app-conex-rc0cia:latest`，状态 healthy。没有凭 deployment.done 就判断新容器已服务。
+- Authentik 应用 `Conex`（slug `conex`），Proxy Provider id=8（`conex-forward-auth`，`forward_single`），已加入 embedded outpost；external host 为上述 HTTPS 地址。
+- 应用使用 `all` 策略，唯一访问绑定是 `conex-users` 组；完成清理后组内只有 `lszio`。没有修改其他应用权限。
+- 域名中间件为 `authentik-auth@file`；`docker service inspect` 的公开端口为 `null`，Host 不通过公开 8787 绕过代理。
+
+### 真实验证
+
+内置浏览器启动失败，改用仓库 Playwright 1.55.0 与系统 Chrome，两个隔离账号经真实密码表单、OAuth redirect/callback 完成验证；没有伪造 Authentik 成功结果或向 Conex 注入可信身份头。
+
+| 场景 | 实际结果 |
+|---|---|
+| 未登录 GET `/`、`/web/session`、`/tickets`、`/rpc`、`/wss` | 全部 302 到 `auth.lszio.space/application/o/authorize/` |
+| 未登录伪造 `X-authentik-username=lszio`、`X-authentik-groups=conex-users` 访问 `/web/session` | 仍为 302，未取得应用会话 |
+| 临时普通账号属于 `conex-users`，真实密码登录 | callback 后到 Conex 首页，`/web/session` 200，页面“已连接”，WSS 实际收到回复，0 pageerror |
+| 同一 Authentik cookie 的两个标签页 | 无需重复登录，各自连接成功；链接分别 `ez_PUeVz` 与 `PNMOmAsP`，没有串成一个客户端 |
+| 页面点击“hello 给自己” | 原 WSS 请求得到真实成功响应；页面观察 24 ms 与回复「pong」 |
+| 临时普通账号不属于允许组，真实密码登录 | Authentik 页面明确显示 `Permission denied` / `Request has been denied`，没有进入 Conex，也没有 WSS 会话 |
+| 账号清理 | 两个临时账号均已删除，remaining=0；最终 `conex-users` 仅 `lszio`；浏览器进程/上下文关闭 |
+
+两次完整浏览器检查均退出 0；第二次额外覆盖同 cookie 双标签页和真实 hello。截图已实际查看。过程中发现直接 ORM 创建 Proxy Provider 不生成 OAuth 默认 callback/grant types，浏览器报 Redirect URI Error；按 Authentik serializer 的同一 `set_oauth_defaults()` 路径保存后，真实 callback 和两类权限验证通过。
+
+### 边界
+
+本次为部署入口登录与访问控制，Conex 应用仍使用 guest 主体，未将 Authentik 用户/组映射为 Conex Space、节点或模块权限。没有把测试计数器、S1 服务令牌或新工作台 UI 部署进此配置；机器 SDK 未登录访问 `/rpc`/`/wss` 同样重定向。没有验证用户本人的密码、MFA 或 GitHub/Google 登录链；访问策略对 `lszio` 的匹配由实际 PolicyEngine 验证通过，浏览器端使用的是随后删除的临时普通账号。

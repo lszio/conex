@@ -273,6 +273,540 @@ pub struct AgentRegisterResult {
     #[prost(message, repeated, tag = "4")]
     pub rejected_capabilities: ::prost::alloc::vec::Vec<RejectedCapability>,
 }
+/// 全局引用 {nodeId,id}；单节点调用可只用 id，nodeId 来自已验证路由。
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentEntityRef {
+    #[prost(string, tag = "1")]
+    pub node_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub id: ::prost::alloc::string::String,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentCapabilities {
+    #[prost(bool, tag = "1")]
+    pub create_conversation: bool,
+    #[prost(bool, tag = "2")]
+    pub continue_conversation: bool,
+    #[prost(bool, tag = "3")]
+    pub read_history: bool,
+    #[prost(bool, tag = "4")]
+    pub stream_messages: bool,
+    #[prost(bool, tag = "5")]
+    pub cancel_execution: bool,
+    #[prost(bool, tag = "6")]
+    pub approval: bool,
+    #[prost(bool, tag = "7")]
+    pub user_input: bool,
+    #[prost(bool, tag = "8")]
+    pub list_subagents: bool,
+    #[prost(bool, tag = "9")]
+    pub cancel_subagent: bool,
+    #[prost(bool, tag = "10")]
+    pub steer_execution: bool,
+    #[prost(bool, tag = "11")]
+    pub attach_external: bool,
+    #[prost(bool, tag = "12")]
+    pub recover_active: bool,
+}
+/// 节点实际支持的领域限额；语义验证器要求为正。
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentLimits {
+    #[prost(uint32, tag = "1")]
+    pub max_page_size: u32,
+    #[prost(uint32, tag = "2")]
+    pub max_submit_bytes: u32,
+    #[prost(uint32, tag = "3")]
+    pub max_message_read_bytes: u32,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct Workspace {
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub node_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub display_name: ::prost::alloc::string::String,
+    /// 节点批准的配置键，不是客户端任意路径；真实根路径仅节点保存。
+    #[prost(string, tag = "4")]
+    pub root_ref: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct Conversation {
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub endpoint_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub workspace_id: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "4")]
+    pub created_at_ms: u64,
+    #[prost(uint64, tag = "5")]
+    pub revision: u64,
+    #[prost(string, tag = "6")]
+    pub quality: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "7")]
+    pub title: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "8")]
+    pub active_execution_id: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct Execution {
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub conversation_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub endpoint_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub module_instance_id: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "5")]
+    pub generation: u64,
+    #[prost(string, tag = "6")]
+    pub state: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "7")]
+    pub revision: u64,
+    #[prost(uint64, tag = "8")]
+    pub created_at_ms: u64,
+    #[prost(uint64, tag = "9")]
+    pub updated_at_ms: u64,
+    #[prost(string, optional, tag = "10")]
+    pub parent_execution_id: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "11")]
+    pub terminal_reason: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(uint64, optional, tag = "12")]
+    pub cancel_requested_at_ms: ::core::option::Option<u64>,
+    /// 仅受限节点记录，默认不进入客户端投影。
+    #[prost(string, optional, tag = "13")]
+    pub backend_ref: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct InteractionChoice {
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub label: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub effect: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct InteractionRequest {
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub execution_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub kind: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub state: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "5")]
+    pub revision: u64,
+    #[prost(uint64, tag = "6")]
+    pub created_at_ms: u64,
+    #[prost(uint64, optional, tag = "7")]
+    pub expires_at_ms: ::core::option::Option<u64>,
+    #[prost(string, optional, tag = "8")]
+    pub prompt: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(message, repeated, tag = "9")]
+    pub choices: ::prost::alloc::vec::Vec<InteractionChoice>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentMessagePart {
+    #[prost(oneof = "agent_message_part::Part", tags = "1, 2")]
+    pub part: ::core::option::Option<agent_message_part::Part>,
+}
+/// Nested message and enum types in `AgentMessagePart`.
+pub mod agent_message_part {
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
+    pub enum Part {
+        #[prost(message, tag = "1")]
+        Text(super::AgentTextPart),
+        #[prost(message, tag = "2")]
+        Tool(super::AgentToolPart),
+    }
+}
+/// text 是该 part 的明确窗口；窗口外内容经 agent/messages/read 分段取回。
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentTextPart {
+    #[prost(string, tag = "1")]
+    pub text: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "2")]
+    pub offset_bytes: u64,
+    #[prost(uint64, tag = "3")]
+    pub total_bytes: u64,
+}
+/// 工具说明；summary 不含凭据或审批秘密。
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentToolPart {
+    #[prost(string, tag = "1")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub phase: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub summary: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AgentMessage {
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub conversation_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub execution_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub role: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub state: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "6")]
+    pub revision: u64,
+    #[prost(message, repeated, tag = "7")]
+    pub parts: ::prost::alloc::vec::Vec<AgentMessagePart>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct Relationship {
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub from: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub to: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub kind: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub source: ::prost::alloc::string::String,
+    #[prost(string, tag = "6")]
+    pub quality: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "7")]
+    pub observed_at_ms: u64,
+}
+/// 明确不能恢复的后端区间；不得伪造曾记录的连续 delta。
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentGap {
+    #[prost(string, tag = "1")]
+    pub reason: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "2")]
+    pub backend_range: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentHistoryInfo {
+    #[prost(bool, tag = "1")]
+    pub has_more: bool,
+    #[prost(string, optional, tag = "2")]
+    pub before_message_id: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// Page={items,nextPageToken?} 的公共定位；token 绑定查询、主体、目标及
+/// 截止时间，不能当授权使用。
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentPageInfo {
+    #[prost(string, optional, tag = "1")]
+    pub next_page_token: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// 契约 AgentEndpoint 记录：既有 agent.proto 的同名消息是控制面注册结构，
+/// 领域记录因此加 Adapter 前缀（wire JSON 不含消息名，字段与契约一致）。
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentAdapterEndpoint {
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub node_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub module_instance_id: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "4")]
+    pub generation: u64,
+    #[prost(string, tag = "5")]
+    pub adapter: ::prost::alloc::string::String,
+    #[prost(string, tag = "6")]
+    pub backend_version: ::prost::alloc::string::String,
+    #[prost(string, tag = "7")]
+    pub protocol_version: ::prost::alloc::string::String,
+    #[prost(bool, tag = "8")]
+    pub experimental: bool,
+    #[prost(message, optional, tag = "9")]
+    pub capabilities: ::core::option::Option<AgentCapabilities>,
+    #[prost(string, tag = "10")]
+    pub availability: ::prost::alloc::string::String,
+    #[prost(string, tag = "11")]
+    pub catalog_scope: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "12")]
+    pub limits: ::core::option::Option<AgentLimits>,
+    #[prost(string, optional, tag = "13")]
+    pub display_name: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentEndpointListInput {
+    #[prost(uint32, optional, tag = "1")]
+    pub limit: ::core::option::Option<u32>,
+    #[prost(string, optional, tag = "2")]
+    pub page_token: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AgentEndpointListResult {
+    #[prost(message, repeated, tag = "1")]
+    pub items: ::prost::alloc::vec::Vec<AgentAdapterEndpoint>,
+    #[prost(string, optional, tag = "2")]
+    pub next_page_token: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentWorkspaceListInput {
+    #[prost(string, tag = "1")]
+    pub endpoint_id: ::prost::alloc::string::String,
+    #[prost(uint32, optional, tag = "2")]
+    pub limit: ::core::option::Option<u32>,
+    #[prost(string, optional, tag = "3")]
+    pub page_token: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AgentWorkspaceListResult {
+    #[prost(message, repeated, tag = "1")]
+    pub items: ::prost::alloc::vec::Vec<Workspace>,
+    #[prost(string, optional, tag = "2")]
+    pub next_page_token: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentConversationListInput {
+    #[prost(string, tag = "1")]
+    pub endpoint_id: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "2")]
+    pub workspace_id: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(uint32, optional, tag = "3")]
+    pub limit: ::core::option::Option<u32>,
+    #[prost(string, optional, tag = "4")]
+    pub page_token: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AgentConversationListResult {
+    #[prost(message, repeated, tag = "1")]
+    pub items: ::prost::alloc::vec::Vec<Conversation>,
+    #[prost(string, optional, tag = "2")]
+    pub next_page_token: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentConversationCreateInput {
+    #[prost(string, tag = "1")]
+    pub endpoint_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub workspace_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub idempotency_key: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "4")]
+    pub title: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentConversationCreateResult {
+    #[prost(message, optional, tag = "1")]
+    pub conversation: ::core::option::Option<Conversation>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentConversationGetInput {
+    #[prost(string, tag = "1")]
+    pub conversation_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentConversationGetResult {
+    #[prost(message, optional, tag = "1")]
+    pub conversation: ::core::option::Option<Conversation>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentConversationHistoryInput {
+    #[prost(string, tag = "1")]
+    pub conversation_id: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "2")]
+    pub before_message_id: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(uint32, optional, tag = "3")]
+    pub limit: ::core::option::Option<u32>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AgentConversationHistoryResult {
+    #[prost(message, repeated, tag = "1")]
+    pub messages: ::prost::alloc::vec::Vec<AgentMessage>,
+    #[prost(bool, tag = "2")]
+    pub has_more: bool,
+    #[prost(string, tag = "3")]
+    pub quality: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "4")]
+    pub gaps: ::prost::alloc::vec::Vec<AgentGap>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentMessageReadInput {
+    #[prost(string, tag = "1")]
+    pub conversation_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub message_id: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "3")]
+    pub part_index: u32,
+    #[prost(uint64, tag = "4")]
+    pub offset_bytes: u64,
+    /// 默认 4096、最大 65536；UTF-8 边界分页。
+    #[prost(uint32, optional, tag = "5")]
+    pub max_bytes: ::core::option::Option<u32>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentMessageReadResult {
+    #[prost(string, tag = "1")]
+    pub text: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "2")]
+    pub offset_bytes: u64,
+    #[prost(uint64, tag = "3")]
+    pub next_offset_bytes: u64,
+    #[prost(uint64, tag = "4")]
+    pub total_bytes: u64,
+    #[prost(string, tag = "5")]
+    pub state: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "6")]
+    pub revision: u64,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentSubmitInput {
+    #[prost(string, tag = "1")]
+    pub conversation_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub idempotency_key: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub content: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentSubmitResult {
+    #[prost(message, optional, tag = "1")]
+    pub execution: ::core::option::Option<Execution>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentExecutionGetInput {
+    #[prost(string, tag = "1")]
+    pub execution_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentExecutionGetResult {
+    #[prost(message, optional, tag = "1")]
+    pub execution: ::core::option::Option<Execution>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentExecutionCancelInput {
+    #[prost(string, tag = "1")]
+    pub execution_id: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "2")]
+    pub expected_generation: u64,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentExecutionCancelResult {
+    #[prost(string, tag = "1")]
+    pub execution_id: ::prost::alloc::string::String,
+    #[prost(bool, tag = "2")]
+    pub requested: bool,
+    #[prost(string, tag = "3")]
+    pub state: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentInteractionListInput {
+    #[prost(string, tag = "1")]
+    pub conversation_id: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "2")]
+    pub execution_id: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(uint32, optional, tag = "3")]
+    pub limit: ::core::option::Option<u32>,
+    #[prost(string, optional, tag = "4")]
+    pub page_token: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AgentInteractionListResult {
+    #[prost(message, repeated, tag = "1")]
+    pub items: ::prost::alloc::vec::Vec<InteractionRequest>,
+    #[prost(string, optional, tag = "2")]
+    pub next_page_token: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentInteractionDecision {
+    /// kind=approval: 仅 choiceId；selection: 仅 choiceIds；input: 仅 text。
+    /// 互斥由语义验证器与领域 prepare 拒绝，proto 默认空值不绕过检查。
+    #[prost(string, tag = "1")]
+    pub kind: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "2")]
+    pub choice_id: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, repeated, tag = "3")]
+    pub choice_ids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "4")]
+    pub text: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentInteractionRespondInput {
+    #[prost(string, tag = "1")]
+    pub interaction_id: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "2")]
+    pub expected_revision: u64,
+    #[prost(message, optional, tag = "3")]
+    pub decision: ::core::option::Option<AgentInteractionDecision>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AgentInteractionRespondResult {
+    #[prost(message, optional, tag = "1")]
+    pub interaction: ::core::option::Option<InteractionRequest>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentRelationshipListInput {
+    #[prost(string, tag = "1")]
+    pub conversation_id: ::prost::alloc::string::String,
+    #[prost(uint32, optional, tag = "2")]
+    pub limit: ::core::option::Option<u32>,
+    #[prost(string, optional, tag = "3")]
+    pub page_token: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AgentRelationshipListResult {
+    #[prost(message, repeated, tag = "1")]
+    pub items: ::prost::alloc::vec::Vec<Relationship>,
+    #[prost(string, optional, tag = "2")]
+    pub next_page_token: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentSubagentListInput {
+    #[prost(string, tag = "1")]
+    pub execution_id: ::prost::alloc::string::String,
+    #[prost(uint32, optional, tag = "2")]
+    pub limit: ::core::option::Option<u32>,
+    #[prost(string, optional, tag = "3")]
+    pub page_token: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AgentSubagentListResult {
+    #[prost(message, repeated, tag = "1")]
+    pub items: ::prost::alloc::vec::Vec<Execution>,
+    #[prost(string, optional, tag = "2")]
+    pub next_page_token: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, tag = "3")]
+    pub quality: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentSubagentCancelInput {
+    #[prost(string, tag = "1")]
+    pub execution_id: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "2")]
+    pub expected_generation: u64,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentSubagentCancelResult {
+    #[prost(string, tag = "1")]
+    pub execution_id: ::prost::alloc::string::String,
+    #[prost(bool, tag = "2")]
+    pub requested: bool,
+    #[prost(string, tag = "3")]
+    pub state: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentExecutionSteerInput {
+    #[prost(string, tag = "1")]
+    pub execution_id: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "2")]
+    pub expected_generation: u64,
+    #[prost(string, tag = "3")]
+    pub idempotency_key: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub content: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentExecutionSteerResult {
+    #[prost(string, tag = "1")]
+    pub execution_id: ::prost::alloc::string::String,
+    #[prost(bool, tag = "2")]
+    pub accepted: bool,
+}
 /// 单个分块条目；多块内容用 ManifestEntries 表示。
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ChunkEntry {
@@ -1057,6 +1591,140 @@ impl ConnectionState {
             _ => None,
         }
     }
+}
+/// 持久事件游标：after 为最后已应用位置的规范 uint64 十进制字符串；
+/// 空流 after="0"。cursor 不携带授权。
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentEventCursor {
+    #[prost(string, tag = "1")]
+    pub stream_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub epoch: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "3")]
+    pub after: u64,
+}
+/// 单个 Conversation 一个 stream；streamId=conversationId。
+/// 位置从 1 连续递增；去重键为 (nodeId,streamId,epoch,position)。
+/// data 与 type 一一对应；entityRevision 为事件写入时的实体 revision。
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AgentEvent {
+    #[prost(string, tag = "1")]
+    pub stream_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub epoch: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "3")]
+    pub position: u64,
+    #[prost(uint64, tag = "4")]
+    pub recorded_at_ms: u64,
+    #[prost(string, tag = "5")]
+    pub r#type: ::prost::alloc::string::String,
+    #[prost(string, tag = "6")]
+    pub entity_id: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "7")]
+    pub entity_revision: u64,
+    #[prost(oneof = "agent_event::Data", tags = "8, 9, 10, 11, 12, 13, 14, 15, 16")]
+    pub data: ::core::option::Option<agent_event::Data>,
+}
+/// Nested message and enum types in `AgentEvent`.
+pub mod agent_event {
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Data {
+        #[prost(message, tag = "8")]
+        ConversationUpdated(super::Conversation),
+        #[prost(message, tag = "9")]
+        ExecutionUpdated(super::Execution),
+        #[prost(message, tag = "10")]
+        InteractionCreated(super::InteractionRequest),
+        #[prost(message, tag = "11")]
+        InteractionUpdated(super::InteractionRequest),
+        #[prost(message, tag = "12")]
+        MessageCreated(super::AgentMessage),
+        #[prost(message, tag = "13")]
+        MessageDelta(super::AgentMessageDelta),
+        #[prost(message, tag = "14")]
+        MessageCompleted(super::AgentMessageCompleted),
+        #[prost(message, tag = "15")]
+        RelationshipUpdated(super::Relationship),
+        #[prost(message, tag = "16")]
+        RecoveryGap(super::AgentGap),
+    }
+}
+/// 仅追加文本；offsetBytes 必须等于该 part 已知 totalBytes。
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentMessageDelta {
+    #[prost(string, tag = "1")]
+    pub message_id: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "2")]
+    pub part_index: u32,
+    #[prost(uint64, tag = "3")]
+    pub offset_bytes: u64,
+    #[prost(string, tag = "4")]
+    pub text: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentMessageCompleted {
+    #[prost(string, tag = "1")]
+    pub message_id: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "2")]
+    pub revision: u64,
+    #[prost(string, tag = "3")]
+    pub state: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentSnapshotInput {
+    #[prost(string, tag = "1")]
+    pub conversation_id: ::prost::alloc::string::String,
+}
+/// 所有投影与 cursor 来自同一事务版本；正文窗口可为空并带正确 totalBytes。
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AgentSnapshot {
+    #[prost(message, optional, tag = "1")]
+    pub conversation: ::core::option::Option<Conversation>,
+    #[prost(message, repeated, tag = "2")]
+    pub executions: ::prost::alloc::vec::Vec<Execution>,
+    #[prost(message, repeated, tag = "3")]
+    pub interactions: ::prost::alloc::vec::Vec<InteractionRequest>,
+    #[prost(message, repeated, tag = "4")]
+    pub messages: ::prost::alloc::vec::Vec<AgentMessage>,
+    #[prost(message, repeated, tag = "5")]
+    pub relationships: ::prost::alloc::vec::Vec<Relationship>,
+    #[prost(message, optional, tag = "6")]
+    pub cursor: ::core::option::Option<AgentEventCursor>,
+    #[prost(uint64, tag = "7")]
+    pub first_available: u64,
+    #[prost(message, optional, tag = "8")]
+    pub history: ::core::option::Option<AgentHistoryInfo>,
+    #[prost(bool, tag = "9")]
+    pub relationships_has_more: bool,
+    #[prost(string, tag = "10")]
+    pub quality: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "11")]
+    pub gaps: ::prost::alloc::vec::Vec<AgentGap>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AgentSnapshotResult {
+    #[prost(message, optional, tag = "1")]
+    pub snapshot: ::core::option::Option<AgentSnapshot>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AgentEventReadInput {
+    #[prost(message, optional, tag = "1")]
+    pub cursor: ::core::option::Option<AgentEventCursor>,
+    #[prost(uint32, optional, tag = "2")]
+    pub limit: ::core::option::Option<u32>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AgentEventReadResult {
+    #[prost(message, repeated, tag = "1")]
+    pub events: ::prost::alloc::vec::Vec<AgentEvent>,
+    #[prost(message, optional, tag = "2")]
+    pub next_cursor: ::core::option::Option<AgentEventCursor>,
+    #[prost(uint64, tag = "3")]
+    pub head: u64,
+    #[prost(uint64, tag = "4")]
+    pub first_available: u64,
+    #[prost(bool, tag = "5")]
+    pub has_more: bool,
 }
 /// 能力端点自描述。仅建模可公布的安装清单字段；
 /// 源码路径、进程命令、凭据后端与允许地址属于管理员安装配置，不进入本消息。

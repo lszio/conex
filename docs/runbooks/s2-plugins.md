@@ -2,9 +2,9 @@
 
 ## 支持范围与安全边界
 
-- 插件是 **SDK 侧进程内的组合单元**：一个接入实例 = 一条 S1 连接；同一插件类可创建多个实例，每实例独立连接、独立模块注册、独立状态序列。中心（conex-host）零改动。
+- 插件是 **SDK 侧受信进程内的组合单元**。本地 Instance 拥有模块；业务、发布和连接状态分别观察。独立 SDK 实例自行管理发布；Node 多应用共享节点连接而不共享业务所有权。中心（conex-host）零改动。
 - 本地依赖是进程内句柄（组合期解析，不经网络）；显式远程绑定把依赖名固定映射到另一实例已发布模块的 `ModuleRef`。缺失依赖、循环依赖、重复模块名在启动前拒绝——类型化本地错误，不过网。
-- 停止实例 = 逆拓扑序 unpublish → 关闭订阅与消费者 → abort handler → 关闭连接；实例停止/断开后不自动复活，重建是新代次，旧 `ModuleRef` 显式失效（S1 `stale`/`-32013` 族）。
+- `start` 完成本地启动后返回，发布异步进行；访问远端注册引用前等待 `Published`（TS `onPublication`/`publicationState`，Rust `wait_published`/`publication_state`）。断中心不停止本地业务；重连换 registrationId，旧 `ModuleRef` 明确 stale，不自动重放原调用/订阅或重绑依赖。显式 stop 才逆序清理自有资源，默认30秒总截止，后续 stop 只能缩短；清理失败明确报告 Failed。
 - 仍受 S1 边界约束：静态批准只用于受限开发，**S4 完成前禁止公开多用户使用**；开发配置仅绑定 loopback。令牌只经环境变量注入，进程与日志不输出明文。
 
 ## 三进程样例
@@ -43,7 +43,7 @@ suite 生成临时端口、令牌摘要与数据目录，启动真实 Host + Rus
 | A05 循环依赖拒绝 | 插件变体进程：`circular_dependency` 带环节点、零 socket；Rust 侧同上 |
 | A06 停止释放 | SIGTERM → `stopped` 退出 0、订阅 end（-32005）、调用 -32002 未注册、list 缺失、幸存实例继续服务 |
 | A07 派生模块跨语言 | 双向样本事件 + probe 独立 read（28/rev5 vs 28/rev4：等值不同序列） |
-| A08 断开不复活/新代次 | 负观察窗口 + 新 registrationId ≠ 旧 + 旧 ref -32013 + 新实例全新状态 |
+| A08 停止不复活/新代次 | 停止后的负观察窗口 + 新 registrationId ≠ 旧 + 旧 ref -32013 + 新实例全新状态；实际断中心保留业务另见 [P2 验收](../verification/private-runtime-p2.md) |
 
 ## 排障
 
@@ -54,3 +54,7 @@ suite 生成临时端口、令牌摘要与数据目录，启动真实 Host + Rus
 - 样本 `error` 事件 / 非零退出：对照 phase 事件定位阶段；套件失败时错误信息带场景号与最后一个观测。
 
 实际执行结果见 [S2 验证记录](../verification/s2-plugins.md)。
+
+## P2 迁移注意
+
+Rust `StartedModule.cleanup` 是异步 `ModuleCleanup`：接收绝对 deadline，返回可等待的 `HandlerFuture<()>`。TS 模块提供 `stop(ctx, handle)`；timer、观察者、派生订阅必须在其中取消/等待。不要把撤销 wire 注册当成已经终止本地任务。Node 部署与受限本地调用见 [自治节点运行手册](private-runtime.md)。

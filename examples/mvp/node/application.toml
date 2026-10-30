@@ -1,0 +1,12 @@
+schema = "conex.application/1"
+app_id = "local-counter"
+version = "0.1.0"
+owner_node_ref = "home-node"
+
+[[modules]]
+id = "counter"
+implementation = "controlled-counter"
+config_ref = "counter-default"
+permissions = ["counter.read", "counter.add"]
+# No center data path: the owner consumes this through the restricted local API.
+exports = [{ contract_id = "conex.counter", strategy = "direct-only" }]

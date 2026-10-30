@@ -1,0 +1,152 @@
+syntax = "proto3";
+
+package conex;
+
+// Agent 领域实体记录与引用（docs/contracts/agent-domain.md §2）。
+// 唯一记录源；events.proto 与 agent_domain.proto 依赖本文件，自身不反向
+// import，保证无环。枚举型语义（adapter/state/quality/kind/effect 等）
+// 外部表示为契约小写字符串，由 conex-proto::agent_domain 语义验证器限制，
+// 不使用生成器默认枚举大小写。uint64 均为规范十进制字符串。
+//
+// 所有 ID 为 ULID；generation 是模块运行代际；revision 是记录修订，
+// 与事件位置无关。
+
+// 全局引用 {nodeId,id}；单节点调用可只用 id，nodeId 来自已验证路由。
+message AgentEntityRef {
+  string node_id = 1;
+  string id = 2;
+}
+
+message AgentCapabilities {
+  bool create_conversation = 1;
+  bool continue_conversation = 2;
+  bool read_history = 3;
+  bool stream_messages = 4;
+  bool cancel_execution = 5;
+  bool approval = 6;
+  bool user_input = 7;
+  bool list_subagents = 8;
+  bool cancel_subagent = 9;
+  bool steer_execution = 10;
+  bool attach_external = 11;
+  bool recover_active = 12;
+}
+
+// 节点实际支持的领域限额；语义验证器要求为正。
+message AgentLimits {
+  uint32 max_page_size = 1;
+  uint32 max_submit_bytes = 2;
+  uint32 max_message_read_bytes = 3;
+}
+
+message Workspace {
+  string id = 1;
+  string node_id = 2;
+  string display_name = 3;
+  // 节点批准的配置键，不是客户端任意路径；真实根路径仅节点保存。
+  string root_ref = 4;
+}
+
+message Conversation {
+  string id = 1;
+  string endpoint_id = 2;
+  string workspace_id = 3;
+  uint64 created_at_ms = 4;
+  uint64 revision = 5;
+  string quality = 6;
+  optional string title = 7;
+  optional string active_execution_id = 8;
+}
+
+message Execution {
+  string id = 1;
+  string conversation_id = 2;
+  string endpoint_id = 3;
+  string module_instance_id = 4;
+  uint64 generation = 5;
+  string state = 6;
+  uint64 revision = 7;
+  uint64 created_at_ms = 8;
+  uint64 updated_at_ms = 9;
+  optional string parent_execution_id = 10;
+  optional string terminal_reason = 11;
+  optional uint64 cancel_requested_at_ms = 12;
+  // 仅受限节点记录，默认不进入客户端投影。
+  optional string backend_ref = 13;
+}
+
+message InteractionChoice {
+  string id = 1;
+  string label = 2;
+  string effect = 3;
+}
+
+message InteractionRequest {
+  string id = 1;
+  string execution_id = 2;
+  string kind = 3;
+  string state = 4;
+  uint64 revision = 5;
+  uint64 created_at_ms = 6;
+  optional uint64 expires_at_ms = 7;
+  optional string prompt = 8;
+  repeated InteractionChoice choices = 9;
+}
+
+message AgentMessagePart {
+  oneof part {
+    AgentTextPart text = 1;
+    AgentToolPart tool = 2;
+  }
+}
+
+// text 是该 part 的明确窗口；窗口外内容经 agent/messages/read 分段取回。
+message AgentTextPart {
+  string text = 1;
+  uint64 offset_bytes = 2;
+  uint64 total_bytes = 3;
+}
+
+// 工具说明；summary 不含凭据或审批秘密。
+message AgentToolPart {
+  string name = 1;
+  string phase = 2;
+  string summary = 3;
+}
+
+message AgentMessage {
+  string id = 1;
+  string conversation_id = 2;
+  string execution_id = 3;
+  string role = 4;
+  string state = 5;
+  uint64 revision = 6;
+  repeated AgentMessagePart parts = 7;
+}
+
+message Relationship {
+  string id = 1;
+  string from = 2;
+  string to = 3;
+  string kind = 4;
+  string source = 5;
+  string quality = 6;
+  uint64 observed_at_ms = 7;
+}
+
+// 明确不能恢复的后端区间；不得伪造曾记录的连续 delta。
+message AgentGap {
+  string reason = 1;
+  optional string backend_range = 2;
+}
+
+message AgentHistoryInfo {
+  bool has_more = 1;
+  optional string before_message_id = 2;
+}
+
+// Page={items,nextPageToken?} 的公共定位；token 绑定查询、主体、目标及
+// 截止时间，不能当授权使用。
+message AgentPageInfo {
+  optional string next_page_token = 1;
+}

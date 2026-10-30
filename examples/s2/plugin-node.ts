@@ -143,6 +143,7 @@ function counterPlugin(): Plugin<InstanceGraphConfig> {
       const derived = new AtomicState<CounterValue>({ value: { count: 0 }, revision: "0", sampledAtMs: String(Date.now()), quality: "current" });
       let lastUpstreamRevision = -1n;
       let forwardAdd: ((delta: number) => Promise<CounterResult>) | undefined;
+      let disposeUpstream: (() => void | Promise<void>) | undefined;
 
       const commitCounter = (count: number): CounterResult => {
         const revision = (BigInt(counter.read().revision) + 1n).toString();
@@ -225,7 +226,8 @@ function counterPlugin(): Plugin<InstanceGraphConfig> {
               emit("bind-snapshot", { target: upstream.reference.providerEndpointId, count: initial.count, revision: initial.revision });
               advanceDerived(doubled(initial.count));
               lastUpstreamRevision = BigInt(initial.revision);
-              upstream.subscribe<unknown, CounterValue>("counter/value", {}, sample => onUpstream(BigInt(sample.revision), sample.value.count));
+              const subscription = upstream.subscribe<unknown, CounterValue>("counter/value", {}, sample => onUpstream(BigInt(sample.revision), sample.value.count));
+              disposeUpstream = async () => { await subscription.unsubscribe(); };
               forwardAdd = delta => upstream.invoke<unknown, CounterResult>("counter/add", { delta }).result;
               return;
             }
@@ -234,8 +236,13 @@ function counterPlugin(): Plugin<InstanceGraphConfig> {
             emit("bind-snapshot", { target: `${config.endpointPrefix}-counter`, count: initial.value.count, revision: initial.revision.toString(), mode: "local" });
             advanceDerived(doubled(initial.value.count));
             lastUpstreamRevision = BigInt(initial.revision);
-            upstream.observe(sample => onUpstream(BigInt(sample.revision), sample.value.count));
+            disposeUpstream = upstream.observe(sample => onUpstream(BigInt(sample.revision), sample.value.count));
             forwardAdd = delta => Promise.resolve(upstream.add(delta));
+          },
+          stop: async () => {
+            await disposeUpstream?.();
+            disposeUpstream = undefined;
+            forwardAdd = undefined;
           },
         },
       ];
@@ -339,6 +346,12 @@ async function main(): Promise<void> {
 
   const instance = new Instance(counterPlugin(), link);
   await instance.start({ endpointPrefix: ENDPOINT, upstream: { mode: "remote", reference: upstream } });
+  if (instance.publication !== "published") {
+    const { promise, resolve, reject } = Promise.withResolvers<void>();
+    const timer = setTimeout(() => reject(new Error("publication deadline")), 10_000);
+    const detach = instance.onPublication(state => { if (state === "published") resolve(); });
+    try { await promise; } finally { clearTimeout(timer); detach(); }
+  }
   emit("publish", { providerEndpointId: `${ENDPOINT}-counter`, registrationId: instance.module("counter")!.registrationId });
   emit("publish", { providerEndpointId: `${ENDPOINT}-derived-counter`, registrationId: instance.module("derived-counter")!.registrationId });
 

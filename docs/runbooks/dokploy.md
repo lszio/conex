@@ -1,6 +1,6 @@
 # Dokploy 部署运行手册
 
-> 状态：**公开落地页已部署并验证**（2026-10-04），**2026-10-05 切换到新页面并开启 PR preview**（§9、§10）。`https://conex.lszio.space` 跑单容器 guest-only 演示栈：访客免凭据浏览、真实只读调用、`/llms.txt` 可用。逐项实测输出见 [落地页验证记录](../verification/landing-page.md)。
+> 当前部署（2026-10-19）：`https://conex.lszio.space` 由 Dokploy 跟踪 `dev`，运行 `fa75832`；入口通过 Authentik `conex-users` 组限制访问，目前仅 `lszio`。旧公开免登录演示已改为受限工作台；应用内部仍使用 guest 会话，不等于 S4 用户/Space 授权完成。实测见 [验证记录 §9](../verification/landing-page.md#9-authentik-受限部署2026-10-19)。
 >
 > 上游：[connected-landing 契约](../contracts/connected-landing.md)、[connected-landing 运行手册](connected-landing.md)、[设计 v6](../design/2026-09-14-conex-design.md)。
 
@@ -8,37 +8,27 @@
 
 | 形态 | 用途 | 配置 | 组成 |
 |---|---|---|---|
-| **公开演示**（当前线上） | 落地页、访客免登录浏览、llms.txt | `docker/host.toml`（镜像内烘焙） | 单个 `host` 容器 |
-| **多主机生产** | 真实反连 Agent、按主体授权 | `deployment/host.toml.example` + Secrets/File Mounts | `host` + `agent-a` + `agent-b` |
+| **受限工作台**（当前线上） | Authentik 登录后使用已有客户端/hello/共享文件工作台 | `docker/host.toml` + Dokploy 域名认证中间件 + Authentik 组策略 | 单个 Host 容器 |
+| **多主机服务** | 真实反连 Agent、按主体静态批准 | `deployment/host.toml.example` + Secrets/File Mounts | Host + Agent |
 
-公开演示形态没有任何 secret：镜像自带合成内容树与 guest-only 配置，克隆即可部署。
-生产形态的步骤见 §6。
+镜像的 guest 模式不授予 Authentik 用户 Conex 业务身份；此次只把既有工作台限制到批准访问者，不能据此公开多用户业务或宣称 S4 已交付。生产内部授权仍须按 S4 落地。
 
-## 2. 公开演示形态（当前线上）
+## 2. 受限工作台形态（当前线上）
 
-`deployment/docker-compose.yml` 只有一个 service，无环境变量、无 File Mount、无 Secrets：
+Dokploy Application 使用仓库 `lszio/conex` 的 `dev` 分支、根 `Dockerfile`，监听容器端口 8787；`autoDeploy=true`，后续 push 到 `dev` 会触发生产构建。部署前应明确这一副作用。
+
+本地 `deployment/docker-compose.yml` 仍可用于单机演示，但它**不包含 Authentik 入口保护**，不能直接按公开生产配置使用：
 
 ```bash
 docker compose -f deployment/docker-compose.yml up --build
-# 或 Dokploy：Compose service → compose path `deployment/docker-compose.yml`
-#            Dockerfile `Dockerfile` → Deploy
 ```
 
-镜像内烘焙的内容：
-
-| 路径 | 内容 |
+| 镜像路径 | 当前内容 |
 |---|---|
-| `/etc/conex/host.toml` | guest-only 配置，3 个 `source-fs` 端点，`web_root=/opt/conex/web` |
-| `/opt/conex/web` | 落地页静态资源（`index.html` / `app.js` / `style.css` / `llms.txt`） |
-| `/opt/conex/demo` | 合成演示内容树（docs / media / archives） |
+| `/etc/conex/host.toml` | guest 会话、P1 数据根、`web_origin=https://conex.lszio.space` |
+| `/opt/conex/web` | 已有工作台静态资源与 llms.txt |
 
-三个只读端点（全部 `source-fs`，授权 `root = ""` + `subtree = true`）：
-
-| endpointId | 目录 | 覆盖的预览路径 |
-|---|---|---|
-| `docs` | `readme.md`、`architecture.md` | Markdown / 纯文本 |
-| `media` | `clip.mp4`、`clip.webm`、`diagram.png` | 视频（含 Range 拖动）、图片 |
-| `archives` | `report.docx`、`bundle.zip`、`random.bin` | DOCX 受限预览、ZIP 只列不展开、二进制元数据下载 |
+当前镜像没有配置 `[[endpoints]]`、S1 静态服务令牌或计数器节点；这次没有新增 S1 工作台 UI，也没有将 SDK 测试计数器部署成生产数据源。线上操作仍是既有真实客户端/hello/文件场景。
 
 ## 3. 明文监听：两个开关不要混用
 
@@ -67,15 +57,14 @@ ticket 绑定、WSS 升级的 Origin 比对。写错的表现是访客能打开�
 
 ```bash
 ORIGIN=https://conex.lszio.space
-curl -sS -o /dev/null -w '%{http_code}\n' $ORIGIN/                # 200
-curl -sS -o /dev/null -w '%{http_code}\n' $ORIGIN/llms.txt        # 200
-curl -sS -o /dev/null -w '%{http_code}\n' $ORIGIN/llm.txt         # 200（别名）
-curl -sS -o /dev/null -w '%{http_code}\n' $ORIGIN/not-found       # 404（不回退 HTML）
-curl -sSi $ORIGIN/web/session | head -3                           # 200 + Set-Cookie
+curl -sS -o /dev/null -w '%{http_code}\n' $ORIGIN/                # 未登录：302
+curl -sS -o /dev/null -w '%{http_code}\n' $ORIGIN/web/session      # 未登录：302
+curl -sS -o /dev/null -w '%{http_code}\n' $ORIGIN/tickets          # 未登录：302
+curl -sS -o /dev/null -w '%{http_code}\n' $ORIGIN/rpc              # 未登录：302
+curl -sS -o /dev/null -w '%{http_code}\n' $ORIGIN/wss              # 未登录：302
 ```
 
-响应头（`/` 与 `/llms.txt` 均带）：`content-security-policy`、`x-content-type-options: nosniff`、
-`x-frame-options: DENY`、`cache-control: no-store`。
+上述重定向应指向 `auth.lszio.space`。获准账号登录后再检查 Host 的安全响应头和 Secure/HttpOnly 会话 cookie；不能把代理的 302 当成 Host 的 200。
 
 ## 6. 多主机生产形态
 
@@ -179,7 +168,7 @@ PR 事件。验证判据是 `application.one` 的 `previewDeployments` 出现条
 Dokploy 应用 `fEKm9C8gzoKBXN94LAFq4` 部署 `branch`。切换即改该字段并重新部署：
 
 ```bash
-dokploy application update --applicationId fEKm9C8gzoKBXN94LAFq4 --branch refactor/arch
+dokploy application update --applicationId fEKm9C8gzoKBXN94LAFq4 --branch dev
 dokploy application deploy  --applicationId fEKm9C8gzoKBXN94LAFq4
 ```
 
@@ -190,6 +179,20 @@ dokploy application deploy  --applicationId fEKm9C8gzoKBXN94LAFq4
 切换前先确认线上现状，便于回退：
 
 ```console
-$ curl -sS https://conex.lszio.space/ | grep -o '<title>[^<]*</title>'
-<title>Conex · hello</title>
+$ curl -sS -o /dev/null -w '%{http_code}\n' https://conex.lszio.space/
+302
 ```
+
+## 11. Authentik 受限入口（2026-10-19）
+
+- 应用：`Conex`，slug=`conex`，Proxy Provider `conex-forward-auth`（id=8），模式 `forward_single`，external host=`https://conex.lszio.space`。
+- 访问组：`conex-users`；应用仅绑定此组，policy mode=`all`，失败关闭。当前成员只有 `lszio`。扩展访问应由管理员明确加组，不要删掉绑定或改成所有已登录用户可访问。
+- 复用默认 implicit-consent 授权 flow 和 invalidation flow，并加入 embedded outpost；不修改其他应用或共享中间件。
+- Dokploy 域名 `GMpeTZsJuF2w3ghfNz7az` 的 `middlewares` 为 `authentik-auth@file`。应用没有发布 Host 端口，入口流量必须经过 Traefik。
+- 使用 Authentik API 创建 Proxy Provider 时会自动调用 `set_oauth_defaults()`；经 ORM 管理时也必须调用它并保存，生成严格 callback URI 与 grant types。否则页面会报 Redirect URI Error。不要手工删掉 callback 的 `?X-authentik-auth-callback=true`。
+
+本次保护全部外部路径，包括 `/rpc`、`/wss`、`/tickets`。未登录的机器 SDK 同样会被重定向，不能把此域名当作已配置好的 S1 bearer 服务端点。后续若开放机器入口，必须单独设计并验证服务凭据与静态业务批准，不能为省事取消全站保护。
+
+实际浏览器验证使用两个临时非管理员账号：有组账号完成密码登录、callback、Conex 会话、同 cookie 两标签页独立链接和真实 hello；无组账号登录后被拒绝。完成后删除两账号，关闭浏览器，复查组成员仅 `lszio`，没有保留测试密码或 API token。
+
+当前是部署入口访问控制；Conex 内部仍为 guest 主体。OIDC 用户映射、节点/Space 资源授权、撤权传播属于 S4，未在此次部署中实现。

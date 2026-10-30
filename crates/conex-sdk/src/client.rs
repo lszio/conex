@@ -574,6 +574,22 @@ impl Client {
             }
         }
     }
+    /// True once the link is lost or explicitly closed; no request will be
+    /// transmitted and pending ones have settled with link-lost errors.
+    pub fn is_closed(&self) -> bool {
+        self.core().is_closed()
+    }
+    /// Completes when this link is lost or explicitly closed. Lost links never
+    /// replay pending requests — they settled on settle_closed. Used by the
+    /// plugin publication coordinator to detect breakage without polling.
+    pub async fn wait_closed(&self) {
+        let mut closed = self.core().closed.subscribe();
+        while !*closed.borrow_and_update() {
+            if closed.changed().await.is_err() {
+                return;
+            }
+        }
+    }
 }
 
 fn broker() -> p::RequestContext {

@@ -24,8 +24,8 @@
 use conex_sdk::proto as p;
 use conex_sdk::{
     Client, ConnectOptions, Contract, Error as SdkError, Execution, Instance, InstanceConfig,
-    InvocationContext, Method, ModuleContext, ModuleDecl, ModuleRef, Plugin, StartedModule, State,
-    StateEvent, StateLease, StateObserver, Subscription,
+    InvocationContext, Method, ModuleContext, ModuleDecl, ModuleRef, Plugin, PublicationState,
+    StartedModule, State, StateEvent, StateLease, StateObserver, Subscription,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -118,6 +118,27 @@ async fn next_event(subscription: &mut Subscription, what: &str) -> Result<State
             "unknown",
             "safe",
         )),
+    }
+}
+
+/// Publication is independent of the local start: registration happens in the
+/// background driver, so the sample waits for the hub round before touching
+/// registrations (P2.4).
+async fn wait_published(instance: &Instance) -> Result<(), SdkError> {
+    let deadline = Instant::now() + Duration::from_secs(15);
+    loop {
+        if instance.publication_state() == PublicationState::Published {
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            return Err(SdkError::new(
+                p::ErrorCode::Unavailable,
+                "publication did not reach Published",
+                "not_started",
+                "never",
+            ));
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
     }
 }
 
@@ -230,6 +251,7 @@ fn counter_module() -> ModuleDecl {
             Ok(StartedModule {
                 contract,
                 service: Some(domain),
+                cleanup: None,
             })
         })
     })
@@ -343,7 +365,10 @@ fn derived_module() -> ModuleDecl {
                     )
                 })?;
                 let derived = DerivedState::new(upstream_count, upstream.revision)?;
-                tokio::spawn(forward_derived(rx, derived.clone()));
+                let task = Arc::new(Mutex::new(Some(tokio::spawn(forward_derived(
+                    rx,
+                    derived.clone(),
+                )))));
                 let (d_read, d_add, d_state) = (derived.clone(), counter.clone(), derived.clone());
                 let read = Method::new(
                     "conex.CounterReadInput",
@@ -395,6 +420,16 @@ fn derived_module() -> ModuleDecl {
                 Ok(StartedModule {
                     contract,
                     service: None,
+                    cleanup: Some(Arc::new(move |_deadline| {
+                        let task = task.lock().unwrap().take();
+                        Box::pin(async move {
+                            if let Some(task) = task {
+                                task.abort();
+                                let _ = task.await;
+                            }
+                            Ok(())
+                        })
+                    })),
                 })
             })
         },
@@ -579,6 +614,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     instance.start().await?;
+    // Registration happens on the background publication link; only then are
+    // the endpoints resolvable by consumers.
+    wait_published(&instance).await?;
     emit(
         "publish",
         &endpoint,

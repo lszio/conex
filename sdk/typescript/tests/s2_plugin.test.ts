@@ -1,7 +1,11 @@
-// S2 plugin runtime acceptance (docs/contracts/s2-plugins.md §8, plan §4 U01):
-// S2-A01 dual instances, A02 local DI with zero broker frames, A04 missing
-// dependency rejection, A05 cycle rejection, A06 stop release, A08 broken
-// links do not revive. Runs against the in-process S1 broker fixture
+// S2 plugin runtime acceptance (docs/contracts/s2-plugins.md §8 amended by
+// docs/contracts/private-runtime.md §1 and MVP-P2 §5 P2.4): S2-A01 dual
+// instances, A02 local DI with zero broker frames, A04 missing dependency
+// rejection, A05 cycle rejection, A06 stop release. Business state,
+// publication state and link state are independent: a link drop never destroys
+// business (A08), reconnect republishes existing modules with fresh refs
+// without reconstruction, remote refs stay pinned, and only explicit stop
+// closes owned local effects. Runs against the in-process S1 broker fixture
 // (fixtures/s2-host.ts) so every module start/publish/stop crosses a real
 // WebSocket connection with real wire frames.
 import { expect, test } from "bun:test";
@@ -11,7 +15,7 @@ import type { CapabilityContract, ModuleReference } from "../src/capability";
 import { AtomicState } from "../src/state";
 import type { Sample } from "../src/state";
 import { Instance, PluginCompositeError, definePlugin } from "../src/plugin";
-import type { InstanceLink, ModuleDefinition, Plugin } from "../src/plugin";
+import type { InstanceLink, ModuleDefinition, Plugin, PublicationState } from "../src/plugin";
 import { s2Host } from "./fixtures/s2-host";
 import type { S2Host } from "./fixtures/s2-host";
 
@@ -177,8 +181,11 @@ test("S2-A01 one plugin class, two instances keep independent counters, revision
     const b = new Instance(plugin, serviceLink(host.port));
     await a.start({ endpoint: "counter-a" });
     await b.start({ endpoint: "counter-b" });
+    await until(() => a.publication === "published" && b.publication === "published" ? true : undefined, "both publications");
     expect(a.state).toBe("active");
     expect(b.state).toBe("active");
+    expect(a.publication).toBe("published");
+    expect(b.publication).toBe("published");
     expect(host.references()).toHaveLength(4);
     const refA = a.module("counter")!;
     const refB = b.module("counter")!;
@@ -190,6 +197,8 @@ test("S2-A01 one plugin class, two instances keep independent counters, revision
     const snapshotB = await client.subscribe<Record<string, never>, CounterValue>(refB, "value", {}, () => undefined).snapshot;
     expect(`${snapshotA.revision}`).toBe("1");
     expect(`${snapshotB.revision}`).toBe("0");
+    await a.stop();
+    await b.stop();
   } finally { host.stop(); }
 });
 
@@ -198,6 +207,7 @@ test("S2-A02 derived module consumes its local dependency in-process with zero b
   try {
     const instance = new Instance(counterPlugin(), serviceLink(host.port));
     await instance.start({ endpoint: "local" });
+    await until(() => instance.publication === "published" ? true : undefined, "local publication");
     // Kahn order: the dependency started (and registered) before its dependent.
     expect(endpointsOf(host, "register")).toEqual(["local", "local.derived"]);
     const counterRef = instance.module("counter")!;
@@ -212,6 +222,7 @@ test("S2-A02 derived module consumes its local dependency in-process with zero b
     expect(await until(() => updates[0], "derived update")).toMatchObject({ value: { count: 10 } });
     // The local dependency edge never touched the wire.
     expect(host.events.filter(event => event.kind === "subscribe" && event.registrationId === counterRef.registrationId)).toHaveLength(0);
+    await instance.stop();
   } finally { host.stop(); }
 });
 
@@ -220,6 +231,7 @@ test("an explicit remote binding invokes and subscribes to another instance's mo
   try {
     const source = new Instance(counterPlugin(), serviceLink(host.port));
     await source.start({ endpoint: "src" });
+    await until(() => source.publication === "published" ? true : undefined, "source publication");
     const peerRef = source.module("counter")!;
     let mirrored = -1;
     const mirrorDomain = new AtomicState<CounterValue>({ value: { count: -1 }, revision: "0", sampledAtMs: "0", quality: "current" });
@@ -250,9 +262,12 @@ test("an explicit remote binding invokes and subscribes to another instance's mo
       }),
     }), serviceLink(host.port));
     await mirrorInstance.start({ endpoint: "mirror", peer: peerRef });
+    await until(() => mirrorInstance.publication === "published" ? true : undefined, "mirror publication");
     const client = await consumer(host.port);
     expect(await client.invoke(mirrorInstance.module("mirror")!, "read", {}).result).toEqual({ count: 0 });
     expect(mirrorSnapshot).toMatchObject({ value: { count: 0 } });
+    await source.stop();
+    await mirrorInstance.stop();
   } finally { host.stop(); }
 });
 
@@ -329,13 +344,14 @@ test("a module start failure fails the instance, closes the link and publishes n
       failure: { kind: "start_failed", module: "boom" },
     });
     expect(instance.state).toBe("failed");
+    expect(instance.publication).toBe("unpublished");
+    expect(instance.module("counter")).toBeUndefined();
     expect(endpointsOf(host, "register")).toEqual([]);
-    // The half-open link was released, not left dangling.
-    expect(await until(() => host.events.some(event => event.kind === "disconnect") || undefined, "link close")).toBe(true);
+    expect(instance.linkState).toBe("closed");
   } finally { host.stop(); }
 });
 
-test("a failed publish unwinds already-published modules", async () => {
+test("a failed publish round unwinds fresh registrations but never fails business", async () => {
   const host = s2Host();
   try {
     // Both modules share (spaceId, providerEndpointId): the second publish is
@@ -345,10 +361,23 @@ test("a failed publish unwinds already-published modules", async () => {
       id: "collision",
       modules: [failingModule("first", { start: () => undefined, registration }), failingModule("second", { depsLocal: ["first"], start: () => undefined, registration })],
     }), serviceLink(host.port));
-    await expect(instance.start({})).rejects.toMatchObject({ code: -32014 });
-    expect(instance.state).toBe("failed");
+    const transitions: PublicationState[] = [];
+    instance.onPublication(state => transitions.push(state));
+    // Publication is independent of business: start resolves active even
+    // though this round can never publish.
+    await instance.start({});
+    await until(() => instance.publicationError !== undefined ? true : undefined, "publication refusal");
+    expect(instance.state).toBe("active");
+    expect(instance.publication).toBe("unpublished");
+    expect(transitions).toContain("registering");
+    expect(instance.publicationError).toMatchObject({ code: -32014 });
+    // The failed round unwound its own fresh registration in reverse order.
+    await until(() => host.events.some(event => event.kind === "unregister") || undefined, "unwind");
     expect(endpointsOf(host, "unregister")).toEqual(["collision"]);
     expect(host.references()).toHaveLength(0);
+    await instance.stop();
+    expect(instance.state).toBe("stopped");
+    expect(instance.publication).toBe("revoked");
   } finally { host.stop(); }
 });
 
@@ -360,6 +389,7 @@ test("S2-A06 stop unpublishes in reverse topology, ends subscriptions, and leave
     const survivor = new Instance(plugin, serviceLink(host.port));
     await doomed.start({ endpoint: "doomed" });
     await survivor.start({ endpoint: "survivor" });
+    await until(() => doomed.publication === "published" && survivor.publication === "published" ? true : undefined, "both publications");
     const doomedCounter = doomed.module("counter")!;
     const doomedDerived = doomed.module("derived")!;
     const survivorCounter = survivor.module("counter")!;
@@ -368,6 +398,7 @@ test("S2-A06 stop unpublishes in reverse topology, ends subscriptions, and leave
     await subscription.snapshot;
     await doomed.stop();
     expect(doomed.state).toBe("stopped");
+    expect(doomed.publication).toBe("revoked");
     // Reverse topology: the dependent module unregistered before its dependency.
     expect(endpointsOf(host, "unregister").filter(endpoint => endpoint!.startsWith("doomed"))).toEqual(["doomed.derived", "doomed"]);
     // The consumer's subscription was terminated, not left dangling.
@@ -379,6 +410,7 @@ test("S2-A06 stop unpublishes in reverse topology, ends subscriptions, and leave
     // stop() is idempotent: a second call settles to the same terminal state.
     await doomed.stop();
     expect(doomed.state).toBe("stopped");
+    await survivor.stop();
   } finally { host.stop(); }
 });
 
@@ -386,9 +418,9 @@ test("stop aborts an in-flight provider handler and waits for it to settle", asy
   const host = s2Host();
   try {
     let handlerSettled = false;
-    // Real timer on purpose: the handler settles strictly after stop aborts
-    // it, so a stop() that did not wait for handler tasks would resolve first
-    // and leave handlerSettled false at the assertion below.
+    const entered = Promise.withResolvers<void>();
+    const aborted = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
     const instance = new Instance(definePlugin<{ endpoint: string }>({
       id: "blocked",
       graph: config => ({
@@ -398,9 +430,9 @@ test("stop aborts an in-flight provider handler and waits for it to settle", asy
           registration: { spaceId: "test", providerEndpointId: config.endpoint, integrationId: "integration" },
           handlers: {
             add: (_raw, _context, signal) => {
-              const { promise, resolve } = Promise.withResolvers<{ count: number }>();
-              signal.addEventListener("abort", () => setTimeout(() => { handlerSettled = true; resolve({ count: 1 }); }, 20), { once: true });
-              return promise;
+              entered.resolve();
+              signal.addEventListener("abort", () => aborted.resolve(), { once: true });
+              return release.promise.then(() => { handlerSettled = true; return { count: 1 }; });
             },
             read: () => ({ count: 0 }),
           },
@@ -410,9 +442,16 @@ test("stop aborts an in-flight provider handler and waits for it to settle", asy
       }),
     }), serviceLink(host.port));
     await instance.start({ endpoint: "blocked" });
+    await until(() => instance.publication === "published" ? true : undefined, "blocked provider publication");
     const client = await consumer(host.port);
     const call = client.invoke(instance.module("counter")!, "add", { delta: 1 });
-    await instance.stop();
+    void call.result.catch(() => undefined);
+    await entered.promise;
+    const stopped = instance.stop();
+    await aborted.promise;
+    expect(handlerSettled).toBe(false);
+    release.resolve();
+    await stopped;
     expect(handlerSettled).toBe(true);
     expect(instance.state).toBe("stopped");
     // The consumer's own invoke settles later (its reply cannot reach a closed
@@ -421,29 +460,194 @@ test("stop aborts an in-flight provider handler and waits for it to settle", asy
   } finally { host.stop(); }
 });
 
-test("S2-A08 a broken link does not revive; a new instance gets a fresh generation and old references go stale", async () => {
+test("start resolves active when the hub is absent; local modules serve and publication stays unpublished", async () => {
+  const host = s2Host();
+  const port = host.port;
+  host.stop(); // the hub is gone before the instance ever connects
+  const instance = new Instance(counterPlugin(), serviceLink(port));
+  await instance.start({ endpoint: "offline" });
+  expect(instance.state).toBe("active");
+  // Local DI serves in-process with zero hub reachable.
+  expect(instance.local<CounterHandle>("counter").read().value).toEqual({ count: 0 });
+  expect(instance.publication).toBe("unpublished");
+  expect(instance.module("counter")).toBeUndefined();
+  expect(instance.linkState).not.toBe("ready");
+  await instance.stop();
+  expect(instance.state).toBe("stopped");
+  expect(instance.publication).toBe("revoked");
+});
+
+test("S2-A08 a link drop stops publication only; reconnect republishes fresh refs without reconstruction", async () => {
   const host = s2Host();
   try {
     const instance = new Instance(counterPlugin(), serviceLink(host.port));
     await instance.start({ endpoint: "counter-a" });
+    await until(() => instance.publication === "published" ? true : undefined, "initial publication");
+    expect(instance.state).toBe("active");
+    expect(instance.publication).toBe("published");
     const staleRef = instance.module("counter")!;
-    host.closeRegistration(staleRef.registrationId);
-    expect(await until(() => instance.state === "broken" ? instance.state : undefined, "broken state")).toBe("broken");
-    expect(host.references()).toHaveLength(0);
-    // Real wait on purpose: this spans the client's own RECONNECT_DELAY_MS
-    // (100ms) reconnect window, which only exists on the platform clock.
-    await new Promise(resolve => setTimeout(resolve, 150));
-    expect(instance.state).toBe("broken");
-    expect(endpointsOf(host, "register")).toEqual(["counter-a", "counter-a.derived"]);
-    // A rebuilt instance is a new generation: fresh registration, old refs stale.
-    const rebuilt = new Instance(counterPlugin(), serviceLink(host.port));
-    await rebuilt.start({ endpoint: "counter-a" });
-    const freshRef = rebuilt.module("counter")!;
-    expect(freshRef.registrationId).not.toBe(staleRef.registrationId);
+    // Business mutates before the drop; a reconstruction would lose this.
     const client = await consumer(host.port);
+    expect(await client.invoke(staleRef, "add", { delta: 3 }).result).toEqual({ count: 3 });
+    const handle = instance.local<CounterHandle>("counter");
+    host.closeRegistration(staleRef.registrationId);
+    await until(() => instance.publication === "disconnected" ? instance.publication : undefined, "disconnected publication");
+    // Disconnect never destroys business: state, handle identity, domain kept.
+    expect(instance.state).toBe("active");
+    expect(instance.local<CounterHandle>("counter")).toBe(handle);
+    expect(instance.module("counter")).toBeUndefined();
+    // The client reconnects on its own and republishes the SAME modules with
+    // fresh registrationIds; count 3 surviving proves no reconstruction and
+    // no mutation replay.
+    await until(() => instance.publication === "published" ? instance.module("counter")! : undefined, "republished ref");
+    const freshRef = instance.module("counter")!;
+    expect(freshRef.registrationId).not.toBe(staleRef.registrationId);
+    expect(await client.invoke(freshRef, "read", {}).result).toEqual({ count: 3 });
+    // The old reference stays stale: explicit failure, no transparent rebind.
     await expect(client.invoke(staleRef, "read", {}).result).rejects.toMatchObject({ code: -32013 });
-    expect(await client.invoke(freshRef, "read", {}).result).toEqual({ count: 0 });
-    await rebuilt.stop();
-    expect(rebuilt.state).toBe("stopped");
+    await instance.stop();
+    expect(instance.state).toBe("stopped");
+    expect(instance.publication).toBe("revoked");
+  } finally { host.stop(); }
+});
+
+test("stop runs reverse cleanup hooks exactly once; a disconnect never runs them", async () => {
+  const host = s2Host();
+  try {
+    const stopped: string[] = [];
+    const instance = new Instance(definePlugin({
+      id: "hooks",
+      modules: [
+        {
+          name: "base",
+          contract: counterContract,
+          registration: { spaceId: "test", providerEndpointId: "hooks-base", integrationId: "integration" },
+          handlers: { read: () => ({ count: 0 }), add: () => ({ count: 0 }) },
+          states: { value: (_argument, observer, _context, signal) => new AtomicState<CounterValue>({ value: { count: 0 }, revision: "0", sampledAtMs: "0", quality: "current" }).open({}, observer, signal) },
+          start: () => "base-handle",
+          stop: (_ctx, handle) => { stopped.push(`base:${String(handle)}`); },
+        },
+        {
+          name: "leaf",
+          contract: counterContract,
+          registration: { spaceId: "test", providerEndpointId: "hooks-leaf", integrationId: "integration" },
+          depsLocal: ["base"],
+          handlers: { read: () => ({ count: 0 }), add: () => ({ count: 0 }) },
+          states: { value: (_argument, observer, _context, signal) => new AtomicState<CounterValue>({ value: { count: 0 }, revision: "0", sampledAtMs: "0", quality: "current" }).open({}, observer, signal) },
+          start: () => "leaf-handle",
+          stop: async (_ctx, handle) => {
+            // Async cleanup: stop must wait for it, bounded, before settling.
+            stopped.push(`leaf:${String(handle)}`);
+          },
+        },
+      ],
+    }), serviceLink(host.port));
+    await instance.start({});
+    await until(() => instance.publication === "published" ? true : undefined, "hooks publication");
+    expect(stopped).toEqual([]);
+    // A link drop does not run cleanup hooks: business survives it.
+    host.closeRegistration(instance.module("leaf")!.registrationId);
+    await until(() => instance.publication === "disconnected" ? instance.publication : undefined, "disconnected");
+    expect(stopped).toEqual([]);
+    // Republish on the reconnected link, then explicit stop runs hooks in
+    // reverse topology, exactly once each.
+    await until(() => instance.publication === "published" ? instance.publication : undefined, "republished");
+    await instance.stop();
+    expect(stopped).toEqual(["leaf:leaf-handle", "base:base-handle"]);
+    // Idempotent second stop: hooks never re-run.
+    await instance.stop();
+    expect(stopped).toEqual(["leaf:leaf-handle", "base:base-handle"]);
+    expect(instance.state).toBe("stopped");
+  } finally { host.stop(); }
+});
+
+test("local-only startup does not wait for a stalled real WebSocket handshake", async () => {
+  const stalled = Bun.serve({
+    port: 0,
+    fetch(request, server) { if (server.upgrade(request)) return; return new Response(null, { status: 400 }); },
+    websocket: { message() {} },
+  });
+  const instance = new Instance(counterPlugin(), { ...serviceLink(stalled.port!), timeoutMs: 1000 });
+  const pending = instance.start({ endpoint: "stalled" });
+  const { promise, resolve } = Promise.withResolvers<boolean>();
+  // Real network integration: this guard proves local startup is independent of
+  // the platform's pending WebSocket handshake, not a guessed ordering sleep.
+  const timer = setTimeout(() => resolve(false), 100);
+  try {
+    const started = await Promise.race([pending.then(() => true), promise]);
+    expect(started).toBe(true);
+    expect(instance.local<CounterHandle>("counter").read().value.count).toBe(0);
+  } finally {
+    clearTimeout(timer);
+    await stalled.stop(true);
+    await pending;
+    await instance.stop();
+  }
+});
+
+test("cleanup failure is reported to every stop waiter instead of claiming stopped", async () => {
+  const host = s2Host();
+  const module = failingModule("cleanup", { start: () => ({ count: 7 }), stop: () => { throw new Error("cleanup refused"); } });
+  const instance = new Instance(definePlugin({ id: "cleanup", modules: [module] }), serviceLink(host.port));
+  try {
+    await instance.start({});
+    const first = instance.stop();
+    expect(instance.stop()).toBe(first);
+    await expect(first).rejects.toBeInstanceOf(AggregateError);
+    expect(instance.state).toBe("failed");
+    await expect(instance.stop()).rejects.toBeInstanceOf(AggregateError);
+  } finally { host.stop(); }
+});
+
+test("a later stop request can shorten but not extend an effective deadline", async () => {
+  const host = s2Host();
+  const entered = Promise.withResolvers<void>();
+  const never = Promise.withResolvers<void>();
+  const module = failingModule("slow-cleanup", {
+    start: () => ({ count: 1 }),
+    stop: () => { entered.resolve(); return never.promise; },
+  });
+  const instance = new Instance(definePlugin({ id: "slow-cleanup", modules: [module] }), serviceLink(host.port));
+  try {
+    await instance.start({});
+    const stopped = instance.stop({ deadlineMs: 1000 });
+    void stopped.catch(() => undefined);
+    await entered.promise;
+    expect(instance.stop({ deadlineMs: 10 })).toBe(stopped);
+    expect(instance.stop({ deadlineMs: 30000 })).toBe(stopped);
+    const { promise, resolve } = Promise.withResolvers<"hung">();
+    // Exercise the platform clock deadline while a real hub link is active;
+    // the cleanup gates establish ordering without sleeps.
+    const timer = setTimeout(() => resolve("hung"), 100);
+    const result = await Promise.race([stopped.then(() => "stopped", () => "failed"), promise]);
+    clearTimeout(timer);
+    expect(result).toBe("failed");
+    expect(instance.state).toBe("failed");
+  } finally { never.resolve(); host.stop(); }
+});
+
+test("stop expiry during start still runs a late module's stop hook exactly once", async () => {
+  const host = s2Host();
+  const releaseStart = Promise.withResolvers<void>();
+  const cleaned: string[] = [];
+  const slow = failingModule("slow", {
+    start: async () => { await releaseStart.promise; return { count: 1 }; },
+    stop: () => { cleaned.push("slow"); },
+  });
+  const instance = new Instance(definePlugin({ id: "race", modules: [slow] }), serviceLink(host.port));
+  try {
+    // start() suspends inside slow.start; stop expiry tears down around it.
+    const starting = instance.start({});
+    const stopping = instance.stop({ deadlineMs: 15 });
+    void stopping.catch(() => undefined);
+    await stopping.catch(() => undefined); // stopActive finished: registries cleared
+    releaseStart.resolve();
+    await until(() => cleaned.includes("slow") || undefined, "late module cleanup");
+    let startRejection: unknown;
+    await starting.catch(error => { startRejection = error; });
+    expect(cleaned).toEqual(["slow"]); // hook exactly once despite the cleared registry
+    expect(instance.state).toBe("failed");
+    expect(String((startRejection as AggregateError | undefined)?.message ?? ""))
+      .not.toContain("lost its cleanup context");
   } finally { host.stop(); }
 });
