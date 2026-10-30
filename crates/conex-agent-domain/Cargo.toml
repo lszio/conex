@@ -1,0 +1,21 @@
+[package]
+name = "conex-agent-domain"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Conex agent domain state: admission, approval CAS, persistent events and recovery on node SQLite"
+publish = false
+
+[dependencies]
+conex-proto.workspace = true
+rusqlite = { version = "=0.41.1", default-features = false, features = ["bundled", "backup"] }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true }
+
+[dev-dependencies]
+tempfile.workspace = true

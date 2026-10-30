@@ -64,7 +64,7 @@ struct RawEnvelope {
 /// plain `Value` parse drops duplicates before the strict decode can see them.
 /// `decode_wire` parses through this visitor first; nested `params/context/
 /// input` duplicates then fail exactly like envelope-level ones (S1 §5.2).
-struct StrictValue(Value);
+pub(crate) struct StrictValue(Value);
 
 struct StrictVisitor;
 

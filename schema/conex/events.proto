@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+package conex;
+
+import "conex/entities.proto";
+
+// Agent 领域持久事件、游标、快照与事件读取（docs/contracts/event-recovery.md）。
+// 依赖 entities.proto 的记录；agent_domain.proto 依赖本文件，无环。
+
+// 持久事件游标：after 为最后已应用位置的规范 uint64 十进制字符串；
+// 空流 after="0"。cursor 不携带授权。
+message AgentEventCursor {
+  string stream_id = 1;
+  string epoch = 2;
+  uint64 after = 3;
+}
+
+// 单个 Conversation 一个 stream；streamId=conversationId。
+// 位置从 1 连续递增；去重键为 (nodeId,streamId,epoch,position)。
+// data 与 type 一一对应；entityRevision 为事件写入时的实体 revision。
+message AgentEvent {
+  string stream_id = 1;
+  string epoch = 2;
+  uint64 position = 3;
+  uint64 recorded_at_ms = 4;
+  string type = 5;
+  string entity_id = 6;
+  uint64 entity_revision = 7;
+  oneof data {
+    Conversation conversation_updated = 8;
+    Execution execution_updated = 9;
+    InteractionRequest interaction_created = 10;
+    InteractionRequest interaction_updated = 11;
+    AgentMessage message_created = 12;
+    AgentMessageDelta message_delta = 13;
+    AgentMessageCompleted message_completed = 14;
+    Relationship relationship_updated = 15;
+    AgentGap recovery_gap = 16;
+  }
+}
+
+// 仅追加文本；offsetBytes 必须等于该 part 已知 totalBytes。
+message AgentMessageDelta {
+  string message_id = 1;
+  uint32 part_index = 2;
+  uint64 offset_bytes = 3;
+  string text = 4;
+}
+
+message AgentMessageCompleted {
+  string message_id = 1;
+  uint64 revision = 2;
+  string state = 3;
+}
+
+// ---- events/snapshot 与 events/read（恢复契约 §3）--------------------------
+
+message AgentSnapshotInput {
+  string conversation_id = 1;
+}
+
+// 所有投影与 cursor 来自同一事务版本；正文窗口可为空并带正确 totalBytes。
+message AgentSnapshot {
+  Conversation conversation = 1;
+  repeated Execution executions = 2;
+  repeated InteractionRequest interactions = 3;
+  repeated AgentMessage messages = 4;
+  repeated Relationship relationships = 5;
+  AgentEventCursor cursor = 6;
+  uint64 first_available = 7;
+  AgentHistoryInfo history = 8;
+  bool relationships_has_more = 9;
+  string quality = 10;
+  repeated AgentGap gaps = 11;
+}
+
+message AgentSnapshotResult {
+  AgentSnapshot snapshot = 1;
+}
+
+message AgentEventReadInput {
+  AgentEventCursor cursor = 1;
+  optional uint32 limit = 2;
+}
+
+message AgentEventReadResult {
+  repeated AgentEvent events = 1;
+  AgentEventCursor next_cursor = 2;
+  uint64 head = 3;
+  uint64 first_available = 4;
+  bool has_more = 5;
+}

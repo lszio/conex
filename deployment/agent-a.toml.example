@@ -1,36 +1,24 @@
-# Agent A configuration — mounted read-only at /etc/conex/agent.toml by
-# docker-compose / Dokploy. Replace every <...> literal; the agent
-# expects the WSS origin to match the host's `host_origin` exactly.
+# Start from the repository root:
+# CONEX_NODE_TOKEN='<node credential>' cargo run -p conex-agent -- --node-config deployment/agent-a.toml.example
+# Replace these installation IDs and approved paths for each node. Never put a
+# credential value in the application package or commit it into this file.
+node_id = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+node_ref = "home-node"
+operator_principal = "01ARZ3NDEKTSV4RRFFQ69G5FAW"
+data_dir = "/tmp/conex-node-a"
+local_socket = "/tmp/conex-node-a/operator.sock"
+applications = ["examples/mvp/node/application.toml"]
+permissions = ["counter.read", "counter.add"]
 
-# Token-bearing principal the agent presents at WSS upgrade. Must match
-# the `principal_id` of the matching [[tokens]] block in host.toml.
-agent_id = "agent-a"
-tenant_id = "production"
+[configs.counter-default]
 
-# Public URL agents dial. wss:// is enforced in production — agents
-# must terminate TLS at the Dokploy proxy.
-host_url = "wss://host.example.com/wss"
-
-# Token credentials. The container's /run/secrets/agent_a_token is a
-# file secret mounted by docker-compose (secrets.agent_a_token.file
-# points to the Dokploy-managed file). The file must hold the plaintext
-# token exactly, mode 0600.
-token_name = "agent-a-token"
-token_backend = "file:/run/secrets/agent_a_token"
-
-# Pin the agent's TLS verification. Required in production: agents must
-# reject hosts that present any other certificate or hostname.
-ca_pem = "/etc/conex/ca.pem"
-expected_server_name = "host.example.com"
-
-# Origin advertised to the host at agent/register. Must equal
-# host.toml's `host_origin` byte for byte.
-host_origin = "conex://host.example.internal"
-
-# Source-remote endpoint the agent serves. `root` is the agent-side
-# filesystem root that backs the host's `root = "team"` in host.toml.
-[[endpoints]]
-endpoint_id = "notes-a"
-root = "/srv/agent-a"
-methods = ["source/list", "source/read", "source/search"]
-resources = ["*"]
+[publication]
+# Local modules remain active when this center is unavailable. This example
+# exports only direct-only data, so it never publishes a relay handler.
+url = "wss://conex.example/wss"
+token_backend = "env:CONEX_NODE_TOKEN"
+space_id = "private"
+integration_id = "local-apps"
+endpoint_prefix = "node-a"
+exposure_principals = []
+exposure_tenants = []

@@ -716,3 +716,65 @@ fn read_secret(source: &str) -> Result<String, String> {
 #[cfg(test)]
 #[path = "runtime_tests.rs"]
 mod runtime_tests;
+
+/// Autonomous application runtime in the existing agent binary. The legacy
+/// source-provider mode remains separate from S1 application publication.
+pub async fn run_node(config: crate::node_config::NodeConfig) -> Result<(), String> {
+    use std::os::unix::fs::OpenOptionsExt;
+    // Whole-package validation precedes database, process and network effects.
+    let applications = crate::assembly::load_applications(&config)?;
+    crate::process::ensure_private_dir(&config.data_dir)?;
+    let lock = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .mode(0o600)
+        .open(config.data_dir.join("node.lock"))
+        .map_err(|error| error.to_string())?;
+    lock.try_lock()
+        .map_err(|error| format!("node already running or lock unavailable: {error}"))?;
+    let store = conex_agent_domain::Store::open(
+        config.data_dir.join("domain.sqlite"),
+        &config.node_id,
+        Default::default(),
+    )
+    .await
+    .map_err(|error| error.to_string())?;
+    let api = crate::local_api::LocalApi::bind(
+        config.local_socket.clone(),
+        config.operator_principal.clone(),
+        config.node_id.clone(),
+    )
+    .await?;
+    let app_ids: Vec<_> = applications
+        .iter()
+        .map(|application| application.app_id.clone())
+        .collect();
+    let mut node = crate::node::Node::boot(config, store, applications).await?;
+    for app_id in app_ids {
+        if let Err(error) = node.start_package(&app_id).await {
+            eprintln!("application {app_id} failed to start: {error}");
+            node.record_startup_failure(&app_id, &error);
+        }
+    }
+    let (handle, shutdown, task) = node.spawn();
+    let api = api.serve(handle.clone(), shutdown);
+    tokio::pin!(api);
+    let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        .map_err(|error| error.to_string())?;
+    tokio::select! {
+        result = &mut api => { result?; }
+        _ = tokio::signal::ctrl_c() => {
+            handle.stop_all(Duration::from_secs(30)).await.map_err(|error| error.to_string())?;
+            api.await?;
+        }
+        _ = terminate.recv() => {
+            handle.stop_all(Duration::from_secs(30)).await.map_err(|error| error.to_string())?;
+            api.await?;
+        }
+    }
+    task.await.map_err(|error| error.to_string())?;
+    drop(lock);
+    Ok(())
+}

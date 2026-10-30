@@ -8,6 +8,7 @@
 //! crate root (package `conex`), not nested under a version module.
 #![forbid(unsafe_code)]
 
+pub mod agent_domain;
 #[cfg(has_conex)]
 pub mod capability;
 #[cfg(has_conex)]

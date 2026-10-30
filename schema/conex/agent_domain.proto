@@ -1,0 +1,202 @@
+syntax = "proto3";
+
+package conex;
+
+import "conex/entities.proto";
+
+// Agent 领域操作表（docs/contracts/agent-domain.md §4）：
+// 每个操作各有独立 Input/Result 消息，禁止以任意 Value 代替整个协议。
+// 记录与快照结构分别来自 entities.proto 与 events.proto。
+// 页 limit 默认 50、范围 1–100；pageToken/幂等键上限 128 UTF-8 字节；
+// content 非空、最大 64 KiB UTF-8。均由语义验证器执行。
+
+// 契约 AgentEndpoint 记录：既有 agent.proto 的同名消息是控制面注册结构，
+// 领域记录因此加 Adapter 前缀（wire JSON 不含消息名，字段与契约一致）。
+message AgentAdapterEndpoint {
+  string id = 1;
+  string node_id = 2;
+  string module_instance_id = 3;
+  uint64 generation = 4;
+  string adapter = 5;
+  string backend_version = 6;
+  string protocol_version = 7;
+  bool experimental = 8;
+  AgentCapabilities capabilities = 9;
+  string availability = 10;
+  string catalog_scope = 11;
+  AgentLimits limits = 12;
+  optional string display_name = 13;
+}
+
+message AgentEndpointListInput {
+  optional uint32 limit = 1;
+  optional string page_token = 2;
+}
+message AgentEndpointListResult {
+  repeated AgentAdapterEndpoint items = 1;
+  optional string next_page_token = 2;
+}
+
+message AgentWorkspaceListInput {
+  string endpoint_id = 1;
+  optional uint32 limit = 2;
+  optional string page_token = 3;
+}
+message AgentWorkspaceListResult {
+  repeated Workspace items = 1;
+  optional string next_page_token = 2;
+}
+
+message AgentConversationListInput {
+  string endpoint_id = 1;
+  optional string workspace_id = 2;
+  optional uint32 limit = 3;
+  optional string page_token = 4;
+}
+message AgentConversationListResult {
+  repeated Conversation items = 1;
+  optional string next_page_token = 2;
+}
+
+message AgentConversationCreateInput {
+  string endpoint_id = 1;
+  string workspace_id = 2;
+  string idempotency_key = 3;
+  optional string title = 4;
+}
+message AgentConversationCreateResult {
+  Conversation conversation = 1;
+}
+
+message AgentConversationGetInput {
+  string conversation_id = 1;
+}
+message AgentConversationGetResult {
+  Conversation conversation = 1;
+}
+
+message AgentConversationHistoryInput {
+  string conversation_id = 1;
+  optional string before_message_id = 2;
+  optional uint32 limit = 3;
+}
+message AgentConversationHistoryResult {
+  repeated AgentMessage messages = 1;
+  bool has_more = 2;
+  string quality = 3;
+  repeated AgentGap gaps = 4;
+}
+
+message AgentMessageReadInput {
+  string conversation_id = 1;
+  string message_id = 2;
+  uint32 part_index = 3;
+  uint64 offset_bytes = 4;
+  // 默认 4096、最大 65536；UTF-8 边界分页。
+  optional uint32 max_bytes = 5;
+}
+message AgentMessageReadResult {
+  string text = 1;
+  uint64 offset_bytes = 2;
+  uint64 next_offset_bytes = 3;
+  uint64 total_bytes = 4;
+  string state = 5;
+  uint64 revision = 6;
+}
+
+message AgentSubmitInput {
+  string conversation_id = 1;
+  string idempotency_key = 2;
+  string content = 3;
+}
+message AgentSubmitResult {
+  Execution execution = 1;
+}
+
+message AgentExecutionGetInput {
+  string execution_id = 1;
+}
+message AgentExecutionGetResult {
+  Execution execution = 1;
+}
+
+message AgentExecutionCancelInput {
+  string execution_id = 1;
+  uint64 expected_generation = 2;
+}
+message AgentExecutionCancelResult {
+  string execution_id = 1;
+  bool requested = 2;
+  string state = 3;
+}
+
+message AgentInteractionListInput {
+  string conversation_id = 1;
+  optional string execution_id = 2;
+  optional uint32 limit = 3;
+  optional string page_token = 4;
+}
+message AgentInteractionListResult {
+  repeated InteractionRequest items = 1;
+  optional string next_page_token = 2;
+}
+
+message AgentInteractionDecision {
+  // kind=approval: 仅 choiceId；selection: 仅 choiceIds；input: 仅 text。
+  // 互斥由语义验证器与领域 prepare 拒绝，proto 默认空值不绕过检查。
+  string kind = 1;
+  optional string choice_id = 2;
+  repeated string choice_ids = 3;
+  optional string text = 4;
+}
+
+message AgentInteractionRespondInput {
+  string interaction_id = 1;
+  uint64 expected_revision = 2;
+  AgentInteractionDecision decision = 3;
+}
+message AgentInteractionRespondResult {
+  InteractionRequest interaction = 1;
+}
+
+message AgentRelationshipListInput {
+  string conversation_id = 1;
+  optional uint32 limit = 2;
+  optional string page_token = 3;
+}
+message AgentRelationshipListResult {
+  repeated Relationship items = 1;
+  optional string next_page_token = 2;
+}
+
+message AgentSubagentListInput {
+  string execution_id = 1;
+  optional uint32 limit = 2;
+  optional string page_token = 3;
+}
+message AgentSubagentListResult {
+  repeated Execution items = 1;
+  optional string next_page_token = 2;
+  string quality = 3;
+}
+
+message AgentSubagentCancelInput {
+  string execution_id = 1;
+  uint64 expected_generation = 2;
+}
+message AgentSubagentCancelResult {
+  string execution_id = 1;
+  bool requested = 2;
+  string state = 3;
+}
+
+message AgentExecutionSteerInput {
+  string execution_id = 1;
+  uint64 expected_generation = 2;
+  string idempotency_key = 3;
+  string content = 4;
+}
+message AgentExecutionSteerResult {
+  string execution_id = 1;
+  bool accepted = 2;
+}

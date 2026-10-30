@@ -123,5 +123,7 @@ A02 的"零网络帧"是结构性质：`deps.local` 返回上游模块 start 返
    影响 B，反之亦然），再 `stop()` 自己并 `done` 退出码 0。
 3. 最后在终端 1 按 Ctrl-C 停止中心。持久根可整目录删除重建。
 
-实例一旦停止/断开不会复活；同插件类再次实例化是新一代次，旧 `ModuleRef`
-显式失效（S1 `stale`/`-32013` 族），由 S2 单测（A06/A08）覆盖。
+显式停止后的实例不复活；单纯断中心不会销毁本地模块，重连只换发布代次。
+`start` 不再等于已发布，样例显式等待 publication。旧 `ModuleRef` 仍明确
+失效，不透明重绑或重放原操作；见 [当前契约](../../docs/contracts/s2-plugins.md) 与
+[P2 实际验收](../../docs/verification/private-runtime-p2.md)。

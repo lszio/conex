@@ -1346,6 +1346,12 @@ async function fresh() {
   const plugin = definePlugin({ id: "counter-plugin", modules: [counterModule("counter")] });
   const instance = new Instance(plugin, makeLink(true));
   await instance.start({});
+  if (instance.publicationState !== "published") {
+    const published = Promise.withResolvers();
+    const timeout = setTimeout(() => published.reject(new Error("fresh instance publication timeout")), 15000);
+    const off = instance.onPublication(state => { if (state === "published") published.resolve(); });
+    try { await published.promise; } finally { clearTimeout(timeout); off(); }
+  }
   const reference = instance.module("counter");
   emit({ event: "publish", providerEndpointId: reference.providerEndpointId, registrationId: reference.registrationId });
 

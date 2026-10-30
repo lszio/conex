@@ -1,5 +1,259 @@
 {
   "$defs": {
+    "conex.AgentAdapterEndpoint": {
+      "additionalProperties": false,
+      "properties": {
+        "adapter": {
+          "type": "string"
+        },
+        "availability": {
+          "type": "string"
+        },
+        "backendVersion": {
+          "type": "string"
+        },
+        "capabilities": {
+          "$ref": "#/$defs/conex.AgentCapabilities"
+        },
+        "catalogScope": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "experimental": {
+          "type": "boolean"
+        },
+        "generation": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "limits": {
+          "$ref": "#/$defs/conex.AgentLimits"
+        },
+        "moduleInstanceId": {
+          "type": "string"
+        },
+        "nodeId": {
+          "type": "string"
+        },
+        "protocolVersion": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "nodeId",
+        "moduleInstanceId",
+        "generation",
+        "adapter",
+        "backendVersion",
+        "protocolVersion",
+        "experimental",
+        "availability",
+        "catalogScope"
+      ],
+      "type": "object"
+    },
+    "conex.AgentCapabilities": {
+      "additionalProperties": false,
+      "properties": {
+        "approval": {
+          "type": "boolean"
+        },
+        "attachExternal": {
+          "type": "boolean"
+        },
+        "cancelExecution": {
+          "type": "boolean"
+        },
+        "cancelSubagent": {
+          "type": "boolean"
+        },
+        "continueConversation": {
+          "type": "boolean"
+        },
+        "createConversation": {
+          "type": "boolean"
+        },
+        "listSubagents": {
+          "type": "boolean"
+        },
+        "readHistory": {
+          "type": "boolean"
+        },
+        "recoverActive": {
+          "type": "boolean"
+        },
+        "steerExecution": {
+          "type": "boolean"
+        },
+        "streamMessages": {
+          "type": "boolean"
+        },
+        "userInput": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "createConversation",
+        "continueConversation",
+        "readHistory",
+        "streamMessages",
+        "cancelExecution",
+        "approval",
+        "userInput",
+        "listSubagents",
+        "cancelSubagent",
+        "steerExecution",
+        "attachExternal",
+        "recoverActive"
+      ],
+      "type": "object"
+    },
+    "conex.AgentConversationCreateInput": {
+      "additionalProperties": false,
+      "properties": {
+        "endpointId": {
+          "type": "string"
+        },
+        "idempotencyKey": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "endpointId",
+        "workspaceId",
+        "idempotencyKey"
+      ],
+      "type": "object"
+    },
+    "conex.AgentConversationCreateResult": {
+      "additionalProperties": false,
+      "properties": {
+        "conversation": {
+          "$ref": "#/$defs/conex.Conversation"
+        }
+      },
+      "type": "object"
+    },
+    "conex.AgentConversationGetInput": {
+      "additionalProperties": false,
+      "properties": {
+        "conversationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "conversationId"
+      ],
+      "type": "object"
+    },
+    "conex.AgentConversationGetResult": {
+      "additionalProperties": false,
+      "properties": {
+        "conversation": {
+          "$ref": "#/$defs/conex.Conversation"
+        }
+      },
+      "type": "object"
+    },
+    "conex.AgentConversationHistoryInput": {
+      "additionalProperties": false,
+      "properties": {
+        "beforeMessageId": {
+          "type": "string"
+        },
+        "conversationId": {
+          "type": "string"
+        },
+        "limit": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "conversationId"
+      ],
+      "type": "object"
+    },
+    "conex.AgentConversationHistoryResult": {
+      "additionalProperties": false,
+      "properties": {
+        "gaps": {
+          "items": {
+            "$ref": "#/$defs/conex.AgentGap"
+          },
+          "type": "array"
+        },
+        "hasMore": {
+          "type": "boolean"
+        },
+        "messages": {
+          "items": {
+            "$ref": "#/$defs/conex.AgentMessage"
+          },
+          "type": "array"
+        },
+        "quality": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "hasMore",
+        "quality"
+      ],
+      "type": "object"
+    },
+    "conex.AgentConversationListInput": {
+      "additionalProperties": false,
+      "properties": {
+        "endpointId": {
+          "type": "string"
+        },
+        "limit": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pageToken": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "endpointId"
+      ],
+      "type": "object"
+    },
+    "conex.AgentConversationListResult": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/conex.Conversation"
+          },
+          "type": "array"
+        },
+        "nextPageToken": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "conex.AgentEndpoint": {
       "additionalProperties": false,
       "properties": {
@@ -19,6 +273,936 @@
       "required": [
         "endpointId",
         "root"
+      ],
+      "type": "object"
+    },
+    "conex.AgentEndpointListInput": {
+      "additionalProperties": false,
+      "properties": {
+        "limit": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pageToken": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "conex.AgentEndpointListResult": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/conex.AgentAdapterEndpoint"
+          },
+          "type": "array"
+        },
+        "nextPageToken": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "conex.AgentEntityRef": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "nodeId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "nodeId",
+        "id"
+      ],
+      "type": "object"
+    },
+    "conex.AgentEvent": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "anyOf": [
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "conversationUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "executionUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "interactionCreated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "interactionUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageCreated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageDelta"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageCompleted"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "relationshipUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "recoveryGap"
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "executionUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "interactionCreated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "interactionUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageCreated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageDelta"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageCompleted"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "relationshipUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "recoveryGap"
+                    ]
+                  }
+                ]
+              },
+              "required": [
+                "conversationUpdated"
+              ]
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "conversationUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "interactionCreated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "interactionUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageCreated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageDelta"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageCompleted"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "relationshipUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "recoveryGap"
+                    ]
+                  }
+                ]
+              },
+              "required": [
+                "executionUpdated"
+              ]
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "conversationUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "executionUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "interactionUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageCreated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageDelta"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageCompleted"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "relationshipUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "recoveryGap"
+                    ]
+                  }
+                ]
+              },
+              "required": [
+                "interactionCreated"
+              ]
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "conversationUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "executionUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "interactionCreated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageCreated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageDelta"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageCompleted"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "relationshipUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "recoveryGap"
+                    ]
+                  }
+                ]
+              },
+              "required": [
+                "interactionUpdated"
+              ]
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "conversationUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "executionUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "interactionCreated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "interactionUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageDelta"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageCompleted"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "relationshipUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "recoveryGap"
+                    ]
+                  }
+                ]
+              },
+              "required": [
+                "messageCreated"
+              ]
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "conversationUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "executionUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "interactionCreated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "interactionUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageCreated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageCompleted"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "relationshipUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "recoveryGap"
+                    ]
+                  }
+                ]
+              },
+              "required": [
+                "messageDelta"
+              ]
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "conversationUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "executionUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "interactionCreated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "interactionUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageCreated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageDelta"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "relationshipUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "recoveryGap"
+                    ]
+                  }
+                ]
+              },
+              "required": [
+                "messageCompleted"
+              ]
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "conversationUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "executionUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "interactionCreated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "interactionUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageCreated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageDelta"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageCompleted"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "recoveryGap"
+                    ]
+                  }
+                ]
+              },
+              "required": [
+                "relationshipUpdated"
+              ]
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "conversationUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "executionUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "interactionCreated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "interactionUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageCreated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageDelta"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageCompleted"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "relationshipUpdated"
+                    ]
+                  }
+                ]
+              },
+              "required": [
+                "recoveryGap"
+              ]
+            }
+          ]
+        }
+      ],
+      "properties": {
+        "conversationUpdated": {
+          "$ref": "#/$defs/conex.Conversation"
+        },
+        "entityId": {
+          "type": "string"
+        },
+        "entityRevision": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "epoch": {
+          "type": "string"
+        },
+        "executionUpdated": {
+          "$ref": "#/$defs/conex.Execution"
+        },
+        "interactionCreated": {
+          "$ref": "#/$defs/conex.InteractionRequest"
+        },
+        "interactionUpdated": {
+          "$ref": "#/$defs/conex.InteractionRequest"
+        },
+        "messageCompleted": {
+          "$ref": "#/$defs/conex.AgentMessageCompleted"
+        },
+        "messageCreated": {
+          "$ref": "#/$defs/conex.AgentMessage"
+        },
+        "messageDelta": {
+          "$ref": "#/$defs/conex.AgentMessageDelta"
+        },
+        "position": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "recordedAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "recoveryGap": {
+          "$ref": "#/$defs/conex.AgentGap"
+        },
+        "relationshipUpdated": {
+          "$ref": "#/$defs/conex.Relationship"
+        },
+        "streamId": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "streamId",
+        "epoch",
+        "position",
+        "recordedAtMs",
+        "type",
+        "entityId",
+        "entityRevision"
+      ],
+      "type": "object"
+    },
+    "conex.AgentEventCursor": {
+      "additionalProperties": false,
+      "properties": {
+        "after": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "epoch": {
+          "type": "string"
+        },
+        "streamId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "streamId",
+        "epoch",
+        "after"
+      ],
+      "type": "object"
+    },
+    "conex.AgentEventReadInput": {
+      "additionalProperties": false,
+      "properties": {
+        "cursor": {
+          "$ref": "#/$defs/conex.AgentEventCursor"
+        },
+        "limit": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "conex.AgentEventReadResult": {
+      "additionalProperties": false,
+      "properties": {
+        "events": {
+          "items": {
+            "$ref": "#/$defs/conex.AgentEvent"
+          },
+          "type": "array"
+        },
+        "firstAvailable": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "hasMore": {
+          "type": "boolean"
+        },
+        "head": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "nextCursor": {
+          "$ref": "#/$defs/conex.AgentEventCursor"
+        }
+      },
+      "required": [
+        "head",
+        "firstAvailable",
+        "hasMore"
+      ],
+      "type": "object"
+    },
+    "conex.AgentExecutionCancelInput": {
+      "additionalProperties": false,
+      "properties": {
+        "executionId": {
+          "type": "string"
+        },
+        "expectedGeneration": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "executionId",
+        "expectedGeneration"
+      ],
+      "type": "object"
+    },
+    "conex.AgentExecutionCancelResult": {
+      "additionalProperties": false,
+      "properties": {
+        "executionId": {
+          "type": "string"
+        },
+        "requested": {
+          "type": "boolean"
+        },
+        "state": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "executionId",
+        "requested",
+        "state"
+      ],
+      "type": "object"
+    },
+    "conex.AgentExecutionGetInput": {
+      "additionalProperties": false,
+      "properties": {
+        "executionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "executionId"
+      ],
+      "type": "object"
+    },
+    "conex.AgentExecutionGetResult": {
+      "additionalProperties": false,
+      "properties": {
+        "execution": {
+          "$ref": "#/$defs/conex.Execution"
+        }
+      },
+      "type": "object"
+    },
+    "conex.AgentExecutionSteerInput": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "executionId": {
+          "type": "string"
+        },
+        "expectedGeneration": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "idempotencyKey": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "executionId",
+        "expectedGeneration",
+        "idempotencyKey",
+        "content"
+      ],
+      "type": "object"
+    },
+    "conex.AgentExecutionSteerResult": {
+      "additionalProperties": false,
+      "properties": {
+        "accepted": {
+          "type": "boolean"
+        },
+        "executionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "executionId",
+        "accepted"
+      ],
+      "type": "object"
+    },
+    "conex.AgentGap": {
+      "additionalProperties": false,
+      "properties": {
+        "backendRange": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "reason"
+      ],
+      "type": "object"
+    },
+    "conex.AgentHistoryInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "beforeMessageId": {
+          "type": "string"
+        },
+        "hasMore": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "hasMore"
+      ],
+      "type": "object"
+    },
+    "conex.AgentInteractionDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "choiceId": {
+          "type": "string"
+        },
+        "choiceIds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "conex.AgentInteractionListInput": {
+      "additionalProperties": false,
+      "properties": {
+        "conversationId": {
+          "type": "string"
+        },
+        "executionId": {
+          "type": "string"
+        },
+        "limit": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pageToken": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "conversationId"
+      ],
+      "type": "object"
+    },
+    "conex.AgentInteractionListResult": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/conex.InteractionRequest"
+          },
+          "type": "array"
+        },
+        "nextPageToken": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "conex.AgentInteractionRespondInput": {
+      "additionalProperties": false,
+      "properties": {
+        "decision": {
+          "$ref": "#/$defs/conex.AgentInteractionDecision"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "interactionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "interactionId",
+        "expectedRevision"
+      ],
+      "type": "object"
+    },
+    "conex.AgentInteractionRespondResult": {
+      "additionalProperties": false,
+      "properties": {
+        "interaction": {
+          "$ref": "#/$defs/conex.InteractionRequest"
+        }
+      },
+      "type": "object"
+    },
+    "conex.AgentLimits": {
+      "additionalProperties": false,
+      "properties": {
+        "maxMessageReadBytes": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maxPageSize": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maxSubmitBytes": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "maxPageSize",
+        "maxSubmitBytes",
+        "maxMessageReadBytes"
       ],
       "type": "object"
     },
@@ -64,6 +1248,240 @@
         "registeredAtMs",
         "lastHeartbeatAtMs"
       ],
+      "type": "object"
+    },
+    "conex.AgentMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "conversationId": {
+          "type": "string"
+        },
+        "executionId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "parts": {
+          "items": {
+            "$ref": "#/$defs/conex.AgentMessagePart"
+          },
+          "type": "array"
+        },
+        "revision": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "conversationId",
+        "executionId",
+        "role",
+        "state",
+        "revision"
+      ],
+      "type": "object"
+    },
+    "conex.AgentMessageCompleted": {
+      "additionalProperties": false,
+      "properties": {
+        "messageId": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "messageId",
+        "revision",
+        "state"
+      ],
+      "type": "object"
+    },
+    "conex.AgentMessageDelta": {
+      "additionalProperties": false,
+      "properties": {
+        "messageId": {
+          "type": "string"
+        },
+        "offsetBytes": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "partIndex": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "messageId",
+        "partIndex",
+        "offsetBytes",
+        "text"
+      ],
+      "type": "object"
+    },
+    "conex.AgentMessagePart": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "anyOf": [
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "text"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "tool"
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "tool"
+                    ]
+                  }
+                ]
+              },
+              "required": [
+                "text"
+              ]
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "text"
+                    ]
+                  }
+                ]
+              },
+              "required": [
+                "tool"
+              ]
+            }
+          ]
+        }
+      ],
+      "properties": {
+        "text": {
+          "$ref": "#/$defs/conex.AgentTextPart"
+        },
+        "tool": {
+          "$ref": "#/$defs/conex.AgentToolPart"
+        }
+      },
+      "type": "object"
+    },
+    "conex.AgentMessageReadInput": {
+      "additionalProperties": false,
+      "properties": {
+        "conversationId": {
+          "type": "string"
+        },
+        "maxBytes": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "messageId": {
+          "type": "string"
+        },
+        "offsetBytes": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "partIndex": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "conversationId",
+        "messageId",
+        "partIndex",
+        "offsetBytes"
+      ],
+      "type": "object"
+    },
+    "conex.AgentMessageReadResult": {
+      "additionalProperties": false,
+      "properties": {
+        "nextOffsetBytes": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "offsetBytes": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "totalBytes": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "offsetBytes",
+        "nextOffsetBytes",
+        "totalBytes",
+        "state",
+        "revision"
+      ],
+      "type": "object"
+    },
+    "conex.AgentPageInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "nextPageToken": {
+          "type": "string"
+        }
+      },
       "type": "object"
     },
     "conex.AgentRegisterRequest": {
@@ -123,6 +1541,310 @@
         "agentId",
         "linkId"
       ],
+      "type": "object"
+    },
+    "conex.AgentRelationshipListInput": {
+      "additionalProperties": false,
+      "properties": {
+        "conversationId": {
+          "type": "string"
+        },
+        "limit": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pageToken": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "conversationId"
+      ],
+      "type": "object"
+    },
+    "conex.AgentRelationshipListResult": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/conex.Relationship"
+          },
+          "type": "array"
+        },
+        "nextPageToken": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "conex.AgentSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "conversation": {
+          "$ref": "#/$defs/conex.Conversation"
+        },
+        "cursor": {
+          "$ref": "#/$defs/conex.AgentEventCursor"
+        },
+        "executions": {
+          "items": {
+            "$ref": "#/$defs/conex.Execution"
+          },
+          "type": "array"
+        },
+        "firstAvailable": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "gaps": {
+          "items": {
+            "$ref": "#/$defs/conex.AgentGap"
+          },
+          "type": "array"
+        },
+        "history": {
+          "$ref": "#/$defs/conex.AgentHistoryInfo"
+        },
+        "interactions": {
+          "items": {
+            "$ref": "#/$defs/conex.InteractionRequest"
+          },
+          "type": "array"
+        },
+        "messages": {
+          "items": {
+            "$ref": "#/$defs/conex.AgentMessage"
+          },
+          "type": "array"
+        },
+        "quality": {
+          "type": "string"
+        },
+        "relationships": {
+          "items": {
+            "$ref": "#/$defs/conex.Relationship"
+          },
+          "type": "array"
+        },
+        "relationshipsHasMore": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "firstAvailable",
+        "relationshipsHasMore",
+        "quality"
+      ],
+      "type": "object"
+    },
+    "conex.AgentSnapshotInput": {
+      "additionalProperties": false,
+      "properties": {
+        "conversationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "conversationId"
+      ],
+      "type": "object"
+    },
+    "conex.AgentSnapshotResult": {
+      "additionalProperties": false,
+      "properties": {
+        "snapshot": {
+          "$ref": "#/$defs/conex.AgentSnapshot"
+        }
+      },
+      "type": "object"
+    },
+    "conex.AgentSubagentCancelInput": {
+      "additionalProperties": false,
+      "properties": {
+        "executionId": {
+          "type": "string"
+        },
+        "expectedGeneration": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "executionId",
+        "expectedGeneration"
+      ],
+      "type": "object"
+    },
+    "conex.AgentSubagentCancelResult": {
+      "additionalProperties": false,
+      "properties": {
+        "executionId": {
+          "type": "string"
+        },
+        "requested": {
+          "type": "boolean"
+        },
+        "state": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "executionId",
+        "requested",
+        "state"
+      ],
+      "type": "object"
+    },
+    "conex.AgentSubagentListInput": {
+      "additionalProperties": false,
+      "properties": {
+        "executionId": {
+          "type": "string"
+        },
+        "limit": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pageToken": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "executionId"
+      ],
+      "type": "object"
+    },
+    "conex.AgentSubagentListResult": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/conex.Execution"
+          },
+          "type": "array"
+        },
+        "nextPageToken": {
+          "type": "string"
+        },
+        "quality": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "quality"
+      ],
+      "type": "object"
+    },
+    "conex.AgentSubmitInput": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "conversationId": {
+          "type": "string"
+        },
+        "idempotencyKey": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "conversationId",
+        "idempotencyKey",
+        "content"
+      ],
+      "type": "object"
+    },
+    "conex.AgentSubmitResult": {
+      "additionalProperties": false,
+      "properties": {
+        "execution": {
+          "$ref": "#/$defs/conex.Execution"
+        }
+      },
+      "type": "object"
+    },
+    "conex.AgentTextPart": {
+      "additionalProperties": false,
+      "properties": {
+        "offsetBytes": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "totalBytes": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "offsetBytes",
+        "totalBytes"
+      ],
+      "type": "object"
+    },
+    "conex.AgentToolPart": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "phase": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "phase",
+        "summary"
+      ],
+      "type": "object"
+    },
+    "conex.AgentWorkspaceListInput": {
+      "additionalProperties": false,
+      "properties": {
+        "endpointId": {
+          "type": "string"
+        },
+        "limit": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pageToken": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "endpointId"
+      ],
+      "type": "object"
+    },
+    "conex.AgentWorkspaceListResult": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/conex.Workspace"
+          },
+          "type": "array"
+        },
+        "nextPageToken": {
+          "type": "string"
+        }
+      },
       "type": "object"
     },
     "conex.AuthorizedScope": {
@@ -899,6 +2621,48 @@
       },
       "type": "object"
     },
+    "conex.Conversation": {
+      "additionalProperties": false,
+      "properties": {
+        "activeExecutionId": {
+          "type": "string"
+        },
+        "createdAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "endpointId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "quality": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "endpointId",
+        "workspaceId",
+        "createdAtMs",
+        "revision",
+        "quality"
+      ],
+      "type": "object"
+    },
     "conex.CounterAddInput": {
       "additionalProperties": false,
       "properties": {
@@ -1153,6 +2917,72 @@
       ],
       "type": "object"
     },
+    "conex.Execution": {
+      "additionalProperties": false,
+      "properties": {
+        "backendRef": {
+          "type": "string"
+        },
+        "cancelRequestedAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "conversationId": {
+          "type": "string"
+        },
+        "createdAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "endpointId": {
+          "type": "string"
+        },
+        "generation": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "moduleInstanceId": {
+          "type": "string"
+        },
+        "parentExecutionId": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "terminalReason": {
+          "type": "string"
+        },
+        "updatedAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "conversationId",
+        "endpointId",
+        "moduleInstanceId",
+        "generation",
+        "state",
+        "revision",
+        "createdAtMs",
+        "updatedAtMs"
+      ],
+      "type": "object"
+    },
     "conex.Failure": {
       "additionalProperties": false,
       "properties": {
@@ -1293,6 +3123,76 @@
         "expiresInMs",
         "profileId",
         "plane"
+      ],
+      "type": "object"
+    },
+    "conex.InteractionChoice": {
+      "additionalProperties": false,
+      "properties": {
+        "effect": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "effect"
+      ],
+      "type": "object"
+    },
+    "conex.InteractionRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "choices": {
+          "items": {
+            "$ref": "#/$defs/conex.InteractionChoice"
+          },
+          "type": "array"
+        },
+        "createdAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "executionId": {
+          "type": "string"
+        },
+        "expiresAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "prompt": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "executionId",
+        "kind",
+        "state",
+        "revision",
+        "createdAtMs"
       ],
       "type": "object"
     },
@@ -2115,6 +4015,44 @@
         "method",
         "direction",
         "reason"
+      ],
+      "type": "object"
+    },
+    "conex.Relationship": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "observedAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "quality": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "from",
+        "to",
+        "kind",
+        "source",
+        "quality",
+        "observedAtMs"
       ],
       "type": "object"
     },
@@ -3499,6 +5437,30 @@
         "peerRole",
         "issuedAtMs",
         "expiresAtMs"
+      ],
+      "type": "object"
+    },
+    "conex.Workspace": {
+      "additionalProperties": false,
+      "properties": {
+        "displayName": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "nodeId": {
+          "type": "string"
+        },
+        "rootRef": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "nodeId",
+        "displayName",
+        "rootRef"
       ],
       "type": "object"
     },

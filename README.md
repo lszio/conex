@@ -9,9 +9,11 @@
 
 **目标基线已确认（2026-10-29）：** 单用户私有、自治节点、协调入口；私网节点主动 WSS 接入公网，支持获准直连与转发。领域契约连接 OMP/Codex 等适配器和不同客户端，组合可以继续导出能力。见 [MVP 架构基线](docs/design/2026-10-29-conex-private-platform.md) 与 [实施总计划](docs/plans/2026-10-29-conex-private-mvp.md)。**这是目标，不是已交付能力**；下方演示、命令与证据描述现有实现。
 
+**当前实施进度：** [MVP-P0 协议调查](docs/plans/2026-10-29-conex-mvp-p0.md)、[MVP-P1 领域存储](docs/verification/agent-domain-p1.md) 与 [MVP-P2 自治节点](docs/verification/private-runtime-p2.md) 已实现。P2 包含严格应用包、持久代际/所有权、中心离线本地运行、独立发布重连、双 SDK 生命周期迁移和受限 Unix LocalApi；见 [节点运行手册](docs/runbooks/private-runtime.md)。当前实际节点模块是受控/外部 counter，不代表 OMP/Codex Adapter、Web/Emacs 直连或公网私有认证已交付；未部署新平台。
+
 **S1 既有实现：** TS/JS 与独立 Rust SDK 已实现同连接发布/发现/调用/取消/状态订阅。共同传输为 JSON WSS；HTTP 仅消费目录/调用/取消，不支持订阅。使用预安装契约和静态批准，不代表新私有平台的节点侧离线授权已经完成；禁止据此公开多用户服务。见 [三进程样例](examples/s1/README.md)、[运行手册](docs/runbooks/s1-capabilities.md) 与 [实际验证记录](docs/verification/s1-capabilities.md)。
 
-**S2 既有实现：** 插件运行时已交付：同一插件类可多实例并存（一实例 = 一条连接），本地依赖进程内注入、显式远程绑定 `ModuleRef`、派生模块同契约再发布；缺失/循环依赖启动前类型化拒绝，停止逆序释放，断开不复活。TS（`definePlugin`/`Instance`）与 Rust（`Plugin`/`Instance`）对称，中心零改动。见 [双实例样例](examples/s2/README.md)、[运行手册](docs/runbooks/s2-plugins.md) 与 [实际验证记录](docs/verification/s2-plugins.md)。其连接绑定生命周期需要迁移，不能直接声称支持自治节点；新方向不要求为此迁移到 Astro。
+**S2 既有实现及 P2 迁移：** 同一插件类可多实例并存，本地依赖进程内注入、显式远程绑定 `ModuleRef`、派生模块同契约再发布；缺失/循环依赖启动前拒绝。TS（`definePlugin`/`Instance`）与 Rust（`Plugin`/`Instance`）默认业务和发布生命周期已分离：断中心不销毁本地模块，重连只换注册，旧引用仍失效；显式停止逆序异步清理并报告失败。Node 多应用共享一个发布连接、各自拥有业务。见 [双实例样例](examples/s2/README.md)、[当前契约](docs/contracts/s2-plugins.md) 与 [P2 证据](docs/verification/private-runtime-p2.md)；中心 S1 语义不变。
 
 **当前状态（2026-10-11）：** 落地页是**工作台**：顶部状态栏常驻本标签页的名字、短链接、分组 key 与在线数，面板切换内容。**一个标签页就是一个客户端**——链接在取 WSS 票据时铸造，同一浏览器的两个标签页共享 cookie 却是两个独立客户端，文件归属也按链接区分。问候从消息泡泡改为右上角提示；`client/hello` 带 `payload` 时是**提问**：目标 SDK 不自动确认，回答由提示里的「确认并回复」回传。`group` 是**隔离键兼加入凭据**（SHA-256 派生）：不同组互相不可见、不可问候、不可访问文件，组名文本永不投影给他人（`client/list`/`client/status` 一律置空），页面默认组名 `default`、可随机生成、复制分享组名即邀请。共享文件支持**相对目录路径**：目录上传保留目录结构，页面按提供者渲染目录树，列表/网格两种视图。`client/status` 报出每组实测延迟（未测量显示「尚未测量」而非 0 ms）。实测首屏 4.1s → 0.54s（bundle 827KB 未压缩 → 104KB gzip），后台标签页不再被保活策略踢下线。契约见 [connected-landing §10](docs/contracts/connected-landing.md)，证据见 [工作台验证记录](docs/verification/landing-page.md)。P0、P1、Connected landing、多主机内容 M0–M5 已交付。剩余 M4（Notez 接入）与 M6（验收收口）…
 
@@ -42,7 +44,7 @@ Conex 的目标是把分散的能力组合成应用，而不是要求所有服�
 - **多客户端**——Web 与 Emacs 使用同一协议；Desktop、Mobile 后续扩展。
 - **失败诚实**——拒绝、不可用、状态过期、结果未知、传输中断分别表达，不自动重放副作用操作。
 
-上述自治、Agent 领域、多客户端及路径授权仍属 MVP 实施目标。当前已交付基础是中心式路由、契约与 SDK、插件组合和下述 hello/share 演示。
+P1 领域存储与 P2 自治运行底座已交付；完整 Agent 后端、多客户端与路径授权仍属后续 MVP 工作包。现有在线演示仍是中心式 hello/share，不自动升级成私有产品。
 
 工作台里发生的事都是真实的：在线客户端列表、hello 往返延迟、提问—回答往返、同组文件共享，
 跑在一个真实的 `conex-host` 进程上，没有模拟数据。

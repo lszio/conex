@@ -1,0 +1,176 @@
+{
+  "$schema": "conex agent-domain strict boundary vectors. Shared by crates/conex-proto (validate_agent_input/validate_agent_output) and sdk/typescript (agent-domain.ts). A string value may be written as {\"repeat\":{\"char\":c,\"count\":n}} meaning char repeated n times (n counts characters; both suites measure UTF-8 bytes after expansion).",
+  "accept": [
+    {
+      "name": "submit_valid",
+      "method": "agent/executions/submit",
+      "direction": "input",
+      "value": {"conversationId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "idempotencyKey": "order-42", "content": "Hello Conex"}
+    },
+    {
+      "name": "submit_content_exactly_64kib_utf8",
+      "method": "agent/executions/submit",
+      "direction": "input",
+      "value": {"conversationId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "idempotencyKey": "k", "content": {"repeat": {"char": "é", "count": 32768}}}
+    },
+    {
+      "name": "idempotency_key_exactly_128_bytes",
+      "method": "agent/executions/submit",
+      "direction": "input",
+      "value": {"conversationId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "idempotencyKey": {"repeat": {"char": "k", "count": 128}}, "content": "hi"}
+    },
+    {
+      "name": "respond_approval",
+      "method": "agent/interactions/respond",
+      "direction": "input",
+      "value": {"interactionId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "expectedRevision": "7", "decision": {"kind": "approval", "choiceId": "allow_once"}}
+    },
+    {
+      "name": "respond_selection",
+      "method": "agent/interactions/respond",
+      "direction": "input",
+      "value": {"interactionId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "expectedRevision": "7", "decision": {"kind": "selection", "choiceIds": ["a", "b"]}}
+    },
+    {
+      "name": "events_read_empty_stream",
+      "method": "events/read",
+      "direction": "input",
+      "value": {"cursor": {"streamId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "epoch": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "after": "0"}, "limit": 32}
+    },
+    {
+      "name": "events_read_after_at_i64_max",
+      "method": "events/read",
+      "direction": "input",
+      "value": {"cursor": {"streamId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "epoch": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "after": "9223372036854775807"}}
+    },
+    {
+      "name": "submit_result_canonical_uint64",
+      "method": "agent/executions/submit",
+      "direction": "output",
+      "value": {"execution": {"id": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "conversationId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "endpointId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "moduleInstanceId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "generation": "3", "state": "accepted", "revision": "1", "createdAtMs": "1730000000000", "updatedAtMs": "1730000000000"}}
+    }
+  ],
+  "reject": [
+    {
+      "name": "unknown_field_rejected",
+      "method": "agent/executions/submit",
+      "direction": "input",
+      "value": {"conversationId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "idempotencyKey": "k", "content": "hi", "extra": true}
+    },
+    {
+      "name": "arbitrary_cwd_rejected",
+      "method": "agent/executions/submit",
+      "direction": "input",
+      "value": {"conversationId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "idempotencyKey": "k", "content": "hi", "cwd": "/etc"}
+    },
+    {
+      "name": "arbitrary_backend_id_rejected",
+      "method": "agent/executions/submit",
+      "direction": "input",
+      "value": {"conversationId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "idempotencyKey": "k", "content": "hi", "backendId": "srv_9"}
+    },
+    {
+      "name": "content_empty_rejected",
+      "method": "agent/executions/submit",
+      "direction": "input",
+      "value": {"conversationId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "idempotencyKey": "k", "content": ""}
+    },
+    {
+      "name": "content_over_64kib_utf8_rejected",
+      "method": "agent/executions/submit",
+      "direction": "input",
+      "value": {"conversationId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "idempotencyKey": "k", "content": {"repeat": {"char": "é", "count": 32768}, "append": "a"}}
+    },
+    {
+      "name": "idempotency_key_empty_rejected",
+      "method": "agent/executions/submit",
+      "direction": "input",
+      "value": {"conversationId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "idempotencyKey": "", "content": "hi"}
+    },
+    {
+      "name": "idempotency_key_129_bytes_rejected",
+      "method": "agent/executions/submit",
+      "direction": "input",
+      "value": {"conversationId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "idempotencyKey": {"repeat": {"char": "k", "count": 129}}, "content": "hi"}
+    },
+    {
+      "name": "conversation_id_not_ulid_rejected",
+      "method": "agent/executions/submit",
+      "direction": "input",
+      "value": {"conversationId": "not-a-ulid", "idempotencyKey": "k", "content": "hi"}
+    },
+    {
+      "name": "numeric_revision_rejected",
+      "method": "agent/interactions/respond",
+      "direction": "input",
+      "value": {"interactionId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "expectedRevision": 7, "decision": {"kind": "approval", "choiceId": "allow_once"}}
+    },
+    {
+      "name": "decision_mixed_kind_fields_rejected",
+      "method": "agent/interactions/respond",
+      "direction": "input",
+      "value": {"interactionId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "expectedRevision": "7", "decision": {"kind": "approval", "choiceIds": ["allow_once"]}}
+    },
+    {
+      "name": "decision_unknown_kind_rejected",
+      "method": "agent/interactions/respond",
+      "direction": "input",
+      "value": {"interactionId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "expectedRevision": "7", "decision": {"kind": "bogus", "text": "x"}}
+    },
+    {
+      "name": "decision_selection_empty_rejected",
+      "method": "agent/interactions/respond",
+      "direction": "input",
+      "value": {"interactionId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "expectedRevision": "7", "decision": {"kind": "selection", "choiceIds": []}}
+    },
+    {
+      "name": "cursor_over_i64_rejected",
+      "method": "events/read",
+      "direction": "input",
+      "value": {"cursor": {"streamId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "epoch": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "after": "9223372036854775808"}}
+    },
+    {
+      "name": "cursor_noncanonical_uint64_rejected",
+      "method": "events/read",
+      "direction": "input",
+      "value": {"cursor": {"streamId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "epoch": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "after": "007"}}
+    },
+    {
+      "name": "page_limit_zero_rejected",
+      "method": "agent/endpoints/list",
+      "direction": "input",
+      "value": {"limit": 0}
+    },
+    {
+      "name": "page_limit_over_100_rejected",
+      "method": "agent/conversations/list",
+      "direction": "input",
+      "value": {"endpointId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "limit": 101}
+    },
+    {
+      "name": "page_token_over_128_bytes_rejected",
+      "method": "agent/endpoints/list",
+      "direction": "input",
+      "value": {"limit": 10, "pageToken": {"repeat": {"char": "p", "count": 129}}}
+    },
+    {
+      "name": "message_read_over_64kib_rejected",
+      "method": "agent/messages/read",
+      "direction": "input",
+      "value": {"conversationId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "messageId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "partIndex": 0, "offsetBytes": "0", "maxBytes": 65537}
+    },
+    {
+      "name": "state_word_list_enforced",
+      "method": "agent/executions/submit",
+      "direction": "output",
+      "value": {"execution": {"id": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "conversationId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "endpointId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "moduleInstanceId": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "generation": "3", "state": "Running", "revision": "1", "createdAtMs": "1", "updatedAtMs": "1"}}
+    }
+  ],
+  "rawReject": [
+    {
+      "name": "duplicate_nested_key_rejected_at_wire",
+      "rawJson": "{\"method\":\"agent/executions/submit\",\"argument\":{\"conversationId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"idempotencyKey\":\"k\",\"content\":\"hi\",\"content\":\"dup\"}}",
+      "reason": "raw duplicate key must be rejected before JSON object conversion"
+    }
+  ]
+}

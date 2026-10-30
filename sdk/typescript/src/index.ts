@@ -52,3 +52,12 @@ export type {
   ModuleInvokeInput, ModuleCancelInput, ModuleCancelResult, StateSample,
   StateSubscribeInput, StateSubscribeResult, StateUpdateInput, StateEndInput,
 } from "./generated/conex/capability";
+export * from "./agent-domain";
+export * from "./events";
+export type {
+  AgentMessage,
+  Conversation as AgentConversation,
+  Execution as AgentExecution,
+  InteractionRequest as AgentInteractionRequest,
+} from "./generated/conex/entities";
+export type { AgentEvent, AgentEventCursor, AgentSnapshot } from "./generated/conex/events";

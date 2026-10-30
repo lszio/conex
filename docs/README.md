@@ -6,13 +6,13 @@ conex 的文档按「规范 / 契约 / 计划 / 证据 / 操作」分层，每�
 
 已确认 [私有分布式能力组合平台 MVP 架构基线](design/2026-10-29-conex-private-platform.md)：单用户私有、自治节点与协调入口、私网主动 WSS 接入、获准直连/转发、OMP/Codex 适配器、对话及图谱、服务器指标；MVP 同时支持 Web 与最小 Emacs 原生客户端。Desktop/Mobile 后续扩展；不把 Astro、多用户治理、自动打洞或插件市场作为前置条件。
 
-按 [实施总计划](plans/2026-10-29-conex-private-mvp.md) 推进，先执行 [P0 契约与真实协议探针计划](plans/2026-10-29-conex-mvp-p0.md)。**新 MVP 尚未实施**；A01–A16 是待验收条件，不是已有结果。本轮只同步文档与计划，不自动修改 Paca、提交、部署或启动业务实现。
+按 [实施总计划](plans/2026-10-29-conex-private-mvp.md) 推进；[P0 调查](verification/agent-protocol-probes.md)、[P1 领域存储](verification/agent-domain-p1.md) 与 [P2 自治节点](verification/private-runtime-p2.md) 已实现。P2 真实验证中心重启、本地业务/代际不变、共享发布、停止隔离与崩溃资源核对。**完整 MVP 尚未交付**；P3/P4 后端、P5 私有授权、Web/Emacs 与产品 A01–A16 仍按后续包验收。
 
-既有 [S1 契约](contracts/s1-capabilities.md) 与 [S2 契约](contracts/s2-plugins.md) 在迁移前仍描述现有 wire/运行时。S1/S2 已有实现与历史验收，见 [S1 验证记录](verification/s1-capabilities.md)、[S2 验证记录](verification/s2-plugins.md)；其中中心盖章授权、完整状态订阅和连接绑定生命周期不能直接当成节点离线授权、持久对话恢复或自治运行。
+既有 [S1 契约](contracts/s1-capabilities.md) 保持 wire/代次语义；[S2 契约](contracts/s2-plugins.md) 已迁移为业务/发布分离。历史证据见 [S1](verification/s1-capabilities.md)、[S2](verification/s2-plugins.md)，自治迁移见 [P2](verification/private-runtime-p2.md)。静态中心批准仍不能代替节点离线 grant 授权。
 
 [2026-10-17 架构](design/2026-10-17-conex-architecture.md)、[迁移盘点](design/2026-10-17-conex-migration-assessment.md) 及 S1–S5 路线是历史基线，不再决定当前 MVP 范围。旧 Paca 编号仅属于原阶段；新工作包未在本轮登记。
 
-现有操作入口：[S1 运行手册](runbooks/s1-capabilities.md)、[S2 运行手册](runbooks/s2-plugins.md)、[双实例样例](../examples/s2/README.md)。
+现有操作入口：[自治节点运行手册](runbooks/private-runtime.md)、[S1 运行手册](runbooks/s1-capabilities.md)、[S2 运行手册](runbooks/s2-plugins.md)、[双实例样例](../examples/s2/README.md)。
 
 ## 历史实现状态（2026-10-04 复核及后续补记）
 
@@ -32,6 +32,13 @@ conex 的文档按「规范 / 契约 / 计划 / 证据 / 操作」分层，每�
 | 规范 | [MVP 架构基线](design/2026-10-29-conex-private-platform.md) | 当前定位、SICP 模型、对象/事件、所有权、数据边界和 A01–A16 | 新设计与实施前必读 |
 | 计划 | [MVP 实施总计划](plans/2026-10-29-conex-private-mvp.md) | 本轮迁移盘点、完整工作包、依赖与验收覆盖 | 了解全局顺序与文件责任 |
 | 计划 | [首批 P0 执行计划](plans/2026-10-29-conex-mvp-p0.md) | 领域/网络契约冻结、真实协议探针、进入编码门槛 | 开始本轮实施准备 |
+| 契约 | [Agent 领域](contracts/agent-domain.md) | 精确操作、身份、busy/幂等、取消、审批 CAS 与后端边界 | P1/P3/P4 与客户端实施 |
+| 契约 | [事件恢复](contracts/event-recovery.md) | 节点持久流、快照边界、有界补读、head 提示、游标失效 | P1/P5/P7/P8 实施 |
+| 契约 | [私有运行](contracts/private-runtime.md) | 应用包、所有权、认证、直连/转发、离线授权与数据边界 | P2/P5 实施 |
+| 证据 | [Agent 协议探针](verification/agent-protocol-probes.md) | 安装版本/schema、元数据与实际 live 结果、未覆盖项 | 区分协议可用与产品交付 |
+| 计划 | [MVP-P1 领域存储](plans/2026-10-29-conex-mvp-p1.md) | proto、SQLite 事务/CAS、事件补读与 TS 绑定 | 已实现，见 [P1 实施记录](verification/agent-domain-p1.md) |
+| 计划 | [MVP-P2 自治运行](plans/2026-10-29-conex-mvp-p2.md) | 本地生命周期、应用装配及发布解耦 | 已实现，见 [P2 证据](verification/private-runtime-p2.md) 与 [运行手册](runbooks/private-runtime.md) |
+| 计划 | [MVP-P5 私有访问](plans/2026-10-29-conex-mvp-p5.md) | 节点/客户端授权、真实直连/转发与安全迁移 | P2 后实施 |
 | 历史设计 | [上一版架构](design/2026-10-17-conex-architecture.md) | 2026-10-17 方向和 S1–S5 切片 | 追溯既有决策 |
 | 历史盘点 | [旧迁移盘点](design/2026-10-17-conex-migration-assessment.md) | 当时的静态源码证据，缺口可能已由 S1/S2 填补 | 追溯迁移，不能据此重做已交付功能 |
 | 契约 | [S1 双向能力与状态订阅](contracts/s1-capabilities.md) | 通用注册、调用、取消、状态快照与更新、限额和验收场景 | S1 实施、对接与验收 |

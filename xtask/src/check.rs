@@ -75,6 +75,11 @@ const STEPS: &[Step] = &[
         "cargo",
         &["xtask", "e2e", "--suite", "s2-plugins"],
     ),
+    (
+        "Private runtime (real node ownership + center reconnect)",
+        "cargo",
+        &["xtask", "e2e", "--suite", "private-runtime"],
+    ),
 ];
 
 pub fn run() -> Result<()> {

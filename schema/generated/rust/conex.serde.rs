@@ -1,3 +1,1544 @@
+impl serde::Serialize for AgentAdapterEndpoint {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.id.is_empty() {
+            len += 1;
+        }
+        if !self.node_id.is_empty() {
+            len += 1;
+        }
+        if !self.module_instance_id.is_empty() {
+            len += 1;
+        }
+        if self.generation != 0 {
+            len += 1;
+        }
+        if !self.adapter.is_empty() {
+            len += 1;
+        }
+        if !self.backend_version.is_empty() {
+            len += 1;
+        }
+        if !self.protocol_version.is_empty() {
+            len += 1;
+        }
+        if self.experimental {
+            len += 1;
+        }
+        if self.capabilities.is_some() {
+            len += 1;
+        }
+        if !self.availability.is_empty() {
+            len += 1;
+        }
+        if !self.catalog_scope.is_empty() {
+            len += 1;
+        }
+        if self.limits.is_some() {
+            len += 1;
+        }
+        if self.display_name.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentAdapterEndpoint", len)?;
+        if !self.id.is_empty() {
+            struct_ser.serialize_field("id", &self.id)?;
+        }
+        if !self.node_id.is_empty() {
+            struct_ser.serialize_field("nodeId", &self.node_id)?;
+        }
+        if !self.module_instance_id.is_empty() {
+            struct_ser.serialize_field("moduleInstanceId", &self.module_instance_id)?;
+        }
+        if self.generation != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("generation", ToString::to_string(&self.generation).as_str())?;
+        }
+        if !self.adapter.is_empty() {
+            struct_ser.serialize_field("adapter", &self.adapter)?;
+        }
+        if !self.backend_version.is_empty() {
+            struct_ser.serialize_field("backendVersion", &self.backend_version)?;
+        }
+        if !self.protocol_version.is_empty() {
+            struct_ser.serialize_field("protocolVersion", &self.protocol_version)?;
+        }
+        if self.experimental {
+            struct_ser.serialize_field("experimental", &self.experimental)?;
+        }
+        if let Some(v) = self.capabilities.as_ref() {
+            struct_ser.serialize_field("capabilities", v)?;
+        }
+        if !self.availability.is_empty() {
+            struct_ser.serialize_field("availability", &self.availability)?;
+        }
+        if !self.catalog_scope.is_empty() {
+            struct_ser.serialize_field("catalogScope", &self.catalog_scope)?;
+        }
+        if let Some(v) = self.limits.as_ref() {
+            struct_ser.serialize_field("limits", v)?;
+        }
+        if let Some(v) = self.display_name.as_ref() {
+            struct_ser.serialize_field("displayName", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentAdapterEndpoint {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "id",
+            "node_id",
+            "nodeId",
+            "module_instance_id",
+            "moduleInstanceId",
+            "generation",
+            "adapter",
+            "backend_version",
+            "backendVersion",
+            "protocol_version",
+            "protocolVersion",
+            "experimental",
+            "capabilities",
+            "availability",
+            "catalog_scope",
+            "catalogScope",
+            "limits",
+            "display_name",
+            "displayName",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Id,
+            NodeId,
+            ModuleInstanceId,
+            Generation,
+            Adapter,
+            BackendVersion,
+            ProtocolVersion,
+            Experimental,
+            Capabilities,
+            Availability,
+            CatalogScope,
+            Limits,
+            DisplayName,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "id" => Ok(GeneratedField::Id),
+                            "nodeId" | "node_id" => Ok(GeneratedField::NodeId),
+                            "moduleInstanceId" | "module_instance_id" => Ok(GeneratedField::ModuleInstanceId),
+                            "generation" => Ok(GeneratedField::Generation),
+                            "adapter" => Ok(GeneratedField::Adapter),
+                            "backendVersion" | "backend_version" => Ok(GeneratedField::BackendVersion),
+                            "protocolVersion" | "protocol_version" => Ok(GeneratedField::ProtocolVersion),
+                            "experimental" => Ok(GeneratedField::Experimental),
+                            "capabilities" => Ok(GeneratedField::Capabilities),
+                            "availability" => Ok(GeneratedField::Availability),
+                            "catalogScope" | "catalog_scope" => Ok(GeneratedField::CatalogScope),
+                            "limits" => Ok(GeneratedField::Limits),
+                            "displayName" | "display_name" => Ok(GeneratedField::DisplayName),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentAdapterEndpoint;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentAdapterEndpoint")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentAdapterEndpoint, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut id__ = None;
+                let mut node_id__ = None;
+                let mut module_instance_id__ = None;
+                let mut generation__ = None;
+                let mut adapter__ = None;
+                let mut backend_version__ = None;
+                let mut protocol_version__ = None;
+                let mut experimental__ = None;
+                let mut capabilities__ = None;
+                let mut availability__ = None;
+                let mut catalog_scope__ = None;
+                let mut limits__ = None;
+                let mut display_name__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Id => {
+                            if id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("id"));
+                            }
+                            id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::NodeId => {
+                            if node_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeId"));
+                            }
+                            node_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ModuleInstanceId => {
+                            if module_instance_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("moduleInstanceId"));
+                            }
+                            module_instance_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Generation => {
+                            if generation__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("generation"));
+                            }
+                            generation__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::Adapter => {
+                            if adapter__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("adapter"));
+                            }
+                            adapter__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::BackendVersion => {
+                            if backend_version__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("backendVersion"));
+                            }
+                            backend_version__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ProtocolVersion => {
+                            if protocol_version__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("protocolVersion"));
+                            }
+                            protocol_version__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Experimental => {
+                            if experimental__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("experimental"));
+                            }
+                            experimental__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Capabilities => {
+                            if capabilities__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("capabilities"));
+                            }
+                            capabilities__ = map_.next_value()?;
+                        }
+                        GeneratedField::Availability => {
+                            if availability__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("availability"));
+                            }
+                            availability__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::CatalogScope => {
+                            if catalog_scope__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("catalogScope"));
+                            }
+                            catalog_scope__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Limits => {
+                            if limits__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("limits"));
+                            }
+                            limits__ = map_.next_value()?;
+                        }
+                        GeneratedField::DisplayName => {
+                            if display_name__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("displayName"));
+                            }
+                            display_name__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(AgentAdapterEndpoint {
+                    id: id__.unwrap_or_default(),
+                    node_id: node_id__.unwrap_or_default(),
+                    module_instance_id: module_instance_id__.unwrap_or_default(),
+                    generation: generation__.unwrap_or_default(),
+                    adapter: adapter__.unwrap_or_default(),
+                    backend_version: backend_version__.unwrap_or_default(),
+                    protocol_version: protocol_version__.unwrap_or_default(),
+                    experimental: experimental__.unwrap_or_default(),
+                    capabilities: capabilities__,
+                    availability: availability__.unwrap_or_default(),
+                    catalog_scope: catalog_scope__.unwrap_or_default(),
+                    limits: limits__,
+                    display_name: display_name__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentAdapterEndpoint", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentCapabilities {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.create_conversation {
+            len += 1;
+        }
+        if self.continue_conversation {
+            len += 1;
+        }
+        if self.read_history {
+            len += 1;
+        }
+        if self.stream_messages {
+            len += 1;
+        }
+        if self.cancel_execution {
+            len += 1;
+        }
+        if self.approval {
+            len += 1;
+        }
+        if self.user_input {
+            len += 1;
+        }
+        if self.list_subagents {
+            len += 1;
+        }
+        if self.cancel_subagent {
+            len += 1;
+        }
+        if self.steer_execution {
+            len += 1;
+        }
+        if self.attach_external {
+            len += 1;
+        }
+        if self.recover_active {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentCapabilities", len)?;
+        if self.create_conversation {
+            struct_ser.serialize_field("createConversation", &self.create_conversation)?;
+        }
+        if self.continue_conversation {
+            struct_ser.serialize_field("continueConversation", &self.continue_conversation)?;
+        }
+        if self.read_history {
+            struct_ser.serialize_field("readHistory", &self.read_history)?;
+        }
+        if self.stream_messages {
+            struct_ser.serialize_field("streamMessages", &self.stream_messages)?;
+        }
+        if self.cancel_execution {
+            struct_ser.serialize_field("cancelExecution", &self.cancel_execution)?;
+        }
+        if self.approval {
+            struct_ser.serialize_field("approval", &self.approval)?;
+        }
+        if self.user_input {
+            struct_ser.serialize_field("userInput", &self.user_input)?;
+        }
+        if self.list_subagents {
+            struct_ser.serialize_field("listSubagents", &self.list_subagents)?;
+        }
+        if self.cancel_subagent {
+            struct_ser.serialize_field("cancelSubagent", &self.cancel_subagent)?;
+        }
+        if self.steer_execution {
+            struct_ser.serialize_field("steerExecution", &self.steer_execution)?;
+        }
+        if self.attach_external {
+            struct_ser.serialize_field("attachExternal", &self.attach_external)?;
+        }
+        if self.recover_active {
+            struct_ser.serialize_field("recoverActive", &self.recover_active)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentCapabilities {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "create_conversation",
+            "createConversation",
+            "continue_conversation",
+            "continueConversation",
+            "read_history",
+            "readHistory",
+            "stream_messages",
+            "streamMessages",
+            "cancel_execution",
+            "cancelExecution",
+            "approval",
+            "user_input",
+            "userInput",
+            "list_subagents",
+            "listSubagents",
+            "cancel_subagent",
+            "cancelSubagent",
+            "steer_execution",
+            "steerExecution",
+            "attach_external",
+            "attachExternal",
+            "recover_active",
+            "recoverActive",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            CreateConversation,
+            ContinueConversation,
+            ReadHistory,
+            StreamMessages,
+            CancelExecution,
+            Approval,
+            UserInput,
+            ListSubagents,
+            CancelSubagent,
+            SteerExecution,
+            AttachExternal,
+            RecoverActive,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "createConversation" | "create_conversation" => Ok(GeneratedField::CreateConversation),
+                            "continueConversation" | "continue_conversation" => Ok(GeneratedField::ContinueConversation),
+                            "readHistory" | "read_history" => Ok(GeneratedField::ReadHistory),
+                            "streamMessages" | "stream_messages" => Ok(GeneratedField::StreamMessages),
+                            "cancelExecution" | "cancel_execution" => Ok(GeneratedField::CancelExecution),
+                            "approval" => Ok(GeneratedField::Approval),
+                            "userInput" | "user_input" => Ok(GeneratedField::UserInput),
+                            "listSubagents" | "list_subagents" => Ok(GeneratedField::ListSubagents),
+                            "cancelSubagent" | "cancel_subagent" => Ok(GeneratedField::CancelSubagent),
+                            "steerExecution" | "steer_execution" => Ok(GeneratedField::SteerExecution),
+                            "attachExternal" | "attach_external" => Ok(GeneratedField::AttachExternal),
+                            "recoverActive" | "recover_active" => Ok(GeneratedField::RecoverActive),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentCapabilities;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentCapabilities")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentCapabilities, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut create_conversation__ = None;
+                let mut continue_conversation__ = None;
+                let mut read_history__ = None;
+                let mut stream_messages__ = None;
+                let mut cancel_execution__ = None;
+                let mut approval__ = None;
+                let mut user_input__ = None;
+                let mut list_subagents__ = None;
+                let mut cancel_subagent__ = None;
+                let mut steer_execution__ = None;
+                let mut attach_external__ = None;
+                let mut recover_active__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::CreateConversation => {
+                            if create_conversation__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("createConversation"));
+                            }
+                            create_conversation__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ContinueConversation => {
+                            if continue_conversation__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("continueConversation"));
+                            }
+                            continue_conversation__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ReadHistory => {
+                            if read_history__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("readHistory"));
+                            }
+                            read_history__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::StreamMessages => {
+                            if stream_messages__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("streamMessages"));
+                            }
+                            stream_messages__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::CancelExecution => {
+                            if cancel_execution__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("cancelExecution"));
+                            }
+                            cancel_execution__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Approval => {
+                            if approval__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("approval"));
+                            }
+                            approval__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::UserInput => {
+                            if user_input__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("userInput"));
+                            }
+                            user_input__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ListSubagents => {
+                            if list_subagents__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("listSubagents"));
+                            }
+                            list_subagents__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::CancelSubagent => {
+                            if cancel_subagent__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("cancelSubagent"));
+                            }
+                            cancel_subagent__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::SteerExecution => {
+                            if steer_execution__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("steerExecution"));
+                            }
+                            steer_execution__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::AttachExternal => {
+                            if attach_external__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("attachExternal"));
+                            }
+                            attach_external__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::RecoverActive => {
+                            if recover_active__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("recoverActive"));
+                            }
+                            recover_active__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(AgentCapabilities {
+                    create_conversation: create_conversation__.unwrap_or_default(),
+                    continue_conversation: continue_conversation__.unwrap_or_default(),
+                    read_history: read_history__.unwrap_or_default(),
+                    stream_messages: stream_messages__.unwrap_or_default(),
+                    cancel_execution: cancel_execution__.unwrap_or_default(),
+                    approval: approval__.unwrap_or_default(),
+                    user_input: user_input__.unwrap_or_default(),
+                    list_subagents: list_subagents__.unwrap_or_default(),
+                    cancel_subagent: cancel_subagent__.unwrap_or_default(),
+                    steer_execution: steer_execution__.unwrap_or_default(),
+                    attach_external: attach_external__.unwrap_or_default(),
+                    recover_active: recover_active__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentCapabilities", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentConversationCreateInput {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.endpoint_id.is_empty() {
+            len += 1;
+        }
+        if !self.workspace_id.is_empty() {
+            len += 1;
+        }
+        if !self.idempotency_key.is_empty() {
+            len += 1;
+        }
+        if self.title.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentConversationCreateInput", len)?;
+        if !self.endpoint_id.is_empty() {
+            struct_ser.serialize_field("endpointId", &self.endpoint_id)?;
+        }
+        if !self.workspace_id.is_empty() {
+            struct_ser.serialize_field("workspaceId", &self.workspace_id)?;
+        }
+        if !self.idempotency_key.is_empty() {
+            struct_ser.serialize_field("idempotencyKey", &self.idempotency_key)?;
+        }
+        if let Some(v) = self.title.as_ref() {
+            struct_ser.serialize_field("title", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentConversationCreateInput {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "endpoint_id",
+            "endpointId",
+            "workspace_id",
+            "workspaceId",
+            "idempotency_key",
+            "idempotencyKey",
+            "title",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            EndpointId,
+            WorkspaceId,
+            IdempotencyKey,
+            Title,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "endpointId" | "endpoint_id" => Ok(GeneratedField::EndpointId),
+                            "workspaceId" | "workspace_id" => Ok(GeneratedField::WorkspaceId),
+                            "idempotencyKey" | "idempotency_key" => Ok(GeneratedField::IdempotencyKey),
+                            "title" => Ok(GeneratedField::Title),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentConversationCreateInput;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentConversationCreateInput")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentConversationCreateInput, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut endpoint_id__ = None;
+                let mut workspace_id__ = None;
+                let mut idempotency_key__ = None;
+                let mut title__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::EndpointId => {
+                            if endpoint_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("endpointId"));
+                            }
+                            endpoint_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::WorkspaceId => {
+                            if workspace_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("workspaceId"));
+                            }
+                            workspace_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::IdempotencyKey => {
+                            if idempotency_key__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("idempotencyKey"));
+                            }
+                            idempotency_key__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Title => {
+                            if title__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("title"));
+                            }
+                            title__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(AgentConversationCreateInput {
+                    endpoint_id: endpoint_id__.unwrap_or_default(),
+                    workspace_id: workspace_id__.unwrap_or_default(),
+                    idempotency_key: idempotency_key__.unwrap_or_default(),
+                    title: title__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentConversationCreateInput", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentConversationCreateResult {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.conversation.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentConversationCreateResult", len)?;
+        if let Some(v) = self.conversation.as_ref() {
+            struct_ser.serialize_field("conversation", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentConversationCreateResult {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "conversation",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Conversation,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "conversation" => Ok(GeneratedField::Conversation),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentConversationCreateResult;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentConversationCreateResult")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentConversationCreateResult, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut conversation__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Conversation => {
+                            if conversation__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("conversation"));
+                            }
+                            conversation__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(AgentConversationCreateResult {
+                    conversation: conversation__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentConversationCreateResult", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentConversationGetInput {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.conversation_id.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentConversationGetInput", len)?;
+        if !self.conversation_id.is_empty() {
+            struct_ser.serialize_field("conversationId", &self.conversation_id)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentConversationGetInput {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "conversation_id",
+            "conversationId",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            ConversationId,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "conversationId" | "conversation_id" => Ok(GeneratedField::ConversationId),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentConversationGetInput;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentConversationGetInput")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentConversationGetInput, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut conversation_id__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::ConversationId => {
+                            if conversation_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("conversationId"));
+                            }
+                            conversation_id__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(AgentConversationGetInput {
+                    conversation_id: conversation_id__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentConversationGetInput", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentConversationGetResult {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.conversation.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentConversationGetResult", len)?;
+        if let Some(v) = self.conversation.as_ref() {
+            struct_ser.serialize_field("conversation", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentConversationGetResult {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "conversation",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Conversation,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "conversation" => Ok(GeneratedField::Conversation),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentConversationGetResult;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentConversationGetResult")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentConversationGetResult, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut conversation__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Conversation => {
+                            if conversation__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("conversation"));
+                            }
+                            conversation__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(AgentConversationGetResult {
+                    conversation: conversation__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentConversationGetResult", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentConversationHistoryInput {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.conversation_id.is_empty() {
+            len += 1;
+        }
+        if self.before_message_id.is_some() {
+            len += 1;
+        }
+        if self.limit.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentConversationHistoryInput", len)?;
+        if !self.conversation_id.is_empty() {
+            struct_ser.serialize_field("conversationId", &self.conversation_id)?;
+        }
+        if let Some(v) = self.before_message_id.as_ref() {
+            struct_ser.serialize_field("beforeMessageId", v)?;
+        }
+        if let Some(v) = self.limit.as_ref() {
+            struct_ser.serialize_field("limit", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentConversationHistoryInput {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "conversation_id",
+            "conversationId",
+            "before_message_id",
+            "beforeMessageId",
+            "limit",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            ConversationId,
+            BeforeMessageId,
+            Limit,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "conversationId" | "conversation_id" => Ok(GeneratedField::ConversationId),
+                            "beforeMessageId" | "before_message_id" => Ok(GeneratedField::BeforeMessageId),
+                            "limit" => Ok(GeneratedField::Limit),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentConversationHistoryInput;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentConversationHistoryInput")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentConversationHistoryInput, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut conversation_id__ = None;
+                let mut before_message_id__ = None;
+                let mut limit__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::ConversationId => {
+                            if conversation_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("conversationId"));
+                            }
+                            conversation_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::BeforeMessageId => {
+                            if before_message_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("beforeMessageId"));
+                            }
+                            before_message_id__ = map_.next_value()?;
+                        }
+                        GeneratedField::Limit => {
+                            if limit__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("limit"));
+                            }
+                            limit__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                    }
+                }
+                Ok(AgentConversationHistoryInput {
+                    conversation_id: conversation_id__.unwrap_or_default(),
+                    before_message_id: before_message_id__,
+                    limit: limit__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentConversationHistoryInput", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentConversationHistoryResult {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.messages.is_empty() {
+            len += 1;
+        }
+        if self.has_more {
+            len += 1;
+        }
+        if !self.quality.is_empty() {
+            len += 1;
+        }
+        if !self.gaps.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentConversationHistoryResult", len)?;
+        if !self.messages.is_empty() {
+            struct_ser.serialize_field("messages", &self.messages)?;
+        }
+        if self.has_more {
+            struct_ser.serialize_field("hasMore", &self.has_more)?;
+        }
+        if !self.quality.is_empty() {
+            struct_ser.serialize_field("quality", &self.quality)?;
+        }
+        if !self.gaps.is_empty() {
+            struct_ser.serialize_field("gaps", &self.gaps)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentConversationHistoryResult {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "messages",
+            "has_more",
+            "hasMore",
+            "quality",
+            "gaps",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Messages,
+            HasMore,
+            Quality,
+            Gaps,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "messages" => Ok(GeneratedField::Messages),
+                            "hasMore" | "has_more" => Ok(GeneratedField::HasMore),
+                            "quality" => Ok(GeneratedField::Quality),
+                            "gaps" => Ok(GeneratedField::Gaps),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentConversationHistoryResult;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentConversationHistoryResult")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentConversationHistoryResult, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut messages__ = None;
+                let mut has_more__ = None;
+                let mut quality__ = None;
+                let mut gaps__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Messages => {
+                            if messages__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("messages"));
+                            }
+                            messages__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::HasMore => {
+                            if has_more__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("hasMore"));
+                            }
+                            has_more__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Quality => {
+                            if quality__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("quality"));
+                            }
+                            quality__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Gaps => {
+                            if gaps__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("gaps"));
+                            }
+                            gaps__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(AgentConversationHistoryResult {
+                    messages: messages__.unwrap_or_default(),
+                    has_more: has_more__.unwrap_or_default(),
+                    quality: quality__.unwrap_or_default(),
+                    gaps: gaps__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentConversationHistoryResult", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentConversationListInput {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.endpoint_id.is_empty() {
+            len += 1;
+        }
+        if self.workspace_id.is_some() {
+            len += 1;
+        }
+        if self.limit.is_some() {
+            len += 1;
+        }
+        if self.page_token.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentConversationListInput", len)?;
+        if !self.endpoint_id.is_empty() {
+            struct_ser.serialize_field("endpointId", &self.endpoint_id)?;
+        }
+        if let Some(v) = self.workspace_id.as_ref() {
+            struct_ser.serialize_field("workspaceId", v)?;
+        }
+        if let Some(v) = self.limit.as_ref() {
+            struct_ser.serialize_field("limit", v)?;
+        }
+        if let Some(v) = self.page_token.as_ref() {
+            struct_ser.serialize_field("pageToken", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentConversationListInput {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "endpoint_id",
+            "endpointId",
+            "workspace_id",
+            "workspaceId",
+            "limit",
+            "page_token",
+            "pageToken",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            EndpointId,
+            WorkspaceId,
+            Limit,
+            PageToken,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "endpointId" | "endpoint_id" => Ok(GeneratedField::EndpointId),
+                            "workspaceId" | "workspace_id" => Ok(GeneratedField::WorkspaceId),
+                            "limit" => Ok(GeneratedField::Limit),
+                            "pageToken" | "page_token" => Ok(GeneratedField::PageToken),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentConversationListInput;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentConversationListInput")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentConversationListInput, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut endpoint_id__ = None;
+                let mut workspace_id__ = None;
+                let mut limit__ = None;
+                let mut page_token__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::EndpointId => {
+                            if endpoint_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("endpointId"));
+                            }
+                            endpoint_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::WorkspaceId => {
+                            if workspace_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("workspaceId"));
+                            }
+                            workspace_id__ = map_.next_value()?;
+                        }
+                        GeneratedField::Limit => {
+                            if limit__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("limit"));
+                            }
+                            limit__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                        GeneratedField::PageToken => {
+                            if page_token__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("pageToken"));
+                            }
+                            page_token__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(AgentConversationListInput {
+                    endpoint_id: endpoint_id__.unwrap_or_default(),
+                    workspace_id: workspace_id__,
+                    limit: limit__,
+                    page_token: page_token__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentConversationListInput", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentConversationListResult {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.items.is_empty() {
+            len += 1;
+        }
+        if self.next_page_token.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentConversationListResult", len)?;
+        if !self.items.is_empty() {
+            struct_ser.serialize_field("items", &self.items)?;
+        }
+        if let Some(v) = self.next_page_token.as_ref() {
+            struct_ser.serialize_field("nextPageToken", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentConversationListResult {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "items",
+            "next_page_token",
+            "nextPageToken",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Items,
+            NextPageToken,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "items" => Ok(GeneratedField::Items),
+                            "nextPageToken" | "next_page_token" => Ok(GeneratedField::NextPageToken),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentConversationListResult;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentConversationListResult")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentConversationListResult, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut items__ = None;
+                let mut next_page_token__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Items => {
+                            if items__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("items"));
+                            }
+                            items__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::NextPageToken => {
+                            if next_page_token__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nextPageToken"));
+                            }
+                            next_page_token__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(AgentConversationListResult {
+                    items: items__.unwrap_or_default(),
+                    next_page_token: next_page_token__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentConversationListResult", FIELDS, GeneratedVisitor)
+    }
+}
 impl serde::Serialize for AgentEndpoint {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -122,6 +1663,2745 @@ impl<'de> serde::Deserialize<'de> for AgentEndpoint {
             }
         }
         deserializer.deserialize_struct("conex.AgentEndpoint", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentEndpointListInput {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.limit.is_some() {
+            len += 1;
+        }
+        if self.page_token.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentEndpointListInput", len)?;
+        if let Some(v) = self.limit.as_ref() {
+            struct_ser.serialize_field("limit", v)?;
+        }
+        if let Some(v) = self.page_token.as_ref() {
+            struct_ser.serialize_field("pageToken", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentEndpointListInput {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "limit",
+            "page_token",
+            "pageToken",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Limit,
+            PageToken,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "limit" => Ok(GeneratedField::Limit),
+                            "pageToken" | "page_token" => Ok(GeneratedField::PageToken),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentEndpointListInput;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentEndpointListInput")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentEndpointListInput, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut limit__ = None;
+                let mut page_token__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Limit => {
+                            if limit__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("limit"));
+                            }
+                            limit__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                        GeneratedField::PageToken => {
+                            if page_token__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("pageToken"));
+                            }
+                            page_token__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(AgentEndpointListInput {
+                    limit: limit__,
+                    page_token: page_token__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentEndpointListInput", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentEndpointListResult {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.items.is_empty() {
+            len += 1;
+        }
+        if self.next_page_token.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentEndpointListResult", len)?;
+        if !self.items.is_empty() {
+            struct_ser.serialize_field("items", &self.items)?;
+        }
+        if let Some(v) = self.next_page_token.as_ref() {
+            struct_ser.serialize_field("nextPageToken", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentEndpointListResult {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "items",
+            "next_page_token",
+            "nextPageToken",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Items,
+            NextPageToken,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "items" => Ok(GeneratedField::Items),
+                            "nextPageToken" | "next_page_token" => Ok(GeneratedField::NextPageToken),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentEndpointListResult;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentEndpointListResult")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentEndpointListResult, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut items__ = None;
+                let mut next_page_token__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Items => {
+                            if items__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("items"));
+                            }
+                            items__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::NextPageToken => {
+                            if next_page_token__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nextPageToken"));
+                            }
+                            next_page_token__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(AgentEndpointListResult {
+                    items: items__.unwrap_or_default(),
+                    next_page_token: next_page_token__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentEndpointListResult", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentEntityRef {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.node_id.is_empty() {
+            len += 1;
+        }
+        if !self.id.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentEntityRef", len)?;
+        if !self.node_id.is_empty() {
+            struct_ser.serialize_field("nodeId", &self.node_id)?;
+        }
+        if !self.id.is_empty() {
+            struct_ser.serialize_field("id", &self.id)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentEntityRef {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "node_id",
+            "nodeId",
+            "id",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            NodeId,
+            Id,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "nodeId" | "node_id" => Ok(GeneratedField::NodeId),
+                            "id" => Ok(GeneratedField::Id),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentEntityRef;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentEntityRef")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentEntityRef, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut node_id__ = None;
+                let mut id__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::NodeId => {
+                            if node_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeId"));
+                            }
+                            node_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Id => {
+                            if id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("id"));
+                            }
+                            id__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(AgentEntityRef {
+                    node_id: node_id__.unwrap_or_default(),
+                    id: id__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentEntityRef", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentEvent {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.stream_id.is_empty() {
+            len += 1;
+        }
+        if !self.epoch.is_empty() {
+            len += 1;
+        }
+        if self.position != 0 {
+            len += 1;
+        }
+        if self.recorded_at_ms != 0 {
+            len += 1;
+        }
+        if !self.r#type.is_empty() {
+            len += 1;
+        }
+        if !self.entity_id.is_empty() {
+            len += 1;
+        }
+        if self.entity_revision != 0 {
+            len += 1;
+        }
+        if self.data.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentEvent", len)?;
+        if !self.stream_id.is_empty() {
+            struct_ser.serialize_field("streamId", &self.stream_id)?;
+        }
+        if !self.epoch.is_empty() {
+            struct_ser.serialize_field("epoch", &self.epoch)?;
+        }
+        if self.position != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("position", ToString::to_string(&self.position).as_str())?;
+        }
+        if self.recorded_at_ms != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("recordedAtMs", ToString::to_string(&self.recorded_at_ms).as_str())?;
+        }
+        if !self.r#type.is_empty() {
+            struct_ser.serialize_field("type", &self.r#type)?;
+        }
+        if !self.entity_id.is_empty() {
+            struct_ser.serialize_field("entityId", &self.entity_id)?;
+        }
+        if self.entity_revision != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("entityRevision", ToString::to_string(&self.entity_revision).as_str())?;
+        }
+        if let Some(v) = self.data.as_ref() {
+            match v {
+                agent_event::Data::ConversationUpdated(v) => {
+                    struct_ser.serialize_field("conversationUpdated", v)?;
+                }
+                agent_event::Data::ExecutionUpdated(v) => {
+                    struct_ser.serialize_field("executionUpdated", v)?;
+                }
+                agent_event::Data::InteractionCreated(v) => {
+                    struct_ser.serialize_field("interactionCreated", v)?;
+                }
+                agent_event::Data::InteractionUpdated(v) => {
+                    struct_ser.serialize_field("interactionUpdated", v)?;
+                }
+                agent_event::Data::MessageCreated(v) => {
+                    struct_ser.serialize_field("messageCreated", v)?;
+                }
+                agent_event::Data::MessageDelta(v) => {
+                    struct_ser.serialize_field("messageDelta", v)?;
+                }
+                agent_event::Data::MessageCompleted(v) => {
+                    struct_ser.serialize_field("messageCompleted", v)?;
+                }
+                agent_event::Data::RelationshipUpdated(v) => {
+                    struct_ser.serialize_field("relationshipUpdated", v)?;
+                }
+                agent_event::Data::RecoveryGap(v) => {
+                    struct_ser.serialize_field("recoveryGap", v)?;
+                }
+            }
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentEvent {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "stream_id",
+            "streamId",
+            "epoch",
+            "position",
+            "recorded_at_ms",
+            "recordedAtMs",
+            "type",
+            "entity_id",
+            "entityId",
+            "entity_revision",
+            "entityRevision",
+            "conversation_updated",
+            "conversationUpdated",
+            "execution_updated",
+            "executionUpdated",
+            "interaction_created",
+            "interactionCreated",
+            "interaction_updated",
+            "interactionUpdated",
+            "message_created",
+            "messageCreated",
+            "message_delta",
+            "messageDelta",
+            "message_completed",
+            "messageCompleted",
+            "relationship_updated",
+            "relationshipUpdated",
+            "recovery_gap",
+            "recoveryGap",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            StreamId,
+            Epoch,
+            Position,
+            RecordedAtMs,
+            Type,
+            EntityId,
+            EntityRevision,
+            ConversationUpdated,
+            ExecutionUpdated,
+            InteractionCreated,
+            InteractionUpdated,
+            MessageCreated,
+            MessageDelta,
+            MessageCompleted,
+            RelationshipUpdated,
+            RecoveryGap,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "streamId" | "stream_id" => Ok(GeneratedField::StreamId),
+                            "epoch" => Ok(GeneratedField::Epoch),
+                            "position" => Ok(GeneratedField::Position),
+                            "recordedAtMs" | "recorded_at_ms" => Ok(GeneratedField::RecordedAtMs),
+                            "type" => Ok(GeneratedField::Type),
+                            "entityId" | "entity_id" => Ok(GeneratedField::EntityId),
+                            "entityRevision" | "entity_revision" => Ok(GeneratedField::EntityRevision),
+                            "conversationUpdated" | "conversation_updated" => Ok(GeneratedField::ConversationUpdated),
+                            "executionUpdated" | "execution_updated" => Ok(GeneratedField::ExecutionUpdated),
+                            "interactionCreated" | "interaction_created" => Ok(GeneratedField::InteractionCreated),
+                            "interactionUpdated" | "interaction_updated" => Ok(GeneratedField::InteractionUpdated),
+                            "messageCreated" | "message_created" => Ok(GeneratedField::MessageCreated),
+                            "messageDelta" | "message_delta" => Ok(GeneratedField::MessageDelta),
+                            "messageCompleted" | "message_completed" => Ok(GeneratedField::MessageCompleted),
+                            "relationshipUpdated" | "relationship_updated" => Ok(GeneratedField::RelationshipUpdated),
+                            "recoveryGap" | "recovery_gap" => Ok(GeneratedField::RecoveryGap),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentEvent;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentEvent")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentEvent, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut stream_id__ = None;
+                let mut epoch__ = None;
+                let mut position__ = None;
+                let mut recorded_at_ms__ = None;
+                let mut r#type__ = None;
+                let mut entity_id__ = None;
+                let mut entity_revision__ = None;
+                let mut data__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::StreamId => {
+                            if stream_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("streamId"));
+                            }
+                            stream_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Epoch => {
+                            if epoch__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("epoch"));
+                            }
+                            epoch__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Position => {
+                            if position__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("position"));
+                            }
+                            position__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::RecordedAtMs => {
+                            if recorded_at_ms__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("recordedAtMs"));
+                            }
+                            recorded_at_ms__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::Type => {
+                            if r#type__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("type"));
+                            }
+                            r#type__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::EntityId => {
+                            if entity_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("entityId"));
+                            }
+                            entity_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::EntityRevision => {
+                            if entity_revision__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("entityRevision"));
+                            }
+                            entity_revision__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::ConversationUpdated => {
+                            if data__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("conversationUpdated"));
+                            }
+                            data__ = map_.next_value::<::std::option::Option<_>>()?.map(agent_event::Data::ConversationUpdated)
+;
+                        }
+                        GeneratedField::ExecutionUpdated => {
+                            if data__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("executionUpdated"));
+                            }
+                            data__ = map_.next_value::<::std::option::Option<_>>()?.map(agent_event::Data::ExecutionUpdated)
+;
+                        }
+                        GeneratedField::InteractionCreated => {
+                            if data__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("interactionCreated"));
+                            }
+                            data__ = map_.next_value::<::std::option::Option<_>>()?.map(agent_event::Data::InteractionCreated)
+;
+                        }
+                        GeneratedField::InteractionUpdated => {
+                            if data__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("interactionUpdated"));
+                            }
+                            data__ = map_.next_value::<::std::option::Option<_>>()?.map(agent_event::Data::InteractionUpdated)
+;
+                        }
+                        GeneratedField::MessageCreated => {
+                            if data__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("messageCreated"));
+                            }
+                            data__ = map_.next_value::<::std::option::Option<_>>()?.map(agent_event::Data::MessageCreated)
+;
+                        }
+                        GeneratedField::MessageDelta => {
+                            if data__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("messageDelta"));
+                            }
+                            data__ = map_.next_value::<::std::option::Option<_>>()?.map(agent_event::Data::MessageDelta)
+;
+                        }
+                        GeneratedField::MessageCompleted => {
+                            if data__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("messageCompleted"));
+                            }
+                            data__ = map_.next_value::<::std::option::Option<_>>()?.map(agent_event::Data::MessageCompleted)
+;
+                        }
+                        GeneratedField::RelationshipUpdated => {
+                            if data__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("relationshipUpdated"));
+                            }
+                            data__ = map_.next_value::<::std::option::Option<_>>()?.map(agent_event::Data::RelationshipUpdated)
+;
+                        }
+                        GeneratedField::RecoveryGap => {
+                            if data__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("recoveryGap"));
+                            }
+                            data__ = map_.next_value::<::std::option::Option<_>>()?.map(agent_event::Data::RecoveryGap)
+;
+                        }
+                    }
+                }
+                Ok(AgentEvent {
+                    stream_id: stream_id__.unwrap_or_default(),
+                    epoch: epoch__.unwrap_or_default(),
+                    position: position__.unwrap_or_default(),
+                    recorded_at_ms: recorded_at_ms__.unwrap_or_default(),
+                    r#type: r#type__.unwrap_or_default(),
+                    entity_id: entity_id__.unwrap_or_default(),
+                    entity_revision: entity_revision__.unwrap_or_default(),
+                    data: data__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentEvent", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentEventCursor {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.stream_id.is_empty() {
+            len += 1;
+        }
+        if !self.epoch.is_empty() {
+            len += 1;
+        }
+        if self.after != 0 {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentEventCursor", len)?;
+        if !self.stream_id.is_empty() {
+            struct_ser.serialize_field("streamId", &self.stream_id)?;
+        }
+        if !self.epoch.is_empty() {
+            struct_ser.serialize_field("epoch", &self.epoch)?;
+        }
+        if self.after != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("after", ToString::to_string(&self.after).as_str())?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentEventCursor {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "stream_id",
+            "streamId",
+            "epoch",
+            "after",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            StreamId,
+            Epoch,
+            After,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "streamId" | "stream_id" => Ok(GeneratedField::StreamId),
+                            "epoch" => Ok(GeneratedField::Epoch),
+                            "after" => Ok(GeneratedField::After),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentEventCursor;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentEventCursor")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentEventCursor, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut stream_id__ = None;
+                let mut epoch__ = None;
+                let mut after__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::StreamId => {
+                            if stream_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("streamId"));
+                            }
+                            stream_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Epoch => {
+                            if epoch__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("epoch"));
+                            }
+                            epoch__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::After => {
+                            if after__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("after"));
+                            }
+                            after__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                    }
+                }
+                Ok(AgentEventCursor {
+                    stream_id: stream_id__.unwrap_or_default(),
+                    epoch: epoch__.unwrap_or_default(),
+                    after: after__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentEventCursor", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentEventReadInput {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.cursor.is_some() {
+            len += 1;
+        }
+        if self.limit.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentEventReadInput", len)?;
+        if let Some(v) = self.cursor.as_ref() {
+            struct_ser.serialize_field("cursor", v)?;
+        }
+        if let Some(v) = self.limit.as_ref() {
+            struct_ser.serialize_field("limit", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentEventReadInput {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "cursor",
+            "limit",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Cursor,
+            Limit,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "cursor" => Ok(GeneratedField::Cursor),
+                            "limit" => Ok(GeneratedField::Limit),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentEventReadInput;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentEventReadInput")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentEventReadInput, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut cursor__ = None;
+                let mut limit__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Cursor => {
+                            if cursor__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("cursor"));
+                            }
+                            cursor__ = map_.next_value()?;
+                        }
+                        GeneratedField::Limit => {
+                            if limit__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("limit"));
+                            }
+                            limit__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                    }
+                }
+                Ok(AgentEventReadInput {
+                    cursor: cursor__,
+                    limit: limit__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentEventReadInput", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentEventReadResult {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.events.is_empty() {
+            len += 1;
+        }
+        if self.next_cursor.is_some() {
+            len += 1;
+        }
+        if self.head != 0 {
+            len += 1;
+        }
+        if self.first_available != 0 {
+            len += 1;
+        }
+        if self.has_more {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentEventReadResult", len)?;
+        if !self.events.is_empty() {
+            struct_ser.serialize_field("events", &self.events)?;
+        }
+        if let Some(v) = self.next_cursor.as_ref() {
+            struct_ser.serialize_field("nextCursor", v)?;
+        }
+        if self.head != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("head", ToString::to_string(&self.head).as_str())?;
+        }
+        if self.first_available != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("firstAvailable", ToString::to_string(&self.first_available).as_str())?;
+        }
+        if self.has_more {
+            struct_ser.serialize_field("hasMore", &self.has_more)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentEventReadResult {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "events",
+            "next_cursor",
+            "nextCursor",
+            "head",
+            "first_available",
+            "firstAvailable",
+            "has_more",
+            "hasMore",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Events,
+            NextCursor,
+            Head,
+            FirstAvailable,
+            HasMore,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "events" => Ok(GeneratedField::Events),
+                            "nextCursor" | "next_cursor" => Ok(GeneratedField::NextCursor),
+                            "head" => Ok(GeneratedField::Head),
+                            "firstAvailable" | "first_available" => Ok(GeneratedField::FirstAvailable),
+                            "hasMore" | "has_more" => Ok(GeneratedField::HasMore),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentEventReadResult;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentEventReadResult")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentEventReadResult, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut events__ = None;
+                let mut next_cursor__ = None;
+                let mut head__ = None;
+                let mut first_available__ = None;
+                let mut has_more__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Events => {
+                            if events__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("events"));
+                            }
+                            events__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::NextCursor => {
+                            if next_cursor__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nextCursor"));
+                            }
+                            next_cursor__ = map_.next_value()?;
+                        }
+                        GeneratedField::Head => {
+                            if head__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("head"));
+                            }
+                            head__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::FirstAvailable => {
+                            if first_available__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("firstAvailable"));
+                            }
+                            first_available__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::HasMore => {
+                            if has_more__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("hasMore"));
+                            }
+                            has_more__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(AgentEventReadResult {
+                    events: events__.unwrap_or_default(),
+                    next_cursor: next_cursor__,
+                    head: head__.unwrap_or_default(),
+                    first_available: first_available__.unwrap_or_default(),
+                    has_more: has_more__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentEventReadResult", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentExecutionCancelInput {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.execution_id.is_empty() {
+            len += 1;
+        }
+        if self.expected_generation != 0 {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentExecutionCancelInput", len)?;
+        if !self.execution_id.is_empty() {
+            struct_ser.serialize_field("executionId", &self.execution_id)?;
+        }
+        if self.expected_generation != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("expectedGeneration", ToString::to_string(&self.expected_generation).as_str())?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentExecutionCancelInput {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "execution_id",
+            "executionId",
+            "expected_generation",
+            "expectedGeneration",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            ExecutionId,
+            ExpectedGeneration,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "executionId" | "execution_id" => Ok(GeneratedField::ExecutionId),
+                            "expectedGeneration" | "expected_generation" => Ok(GeneratedField::ExpectedGeneration),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentExecutionCancelInput;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentExecutionCancelInput")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentExecutionCancelInput, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut execution_id__ = None;
+                let mut expected_generation__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::ExecutionId => {
+                            if execution_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("executionId"));
+                            }
+                            execution_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ExpectedGeneration => {
+                            if expected_generation__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("expectedGeneration"));
+                            }
+                            expected_generation__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                    }
+                }
+                Ok(AgentExecutionCancelInput {
+                    execution_id: execution_id__.unwrap_or_default(),
+                    expected_generation: expected_generation__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentExecutionCancelInput", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentExecutionCancelResult {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.execution_id.is_empty() {
+            len += 1;
+        }
+        if self.requested {
+            len += 1;
+        }
+        if !self.state.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentExecutionCancelResult", len)?;
+        if !self.execution_id.is_empty() {
+            struct_ser.serialize_field("executionId", &self.execution_id)?;
+        }
+        if self.requested {
+            struct_ser.serialize_field("requested", &self.requested)?;
+        }
+        if !self.state.is_empty() {
+            struct_ser.serialize_field("state", &self.state)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentExecutionCancelResult {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "execution_id",
+            "executionId",
+            "requested",
+            "state",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            ExecutionId,
+            Requested,
+            State,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "executionId" | "execution_id" => Ok(GeneratedField::ExecutionId),
+                            "requested" => Ok(GeneratedField::Requested),
+                            "state" => Ok(GeneratedField::State),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentExecutionCancelResult;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentExecutionCancelResult")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentExecutionCancelResult, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut execution_id__ = None;
+                let mut requested__ = None;
+                let mut state__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::ExecutionId => {
+                            if execution_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("executionId"));
+                            }
+                            execution_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Requested => {
+                            if requested__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("requested"));
+                            }
+                            requested__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::State => {
+                            if state__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("state"));
+                            }
+                            state__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(AgentExecutionCancelResult {
+                    execution_id: execution_id__.unwrap_or_default(),
+                    requested: requested__.unwrap_or_default(),
+                    state: state__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentExecutionCancelResult", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentExecutionGetInput {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.execution_id.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentExecutionGetInput", len)?;
+        if !self.execution_id.is_empty() {
+            struct_ser.serialize_field("executionId", &self.execution_id)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentExecutionGetInput {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "execution_id",
+            "executionId",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            ExecutionId,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "executionId" | "execution_id" => Ok(GeneratedField::ExecutionId),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentExecutionGetInput;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentExecutionGetInput")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentExecutionGetInput, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut execution_id__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::ExecutionId => {
+                            if execution_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("executionId"));
+                            }
+                            execution_id__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(AgentExecutionGetInput {
+                    execution_id: execution_id__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentExecutionGetInput", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentExecutionGetResult {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.execution.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentExecutionGetResult", len)?;
+        if let Some(v) = self.execution.as_ref() {
+            struct_ser.serialize_field("execution", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentExecutionGetResult {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "execution",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Execution,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "execution" => Ok(GeneratedField::Execution),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentExecutionGetResult;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentExecutionGetResult")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentExecutionGetResult, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut execution__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Execution => {
+                            if execution__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("execution"));
+                            }
+                            execution__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(AgentExecutionGetResult {
+                    execution: execution__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentExecutionGetResult", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentExecutionSteerInput {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.execution_id.is_empty() {
+            len += 1;
+        }
+        if self.expected_generation != 0 {
+            len += 1;
+        }
+        if !self.idempotency_key.is_empty() {
+            len += 1;
+        }
+        if !self.content.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentExecutionSteerInput", len)?;
+        if !self.execution_id.is_empty() {
+            struct_ser.serialize_field("executionId", &self.execution_id)?;
+        }
+        if self.expected_generation != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("expectedGeneration", ToString::to_string(&self.expected_generation).as_str())?;
+        }
+        if !self.idempotency_key.is_empty() {
+            struct_ser.serialize_field("idempotencyKey", &self.idempotency_key)?;
+        }
+        if !self.content.is_empty() {
+            struct_ser.serialize_field("content", &self.content)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentExecutionSteerInput {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "execution_id",
+            "executionId",
+            "expected_generation",
+            "expectedGeneration",
+            "idempotency_key",
+            "idempotencyKey",
+            "content",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            ExecutionId,
+            ExpectedGeneration,
+            IdempotencyKey,
+            Content,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "executionId" | "execution_id" => Ok(GeneratedField::ExecutionId),
+                            "expectedGeneration" | "expected_generation" => Ok(GeneratedField::ExpectedGeneration),
+                            "idempotencyKey" | "idempotency_key" => Ok(GeneratedField::IdempotencyKey),
+                            "content" => Ok(GeneratedField::Content),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentExecutionSteerInput;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentExecutionSteerInput")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentExecutionSteerInput, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut execution_id__ = None;
+                let mut expected_generation__ = None;
+                let mut idempotency_key__ = None;
+                let mut content__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::ExecutionId => {
+                            if execution_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("executionId"));
+                            }
+                            execution_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ExpectedGeneration => {
+                            if expected_generation__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("expectedGeneration"));
+                            }
+                            expected_generation__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::IdempotencyKey => {
+                            if idempotency_key__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("idempotencyKey"));
+                            }
+                            idempotency_key__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Content => {
+                            if content__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("content"));
+                            }
+                            content__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(AgentExecutionSteerInput {
+                    execution_id: execution_id__.unwrap_or_default(),
+                    expected_generation: expected_generation__.unwrap_or_default(),
+                    idempotency_key: idempotency_key__.unwrap_or_default(),
+                    content: content__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentExecutionSteerInput", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentExecutionSteerResult {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.execution_id.is_empty() {
+            len += 1;
+        }
+        if self.accepted {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentExecutionSteerResult", len)?;
+        if !self.execution_id.is_empty() {
+            struct_ser.serialize_field("executionId", &self.execution_id)?;
+        }
+        if self.accepted {
+            struct_ser.serialize_field("accepted", &self.accepted)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentExecutionSteerResult {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "execution_id",
+            "executionId",
+            "accepted",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            ExecutionId,
+            Accepted,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "executionId" | "execution_id" => Ok(GeneratedField::ExecutionId),
+                            "accepted" => Ok(GeneratedField::Accepted),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentExecutionSteerResult;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentExecutionSteerResult")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentExecutionSteerResult, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut execution_id__ = None;
+                let mut accepted__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::ExecutionId => {
+                            if execution_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("executionId"));
+                            }
+                            execution_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Accepted => {
+                            if accepted__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("accepted"));
+                            }
+                            accepted__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(AgentExecutionSteerResult {
+                    execution_id: execution_id__.unwrap_or_default(),
+                    accepted: accepted__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentExecutionSteerResult", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentGap {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.reason.is_empty() {
+            len += 1;
+        }
+        if self.backend_range.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentGap", len)?;
+        if !self.reason.is_empty() {
+            struct_ser.serialize_field("reason", &self.reason)?;
+        }
+        if let Some(v) = self.backend_range.as_ref() {
+            struct_ser.serialize_field("backendRange", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentGap {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "reason",
+            "backend_range",
+            "backendRange",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Reason,
+            BackendRange,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "reason" => Ok(GeneratedField::Reason),
+                            "backendRange" | "backend_range" => Ok(GeneratedField::BackendRange),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentGap;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentGap")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentGap, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut reason__ = None;
+                let mut backend_range__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Reason => {
+                            if reason__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("reason"));
+                            }
+                            reason__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::BackendRange => {
+                            if backend_range__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("backendRange"));
+                            }
+                            backend_range__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(AgentGap {
+                    reason: reason__.unwrap_or_default(),
+                    backend_range: backend_range__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentGap", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentHistoryInfo {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.has_more {
+            len += 1;
+        }
+        if self.before_message_id.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentHistoryInfo", len)?;
+        if self.has_more {
+            struct_ser.serialize_field("hasMore", &self.has_more)?;
+        }
+        if let Some(v) = self.before_message_id.as_ref() {
+            struct_ser.serialize_field("beforeMessageId", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentHistoryInfo {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "has_more",
+            "hasMore",
+            "before_message_id",
+            "beforeMessageId",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            HasMore,
+            BeforeMessageId,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "hasMore" | "has_more" => Ok(GeneratedField::HasMore),
+                            "beforeMessageId" | "before_message_id" => Ok(GeneratedField::BeforeMessageId),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentHistoryInfo;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentHistoryInfo")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentHistoryInfo, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut has_more__ = None;
+                let mut before_message_id__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::HasMore => {
+                            if has_more__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("hasMore"));
+                            }
+                            has_more__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::BeforeMessageId => {
+                            if before_message_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("beforeMessageId"));
+                            }
+                            before_message_id__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(AgentHistoryInfo {
+                    has_more: has_more__.unwrap_or_default(),
+                    before_message_id: before_message_id__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentHistoryInfo", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentInteractionDecision {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.kind.is_empty() {
+            len += 1;
+        }
+        if self.choice_id.is_some() {
+            len += 1;
+        }
+        if !self.choice_ids.is_empty() {
+            len += 1;
+        }
+        if self.text.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentInteractionDecision", len)?;
+        if !self.kind.is_empty() {
+            struct_ser.serialize_field("kind", &self.kind)?;
+        }
+        if let Some(v) = self.choice_id.as_ref() {
+            struct_ser.serialize_field("choiceId", v)?;
+        }
+        if !self.choice_ids.is_empty() {
+            struct_ser.serialize_field("choiceIds", &self.choice_ids)?;
+        }
+        if let Some(v) = self.text.as_ref() {
+            struct_ser.serialize_field("text", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentInteractionDecision {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "kind",
+            "choice_id",
+            "choiceId",
+            "choice_ids",
+            "choiceIds",
+            "text",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Kind,
+            ChoiceId,
+            ChoiceIds,
+            Text,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "kind" => Ok(GeneratedField::Kind),
+                            "choiceId" | "choice_id" => Ok(GeneratedField::ChoiceId),
+                            "choiceIds" | "choice_ids" => Ok(GeneratedField::ChoiceIds),
+                            "text" => Ok(GeneratedField::Text),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentInteractionDecision;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentInteractionDecision")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentInteractionDecision, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut kind__ = None;
+                let mut choice_id__ = None;
+                let mut choice_ids__ = None;
+                let mut text__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Kind => {
+                            if kind__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("kind"));
+                            }
+                            kind__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ChoiceId => {
+                            if choice_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("choiceId"));
+                            }
+                            choice_id__ = map_.next_value()?;
+                        }
+                        GeneratedField::ChoiceIds => {
+                            if choice_ids__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("choiceIds"));
+                            }
+                            choice_ids__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Text => {
+                            if text__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("text"));
+                            }
+                            text__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(AgentInteractionDecision {
+                    kind: kind__.unwrap_or_default(),
+                    choice_id: choice_id__,
+                    choice_ids: choice_ids__.unwrap_or_default(),
+                    text: text__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentInteractionDecision", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentInteractionListInput {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.conversation_id.is_empty() {
+            len += 1;
+        }
+        if self.execution_id.is_some() {
+            len += 1;
+        }
+        if self.limit.is_some() {
+            len += 1;
+        }
+        if self.page_token.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentInteractionListInput", len)?;
+        if !self.conversation_id.is_empty() {
+            struct_ser.serialize_field("conversationId", &self.conversation_id)?;
+        }
+        if let Some(v) = self.execution_id.as_ref() {
+            struct_ser.serialize_field("executionId", v)?;
+        }
+        if let Some(v) = self.limit.as_ref() {
+            struct_ser.serialize_field("limit", v)?;
+        }
+        if let Some(v) = self.page_token.as_ref() {
+            struct_ser.serialize_field("pageToken", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentInteractionListInput {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "conversation_id",
+            "conversationId",
+            "execution_id",
+            "executionId",
+            "limit",
+            "page_token",
+            "pageToken",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            ConversationId,
+            ExecutionId,
+            Limit,
+            PageToken,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "conversationId" | "conversation_id" => Ok(GeneratedField::ConversationId),
+                            "executionId" | "execution_id" => Ok(GeneratedField::ExecutionId),
+                            "limit" => Ok(GeneratedField::Limit),
+                            "pageToken" | "page_token" => Ok(GeneratedField::PageToken),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentInteractionListInput;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentInteractionListInput")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentInteractionListInput, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut conversation_id__ = None;
+                let mut execution_id__ = None;
+                let mut limit__ = None;
+                let mut page_token__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::ConversationId => {
+                            if conversation_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("conversationId"));
+                            }
+                            conversation_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ExecutionId => {
+                            if execution_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("executionId"));
+                            }
+                            execution_id__ = map_.next_value()?;
+                        }
+                        GeneratedField::Limit => {
+                            if limit__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("limit"));
+                            }
+                            limit__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                        GeneratedField::PageToken => {
+                            if page_token__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("pageToken"));
+                            }
+                            page_token__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(AgentInteractionListInput {
+                    conversation_id: conversation_id__.unwrap_or_default(),
+                    execution_id: execution_id__,
+                    limit: limit__,
+                    page_token: page_token__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentInteractionListInput", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentInteractionListResult {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.items.is_empty() {
+            len += 1;
+        }
+        if self.next_page_token.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentInteractionListResult", len)?;
+        if !self.items.is_empty() {
+            struct_ser.serialize_field("items", &self.items)?;
+        }
+        if let Some(v) = self.next_page_token.as_ref() {
+            struct_ser.serialize_field("nextPageToken", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentInteractionListResult {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "items",
+            "next_page_token",
+            "nextPageToken",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Items,
+            NextPageToken,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "items" => Ok(GeneratedField::Items),
+                            "nextPageToken" | "next_page_token" => Ok(GeneratedField::NextPageToken),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentInteractionListResult;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentInteractionListResult")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentInteractionListResult, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut items__ = None;
+                let mut next_page_token__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Items => {
+                            if items__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("items"));
+                            }
+                            items__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::NextPageToken => {
+                            if next_page_token__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nextPageToken"));
+                            }
+                            next_page_token__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(AgentInteractionListResult {
+                    items: items__.unwrap_or_default(),
+                    next_page_token: next_page_token__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentInteractionListResult", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentInteractionRespondInput {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.interaction_id.is_empty() {
+            len += 1;
+        }
+        if self.expected_revision != 0 {
+            len += 1;
+        }
+        if self.decision.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentInteractionRespondInput", len)?;
+        if !self.interaction_id.is_empty() {
+            struct_ser.serialize_field("interactionId", &self.interaction_id)?;
+        }
+        if self.expected_revision != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("expectedRevision", ToString::to_string(&self.expected_revision).as_str())?;
+        }
+        if let Some(v) = self.decision.as_ref() {
+            struct_ser.serialize_field("decision", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentInteractionRespondInput {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "interaction_id",
+            "interactionId",
+            "expected_revision",
+            "expectedRevision",
+            "decision",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            InteractionId,
+            ExpectedRevision,
+            Decision,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "interactionId" | "interaction_id" => Ok(GeneratedField::InteractionId),
+                            "expectedRevision" | "expected_revision" => Ok(GeneratedField::ExpectedRevision),
+                            "decision" => Ok(GeneratedField::Decision),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentInteractionRespondInput;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentInteractionRespondInput")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentInteractionRespondInput, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut interaction_id__ = None;
+                let mut expected_revision__ = None;
+                let mut decision__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::InteractionId => {
+                            if interaction_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("interactionId"));
+                            }
+                            interaction_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ExpectedRevision => {
+                            if expected_revision__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("expectedRevision"));
+                            }
+                            expected_revision__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::Decision => {
+                            if decision__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("decision"));
+                            }
+                            decision__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(AgentInteractionRespondInput {
+                    interaction_id: interaction_id__.unwrap_or_default(),
+                    expected_revision: expected_revision__.unwrap_or_default(),
+                    decision: decision__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentInteractionRespondInput", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentInteractionRespondResult {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.interaction.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentInteractionRespondResult", len)?;
+        if let Some(v) = self.interaction.as_ref() {
+            struct_ser.serialize_field("interaction", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentInteractionRespondResult {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "interaction",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Interaction,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "interaction" => Ok(GeneratedField::Interaction),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentInteractionRespondResult;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentInteractionRespondResult")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentInteractionRespondResult, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut interaction__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Interaction => {
+                            if interaction__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("interaction"));
+                            }
+                            interaction__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(AgentInteractionRespondResult {
+                    interaction: interaction__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentInteractionRespondResult", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentLimits {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.max_page_size != 0 {
+            len += 1;
+        }
+        if self.max_submit_bytes != 0 {
+            len += 1;
+        }
+        if self.max_message_read_bytes != 0 {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentLimits", len)?;
+        if self.max_page_size != 0 {
+            struct_ser.serialize_field("maxPageSize", &self.max_page_size)?;
+        }
+        if self.max_submit_bytes != 0 {
+            struct_ser.serialize_field("maxSubmitBytes", &self.max_submit_bytes)?;
+        }
+        if self.max_message_read_bytes != 0 {
+            struct_ser.serialize_field("maxMessageReadBytes", &self.max_message_read_bytes)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentLimits {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "max_page_size",
+            "maxPageSize",
+            "max_submit_bytes",
+            "maxSubmitBytes",
+            "max_message_read_bytes",
+            "maxMessageReadBytes",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            MaxPageSize,
+            MaxSubmitBytes,
+            MaxMessageReadBytes,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "maxPageSize" | "max_page_size" => Ok(GeneratedField::MaxPageSize),
+                            "maxSubmitBytes" | "max_submit_bytes" => Ok(GeneratedField::MaxSubmitBytes),
+                            "maxMessageReadBytes" | "max_message_read_bytes" => Ok(GeneratedField::MaxMessageReadBytes),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentLimits;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentLimits")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentLimits, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut max_page_size__ = None;
+                let mut max_submit_bytes__ = None;
+                let mut max_message_read_bytes__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::MaxPageSize => {
+                            if max_page_size__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("maxPageSize"));
+                            }
+                            max_page_size__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::MaxSubmitBytes => {
+                            if max_submit_bytes__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("maxSubmitBytes"));
+                            }
+                            max_submit_bytes__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::MaxMessageReadBytes => {
+                            if max_message_read_bytes__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("maxMessageReadBytes"));
+                            }
+                            max_message_read_bytes__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                    }
+                }
+                Ok(AgentLimits {
+                    max_page_size: max_page_size__.unwrap_or_default(),
+                    max_submit_bytes: max_submit_bytes__.unwrap_or_default(),
+                    max_message_read_bytes: max_message_read_bytes__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentLimits", FIELDS, GeneratedVisitor)
     }
 }
 impl serde::Serialize for AgentLinkSummary {
@@ -333,6 +4613,1054 @@ impl<'de> serde::Deserialize<'de> for AgentLinkSummary {
             }
         }
         deserializer.deserialize_struct("conex.AgentLinkSummary", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentMessage {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.id.is_empty() {
+            len += 1;
+        }
+        if !self.conversation_id.is_empty() {
+            len += 1;
+        }
+        if !self.execution_id.is_empty() {
+            len += 1;
+        }
+        if !self.role.is_empty() {
+            len += 1;
+        }
+        if !self.state.is_empty() {
+            len += 1;
+        }
+        if self.revision != 0 {
+            len += 1;
+        }
+        if !self.parts.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentMessage", len)?;
+        if !self.id.is_empty() {
+            struct_ser.serialize_field("id", &self.id)?;
+        }
+        if !self.conversation_id.is_empty() {
+            struct_ser.serialize_field("conversationId", &self.conversation_id)?;
+        }
+        if !self.execution_id.is_empty() {
+            struct_ser.serialize_field("executionId", &self.execution_id)?;
+        }
+        if !self.role.is_empty() {
+            struct_ser.serialize_field("role", &self.role)?;
+        }
+        if !self.state.is_empty() {
+            struct_ser.serialize_field("state", &self.state)?;
+        }
+        if self.revision != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("revision", ToString::to_string(&self.revision).as_str())?;
+        }
+        if !self.parts.is_empty() {
+            struct_ser.serialize_field("parts", &self.parts)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentMessage {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "id",
+            "conversation_id",
+            "conversationId",
+            "execution_id",
+            "executionId",
+            "role",
+            "state",
+            "revision",
+            "parts",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Id,
+            ConversationId,
+            ExecutionId,
+            Role,
+            State,
+            Revision,
+            Parts,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "id" => Ok(GeneratedField::Id),
+                            "conversationId" | "conversation_id" => Ok(GeneratedField::ConversationId),
+                            "executionId" | "execution_id" => Ok(GeneratedField::ExecutionId),
+                            "role" => Ok(GeneratedField::Role),
+                            "state" => Ok(GeneratedField::State),
+                            "revision" => Ok(GeneratedField::Revision),
+                            "parts" => Ok(GeneratedField::Parts),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentMessage;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentMessage")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentMessage, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut id__ = None;
+                let mut conversation_id__ = None;
+                let mut execution_id__ = None;
+                let mut role__ = None;
+                let mut state__ = None;
+                let mut revision__ = None;
+                let mut parts__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Id => {
+                            if id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("id"));
+                            }
+                            id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ConversationId => {
+                            if conversation_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("conversationId"));
+                            }
+                            conversation_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ExecutionId => {
+                            if execution_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("executionId"));
+                            }
+                            execution_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Role => {
+                            if role__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("role"));
+                            }
+                            role__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::State => {
+                            if state__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("state"));
+                            }
+                            state__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Revision => {
+                            if revision__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("revision"));
+                            }
+                            revision__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::Parts => {
+                            if parts__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("parts"));
+                            }
+                            parts__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(AgentMessage {
+                    id: id__.unwrap_or_default(),
+                    conversation_id: conversation_id__.unwrap_or_default(),
+                    execution_id: execution_id__.unwrap_or_default(),
+                    role: role__.unwrap_or_default(),
+                    state: state__.unwrap_or_default(),
+                    revision: revision__.unwrap_or_default(),
+                    parts: parts__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentMessage", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentMessageCompleted {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.message_id.is_empty() {
+            len += 1;
+        }
+        if self.revision != 0 {
+            len += 1;
+        }
+        if !self.state.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentMessageCompleted", len)?;
+        if !self.message_id.is_empty() {
+            struct_ser.serialize_field("messageId", &self.message_id)?;
+        }
+        if self.revision != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("revision", ToString::to_string(&self.revision).as_str())?;
+        }
+        if !self.state.is_empty() {
+            struct_ser.serialize_field("state", &self.state)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentMessageCompleted {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "message_id",
+            "messageId",
+            "revision",
+            "state",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            MessageId,
+            Revision,
+            State,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "messageId" | "message_id" => Ok(GeneratedField::MessageId),
+                            "revision" => Ok(GeneratedField::Revision),
+                            "state" => Ok(GeneratedField::State),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentMessageCompleted;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentMessageCompleted")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentMessageCompleted, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut message_id__ = None;
+                let mut revision__ = None;
+                let mut state__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::MessageId => {
+                            if message_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("messageId"));
+                            }
+                            message_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Revision => {
+                            if revision__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("revision"));
+                            }
+                            revision__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::State => {
+                            if state__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("state"));
+                            }
+                            state__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(AgentMessageCompleted {
+                    message_id: message_id__.unwrap_or_default(),
+                    revision: revision__.unwrap_or_default(),
+                    state: state__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentMessageCompleted", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentMessageDelta {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.message_id.is_empty() {
+            len += 1;
+        }
+        if self.part_index != 0 {
+            len += 1;
+        }
+        if self.offset_bytes != 0 {
+            len += 1;
+        }
+        if !self.text.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentMessageDelta", len)?;
+        if !self.message_id.is_empty() {
+            struct_ser.serialize_field("messageId", &self.message_id)?;
+        }
+        if self.part_index != 0 {
+            struct_ser.serialize_field("partIndex", &self.part_index)?;
+        }
+        if self.offset_bytes != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("offsetBytes", ToString::to_string(&self.offset_bytes).as_str())?;
+        }
+        if !self.text.is_empty() {
+            struct_ser.serialize_field("text", &self.text)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentMessageDelta {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "message_id",
+            "messageId",
+            "part_index",
+            "partIndex",
+            "offset_bytes",
+            "offsetBytes",
+            "text",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            MessageId,
+            PartIndex,
+            OffsetBytes,
+            Text,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "messageId" | "message_id" => Ok(GeneratedField::MessageId),
+                            "partIndex" | "part_index" => Ok(GeneratedField::PartIndex),
+                            "offsetBytes" | "offset_bytes" => Ok(GeneratedField::OffsetBytes),
+                            "text" => Ok(GeneratedField::Text),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentMessageDelta;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentMessageDelta")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentMessageDelta, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut message_id__ = None;
+                let mut part_index__ = None;
+                let mut offset_bytes__ = None;
+                let mut text__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::MessageId => {
+                            if message_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("messageId"));
+                            }
+                            message_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::PartIndex => {
+                            if part_index__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("partIndex"));
+                            }
+                            part_index__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::OffsetBytes => {
+                            if offset_bytes__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("offsetBytes"));
+                            }
+                            offset_bytes__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::Text => {
+                            if text__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("text"));
+                            }
+                            text__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(AgentMessageDelta {
+                    message_id: message_id__.unwrap_or_default(),
+                    part_index: part_index__.unwrap_or_default(),
+                    offset_bytes: offset_bytes__.unwrap_or_default(),
+                    text: text__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentMessageDelta", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentMessagePart {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.part.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentMessagePart", len)?;
+        if let Some(v) = self.part.as_ref() {
+            match v {
+                agent_message_part::Part::Text(v) => {
+                    struct_ser.serialize_field("text", v)?;
+                }
+                agent_message_part::Part::Tool(v) => {
+                    struct_ser.serialize_field("tool", v)?;
+                }
+            }
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentMessagePart {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "text",
+            "tool",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Text,
+            Tool,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "text" => Ok(GeneratedField::Text),
+                            "tool" => Ok(GeneratedField::Tool),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentMessagePart;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentMessagePart")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentMessagePart, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut part__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Text => {
+                            if part__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("text"));
+                            }
+                            part__ = map_.next_value::<::std::option::Option<_>>()?.map(agent_message_part::Part::Text)
+;
+                        }
+                        GeneratedField::Tool => {
+                            if part__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("tool"));
+                            }
+                            part__ = map_.next_value::<::std::option::Option<_>>()?.map(agent_message_part::Part::Tool)
+;
+                        }
+                    }
+                }
+                Ok(AgentMessagePart {
+                    part: part__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentMessagePart", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentMessageReadInput {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.conversation_id.is_empty() {
+            len += 1;
+        }
+        if !self.message_id.is_empty() {
+            len += 1;
+        }
+        if self.part_index != 0 {
+            len += 1;
+        }
+        if self.offset_bytes != 0 {
+            len += 1;
+        }
+        if self.max_bytes.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentMessageReadInput", len)?;
+        if !self.conversation_id.is_empty() {
+            struct_ser.serialize_field("conversationId", &self.conversation_id)?;
+        }
+        if !self.message_id.is_empty() {
+            struct_ser.serialize_field("messageId", &self.message_id)?;
+        }
+        if self.part_index != 0 {
+            struct_ser.serialize_field("partIndex", &self.part_index)?;
+        }
+        if self.offset_bytes != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("offsetBytes", ToString::to_string(&self.offset_bytes).as_str())?;
+        }
+        if let Some(v) = self.max_bytes.as_ref() {
+            struct_ser.serialize_field("maxBytes", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentMessageReadInput {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "conversation_id",
+            "conversationId",
+            "message_id",
+            "messageId",
+            "part_index",
+            "partIndex",
+            "offset_bytes",
+            "offsetBytes",
+            "max_bytes",
+            "maxBytes",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            ConversationId,
+            MessageId,
+            PartIndex,
+            OffsetBytes,
+            MaxBytes,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "conversationId" | "conversation_id" => Ok(GeneratedField::ConversationId),
+                            "messageId" | "message_id" => Ok(GeneratedField::MessageId),
+                            "partIndex" | "part_index" => Ok(GeneratedField::PartIndex),
+                            "offsetBytes" | "offset_bytes" => Ok(GeneratedField::OffsetBytes),
+                            "maxBytes" | "max_bytes" => Ok(GeneratedField::MaxBytes),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentMessageReadInput;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentMessageReadInput")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentMessageReadInput, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut conversation_id__ = None;
+                let mut message_id__ = None;
+                let mut part_index__ = None;
+                let mut offset_bytes__ = None;
+                let mut max_bytes__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::ConversationId => {
+                            if conversation_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("conversationId"));
+                            }
+                            conversation_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::MessageId => {
+                            if message_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("messageId"));
+                            }
+                            message_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::PartIndex => {
+                            if part_index__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("partIndex"));
+                            }
+                            part_index__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::OffsetBytes => {
+                            if offset_bytes__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("offsetBytes"));
+                            }
+                            offset_bytes__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::MaxBytes => {
+                            if max_bytes__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("maxBytes"));
+                            }
+                            max_bytes__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                    }
+                }
+                Ok(AgentMessageReadInput {
+                    conversation_id: conversation_id__.unwrap_or_default(),
+                    message_id: message_id__.unwrap_or_default(),
+                    part_index: part_index__.unwrap_or_default(),
+                    offset_bytes: offset_bytes__.unwrap_or_default(),
+                    max_bytes: max_bytes__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentMessageReadInput", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentMessageReadResult {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.text.is_empty() {
+            len += 1;
+        }
+        if self.offset_bytes != 0 {
+            len += 1;
+        }
+        if self.next_offset_bytes != 0 {
+            len += 1;
+        }
+        if self.total_bytes != 0 {
+            len += 1;
+        }
+        if !self.state.is_empty() {
+            len += 1;
+        }
+        if self.revision != 0 {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentMessageReadResult", len)?;
+        if !self.text.is_empty() {
+            struct_ser.serialize_field("text", &self.text)?;
+        }
+        if self.offset_bytes != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("offsetBytes", ToString::to_string(&self.offset_bytes).as_str())?;
+        }
+        if self.next_offset_bytes != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("nextOffsetBytes", ToString::to_string(&self.next_offset_bytes).as_str())?;
+        }
+        if self.total_bytes != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("totalBytes", ToString::to_string(&self.total_bytes).as_str())?;
+        }
+        if !self.state.is_empty() {
+            struct_ser.serialize_field("state", &self.state)?;
+        }
+        if self.revision != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("revision", ToString::to_string(&self.revision).as_str())?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentMessageReadResult {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "text",
+            "offset_bytes",
+            "offsetBytes",
+            "next_offset_bytes",
+            "nextOffsetBytes",
+            "total_bytes",
+            "totalBytes",
+            "state",
+            "revision",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Text,
+            OffsetBytes,
+            NextOffsetBytes,
+            TotalBytes,
+            State,
+            Revision,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "text" => Ok(GeneratedField::Text),
+                            "offsetBytes" | "offset_bytes" => Ok(GeneratedField::OffsetBytes),
+                            "nextOffsetBytes" | "next_offset_bytes" => Ok(GeneratedField::NextOffsetBytes),
+                            "totalBytes" | "total_bytes" => Ok(GeneratedField::TotalBytes),
+                            "state" => Ok(GeneratedField::State),
+                            "revision" => Ok(GeneratedField::Revision),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentMessageReadResult;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentMessageReadResult")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentMessageReadResult, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut text__ = None;
+                let mut offset_bytes__ = None;
+                let mut next_offset_bytes__ = None;
+                let mut total_bytes__ = None;
+                let mut state__ = None;
+                let mut revision__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Text => {
+                            if text__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("text"));
+                            }
+                            text__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::OffsetBytes => {
+                            if offset_bytes__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("offsetBytes"));
+                            }
+                            offset_bytes__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::NextOffsetBytes => {
+                            if next_offset_bytes__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nextOffsetBytes"));
+                            }
+                            next_offset_bytes__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::TotalBytes => {
+                            if total_bytes__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("totalBytes"));
+                            }
+                            total_bytes__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::State => {
+                            if state__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("state"));
+                            }
+                            state__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Revision => {
+                            if revision__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("revision"));
+                            }
+                            revision__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                    }
+                }
+                Ok(AgentMessageReadResult {
+                    text: text__.unwrap_or_default(),
+                    offset_bytes: offset_bytes__.unwrap_or_default(),
+                    next_offset_bytes: next_offset_bytes__.unwrap_or_default(),
+                    total_bytes: total_bytes__.unwrap_or_default(),
+                    state: state__.unwrap_or_default(),
+                    revision: revision__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentMessageReadResult", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentPageInfo {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.next_page_token.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentPageInfo", len)?;
+        if let Some(v) = self.next_page_token.as_ref() {
+            struct_ser.serialize_field("nextPageToken", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentPageInfo {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "next_page_token",
+            "nextPageToken",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            NextPageToken,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "nextPageToken" | "next_page_token" => Ok(GeneratedField::NextPageToken),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentPageInfo;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentPageInfo")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentPageInfo, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut next_page_token__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::NextPageToken => {
+                            if next_page_token__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nextPageToken"));
+                            }
+                            next_page_token__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(AgentPageInfo {
+                    next_page_token: next_page_token__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentPageInfo", FIELDS, GeneratedVisitor)
     }
 }
 impl serde::Serialize for AgentRegisterRequest {
@@ -641,6 +5969,1905 @@ impl<'de> serde::Deserialize<'de> for AgentRegisterResult {
             }
         }
         deserializer.deserialize_struct("conex.AgentRegisterResult", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentRelationshipListInput {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.conversation_id.is_empty() {
+            len += 1;
+        }
+        if self.limit.is_some() {
+            len += 1;
+        }
+        if self.page_token.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentRelationshipListInput", len)?;
+        if !self.conversation_id.is_empty() {
+            struct_ser.serialize_field("conversationId", &self.conversation_id)?;
+        }
+        if let Some(v) = self.limit.as_ref() {
+            struct_ser.serialize_field("limit", v)?;
+        }
+        if let Some(v) = self.page_token.as_ref() {
+            struct_ser.serialize_field("pageToken", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentRelationshipListInput {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "conversation_id",
+            "conversationId",
+            "limit",
+            "page_token",
+            "pageToken",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            ConversationId,
+            Limit,
+            PageToken,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "conversationId" | "conversation_id" => Ok(GeneratedField::ConversationId),
+                            "limit" => Ok(GeneratedField::Limit),
+                            "pageToken" | "page_token" => Ok(GeneratedField::PageToken),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentRelationshipListInput;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentRelationshipListInput")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentRelationshipListInput, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut conversation_id__ = None;
+                let mut limit__ = None;
+                let mut page_token__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::ConversationId => {
+                            if conversation_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("conversationId"));
+                            }
+                            conversation_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Limit => {
+                            if limit__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("limit"));
+                            }
+                            limit__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                        GeneratedField::PageToken => {
+                            if page_token__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("pageToken"));
+                            }
+                            page_token__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(AgentRelationshipListInput {
+                    conversation_id: conversation_id__.unwrap_or_default(),
+                    limit: limit__,
+                    page_token: page_token__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentRelationshipListInput", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentRelationshipListResult {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.items.is_empty() {
+            len += 1;
+        }
+        if self.next_page_token.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentRelationshipListResult", len)?;
+        if !self.items.is_empty() {
+            struct_ser.serialize_field("items", &self.items)?;
+        }
+        if let Some(v) = self.next_page_token.as_ref() {
+            struct_ser.serialize_field("nextPageToken", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentRelationshipListResult {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "items",
+            "next_page_token",
+            "nextPageToken",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Items,
+            NextPageToken,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "items" => Ok(GeneratedField::Items),
+                            "nextPageToken" | "next_page_token" => Ok(GeneratedField::NextPageToken),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentRelationshipListResult;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentRelationshipListResult")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentRelationshipListResult, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut items__ = None;
+                let mut next_page_token__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Items => {
+                            if items__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("items"));
+                            }
+                            items__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::NextPageToken => {
+                            if next_page_token__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nextPageToken"));
+                            }
+                            next_page_token__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(AgentRelationshipListResult {
+                    items: items__.unwrap_or_default(),
+                    next_page_token: next_page_token__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentRelationshipListResult", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentSnapshot {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.conversation.is_some() {
+            len += 1;
+        }
+        if !self.executions.is_empty() {
+            len += 1;
+        }
+        if !self.interactions.is_empty() {
+            len += 1;
+        }
+        if !self.messages.is_empty() {
+            len += 1;
+        }
+        if !self.relationships.is_empty() {
+            len += 1;
+        }
+        if self.cursor.is_some() {
+            len += 1;
+        }
+        if self.first_available != 0 {
+            len += 1;
+        }
+        if self.history.is_some() {
+            len += 1;
+        }
+        if self.relationships_has_more {
+            len += 1;
+        }
+        if !self.quality.is_empty() {
+            len += 1;
+        }
+        if !self.gaps.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentSnapshot", len)?;
+        if let Some(v) = self.conversation.as_ref() {
+            struct_ser.serialize_field("conversation", v)?;
+        }
+        if !self.executions.is_empty() {
+            struct_ser.serialize_field("executions", &self.executions)?;
+        }
+        if !self.interactions.is_empty() {
+            struct_ser.serialize_field("interactions", &self.interactions)?;
+        }
+        if !self.messages.is_empty() {
+            struct_ser.serialize_field("messages", &self.messages)?;
+        }
+        if !self.relationships.is_empty() {
+            struct_ser.serialize_field("relationships", &self.relationships)?;
+        }
+        if let Some(v) = self.cursor.as_ref() {
+            struct_ser.serialize_field("cursor", v)?;
+        }
+        if self.first_available != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("firstAvailable", ToString::to_string(&self.first_available).as_str())?;
+        }
+        if let Some(v) = self.history.as_ref() {
+            struct_ser.serialize_field("history", v)?;
+        }
+        if self.relationships_has_more {
+            struct_ser.serialize_field("relationshipsHasMore", &self.relationships_has_more)?;
+        }
+        if !self.quality.is_empty() {
+            struct_ser.serialize_field("quality", &self.quality)?;
+        }
+        if !self.gaps.is_empty() {
+            struct_ser.serialize_field("gaps", &self.gaps)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentSnapshot {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "conversation",
+            "executions",
+            "interactions",
+            "messages",
+            "relationships",
+            "cursor",
+            "first_available",
+            "firstAvailable",
+            "history",
+            "relationships_has_more",
+            "relationshipsHasMore",
+            "quality",
+            "gaps",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Conversation,
+            Executions,
+            Interactions,
+            Messages,
+            Relationships,
+            Cursor,
+            FirstAvailable,
+            History,
+            RelationshipsHasMore,
+            Quality,
+            Gaps,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "conversation" => Ok(GeneratedField::Conversation),
+                            "executions" => Ok(GeneratedField::Executions),
+                            "interactions" => Ok(GeneratedField::Interactions),
+                            "messages" => Ok(GeneratedField::Messages),
+                            "relationships" => Ok(GeneratedField::Relationships),
+                            "cursor" => Ok(GeneratedField::Cursor),
+                            "firstAvailable" | "first_available" => Ok(GeneratedField::FirstAvailable),
+                            "history" => Ok(GeneratedField::History),
+                            "relationshipsHasMore" | "relationships_has_more" => Ok(GeneratedField::RelationshipsHasMore),
+                            "quality" => Ok(GeneratedField::Quality),
+                            "gaps" => Ok(GeneratedField::Gaps),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentSnapshot;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentSnapshot")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentSnapshot, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut conversation__ = None;
+                let mut executions__ = None;
+                let mut interactions__ = None;
+                let mut messages__ = None;
+                let mut relationships__ = None;
+                let mut cursor__ = None;
+                let mut first_available__ = None;
+                let mut history__ = None;
+                let mut relationships_has_more__ = None;
+                let mut quality__ = None;
+                let mut gaps__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Conversation => {
+                            if conversation__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("conversation"));
+                            }
+                            conversation__ = map_.next_value()?;
+                        }
+                        GeneratedField::Executions => {
+                            if executions__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("executions"));
+                            }
+                            executions__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Interactions => {
+                            if interactions__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("interactions"));
+                            }
+                            interactions__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Messages => {
+                            if messages__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("messages"));
+                            }
+                            messages__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Relationships => {
+                            if relationships__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("relationships"));
+                            }
+                            relationships__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Cursor => {
+                            if cursor__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("cursor"));
+                            }
+                            cursor__ = map_.next_value()?;
+                        }
+                        GeneratedField::FirstAvailable => {
+                            if first_available__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("firstAvailable"));
+                            }
+                            first_available__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::History => {
+                            if history__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("history"));
+                            }
+                            history__ = map_.next_value()?;
+                        }
+                        GeneratedField::RelationshipsHasMore => {
+                            if relationships_has_more__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("relationshipsHasMore"));
+                            }
+                            relationships_has_more__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Quality => {
+                            if quality__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("quality"));
+                            }
+                            quality__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Gaps => {
+                            if gaps__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("gaps"));
+                            }
+                            gaps__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(AgentSnapshot {
+                    conversation: conversation__,
+                    executions: executions__.unwrap_or_default(),
+                    interactions: interactions__.unwrap_or_default(),
+                    messages: messages__.unwrap_or_default(),
+                    relationships: relationships__.unwrap_or_default(),
+                    cursor: cursor__,
+                    first_available: first_available__.unwrap_or_default(),
+                    history: history__,
+                    relationships_has_more: relationships_has_more__.unwrap_or_default(),
+                    quality: quality__.unwrap_or_default(),
+                    gaps: gaps__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentSnapshot", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentSnapshotInput {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.conversation_id.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentSnapshotInput", len)?;
+        if !self.conversation_id.is_empty() {
+            struct_ser.serialize_field("conversationId", &self.conversation_id)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentSnapshotInput {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "conversation_id",
+            "conversationId",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            ConversationId,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "conversationId" | "conversation_id" => Ok(GeneratedField::ConversationId),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentSnapshotInput;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentSnapshotInput")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentSnapshotInput, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut conversation_id__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::ConversationId => {
+                            if conversation_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("conversationId"));
+                            }
+                            conversation_id__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(AgentSnapshotInput {
+                    conversation_id: conversation_id__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentSnapshotInput", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentSnapshotResult {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.snapshot.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentSnapshotResult", len)?;
+        if let Some(v) = self.snapshot.as_ref() {
+            struct_ser.serialize_field("snapshot", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentSnapshotResult {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "snapshot",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Snapshot,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "snapshot" => Ok(GeneratedField::Snapshot),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentSnapshotResult;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentSnapshotResult")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentSnapshotResult, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut snapshot__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Snapshot => {
+                            if snapshot__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("snapshot"));
+                            }
+                            snapshot__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(AgentSnapshotResult {
+                    snapshot: snapshot__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentSnapshotResult", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentSubagentCancelInput {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.execution_id.is_empty() {
+            len += 1;
+        }
+        if self.expected_generation != 0 {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentSubagentCancelInput", len)?;
+        if !self.execution_id.is_empty() {
+            struct_ser.serialize_field("executionId", &self.execution_id)?;
+        }
+        if self.expected_generation != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("expectedGeneration", ToString::to_string(&self.expected_generation).as_str())?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentSubagentCancelInput {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "execution_id",
+            "executionId",
+            "expected_generation",
+            "expectedGeneration",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            ExecutionId,
+            ExpectedGeneration,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "executionId" | "execution_id" => Ok(GeneratedField::ExecutionId),
+                            "expectedGeneration" | "expected_generation" => Ok(GeneratedField::ExpectedGeneration),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentSubagentCancelInput;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentSubagentCancelInput")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentSubagentCancelInput, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut execution_id__ = None;
+                let mut expected_generation__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::ExecutionId => {
+                            if execution_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("executionId"));
+                            }
+                            execution_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ExpectedGeneration => {
+                            if expected_generation__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("expectedGeneration"));
+                            }
+                            expected_generation__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                    }
+                }
+                Ok(AgentSubagentCancelInput {
+                    execution_id: execution_id__.unwrap_or_default(),
+                    expected_generation: expected_generation__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentSubagentCancelInput", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentSubagentCancelResult {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.execution_id.is_empty() {
+            len += 1;
+        }
+        if self.requested {
+            len += 1;
+        }
+        if !self.state.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentSubagentCancelResult", len)?;
+        if !self.execution_id.is_empty() {
+            struct_ser.serialize_field("executionId", &self.execution_id)?;
+        }
+        if self.requested {
+            struct_ser.serialize_field("requested", &self.requested)?;
+        }
+        if !self.state.is_empty() {
+            struct_ser.serialize_field("state", &self.state)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentSubagentCancelResult {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "execution_id",
+            "executionId",
+            "requested",
+            "state",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            ExecutionId,
+            Requested,
+            State,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "executionId" | "execution_id" => Ok(GeneratedField::ExecutionId),
+                            "requested" => Ok(GeneratedField::Requested),
+                            "state" => Ok(GeneratedField::State),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentSubagentCancelResult;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentSubagentCancelResult")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentSubagentCancelResult, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut execution_id__ = None;
+                let mut requested__ = None;
+                let mut state__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::ExecutionId => {
+                            if execution_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("executionId"));
+                            }
+                            execution_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Requested => {
+                            if requested__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("requested"));
+                            }
+                            requested__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::State => {
+                            if state__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("state"));
+                            }
+                            state__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(AgentSubagentCancelResult {
+                    execution_id: execution_id__.unwrap_or_default(),
+                    requested: requested__.unwrap_or_default(),
+                    state: state__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentSubagentCancelResult", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentSubagentListInput {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.execution_id.is_empty() {
+            len += 1;
+        }
+        if self.limit.is_some() {
+            len += 1;
+        }
+        if self.page_token.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentSubagentListInput", len)?;
+        if !self.execution_id.is_empty() {
+            struct_ser.serialize_field("executionId", &self.execution_id)?;
+        }
+        if let Some(v) = self.limit.as_ref() {
+            struct_ser.serialize_field("limit", v)?;
+        }
+        if let Some(v) = self.page_token.as_ref() {
+            struct_ser.serialize_field("pageToken", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentSubagentListInput {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "execution_id",
+            "executionId",
+            "limit",
+            "page_token",
+            "pageToken",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            ExecutionId,
+            Limit,
+            PageToken,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "executionId" | "execution_id" => Ok(GeneratedField::ExecutionId),
+                            "limit" => Ok(GeneratedField::Limit),
+                            "pageToken" | "page_token" => Ok(GeneratedField::PageToken),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentSubagentListInput;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentSubagentListInput")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentSubagentListInput, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut execution_id__ = None;
+                let mut limit__ = None;
+                let mut page_token__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::ExecutionId => {
+                            if execution_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("executionId"));
+                            }
+                            execution_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Limit => {
+                            if limit__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("limit"));
+                            }
+                            limit__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                        GeneratedField::PageToken => {
+                            if page_token__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("pageToken"));
+                            }
+                            page_token__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(AgentSubagentListInput {
+                    execution_id: execution_id__.unwrap_or_default(),
+                    limit: limit__,
+                    page_token: page_token__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentSubagentListInput", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentSubagentListResult {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.items.is_empty() {
+            len += 1;
+        }
+        if self.next_page_token.is_some() {
+            len += 1;
+        }
+        if !self.quality.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentSubagentListResult", len)?;
+        if !self.items.is_empty() {
+            struct_ser.serialize_field("items", &self.items)?;
+        }
+        if let Some(v) = self.next_page_token.as_ref() {
+            struct_ser.serialize_field("nextPageToken", v)?;
+        }
+        if !self.quality.is_empty() {
+            struct_ser.serialize_field("quality", &self.quality)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentSubagentListResult {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "items",
+            "next_page_token",
+            "nextPageToken",
+            "quality",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Items,
+            NextPageToken,
+            Quality,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "items" => Ok(GeneratedField::Items),
+                            "nextPageToken" | "next_page_token" => Ok(GeneratedField::NextPageToken),
+                            "quality" => Ok(GeneratedField::Quality),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentSubagentListResult;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentSubagentListResult")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentSubagentListResult, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut items__ = None;
+                let mut next_page_token__ = None;
+                let mut quality__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Items => {
+                            if items__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("items"));
+                            }
+                            items__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::NextPageToken => {
+                            if next_page_token__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nextPageToken"));
+                            }
+                            next_page_token__ = map_.next_value()?;
+                        }
+                        GeneratedField::Quality => {
+                            if quality__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("quality"));
+                            }
+                            quality__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(AgentSubagentListResult {
+                    items: items__.unwrap_or_default(),
+                    next_page_token: next_page_token__,
+                    quality: quality__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentSubagentListResult", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentSubmitInput {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.conversation_id.is_empty() {
+            len += 1;
+        }
+        if !self.idempotency_key.is_empty() {
+            len += 1;
+        }
+        if !self.content.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentSubmitInput", len)?;
+        if !self.conversation_id.is_empty() {
+            struct_ser.serialize_field("conversationId", &self.conversation_id)?;
+        }
+        if !self.idempotency_key.is_empty() {
+            struct_ser.serialize_field("idempotencyKey", &self.idempotency_key)?;
+        }
+        if !self.content.is_empty() {
+            struct_ser.serialize_field("content", &self.content)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentSubmitInput {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "conversation_id",
+            "conversationId",
+            "idempotency_key",
+            "idempotencyKey",
+            "content",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            ConversationId,
+            IdempotencyKey,
+            Content,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "conversationId" | "conversation_id" => Ok(GeneratedField::ConversationId),
+                            "idempotencyKey" | "idempotency_key" => Ok(GeneratedField::IdempotencyKey),
+                            "content" => Ok(GeneratedField::Content),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentSubmitInput;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentSubmitInput")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentSubmitInput, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut conversation_id__ = None;
+                let mut idempotency_key__ = None;
+                let mut content__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::ConversationId => {
+                            if conversation_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("conversationId"));
+                            }
+                            conversation_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::IdempotencyKey => {
+                            if idempotency_key__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("idempotencyKey"));
+                            }
+                            idempotency_key__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Content => {
+                            if content__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("content"));
+                            }
+                            content__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(AgentSubmitInput {
+                    conversation_id: conversation_id__.unwrap_or_default(),
+                    idempotency_key: idempotency_key__.unwrap_or_default(),
+                    content: content__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentSubmitInput", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentSubmitResult {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.execution.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentSubmitResult", len)?;
+        if let Some(v) = self.execution.as_ref() {
+            struct_ser.serialize_field("execution", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentSubmitResult {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "execution",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Execution,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "execution" => Ok(GeneratedField::Execution),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentSubmitResult;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentSubmitResult")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentSubmitResult, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut execution__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Execution => {
+                            if execution__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("execution"));
+                            }
+                            execution__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(AgentSubmitResult {
+                    execution: execution__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentSubmitResult", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentTextPart {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.text.is_empty() {
+            len += 1;
+        }
+        if self.offset_bytes != 0 {
+            len += 1;
+        }
+        if self.total_bytes != 0 {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentTextPart", len)?;
+        if !self.text.is_empty() {
+            struct_ser.serialize_field("text", &self.text)?;
+        }
+        if self.offset_bytes != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("offsetBytes", ToString::to_string(&self.offset_bytes).as_str())?;
+        }
+        if self.total_bytes != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("totalBytes", ToString::to_string(&self.total_bytes).as_str())?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentTextPart {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "text",
+            "offset_bytes",
+            "offsetBytes",
+            "total_bytes",
+            "totalBytes",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Text,
+            OffsetBytes,
+            TotalBytes,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "text" => Ok(GeneratedField::Text),
+                            "offsetBytes" | "offset_bytes" => Ok(GeneratedField::OffsetBytes),
+                            "totalBytes" | "total_bytes" => Ok(GeneratedField::TotalBytes),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentTextPart;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentTextPart")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentTextPart, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut text__ = None;
+                let mut offset_bytes__ = None;
+                let mut total_bytes__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Text => {
+                            if text__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("text"));
+                            }
+                            text__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::OffsetBytes => {
+                            if offset_bytes__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("offsetBytes"));
+                            }
+                            offset_bytes__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::TotalBytes => {
+                            if total_bytes__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("totalBytes"));
+                            }
+                            total_bytes__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                    }
+                }
+                Ok(AgentTextPart {
+                    text: text__.unwrap_or_default(),
+                    offset_bytes: offset_bytes__.unwrap_or_default(),
+                    total_bytes: total_bytes__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentTextPart", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentToolPart {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.name.is_empty() {
+            len += 1;
+        }
+        if !self.phase.is_empty() {
+            len += 1;
+        }
+        if !self.summary.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentToolPart", len)?;
+        if !self.name.is_empty() {
+            struct_ser.serialize_field("name", &self.name)?;
+        }
+        if !self.phase.is_empty() {
+            struct_ser.serialize_field("phase", &self.phase)?;
+        }
+        if !self.summary.is_empty() {
+            struct_ser.serialize_field("summary", &self.summary)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentToolPart {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "name",
+            "phase",
+            "summary",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Name,
+            Phase,
+            Summary,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "name" => Ok(GeneratedField::Name),
+                            "phase" => Ok(GeneratedField::Phase),
+                            "summary" => Ok(GeneratedField::Summary),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentToolPart;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentToolPart")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentToolPart, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut name__ = None;
+                let mut phase__ = None;
+                let mut summary__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Name => {
+                            if name__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("name"));
+                            }
+                            name__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Phase => {
+                            if phase__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("phase"));
+                            }
+                            phase__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Summary => {
+                            if summary__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("summary"));
+                            }
+                            summary__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(AgentToolPart {
+                    name: name__.unwrap_or_default(),
+                    phase: phase__.unwrap_or_default(),
+                    summary: summary__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentToolPart", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentWorkspaceListInput {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.endpoint_id.is_empty() {
+            len += 1;
+        }
+        if self.limit.is_some() {
+            len += 1;
+        }
+        if self.page_token.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentWorkspaceListInput", len)?;
+        if !self.endpoint_id.is_empty() {
+            struct_ser.serialize_field("endpointId", &self.endpoint_id)?;
+        }
+        if let Some(v) = self.limit.as_ref() {
+            struct_ser.serialize_field("limit", v)?;
+        }
+        if let Some(v) = self.page_token.as_ref() {
+            struct_ser.serialize_field("pageToken", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentWorkspaceListInput {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "endpoint_id",
+            "endpointId",
+            "limit",
+            "page_token",
+            "pageToken",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            EndpointId,
+            Limit,
+            PageToken,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "endpointId" | "endpoint_id" => Ok(GeneratedField::EndpointId),
+                            "limit" => Ok(GeneratedField::Limit),
+                            "pageToken" | "page_token" => Ok(GeneratedField::PageToken),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentWorkspaceListInput;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentWorkspaceListInput")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentWorkspaceListInput, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut endpoint_id__ = None;
+                let mut limit__ = None;
+                let mut page_token__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::EndpointId => {
+                            if endpoint_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("endpointId"));
+                            }
+                            endpoint_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Limit => {
+                            if limit__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("limit"));
+                            }
+                            limit__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                        GeneratedField::PageToken => {
+                            if page_token__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("pageToken"));
+                            }
+                            page_token__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(AgentWorkspaceListInput {
+                    endpoint_id: endpoint_id__.unwrap_or_default(),
+                    limit: limit__,
+                    page_token: page_token__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentWorkspaceListInput", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AgentWorkspaceListResult {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.items.is_empty() {
+            len += 1;
+        }
+        if self.next_page_token.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AgentWorkspaceListResult", len)?;
+        if !self.items.is_empty() {
+            struct_ser.serialize_field("items", &self.items)?;
+        }
+        if let Some(v) = self.next_page_token.as_ref() {
+            struct_ser.serialize_field("nextPageToken", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AgentWorkspaceListResult {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "items",
+            "next_page_token",
+            "nextPageToken",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Items,
+            NextPageToken,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "items" => Ok(GeneratedField::Items),
+                            "nextPageToken" | "next_page_token" => Ok(GeneratedField::NextPageToken),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AgentWorkspaceListResult;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AgentWorkspaceListResult")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AgentWorkspaceListResult, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut items__ = None;
+                let mut next_page_token__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Items => {
+                            if items__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("items"));
+                            }
+                            items__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::NextPageToken => {
+                            if next_page_token__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nextPageToken"));
+                            }
+                            next_page_token__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(AgentWorkspaceListResult {
+                    items: items__.unwrap_or_default(),
+                    next_page_token: next_page_token__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AgentWorkspaceListResult", FIELDS, GeneratedVisitor)
     }
 }
 impl serde::Serialize for AttachmentKind {
@@ -5277,6 +12504,228 @@ impl<'de> serde::Deserialize<'de> for ContentAddress {
         deserializer.deserialize_struct("conex.ContentAddress", FIELDS, GeneratedVisitor)
     }
 }
+impl serde::Serialize for Conversation {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.id.is_empty() {
+            len += 1;
+        }
+        if !self.endpoint_id.is_empty() {
+            len += 1;
+        }
+        if !self.workspace_id.is_empty() {
+            len += 1;
+        }
+        if self.created_at_ms != 0 {
+            len += 1;
+        }
+        if self.revision != 0 {
+            len += 1;
+        }
+        if !self.quality.is_empty() {
+            len += 1;
+        }
+        if self.title.is_some() {
+            len += 1;
+        }
+        if self.active_execution_id.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.Conversation", len)?;
+        if !self.id.is_empty() {
+            struct_ser.serialize_field("id", &self.id)?;
+        }
+        if !self.endpoint_id.is_empty() {
+            struct_ser.serialize_field("endpointId", &self.endpoint_id)?;
+        }
+        if !self.workspace_id.is_empty() {
+            struct_ser.serialize_field("workspaceId", &self.workspace_id)?;
+        }
+        if self.created_at_ms != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("createdAtMs", ToString::to_string(&self.created_at_ms).as_str())?;
+        }
+        if self.revision != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("revision", ToString::to_string(&self.revision).as_str())?;
+        }
+        if !self.quality.is_empty() {
+            struct_ser.serialize_field("quality", &self.quality)?;
+        }
+        if let Some(v) = self.title.as_ref() {
+            struct_ser.serialize_field("title", v)?;
+        }
+        if let Some(v) = self.active_execution_id.as_ref() {
+            struct_ser.serialize_field("activeExecutionId", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for Conversation {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "id",
+            "endpoint_id",
+            "endpointId",
+            "workspace_id",
+            "workspaceId",
+            "created_at_ms",
+            "createdAtMs",
+            "revision",
+            "quality",
+            "title",
+            "active_execution_id",
+            "activeExecutionId",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Id,
+            EndpointId,
+            WorkspaceId,
+            CreatedAtMs,
+            Revision,
+            Quality,
+            Title,
+            ActiveExecutionId,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "id" => Ok(GeneratedField::Id),
+                            "endpointId" | "endpoint_id" => Ok(GeneratedField::EndpointId),
+                            "workspaceId" | "workspace_id" => Ok(GeneratedField::WorkspaceId),
+                            "createdAtMs" | "created_at_ms" => Ok(GeneratedField::CreatedAtMs),
+                            "revision" => Ok(GeneratedField::Revision),
+                            "quality" => Ok(GeneratedField::Quality),
+                            "title" => Ok(GeneratedField::Title),
+                            "activeExecutionId" | "active_execution_id" => Ok(GeneratedField::ActiveExecutionId),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = Conversation;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.Conversation")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<Conversation, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut id__ = None;
+                let mut endpoint_id__ = None;
+                let mut workspace_id__ = None;
+                let mut created_at_ms__ = None;
+                let mut revision__ = None;
+                let mut quality__ = None;
+                let mut title__ = None;
+                let mut active_execution_id__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Id => {
+                            if id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("id"));
+                            }
+                            id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::EndpointId => {
+                            if endpoint_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("endpointId"));
+                            }
+                            endpoint_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::WorkspaceId => {
+                            if workspace_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("workspaceId"));
+                            }
+                            workspace_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::CreatedAtMs => {
+                            if created_at_ms__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("createdAtMs"));
+                            }
+                            created_at_ms__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::Revision => {
+                            if revision__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("revision"));
+                            }
+                            revision__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::Quality => {
+                            if quality__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("quality"));
+                            }
+                            quality__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Title => {
+                            if title__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("title"));
+                            }
+                            title__ = map_.next_value()?;
+                        }
+                        GeneratedField::ActiveExecutionId => {
+                            if active_execution_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("activeExecutionId"));
+                            }
+                            active_execution_id__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(Conversation {
+                    id: id__.unwrap_or_default(),
+                    endpoint_id: endpoint_id__.unwrap_or_default(),
+                    workspace_id: workspace_id__.unwrap_or_default(),
+                    created_at_ms: created_at_ms__.unwrap_or_default(),
+                    revision: revision__.unwrap_or_default(),
+                    quality: quality__.unwrap_or_default(),
+                    title: title__,
+                    active_execution_id: active_execution_id__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.Conversation", FIELDS, GeneratedVisitor)
+    }
+}
 impl serde::Serialize for CounterAddInput {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -6840,6 +14289,330 @@ impl<'de> serde::Deserialize<'de> for ErrorCode {
         deserializer.deserialize_any(GeneratedVisitor)
     }
 }
+impl serde::Serialize for Execution {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.id.is_empty() {
+            len += 1;
+        }
+        if !self.conversation_id.is_empty() {
+            len += 1;
+        }
+        if !self.endpoint_id.is_empty() {
+            len += 1;
+        }
+        if !self.module_instance_id.is_empty() {
+            len += 1;
+        }
+        if self.generation != 0 {
+            len += 1;
+        }
+        if !self.state.is_empty() {
+            len += 1;
+        }
+        if self.revision != 0 {
+            len += 1;
+        }
+        if self.created_at_ms != 0 {
+            len += 1;
+        }
+        if self.updated_at_ms != 0 {
+            len += 1;
+        }
+        if self.parent_execution_id.is_some() {
+            len += 1;
+        }
+        if self.terminal_reason.is_some() {
+            len += 1;
+        }
+        if self.cancel_requested_at_ms.is_some() {
+            len += 1;
+        }
+        if self.backend_ref.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.Execution", len)?;
+        if !self.id.is_empty() {
+            struct_ser.serialize_field("id", &self.id)?;
+        }
+        if !self.conversation_id.is_empty() {
+            struct_ser.serialize_field("conversationId", &self.conversation_id)?;
+        }
+        if !self.endpoint_id.is_empty() {
+            struct_ser.serialize_field("endpointId", &self.endpoint_id)?;
+        }
+        if !self.module_instance_id.is_empty() {
+            struct_ser.serialize_field("moduleInstanceId", &self.module_instance_id)?;
+        }
+        if self.generation != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("generation", ToString::to_string(&self.generation).as_str())?;
+        }
+        if !self.state.is_empty() {
+            struct_ser.serialize_field("state", &self.state)?;
+        }
+        if self.revision != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("revision", ToString::to_string(&self.revision).as_str())?;
+        }
+        if self.created_at_ms != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("createdAtMs", ToString::to_string(&self.created_at_ms).as_str())?;
+        }
+        if self.updated_at_ms != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("updatedAtMs", ToString::to_string(&self.updated_at_ms).as_str())?;
+        }
+        if let Some(v) = self.parent_execution_id.as_ref() {
+            struct_ser.serialize_field("parentExecutionId", v)?;
+        }
+        if let Some(v) = self.terminal_reason.as_ref() {
+            struct_ser.serialize_field("terminalReason", v)?;
+        }
+        if let Some(v) = self.cancel_requested_at_ms.as_ref() {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("cancelRequestedAtMs", ToString::to_string(&v).as_str())?;
+        }
+        if let Some(v) = self.backend_ref.as_ref() {
+            struct_ser.serialize_field("backendRef", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for Execution {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "id",
+            "conversation_id",
+            "conversationId",
+            "endpoint_id",
+            "endpointId",
+            "module_instance_id",
+            "moduleInstanceId",
+            "generation",
+            "state",
+            "revision",
+            "created_at_ms",
+            "createdAtMs",
+            "updated_at_ms",
+            "updatedAtMs",
+            "parent_execution_id",
+            "parentExecutionId",
+            "terminal_reason",
+            "terminalReason",
+            "cancel_requested_at_ms",
+            "cancelRequestedAtMs",
+            "backend_ref",
+            "backendRef",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Id,
+            ConversationId,
+            EndpointId,
+            ModuleInstanceId,
+            Generation,
+            State,
+            Revision,
+            CreatedAtMs,
+            UpdatedAtMs,
+            ParentExecutionId,
+            TerminalReason,
+            CancelRequestedAtMs,
+            BackendRef,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "id" => Ok(GeneratedField::Id),
+                            "conversationId" | "conversation_id" => Ok(GeneratedField::ConversationId),
+                            "endpointId" | "endpoint_id" => Ok(GeneratedField::EndpointId),
+                            "moduleInstanceId" | "module_instance_id" => Ok(GeneratedField::ModuleInstanceId),
+                            "generation" => Ok(GeneratedField::Generation),
+                            "state" => Ok(GeneratedField::State),
+                            "revision" => Ok(GeneratedField::Revision),
+                            "createdAtMs" | "created_at_ms" => Ok(GeneratedField::CreatedAtMs),
+                            "updatedAtMs" | "updated_at_ms" => Ok(GeneratedField::UpdatedAtMs),
+                            "parentExecutionId" | "parent_execution_id" => Ok(GeneratedField::ParentExecutionId),
+                            "terminalReason" | "terminal_reason" => Ok(GeneratedField::TerminalReason),
+                            "cancelRequestedAtMs" | "cancel_requested_at_ms" => Ok(GeneratedField::CancelRequestedAtMs),
+                            "backendRef" | "backend_ref" => Ok(GeneratedField::BackendRef),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = Execution;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.Execution")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<Execution, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut id__ = None;
+                let mut conversation_id__ = None;
+                let mut endpoint_id__ = None;
+                let mut module_instance_id__ = None;
+                let mut generation__ = None;
+                let mut state__ = None;
+                let mut revision__ = None;
+                let mut created_at_ms__ = None;
+                let mut updated_at_ms__ = None;
+                let mut parent_execution_id__ = None;
+                let mut terminal_reason__ = None;
+                let mut cancel_requested_at_ms__ = None;
+                let mut backend_ref__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Id => {
+                            if id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("id"));
+                            }
+                            id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ConversationId => {
+                            if conversation_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("conversationId"));
+                            }
+                            conversation_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::EndpointId => {
+                            if endpoint_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("endpointId"));
+                            }
+                            endpoint_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ModuleInstanceId => {
+                            if module_instance_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("moduleInstanceId"));
+                            }
+                            module_instance_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Generation => {
+                            if generation__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("generation"));
+                            }
+                            generation__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::State => {
+                            if state__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("state"));
+                            }
+                            state__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Revision => {
+                            if revision__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("revision"));
+                            }
+                            revision__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::CreatedAtMs => {
+                            if created_at_ms__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("createdAtMs"));
+                            }
+                            created_at_ms__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::UpdatedAtMs => {
+                            if updated_at_ms__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("updatedAtMs"));
+                            }
+                            updated_at_ms__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::ParentExecutionId => {
+                            if parent_execution_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("parentExecutionId"));
+                            }
+                            parent_execution_id__ = map_.next_value()?;
+                        }
+                        GeneratedField::TerminalReason => {
+                            if terminal_reason__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("terminalReason"));
+                            }
+                            terminal_reason__ = map_.next_value()?;
+                        }
+                        GeneratedField::CancelRequestedAtMs => {
+                            if cancel_requested_at_ms__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("cancelRequestedAtMs"));
+                            }
+                            cancel_requested_at_ms__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                        GeneratedField::BackendRef => {
+                            if backend_ref__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("backendRef"));
+                            }
+                            backend_ref__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(Execution {
+                    id: id__.unwrap_or_default(),
+                    conversation_id: conversation_id__.unwrap_or_default(),
+                    endpoint_id: endpoint_id__.unwrap_or_default(),
+                    module_instance_id: module_instance_id__.unwrap_or_default(),
+                    generation: generation__.unwrap_or_default(),
+                    state: state__.unwrap_or_default(),
+                    revision: revision__.unwrap_or_default(),
+                    created_at_ms: created_at_ms__.unwrap_or_default(),
+                    updated_at_ms: updated_at_ms__.unwrap_or_default(),
+                    parent_execution_id: parent_execution_id__,
+                    terminal_reason: terminal_reason__,
+                    cancel_requested_at_ms: cancel_requested_at_ms__,
+                    backend_ref: backend_ref__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.Execution", FIELDS, GeneratedVisitor)
+    }
+}
 impl serde::Serialize for ExecutionClass {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -7608,6 +15381,373 @@ impl<'de> serde::Deserialize<'de> for HelloResponse {
             }
         }
         deserializer.deserialize_struct("conex.HelloResponse", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for InteractionChoice {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.id.is_empty() {
+            len += 1;
+        }
+        if !self.label.is_empty() {
+            len += 1;
+        }
+        if !self.effect.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.InteractionChoice", len)?;
+        if !self.id.is_empty() {
+            struct_ser.serialize_field("id", &self.id)?;
+        }
+        if !self.label.is_empty() {
+            struct_ser.serialize_field("label", &self.label)?;
+        }
+        if !self.effect.is_empty() {
+            struct_ser.serialize_field("effect", &self.effect)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for InteractionChoice {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "id",
+            "label",
+            "effect",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Id,
+            Label,
+            Effect,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "id" => Ok(GeneratedField::Id),
+                            "label" => Ok(GeneratedField::Label),
+                            "effect" => Ok(GeneratedField::Effect),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = InteractionChoice;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.InteractionChoice")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<InteractionChoice, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut id__ = None;
+                let mut label__ = None;
+                let mut effect__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Id => {
+                            if id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("id"));
+                            }
+                            id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Label => {
+                            if label__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("label"));
+                            }
+                            label__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Effect => {
+                            if effect__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("effect"));
+                            }
+                            effect__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(InteractionChoice {
+                    id: id__.unwrap_or_default(),
+                    label: label__.unwrap_or_default(),
+                    effect: effect__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.InteractionChoice", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for InteractionRequest {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.id.is_empty() {
+            len += 1;
+        }
+        if !self.execution_id.is_empty() {
+            len += 1;
+        }
+        if !self.kind.is_empty() {
+            len += 1;
+        }
+        if !self.state.is_empty() {
+            len += 1;
+        }
+        if self.revision != 0 {
+            len += 1;
+        }
+        if self.created_at_ms != 0 {
+            len += 1;
+        }
+        if self.expires_at_ms.is_some() {
+            len += 1;
+        }
+        if self.prompt.is_some() {
+            len += 1;
+        }
+        if !self.choices.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.InteractionRequest", len)?;
+        if !self.id.is_empty() {
+            struct_ser.serialize_field("id", &self.id)?;
+        }
+        if !self.execution_id.is_empty() {
+            struct_ser.serialize_field("executionId", &self.execution_id)?;
+        }
+        if !self.kind.is_empty() {
+            struct_ser.serialize_field("kind", &self.kind)?;
+        }
+        if !self.state.is_empty() {
+            struct_ser.serialize_field("state", &self.state)?;
+        }
+        if self.revision != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("revision", ToString::to_string(&self.revision).as_str())?;
+        }
+        if self.created_at_ms != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("createdAtMs", ToString::to_string(&self.created_at_ms).as_str())?;
+        }
+        if let Some(v) = self.expires_at_ms.as_ref() {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("expiresAtMs", ToString::to_string(&v).as_str())?;
+        }
+        if let Some(v) = self.prompt.as_ref() {
+            struct_ser.serialize_field("prompt", v)?;
+        }
+        if !self.choices.is_empty() {
+            struct_ser.serialize_field("choices", &self.choices)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for InteractionRequest {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "id",
+            "execution_id",
+            "executionId",
+            "kind",
+            "state",
+            "revision",
+            "created_at_ms",
+            "createdAtMs",
+            "expires_at_ms",
+            "expiresAtMs",
+            "prompt",
+            "choices",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Id,
+            ExecutionId,
+            Kind,
+            State,
+            Revision,
+            CreatedAtMs,
+            ExpiresAtMs,
+            Prompt,
+            Choices,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "id" => Ok(GeneratedField::Id),
+                            "executionId" | "execution_id" => Ok(GeneratedField::ExecutionId),
+                            "kind" => Ok(GeneratedField::Kind),
+                            "state" => Ok(GeneratedField::State),
+                            "revision" => Ok(GeneratedField::Revision),
+                            "createdAtMs" | "created_at_ms" => Ok(GeneratedField::CreatedAtMs),
+                            "expiresAtMs" | "expires_at_ms" => Ok(GeneratedField::ExpiresAtMs),
+                            "prompt" => Ok(GeneratedField::Prompt),
+                            "choices" => Ok(GeneratedField::Choices),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = InteractionRequest;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.InteractionRequest")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<InteractionRequest, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut id__ = None;
+                let mut execution_id__ = None;
+                let mut kind__ = None;
+                let mut state__ = None;
+                let mut revision__ = None;
+                let mut created_at_ms__ = None;
+                let mut expires_at_ms__ = None;
+                let mut prompt__ = None;
+                let mut choices__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Id => {
+                            if id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("id"));
+                            }
+                            id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ExecutionId => {
+                            if execution_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("executionId"));
+                            }
+                            execution_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Kind => {
+                            if kind__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("kind"));
+                            }
+                            kind__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::State => {
+                            if state__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("state"));
+                            }
+                            state__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Revision => {
+                            if revision__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("revision"));
+                            }
+                            revision__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::CreatedAtMs => {
+                            if created_at_ms__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("createdAtMs"));
+                            }
+                            created_at_ms__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::ExpiresAtMs => {
+                            if expires_at_ms__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("expiresAtMs"));
+                            }
+                            expires_at_ms__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                        GeneratedField::Prompt => {
+                            if prompt__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("prompt"));
+                            }
+                            prompt__ = map_.next_value()?;
+                        }
+                        GeneratedField::Choices => {
+                            if choices__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("choices"));
+                            }
+                            choices__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(InteractionRequest {
+                    id: id__.unwrap_or_default(),
+                    execution_id: execution_id__.unwrap_or_default(),
+                    kind: kind__.unwrap_or_default(),
+                    state: state__.unwrap_or_default(),
+                    revision: revision__.unwrap_or_default(),
+                    created_at_ms: created_at_ms__.unwrap_or_default(),
+                    expires_at_ms: expires_at_ms__,
+                    prompt: prompt__,
+                    choices: choices__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.InteractionRequest", FIELDS, GeneratedVisitor)
     }
 }
 impl serde::Serialize for Limits {
@@ -11344,6 +19484,204 @@ impl<'de> serde::Deserialize<'de> for RejectedCapability {
             }
         }
         deserializer.deserialize_struct("conex.RejectedCapability", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for Relationship {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.id.is_empty() {
+            len += 1;
+        }
+        if !self.from.is_empty() {
+            len += 1;
+        }
+        if !self.to.is_empty() {
+            len += 1;
+        }
+        if !self.kind.is_empty() {
+            len += 1;
+        }
+        if !self.source.is_empty() {
+            len += 1;
+        }
+        if !self.quality.is_empty() {
+            len += 1;
+        }
+        if self.observed_at_ms != 0 {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.Relationship", len)?;
+        if !self.id.is_empty() {
+            struct_ser.serialize_field("id", &self.id)?;
+        }
+        if !self.from.is_empty() {
+            struct_ser.serialize_field("from", &self.from)?;
+        }
+        if !self.to.is_empty() {
+            struct_ser.serialize_field("to", &self.to)?;
+        }
+        if !self.kind.is_empty() {
+            struct_ser.serialize_field("kind", &self.kind)?;
+        }
+        if !self.source.is_empty() {
+            struct_ser.serialize_field("source", &self.source)?;
+        }
+        if !self.quality.is_empty() {
+            struct_ser.serialize_field("quality", &self.quality)?;
+        }
+        if self.observed_at_ms != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("observedAtMs", ToString::to_string(&self.observed_at_ms).as_str())?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for Relationship {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "id",
+            "from",
+            "to",
+            "kind",
+            "source",
+            "quality",
+            "observed_at_ms",
+            "observedAtMs",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Id,
+            From,
+            To,
+            Kind,
+            Source,
+            Quality,
+            ObservedAtMs,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "id" => Ok(GeneratedField::Id),
+                            "from" => Ok(GeneratedField::From),
+                            "to" => Ok(GeneratedField::To),
+                            "kind" => Ok(GeneratedField::Kind),
+                            "source" => Ok(GeneratedField::Source),
+                            "quality" => Ok(GeneratedField::Quality),
+                            "observedAtMs" | "observed_at_ms" => Ok(GeneratedField::ObservedAtMs),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = Relationship;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.Relationship")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<Relationship, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut id__ = None;
+                let mut from__ = None;
+                let mut to__ = None;
+                let mut kind__ = None;
+                let mut source__ = None;
+                let mut quality__ = None;
+                let mut observed_at_ms__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Id => {
+                            if id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("id"));
+                            }
+                            id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::From => {
+                            if from__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("from"));
+                            }
+                            from__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::To => {
+                            if to__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("to"));
+                            }
+                            to__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Kind => {
+                            if kind__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("kind"));
+                            }
+                            kind__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Source => {
+                            if source__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("source"));
+                            }
+                            source__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Quality => {
+                            if quality__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("quality"));
+                            }
+                            quality__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ObservedAtMs => {
+                            if observed_at_ms__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("observedAtMs"));
+                            }
+                            observed_at_ms__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                    }
+                }
+                Ok(Relationship {
+                    id: id__.unwrap_or_default(),
+                    from: from__.unwrap_or_default(),
+                    to: to__.unwrap_or_default(),
+                    kind: kind__.unwrap_or_default(),
+                    source: source__.unwrap_or_default(),
+                    quality: quality__.unwrap_or_default(),
+                    observed_at_ms: observed_at_ms__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.Relationship", FIELDS, GeneratedVisitor)
     }
 }
 impl serde::Serialize for RemoteTarget {
@@ -19458,5 +27796,150 @@ impl<'de> serde::Deserialize<'de> for WebTicket {
             }
         }
         deserializer.deserialize_struct("conex.WebTicket", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for Workspace {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.id.is_empty() {
+            len += 1;
+        }
+        if !self.node_id.is_empty() {
+            len += 1;
+        }
+        if !self.display_name.is_empty() {
+            len += 1;
+        }
+        if !self.root_ref.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.Workspace", len)?;
+        if !self.id.is_empty() {
+            struct_ser.serialize_field("id", &self.id)?;
+        }
+        if !self.node_id.is_empty() {
+            struct_ser.serialize_field("nodeId", &self.node_id)?;
+        }
+        if !self.display_name.is_empty() {
+            struct_ser.serialize_field("displayName", &self.display_name)?;
+        }
+        if !self.root_ref.is_empty() {
+            struct_ser.serialize_field("rootRef", &self.root_ref)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for Workspace {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "id",
+            "node_id",
+            "nodeId",
+            "display_name",
+            "displayName",
+            "root_ref",
+            "rootRef",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Id,
+            NodeId,
+            DisplayName,
+            RootRef,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "id" => Ok(GeneratedField::Id),
+                            "nodeId" | "node_id" => Ok(GeneratedField::NodeId),
+                            "displayName" | "display_name" => Ok(GeneratedField::DisplayName),
+                            "rootRef" | "root_ref" => Ok(GeneratedField::RootRef),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = Workspace;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.Workspace")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<Workspace, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut id__ = None;
+                let mut node_id__ = None;
+                let mut display_name__ = None;
+                let mut root_ref__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Id => {
+                            if id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("id"));
+                            }
+                            id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::NodeId => {
+                            if node_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeId"));
+                            }
+                            node_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::DisplayName => {
+                            if display_name__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("displayName"));
+                            }
+                            display_name__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::RootRef => {
+                            if root_ref__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("rootRef"));
+                            }
+                            root_ref__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(Workspace {
+                    id: id__.unwrap_or_default(),
+                    node_id: node_id__.unwrap_or_default(),
+                    display_name: display_name__.unwrap_or_default(),
+                    root_ref: root_ref__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.Workspace", FIELDS, GeneratedVisitor)
     }
 }
