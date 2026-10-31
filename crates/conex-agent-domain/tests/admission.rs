@@ -372,6 +372,7 @@ async fn message_quota_isolates_the_endpoint_instead_of_growing_unbounded() {
                 execution.generation,
                 BackendObservation::MessageStarted {
                     role: "assistant".into(),
+                    backend_key: None,
                 },
                 2_200 + index,
             )
@@ -385,6 +386,7 @@ async fn message_quota_isolates_the_endpoint_instead_of_growing_unbounded() {
             execution.generation,
             BackendObservation::MessageStarted {
                 role: "assistant".into(),
+                backend_key: None,
             },
             2_300,
         )

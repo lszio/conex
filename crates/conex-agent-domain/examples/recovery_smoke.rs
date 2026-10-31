@@ -154,6 +154,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             stream_execution.generation,
             BackendObservation::MessageStarted {
                 role: "assistant".into(),
+                backend_key: None,
             },
             2_000,
         )

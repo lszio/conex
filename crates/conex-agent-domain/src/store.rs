@@ -145,7 +145,9 @@ impl Store {
             // 就是迁移前的一致快照，不再重复留快照）；其余版本拒绝。
             match current_version(&db)? {
                 1 => migrate_to_v2(&db)?,
-                2 => {}
+                2 => migrate_to_v3(&db)?,
+                3 => migrate_to_v4(&db)?,
+                4 => {}
                 other => {
                     return Err(StoreError::InvalidArgument(format!(
                         "restored database version {other} is not supported"
@@ -389,6 +391,50 @@ fn migrate_to_v2(db: &Connection) -> Result<(), StoreError> {
     Ok(())
 }
 
+/// v2→v3 增量（P5.3）：只加访问撤销表；必须与 schema.sql 的 v3 段一致。
+const MIGRATE_V2_TO_V3: &str = "\
+CREATE TABLE access_revocations(
+ source TEXT NOT NULL CHECK(source IN ('hub','local')),
+ revision INTEGER NOT NULL,
+ kind TEXT NOT NULL CHECK(kind IN ('jti','principal','kid')),
+ target TEXT NOT NULL,
+ effective_at_ms INTEGER NOT NULL,
+ PRIMARY KEY(source, revision)
+);
+CREATE TABLE access_sync_watermark(
+ id INTEGER PRIMARY KEY CHECK(id=1),
+ hub_revision INTEGER NOT NULL CHECK(hub_revision>=0)
+);
+PRAGMA user_version=3;
+";
+
+fn migrate_to_v3(db: &Connection) -> Result<(), StoreError> {
+    let tx = rusqlite::Transaction::new_unchecked(db, TransactionBehavior::Immediate)?;
+    tx.execute_batch(MIGRATE_V2_TO_V3)?;
+    tx.commit()?;
+    Ok(())
+}
+
+/// v3→v4 增量（P3.2）：只加子代理关系表；必须与 schema.sql 的 v4 段一致。
+const MIGRATE_V3_TO_V4: &str = "\
+CREATE TABLE relationships(
+ id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL REFERENCES conversations(id),
+ from_ref TEXT NOT NULL, to_ref TEXT NOT NULL, kind TEXT NOT NULL,
+ source TEXT NOT NULL CHECK(source IN ('backend','config','user')),
+ quality TEXT NOT NULL CHECK(quality IN ('current','stale','historical','unknown')),
+ observed_at_ms INTEGER NOT NULL, projection BLOB NOT NULL
+);
+CREATE INDEX relationships_conversation ON relationships(conversation_id, observed_at_ms);
+PRAGMA user_version=4;
+";
+
+fn migrate_to_v4(db: &Connection) -> Result<(), StoreError> {
+    let tx = rusqlite::Transaction::new_unchecked(db, TransactionBehavior::Immediate)?;
+    tx.execute_batch(MIGRATE_V3_TO_V4)?;
+    tx.commit()?;
+    Ok(())
+}
+
 /// 保留最近 7 份本机迁移备份（契约 §6）。只清理本库路径 `*.backup-v<N>.*`
 /// 前缀文件，不触碰用户显式 backup_to 的任意路径备份。
 const MIGRATION_BACKUP_KEEP: usize = 7;
@@ -485,6 +531,20 @@ fn init_or_verify(db: &Connection, path: &Path, node_id: &str) -> Result<(), Sto
         2 => {
             verify_identity(db, node_id)?;
             require_integrity(db)?;
+            snapshot_before_migration(db, path, 2)?;
+            retain_migration_backups(path, 2)?;
+            migrate_to_v3(db)
+        }
+        3 => {
+            verify_identity(db, node_id)?;
+            require_integrity(db)?;
+            snapshot_before_migration(db, path, 3)?;
+            retain_migration_backups(path, 3)?;
+            migrate_to_v4(db)
+        }
+        4 => {
+            verify_identity(db, node_id)?;
+            require_integrity(db)?;
             Ok(())
         }
         newer => Err(StoreError::InvalidArgument(format!(
@@ -495,7 +555,7 @@ fn init_or_verify(db: &Connection, path: &Path, node_id: &str) -> Result<(), Sto
 
 fn verify_backup(db: &Connection, node_id: &str) -> Result<(), StoreError> {
     match current_version(db)? {
-        1..=2 => {}
+        1..=4 => {}
         other => {
             return Err(StoreError::InvalidArgument(format!(
                 "backup version {other} is not supported (expected 1-2)"
@@ -1655,9 +1715,16 @@ impl Store {
                         ..ApplyResult::default()
                     })
                 }
-                BackendObservation::MessageStarted { role } => {
+                BackendObservation::MessageStarted { role, backend_key } => {
                     if !ROLES.contains(&role.as_str()) {
                         return Err(StoreError::InvalidArgument(format!("unknown role {role}")));
+                    }
+                    if let Some(key) = backend_key.as_deref()
+                        && key.is_empty()
+                    {
+                        return Err(StoreError::InvalidArgument(
+                            "backend message key must not be empty".into(),
+                        ));
                     }
                     let active_messages: i64 = tx.query_row(
                         "SELECT COUNT(*) FROM messages WHERE conversation_id=?1
@@ -1697,12 +1764,13 @@ impl Store {
                     }
                     tx.execute(
                         "INSERT INTO messages(id,conversation_id,execution_id,ordinal,backend_key,
-                         revision,state,projection) VALUES (?1,?2,?3,?4,NULL,1,'streaming',?5)",
+                         revision,state,projection) VALUES (?1,?2,?3,?4,?5,1,'streaming',?6)",
                         params![
                             message_id,
                             message.conversation_id,
                             message.execution_id,
                             ordinal + 1,
+                            backend_key,
                             meta
                         ],
                     )?;
@@ -2459,6 +2527,345 @@ impl Store {
         .await
     }
 
+    /// 登记后端会话映射（契约 §2：`(adapter,backendInstanceKey,backendConversationId)`
+    /// 唯一）。仅在首次受控创建/恢复成功后调用；重复登记同键同值幂等。
+    pub async fn record_backend_mapping(
+        &self,
+        adapter: &str,
+        backend_instance_key: &str,
+        backend_conversation_id: &str,
+        conversation_id: &str,
+    ) -> Result<(), StoreError> {
+        if adapter.is_empty()
+            || backend_instance_key.is_empty()
+            || backend_conversation_id.is_empty()
+        {
+            return Err(StoreError::InvalidArgument(
+                "backend mapping fields must not be empty".into(),
+            ));
+        }
+        require_ulid(conversation_id, "conversationId")?;
+        let (adapter, key, backend_id, conversation) = (
+            adapter.to_string(),
+            backend_instance_key.to_string(),
+            backend_conversation_id.to_string(),
+            conversation_id.to_string(),
+        );
+        self.immediate(move |tx, _ids, _limits| {
+            let exists: bool = tx.query_row(
+                "SELECT COUNT(*) FROM conversations WHERE id=?1",
+                params![conversation],
+                |row| row.get::<_, i64>(0),
+            )? > 0;
+            if !exists {
+                return Err(StoreError::NotFound {
+                    entity: "conversation",
+                    id: conversation,
+                });
+            }
+            tx.execute(
+                "INSERT INTO backend_mappings(adapter,backend_instance_key,backend_conversation_id,conversation_id)
+                 VALUES (?1,?2,?3,?4)
+                 ON CONFLICT(adapter,backend_instance_key,backend_conversation_id)
+                 DO UPDATE SET conversation_id=excluded.conversation_id",
+                params![adapter, key, backend_id, conversation],
+            )?;
+            Ok(())
+        })
+        .await
+    }
+
+    /// 按后端身份找回节点会话；无映射返回 None，不猜测。
+    pub async fn find_conversation_by_backend(
+        &self,
+        adapter: &str,
+        backend_instance_key: &str,
+        backend_conversation_id: &str,
+    ) -> Result<Option<String>, StoreError> {
+        let (adapter, key, backend_id) = (
+            adapter.to_string(),
+            backend_instance_key.to_string(),
+            backend_conversation_id.to_string(),
+        );
+        self.readonly(move |tx, _gen, _limits| {
+            tx.query_row(
+                "SELECT conversation_id FROM backend_mappings
+                 WHERE adapter=?1 AND backend_instance_key=?2 AND backend_conversation_id=?3",
+                params![adapter, key, backend_id],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(StoreError::from)
+        })
+        .await
+    }
+
+    /// 端点目录读取（entities kind='endpoint'）；投影按 id 稳定排序。
+    pub async fn list_endpoints(
+        &self,
+    ) -> Result<Vec<conex_proto::AgentAdapterEndpoint>, StoreError> {
+        self.readonly(move |tx, _gen, _limits| {
+            let mut stmt = tx
+                .prepare("SELECT id, projection FROM entities WHERE kind='endpoint' ORDER BY id")?;
+            let mut out = Vec::new();
+            let rows = stmt.query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, Vec<u8>>(1)?))
+            })?;
+            for row in rows {
+                let (_id, projection) = row?;
+                out.push(decode(&projection)?);
+            }
+            Ok(out)
+        })
+        .await
+    }
+
+    /// 会话列表（catalogScope=node-managed：只列本节点登记会话）。
+    /// 按 (createdAtMs,id) 稳定排序；分页由调用方按契约 §4 切页。
+    pub async fn list_conversations(
+        &self,
+        endpoint_id: &str,
+        workspace_id: Option<&str>,
+    ) -> Result<Vec<Conversation>, StoreError> {
+        require_ulid(endpoint_id, "endpointId")?;
+        if let Some(workspace) = workspace_id {
+            require_ulid(workspace, "workspaceId")?;
+        }
+        let endpoint = endpoint_id.to_string();
+        let workspace = workspace_id.map(str::to_string);
+        self.readonly(move |tx, _gen, _limits| {
+            let mut stmt = tx
+                .prepare("SELECT projection FROM conversations WHERE endpoint_id=?1 ORDER BY id")?;
+            let mut out = Vec::new();
+            let rows = stmt.query_map(params![endpoint], |row| row.get::<_, Vec<u8>>(0))?;
+            for row in rows {
+                let conversation: Conversation = decode(&row?)?;
+                if let Some(workspace) = workspace.as_deref()
+                    && conversation.workspace_id != workspace
+                {
+                    continue;
+                }
+                out.push(conversation);
+            }
+            out.sort_by(|a, b| (a.created_at_ms, &a.id).cmp(&(b.created_at_ms, &b.id)));
+            Ok(out)
+        })
+        .await
+    }
+
+    /// 单条会话投影；未授权目标在边界已被拒绝，这里只处理存在性。
+    pub async fn read_conversation(
+        &self,
+        conversation_id: &str,
+    ) -> Result<Conversation, StoreError> {
+        require_ulid(conversation_id, "conversationId")?;
+        let conversation = conversation_id.to_string();
+        self.readonly(move |tx, _gen, _limits| load_conversation(tx, &conversation))
+            .await
+    }
+
+    /// 单条执行投影（含终态；snapshot 只投影活动执行）。
+    pub async fn read_execution(&self, execution_id: &str) -> Result<Execution, StoreError> {
+        require_ulid(execution_id, "executionId")?;
+        let execution = execution_id.to_string();
+        self.readonly(move |tx, _gen, _limits| load_execution(tx, &execution))
+            .await
+    }
+
+    /// 历史读取（契约 §8）：按节点稳定 ordinal 向前翻已结束消息；
+    /// beforeMessageId 必须属于同会话。返回按 ordinal 升序、hasMore 指示更早页。
+    pub async fn read_history(
+        &self,
+        conversation_id: &str,
+        before_message_id: Option<&str>,
+        limit: u32,
+    ) -> Result<(Vec<AgentMessage>, bool), StoreError> {
+        require_ulid(conversation_id, "conversationId")?;
+        if limit == 0 || limit > 100 {
+            return Err(StoreError::InvalidArgument("limit out of range".into()));
+        }
+        let conversation = conversation_id.to_string();
+        let before = before_message_id.map(str::to_string);
+        self.readonly(move |tx, _gen, _limits| {
+            let before_ordinal = match before.as_deref() {
+                None => i64::MAX,
+                Some(before) => {
+                    let stored = load_message(tx, before)?;
+                    if stored.conversation_id != conversation {
+                        return Err(StoreError::InvalidArgument(
+                            "beforeMessageId belongs to another conversation".into(),
+                        ));
+                    }
+                    let ordinal: i64 = tx.query_row(
+                        "SELECT ordinal FROM messages WHERE id=?1",
+                        params![before],
+                        |row| row.get(0),
+                    )?;
+                    ordinal
+                }
+            };
+            let mut rows: Vec<AgentMessage> = Vec::new();
+            let mut stmt = tx.prepare(
+                "SELECT projection FROM messages WHERE conversation_id=?1 AND ordinal<?2
+                 AND state!='streaming' ORDER BY ordinal DESC LIMIT ?3",
+            )?;
+            let projections = stmt.query_map(
+                params![conversation, before_ordinal, limit as i64 + 1],
+                |row| row.get::<_, Vec<u8>>(0),
+            )?;
+            for row in projections {
+                let message: AgentMessage = decode(&row?)?;
+                rows.push(message);
+            }
+            let mut has_more = false;
+            if rows.len() > limit as usize {
+                has_more = true;
+                rows.truncate(limit as usize);
+            }
+            rows.reverse();
+            Ok((rows, has_more))
+        })
+        .await
+    }
+
+    /// 交互列表；executionId 过滤可选，按 (createdAtMs,id) 稳定排序。
+    pub async fn list_interactions(
+        &self,
+        conversation_id: &str,
+        execution_id: Option<&str>,
+        limit: u32,
+    ) -> Result<Vec<InteractionRequest>, StoreError> {
+        require_ulid(conversation_id, "conversationId")?;
+        if let Some(execution) = execution_id {
+            require_ulid(execution, "executionId")?;
+        }
+        if limit == 0 || limit > 100 {
+            return Err(StoreError::InvalidArgument("limit out of range".into()));
+        }
+        let conversation = conversation_id.to_string();
+        let execution = execution_id.map(str::to_string);
+        self.readonly(move |tx, _gen, _limits| {
+            let mut stmt = tx.prepare(
+                "SELECT i.projection FROM interactions i
+                 JOIN executions e ON e.id=i.execution_id
+                 WHERE e.conversation_id=?1 ORDER BY i.rowid DESC LIMIT ?2",
+            )?;
+            let mut out = Vec::new();
+            let rows = stmt.query_map(params![conversation, limit as i64], |row| {
+                row.get::<_, Vec<u8>>(0)
+            })?;
+            for row in rows {
+                let request: InteractionRequest = decode(&row?)?;
+                if let Some(execution) = execution.as_deref()
+                    && request.execution_id != execution
+                {
+                    continue;
+                }
+                out.push(request);
+            }
+            out.sort_by(|a, b| (a.created_at_ms, &a.id).cmp(&(b.created_at_ms, &b.id)));
+            Ok(out)
+        })
+        .await
+    }
+
+    /// 登记/更新后端关系（契约 §2 Relationship）。同 id 重写用于生命周期推进
+    /// （quality 变化）；from/to 是实体引用，不承担授权语义。
+    pub async fn record_relationship(
+        &self,
+        conversation_id: &str,
+        relationship: conex_proto::Relationship,
+    ) -> Result<(), StoreError> {
+        require_ulid(conversation_id, "conversationId")?;
+        if relationship.id.is_empty()
+            || relationship.from.is_empty()
+            || relationship.to.is_empty()
+            || relationship.kind.is_empty()
+        {
+            return Err(StoreError::InvalidArgument(
+                "relationship fields must not be empty".into(),
+            ));
+        }
+        match relationship.source.as_str() {
+            "backend" | "config" | "user" => {}
+            other => {
+                return Err(StoreError::InvalidArgument(format!(
+                    "unknown relationship source {other}"
+                )));
+            }
+        }
+        match relationship.quality.as_str() {
+            "current" | "stale" | "historical" | "unknown" => {}
+            other => {
+                return Err(StoreError::InvalidArgument(format!(
+                    "unknown relationship quality {other}"
+                )));
+            }
+        }
+        let conversation = conversation_id.to_string();
+        self.immediate(move |tx, _ids, _limits| {
+            let exists: bool = tx.query_row(
+                "SELECT COUNT(*) FROM conversations WHERE id=?1",
+                params![conversation],
+                |row| row.get::<_, i64>(0),
+            )? > 0;
+            if !exists {
+                return Err(StoreError::NotFound {
+                    entity: "conversation",
+                    id: conversation.clone(),
+                });
+            }
+            let projection = encode(&relationship)?;
+            tx.execute(
+                "INSERT INTO relationships(id,conversation_id,from_ref,to_ref,kind,source,
+                 quality,observed_at_ms,projection) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)
+                 ON CONFLICT(id) DO UPDATE SET quality=excluded.quality,
+                 observed_at_ms=excluded.observed_at_ms, projection=excluded.projection",
+                params![
+                    relationship.id,
+                    conversation,
+                    relationship.from,
+                    relationship.to,
+                    relationship.kind,
+                    relationship.source,
+                    relationship.quality,
+                    relationship.observed_at_ms as i64,
+                    projection
+                ],
+            )?;
+            Ok(())
+        })
+        .await
+    }
+
+    /// 关系列表（agent/relationships/list 的数据源）；按观察时间倒序、上限受限。
+    pub async fn list_relationships(
+        &self,
+        conversation_id: &str,
+        limit: u32,
+    ) -> Result<Vec<conex_proto::Relationship>, StoreError> {
+        require_ulid(conversation_id, "conversationId")?;
+        if limit == 0 || limit > 100 {
+            return Err(StoreError::InvalidArgument("limit out of range".into()));
+        }
+        let conversation = conversation_id.to_string();
+        self.readonly(move |tx, _gen, _limits| {
+            let mut stmt = tx.prepare(
+                "SELECT projection FROM relationships WHERE conversation_id=?1
+                 ORDER BY observed_at_ms DESC, id LIMIT ?2",
+            )?;
+            let mut out = Vec::new();
+            let rows = stmt.query_map(params![conversation, limit as i64], |row| {
+                row.get::<_, Vec<u8>>(0)
+            })?;
+            for row in rows {
+                out.push(decode(&row?)?);
+            }
+            Ok(out)
+        })
+        .await
+    }
+
     /// 保留清理：24h/64MiB 每流、512MiB 节点总量；只删连续前缀并更新
     /// firstAvailable/字节数（恢复契约 §5）。
     pub async fn prune(&self, now: u64) -> Result<PruneResult, StoreError> {
@@ -3053,4 +3460,122 @@ fn delete_prefix_position(
         params![stream, boundary + 1, bytes],
     )?;
     Ok((events as u64, bytes as u64))
+}
+
+impl Store {
+    /// 本地授权撤销（P5.3）：先持久提交再回执；revision 为本库单调序列，
+    /// 重启不丢失（契约 §3.3）。
+    pub async fn record_local_access_revocation(
+        &self,
+        kind: &str,
+        target: &str,
+        now_ms: u64,
+    ) -> Result<u64, StoreError> {
+        let kind = kind.to_string();
+        let target = target.to_string();
+        self.immediate(move |tx, _ids, _limits| {
+            if !matches!(kind.as_str(), "jti" | "principal" | "kid") {
+                return Err(StoreError::InvalidArgument(
+                    "revocation kind must be jti, principal or kid".into(),
+                ));
+            }
+            if target.is_empty() || target.len() > 256 {
+                return Err(StoreError::InvalidArgument(
+                    "revocation target must be 1..=256 bytes".into(),
+                ));
+            }
+            let next: i64 = tx.query_row(
+                "SELECT COALESCE(MAX(revision),0)+1 FROM access_revocations WHERE source='local'",
+                [],
+                |row| row.get(0),
+            )?;
+            tx.execute(
+                "INSERT INTO access_revocations(source, revision, kind, target, effective_at_ms)
+                 VALUES ('local', ?1, ?2, ?3, ?4)",
+                params![next, kind, target, now_ms as i64],
+            )?;
+            Ok(next as u64)
+        })
+        .await
+    }
+
+    /// 应用 hub 撤权分页（P5.4）：同 revision 幂等；单个事务写全部项并推进
+    /// 水位，先提交后回执。返回新水位。
+    pub async fn apply_hub_access_revocations(
+        &self,
+        items: Vec<(u64, String, String, u64)>,
+    ) -> Result<u64, StoreError> {
+        self.immediate(move |tx, _ids, _limits| {
+            let mut watermark: u64 = tx
+                .query_row(
+                    "SELECT hub_revision FROM access_sync_watermark WHERE id=1",
+                    [],
+                    |row| row.get::<_, i64>(0),
+                )
+                .optional()?
+                .unwrap_or(0) as u64;
+            for (revision, kind, target, effective_at_ms) in items {
+                if !matches!(kind.as_str(), "jti" | "principal" | "kid") {
+                    return Err(StoreError::InvalidArgument(format!(
+                        "hub revocation kind {kind} is not accepted"
+                    )));
+                }
+                tx.execute(
+                    "INSERT OR IGNORE INTO access_revocations(source, revision, kind, target, effective_at_ms)
+                     VALUES ('hub', ?1, ?2, ?3, ?4)",
+                    params![revision as i64, kind, target, effective_at_ms as i64],
+                )?;
+                watermark = watermark.max(revision);
+            }
+            tx.execute(
+                "INSERT INTO access_sync_watermark(id, hub_revision) VALUES (1, ?1)
+                 ON CONFLICT(id) DO UPDATE SET hub_revision=excluded.hub_revision",
+                params![watermark as i64],
+            )?;
+            Ok(watermark)
+        })
+        .await
+    }
+
+    /// 节点重启后的同步起点：持久的 hub revision 水位。
+    pub async fn access_sync_watermark(&self) -> Result<u64, StoreError> {
+        self.readonly(move |_tx, _ids, _limits| {
+            let conn = _tx;
+            Ok(conn
+                .query_row(
+                    "SELECT hub_revision FROM access_sync_watermark WHERE id=1",
+                    [],
+                    |row| row.get::<_, i64>(0),
+                )
+                .optional()?
+                .unwrap_or(0) as u64)
+        })
+        .await
+    }
+
+    /// 每次操作的撤销检查：jti/principal/kid 任一命中即拒绝（契约 §3.3）。
+    pub async fn access_revocation_blocked(
+        &self,
+        jti: &str,
+        principal: &str,
+        kid: &str,
+    ) -> Result<bool, StoreError> {
+        let jti = jti.to_string();
+        let principal = principal.to_string();
+        let kid = kid.to_string();
+        self.readonly(move |tx, _ids, _limits| {
+            let blocked: i64 = tx.query_row(
+                "SELECT EXISTS(
+                    SELECT 1 FROM access_revocations
+                    WHERE (kind='jti' AND target=?1)
+                       OR (kind='principal' AND target=?2)
+                       OR (kind='kid' AND target=?3)
+                 )",
+                params![jti, principal, kid],
+                |row| row.get(0),
+            )?;
+            Ok(blocked == 1)
+        })
+        .await
+    }
 }

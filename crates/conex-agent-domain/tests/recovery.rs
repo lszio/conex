@@ -458,6 +458,7 @@ async fn snapshot_stays_within_budget_with_many_terminal_executions_and_a_long_r
             execution.generation,
             BackendObservation::MessageStarted {
                 role: "assistant".into(),
+                backend_key: None,
             },
             3_200,
         )

@@ -191,7 +191,11 @@ pub enum BackendObservation {
     /// 后端已接受执行；backend_ref 仅受限节点记录。
     Started { backend_ref: Option<String> },
     /// 后端开始一条消息；store 分配节点 Message ID 并在 ApplyResult 返回。
-    MessageStarted { role: String },
+    /// backend_key 是后端消息稳定标识（节点受限记录，契约 §8 显式映射）。
+    MessageStarted {
+        role: String,
+        backend_key: Option<String>,
+    },
     /// 追加文本到已知节点消息的第一个 text part；store 按 UTF-8 边界拆分
     /// 为 <=4096 字节的 message.delta 事件。
     TextAppended { message_id: String, text: String },

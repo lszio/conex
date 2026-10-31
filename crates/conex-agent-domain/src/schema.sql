@@ -78,4 +78,32 @@ CREATE TABLE owned_resources(
  owner_epoch TEXT NOT NULL, control_kind TEXT NOT NULL, control_identity BLOB NOT NULL,
  state TEXT NOT NULL CHECK(state IN ('created','active','unknown','released'))
 );
-PRAGMA user_version=2;
+
+-- v3（P5.3）：本地授权撤销与 hub 同步水位（docs/contracts/private-runtime.md
+-- §3.3）。hub 项保留中心 revision（同 revision 重复应用幂等）；本地项使用
+-- 本库单调序列。重启不丢失主体/kid 撤销；水位跨重启持久。
+CREATE TABLE access_revocations(
+ source TEXT NOT NULL CHECK(source IN ('hub','local')),
+ revision INTEGER NOT NULL,
+ kind TEXT NOT NULL CHECK(kind IN ('jti','principal','kid')),
+ target TEXT NOT NULL,
+ effective_at_ms INTEGER NOT NULL,
+ PRIMARY KEY(source, revision)
+);
+CREATE TABLE access_sync_watermark(
+ id INTEGER PRIMARY KEY CHECK(id=1),
+ hub_revision INTEGER NOT NULL CHECK(hub_revision>=0)
+);
+
+-- v4（P3.2）：后端子代理关系投影（docs/plans/2026-10-31-conex-mvp-p3.md §3）。
+-- backend_mappings 表 P1 已建；本版补关系存储。from/to 是实体引用（ULID 或
+-- 后端稳定身份 ref），关系可见不授予执行内容权限；仅节点写入。
+CREATE TABLE relationships(
+ id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL REFERENCES conversations(id),
+ from_ref TEXT NOT NULL, to_ref TEXT NOT NULL, kind TEXT NOT NULL,
+ source TEXT NOT NULL CHECK(source IN ('backend','config','user')),
+ quality TEXT NOT NULL CHECK(quality IN ('current','stale','historical','unknown')),
+ observed_at_ms INTEGER NOT NULL, projection BLOB NOT NULL
+);
+CREATE INDEX relationships_conversation ON relationships(conversation_id, observed_at_ms);
+PRAGMA user_version=4;
