@@ -648,6 +648,11 @@
                     "required": [
                       "recoveryGap"
                     ]
+                  },
+                  {
+                    "required": [
+                      "messagePart"
+                    ]
                   }
                 ]
               }
@@ -693,6 +698,11 @@
                   {
                     "required": [
                       "recoveryGap"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messagePart"
                     ]
                   }
                 ]
@@ -743,6 +753,11 @@
                     "required": [
                       "recoveryGap"
                     ]
+                  },
+                  {
+                    "required": [
+                      "messagePart"
+                    ]
                   }
                 ]
               },
@@ -791,6 +806,11 @@
                   {
                     "required": [
                       "recoveryGap"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messagePart"
                     ]
                   }
                 ]
@@ -841,6 +861,11 @@
                     "required": [
                       "recoveryGap"
                     ]
+                  },
+                  {
+                    "required": [
+                      "messagePart"
+                    ]
                   }
                 ]
               },
@@ -889,6 +914,11 @@
                   {
                     "required": [
                       "recoveryGap"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messagePart"
                     ]
                   }
                 ]
@@ -939,6 +969,11 @@
                     "required": [
                       "recoveryGap"
                     ]
+                  },
+                  {
+                    "required": [
+                      "messagePart"
+                    ]
                   }
                 ]
               },
@@ -987,6 +1022,11 @@
                   {
                     "required": [
                       "recoveryGap"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messagePart"
                     ]
                   }
                 ]
@@ -1037,6 +1077,11 @@
                     "required": [
                       "recoveryGap"
                     ]
+                  },
+                  {
+                    "required": [
+                      "messagePart"
+                    ]
                   }
                 ]
               },
@@ -1086,11 +1131,70 @@
                     "required": [
                       "relationshipUpdated"
                     ]
+                  },
+                  {
+                    "required": [
+                      "messagePart"
+                    ]
                   }
                 ]
               },
               "required": [
                 "recoveryGap"
+              ]
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "conversationUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "executionUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "interactionCreated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "interactionUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageCreated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageDelta"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "messageCompleted"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "relationshipUpdated"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "recoveryGap"
+                    ]
+                  }
+                ]
+              },
+              "required": [
+                "messagePart"
               ]
             }
           ]
@@ -1128,6 +1232,9 @@
         },
         "messageDelta": {
           "$ref": "#/$defs/conex.AgentMessageDelta"
+        },
+        "messagePart": {
+          "$ref": "#/$defs/conex.AgentMessagePart"
         },
         "position": {
           "format": "uint64",

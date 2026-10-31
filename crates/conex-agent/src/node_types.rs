@@ -11,6 +11,7 @@ use std::sync::Arc;
 pub struct ModuleRuntime {
     pub store: Store,
     pub data_dir: PathBuf,
+    pub node_id: String,
     pub node_epoch: String,
     pub module_key: String,
     pub generation: u64,

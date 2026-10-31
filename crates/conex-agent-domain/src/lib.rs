@@ -12,9 +12,9 @@ mod store;
 mod ulid;
 
 pub use model::{
-    Admission, AuthorizedScope, BackendObservation, BackendResponseOutcome, CancelTarget,
-    DispatchPermit, DispatchToken, OwnedResource, PruneResult, ReconcileTarget, ResourceState,
-    ResponsePermit, StoreError, StoreLimits, TerminalState,
+    Admission, ApplyResult, AuthorizedScope, BackendObservation, BackendResponseOutcome,
+    CancelTarget, DispatchPermit, DispatchToken, OwnedResource, PruneResult, ReconcileTarget,
+    ResourceState, ResponsePermit, StoreError, StoreLimits, TerminalState,
 };
 pub use store::Store;
 

@@ -85,6 +85,25 @@ pub fn load_applications(config: &NodeConfig) -> Result<Vec<PreparedApplication>
             SourceStrategy::RelayAllowed,
         )?);
     }
+    // OMP 适配器仅在节点配置了 [omp] 后端时可用；应用包引用 "omp" 而节点
+    // 未配置时 resolve 阶段即拒绝（unknown implementation），不静默降级。
+    if let Some(omp) = &config.omp {
+        let omp = omp.clone();
+        let factory: ApprovedFactory = Arc::new(move |value| {
+            if !value.is_null() {
+                return Err("omp implementation does not take package config".into());
+            }
+            Ok(crate::adapters::omp::factory(omp.clone()))
+        });
+        entries.push(ImplementationEntry::new(
+            "omp",
+            factory,
+            crate::adapters::omp::registry_contracts()?,
+            BTreeMap::new(),
+            config.permissions.clone(),
+            SourceStrategy::DirectOnly,
+        )?);
+    }
     let approved_remotes = config
         .remote_endpoints
         .iter()
@@ -150,7 +169,7 @@ pub fn load_applications(config: &NodeConfig) -> Result<Vec<PreparedApplication>
                     .exports
                     .iter()
                     .flat_map(|export| export.members.iter())
-                    .filter(|method| module.permissions.contains(&method.replace('/', ".")))
+                    .filter(|method| crate::adapters::method_allowed(&module.permissions, method))
                     .cloned()
                     .collect(),
                 factory,

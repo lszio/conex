@@ -36,6 +36,8 @@ message AgentEvent {
     AgentMessageCompleted message_completed = 14;
     Relationship relationship_updated = 15;
     AgentGap recovery_gap = 16;
+    // 追加的消息部件（工具活动）；部件按事件顺序追加到消息。
+    AgentMessagePart message_part = 17;
   }
 }
 

@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 pub mod access;
+pub mod adapters;
 pub mod application;
 pub mod assembly;
 pub mod builtins;

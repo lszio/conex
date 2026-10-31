@@ -72,6 +72,9 @@ pub(crate) enum Ev {
         revision: u64,
         state: String,
     },
+    MessagePart {
+        part: conex_proto::AgentMessagePart,
+    },
     Gap {
         reason: String,
         backend_range: Option<String>,
@@ -670,6 +673,7 @@ pub(crate) fn append_event(
             revision: *revision,
             state: state.clone(),
         }),
+        Ev::MessagePart { part, .. } => agent_event::Data::MessagePart(part.clone()),
         Ev::Gap {
             reason,
             backend_range,
@@ -1836,6 +1840,66 @@ impl Store {
                         ..ApplyResult::default()
                     })
                 }
+                BackendObservation::ToolPartAppended {
+                    message_id,
+                    name,
+                    phase,
+                    summary,
+                } => {
+                    if !matches!(phase.as_str(), "started" | "completed") {
+                        return Err(StoreError::InvalidArgument(format!(
+                            "unknown tool phase {phase}"
+                        )));
+                    }
+                    if name.trim().is_empty() {
+                        return Err(StoreError::InvalidArgument(
+                            "tool name must not be empty".into(),
+                        ));
+                    }
+                    if summary.len() > limits.max_tool_summary_bytes {
+                        return Err(StoreError::PayloadTooLarge {
+                            limit: limits.max_tool_summary_bytes,
+                        });
+                    }
+                    let mut message = load_message(tx, &message_id)?;
+                    if message.conversation_id != current.conversation_id
+                        || message.execution_id != current.id
+                    {
+                        return Err(StoreError::NotFound {
+                            entity: "message",
+                            id: message_id,
+                        });
+                    }
+                    if message.parts.len() >= limits.max_parts {
+                        return bounded_failure(tx, ids, limits, now, &current, "part_quota");
+                    }
+                    let part = conex_proto::AgentMessagePart {
+                        part: Some(agent_message_part::Part::Tool(conex_proto::AgentToolPart {
+                            name: name.clone(),
+                            phase: phase.clone(),
+                            summary: summary.clone(),
+                        })),
+                    };
+                    message.parts.push(part.clone());
+                    message.revision += 1;
+                    save_message(tx, &message)?;
+                    append_event(
+                        tx,
+                        ids,
+                        limits,
+                        &current.conversation_id,
+                        &epoch,
+                        now,
+                        "message.part",
+                        &message.id,
+                        message.revision,
+                        Ev::MessagePart { part },
+                    )?;
+                    Ok(ApplyResult {
+                        applied: true,
+                        ..ApplyResult::default()
+                    })
+                }
                 BackendObservation::InteractionOpened {
                     kind,
                     prompt,
@@ -2670,6 +2734,112 @@ impl Store {
         let execution = execution_id.to_string();
         self.readonly(move |tx, _gen, _limits| load_execution(tx, &execution))
             .await
+    }
+
+    /// 派生子执行准入（契约 §5：parentExecutionId 不抢顶层槽）。同一会话内
+    /// 父执行仍活跃时才准入；state 直接 running（后端生命周期帧即为证据）。
+    /// 幂等性由调用方（会话 actor 的 backend_ref 映射）保证，不重复登记。
+    pub async fn admit_backend_subexecution(
+        &self,
+        conversation_id: &str,
+        parent_execution_id: &str,
+        backend_ref: &str,
+        now: u64,
+    ) -> Result<Execution, StoreError> {
+        require_ulid(conversation_id, "conversationId")?;
+        require_ulid(parent_execution_id, "parentExecutionId")?;
+        if backend_ref.is_empty() {
+            return Err(StoreError::InvalidArgument(
+                "backend_ref must not be empty".into(),
+            ));
+        }
+        let conversation = conversation_id.to_string();
+        let parent = parent_execution_id.to_string();
+        let reference = backend_ref.to_string();
+        self.immediate(move |tx, ids, limits| {
+            let parent_row = load_execution(tx, &parent)?;
+            if parent_row.conversation_id != conversation {
+                return Err(StoreError::InvalidArgument(
+                    "parent execution belongs to another conversation".into(),
+                ));
+            }
+            if TERMINAL_EXECUTION_STATES.contains(&parent_row.state.as_str()) {
+                return Err(StoreError::Conflict("parent_execution_terminal"));
+            }
+            let execution_id = ids.mint();
+            let execution = Execution {
+                id: execution_id.clone(),
+                conversation_id: conversation.clone(),
+                endpoint_id: parent_row.endpoint_id.clone(),
+                module_instance_id: parent_row.module_instance_id.clone(),
+                generation: parent_row.generation,
+                state: "running".into(),
+                revision: 1,
+                created_at_ms: now,
+                updated_at_ms: now,
+                parent_execution_id: Some(parent.clone()),
+                terminal_reason: None,
+                cancel_requested_at_ms: None,
+                backend_ref: Some(reference),
+            };
+            let projection = encode_bounded(&execution, limits.max_execution_meta_bytes)?;
+            tx.execute(
+                "INSERT INTO executions(id,conversation_id,parent_execution_id,generation,
+                 state,revision,projection) VALUES (?1,?2,?3,?4,'running',1,?5)",
+                params![
+                    execution_id,
+                    conversation,
+                    parent,
+                    execution.generation as i64,
+                    projection
+                ],
+            )?;
+            let epoch = stream_epoch(tx, &execution.conversation_id)?;
+            append_event(
+                tx,
+                ids,
+                limits,
+                &execution.conversation_id,
+                &epoch,
+                now,
+                "execution.updated",
+                &execution.id,
+                execution.revision,
+                Ev::ExecutionUpdated(Box::new(execution.clone())),
+            )?;
+            Ok(execution)
+        })
+        .await
+    }
+
+    /// 子代理列表（agent/subagents/list 数据源）：父执行派生的执行记录，
+    /// 来自后端真实生命周期帧。quality 恒为 current——记录即后端报告；
+    /// 空列表表示后端未报告任何子代理，不推断为能力缺失。
+    pub async fn list_subagents(
+        &self,
+        parent_execution_id: &str,
+        limit: u32,
+    ) -> Result<(Vec<Execution>, String), StoreError> {
+        require_ulid(parent_execution_id, "executionId")?;
+        if limit == 0 || limit > 100 {
+            return Err(StoreError::InvalidArgument("limit out of range".into()));
+        }
+        let parent = parent_execution_id.to_string();
+        self.readonly(move |tx, _gen, _limits| {
+            let mut stmt = tx.prepare(
+                "SELECT projection FROM executions WHERE parent_execution_id=?1
+                 ORDER BY rowid LIMIT ?2",
+            )?;
+            let mut out = Vec::new();
+            let rows = stmt.query_map(params![parent, limit as i64], |row| {
+                row.get::<_, Vec<u8>>(0)
+            })?;
+            for row in rows {
+                out.push(decode(&row?)?);
+            }
+            Ok((out, "current".to_string()))
+        })
+        .await
     }
 
     /// 历史读取（契约 §8）：按节点稳定 ordinal 向前翻已结束消息；

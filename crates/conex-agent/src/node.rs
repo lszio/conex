@@ -353,6 +353,7 @@ impl Node {
             let runtime = ModuleRuntime {
                 store: self.store.clone(),
                 data_dir: self.config.data_dir.clone(),
+                node_id: self.config.node_id.clone(),
                 node_epoch: self.epoch.clone(),
                 module_key: module.module_key.clone(),
                 generation,
@@ -489,7 +490,7 @@ impl Node {
             .contract
             .methods
             .keys()
-            .filter(|method| module.permissions.contains(&method.replace('/', ".")))
+            .filter(|method| crate::adapters::method_allowed(&module.permissions, method))
             .cloned()
             .collect();
         let Some(private) = self.config.private.as_ref() else {
@@ -550,7 +551,7 @@ impl Node {
             .contract
             .methods
             .keys()
-            .filter(|method| module.permissions.contains(&method.replace('/', ".")))
+            .filter(|method| crate::adapters::method_allowed(&module.permissions, method))
             .cloned()
             .collect();
         let scope = crate::access::authorize(

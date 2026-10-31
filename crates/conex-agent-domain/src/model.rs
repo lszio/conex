@@ -204,6 +204,13 @@ pub enum BackendObservation {
         message_id: String,
         incomplete: bool,
     },
+    /// 后端工具活动；追加 tool part（bounds: max_parts/summary 限额）。
+    ToolPartAppended {
+        message_id: String,
+        name: String,
+        phase: String,
+        summary: String,
+    },
     /// 后端请求人工交互；store 分配节点 InteractionRequest ID。
     InteractionOpened {
         kind: String,

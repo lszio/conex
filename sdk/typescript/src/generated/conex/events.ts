@@ -10,6 +10,7 @@ import {
   AgentGap,
   AgentHistoryInfo,
   AgentMessage,
+  AgentMessagePart,
   Conversation,
   Execution,
   InteractionRequest,
@@ -51,7 +52,11 @@ export interface AgentEvent {
   messageDelta?: AgentMessageDelta | undefined;
   messageCompleted?: AgentMessageCompleted | undefined;
   relationshipUpdated?: Relationship | undefined;
-  recoveryGap?: AgentGap | undefined;
+  recoveryGap?:
+    | AgentGap
+    | undefined;
+  /** 追加的消息部件（工具活动）；部件按事件顺序追加到消息。 */
+  messagePart?: AgentMessagePart | undefined;
 }
 
 /** 仅追加文本；offsetBytes 必须等于该 part 已知 totalBytes。 */
@@ -227,6 +232,7 @@ function createBaseAgentEvent(): AgentEvent {
     messageCompleted: undefined,
     relationshipUpdated: undefined,
     recoveryGap: undefined,
+    messagePart: undefined,
   };
 }
 
@@ -279,6 +285,9 @@ export const AgentEvent: MessageFns<AgentEvent> = {
     }
     if (message.recoveryGap !== undefined) {
       AgentGap.encode(message.recoveryGap, writer.uint32(130).fork()).join();
+    }
+    if (message.messagePart !== undefined) {
+      AgentMessagePart.encode(message.messagePart, writer.uint32(138).fork()).join();
     }
     return writer;
   },
@@ -424,6 +433,14 @@ export const AgentEvent: MessageFns<AgentEvent> = {
             message.recoveryGap = AgentGap.decode(reader, reader.uint32());
             continue;
           }
+          case 17: {
+            if (tag !== 138) {
+              break;
+            }
+
+            message.messagePart = AgentMessagePart.decode(reader, reader.uint32());
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -506,6 +523,11 @@ export const AgentEvent: MessageFns<AgentEvent> = {
         : isSet(object.recovery_gap)
         ? AgentGap.fromJSON(object.recovery_gap)
         : undefined,
+      messagePart: isSet(object.messagePart)
+        ? AgentMessagePart.fromJSON(object.messagePart)
+        : isSet(object.message_part)
+        ? AgentMessagePart.fromJSON(object.message_part)
+        : undefined,
     };
   },
 
@@ -559,6 +581,9 @@ export const AgentEvent: MessageFns<AgentEvent> = {
     if (message.recoveryGap !== undefined) {
       obj.recoveryGap = AgentGap.toJSON(message.recoveryGap);
     }
+    if (message.messagePart !== undefined) {
+      obj.messagePart = AgentMessagePart.toJSON(message.messagePart);
+    }
     return obj;
   },
 
@@ -600,6 +625,9 @@ export const AgentEvent: MessageFns<AgentEvent> = {
       : undefined;
     message.recoveryGap = (object.recoveryGap !== undefined && object.recoveryGap !== null)
       ? AgentGap.fromPartial(object.recoveryGap)
+      : undefined;
+    message.messagePart = (object.messagePart !== undefined && object.messagePart !== null)
+      ? AgentMessagePart.fromPartial(object.messagePart)
       : undefined;
     return message;
   },

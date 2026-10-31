@@ -1622,7 +1622,7 @@ pub struct AgentEvent {
     pub entity_id: ::prost::alloc::string::String,
     #[prost(uint64, tag = "7")]
     pub entity_revision: u64,
-    #[prost(oneof = "agent_event::Data", tags = "8, 9, 10, 11, 12, 13, 14, 15, 16")]
+    #[prost(oneof = "agent_event::Data", tags = "8, 9, 10, 11, 12, 13, 14, 15, 16, 17")]
     pub data: ::core::option::Option<agent_event::Data>,
 }
 /// Nested message and enum types in `AgentEvent`.
@@ -1647,6 +1647,9 @@ pub mod agent_event {
         RelationshipUpdated(super::Relationship),
         #[prost(message, tag = "16")]
         RecoveryGap(super::AgentGap),
+        /// 追加的消息部件（工具活动）；部件按事件顺序追加到消息。
+        #[prost(message, tag = "17")]
+        MessagePart(super::AgentMessagePart),
     }
 }
 /// 仅追加文本；offsetBytes 必须等于该 part 已知 totalBytes。

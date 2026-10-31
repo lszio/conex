@@ -3635,6 +3635,9 @@ impl serde::Serialize for AgentEvent {
                 agent_event::Data::RecoveryGap(v) => {
                     struct_ser.serialize_field("recoveryGap", v)?;
                 }
+                agent_event::Data::MessagePart(v) => {
+                    struct_ser.serialize_field("messagePart", v)?;
+                }
             }
         }
         struct_ser.end()
@@ -3676,6 +3679,8 @@ impl<'de> serde::Deserialize<'de> for AgentEvent {
             "relationshipUpdated",
             "recovery_gap",
             "recoveryGap",
+            "message_part",
+            "messagePart",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -3696,6 +3701,7 @@ impl<'de> serde::Deserialize<'de> for AgentEvent {
             MessageCompleted,
             RelationshipUpdated,
             RecoveryGap,
+            MessagePart,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -3733,6 +3739,7 @@ impl<'de> serde::Deserialize<'de> for AgentEvent {
                             "messageCompleted" | "message_completed" => Ok(GeneratedField::MessageCompleted),
                             "relationshipUpdated" | "relationship_updated" => Ok(GeneratedField::RelationshipUpdated),
                             "recoveryGap" | "recovery_gap" => Ok(GeneratedField::RecoveryGap),
+                            "messagePart" | "message_part" => Ok(GeneratedField::MessagePart),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -3871,6 +3878,13 @@ impl<'de> serde::Deserialize<'de> for AgentEvent {
                                 return Err(serde::de::Error::duplicate_field("recoveryGap"));
                             }
                             data__ = map_.next_value::<::std::option::Option<_>>()?.map(agent_event::Data::RecoveryGap)
+;
+                        }
+                        GeneratedField::MessagePart => {
+                            if data__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("messagePart"));
+                            }
+                            data__ = map_.next_value::<::std::option::Option<_>>()?.map(agent_event::Data::MessagePart)
 ;
                         }
                     }
