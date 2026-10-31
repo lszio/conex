@@ -29,7 +29,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::{Mutex, mpsc, oneshot, watch};
@@ -104,6 +104,19 @@ fn unknown_outcome(message: impl std::fmt::Display) -> Error {
     )
 }
 
+/// 领域观察不允许静默丢弃：失败落日志并终止当前帧处理（契约可观察性）。
+macro_rules! log_apply {
+    ($result:expr) => {
+        match $result {
+            Ok(result) => result,
+            Err(error) => {
+                eprintln!("conex-agent omp: apply_backend failed: {error}");
+                return;
+            }
+        }
+    };
+}
+
 fn proto_json<T: serde::Serialize>(value: &T) -> Result<Value, Error> {
     serde_json::to_value(value).map_err(|error| {
         Error::new(
@@ -142,6 +155,7 @@ pub struct OmpBackend {
     config: OmpAdapterConfig,
     store: Store,
     node_id: String,
+    module_instance_id: String,
     backend_version: String,
     sessions: Mutex<BTreeMap<String, Arc<SessionHandle>>>,
     data_dir: PathBuf,
@@ -149,10 +163,14 @@ pub struct OmpBackend {
 
 impl OmpBackend {
     fn workspace_root(&self, workspace_id: &str) -> Result<PathBuf, Error> {
+        // conversation.workspace_id 是登记到 store 的稳定 ULID；
+        // 配置里的 id 是 rootRef 键，二者以派生函数对应。
         self.config
             .workspaces
             .iter()
-            .find(|workspace| workspace.id == workspace_id)
+            .find(|workspace| {
+                stable_ulid(&format!("workspace:{}:{}", self.node_id, workspace.id)) == workspace_id
+            })
             .map(|workspace| workspace.root.clone())
             .ok_or_else(|| {
                 Error::new(
@@ -184,6 +202,7 @@ impl OmpBackend {
             ));
         }
         let handle = spawn_session(
+            &self.config,
             &self.config.backend_binary,
             &self.data_dir,
             conversation_id,
@@ -232,6 +251,7 @@ pub fn factory(config: OmpAdapterConfig) -> RuntimeFactory {
                 config: config.clone(),
                 store: runtime.store.clone(),
                 node_id: runtime.node_id.clone(),
+                module_instance_id: runtime.resource_id.clone(),
                 backend_version,
                 sessions: Mutex::new(BTreeMap::new()),
                 data_dir: runtime.data_dir.clone(),
@@ -312,7 +332,11 @@ fn agent_contract(backend: Arc<OmpBackend>) -> Result<Arc<Contract>, Error> {
         ($name:expr, $input:ty, $input_name:expr, $output_name:expr, $body:expr) => {
             methods.insert(
                 $name.to_string(),
-                read($input_name, $output_name).with_handler({
+                read(
+                    concat!("conex.", $input_name),
+                    concat!("conex.", $output_name),
+                )
+                .with_handler({
                     let captured = backend.clone();
                     move |context, input: $input| {
                         let backend = captured.clone();
@@ -331,7 +355,11 @@ fn agent_contract(backend: Arc<OmpBackend>) -> Result<Arc<Contract>, Error> {
         ($name:expr, $input:ty, $input_name:expr, $output_name:expr, $body:expr) => {
             methods.insert(
                 $name.to_string(),
-                write($input_name, $output_name).with_handler({
+                write(
+                    concat!("conex.", $input_name),
+                    concat!("conex.", $output_name),
+                )
+                .with_handler({
                     let captured = backend.clone();
                     move |context, input: $input| {
                         let backend = captured.clone();
@@ -353,10 +381,51 @@ fn agent_contract(backend: Arc<OmpBackend>) -> Result<Arc<Contract>, Error> {
         "AgentEndpointListResult",
         |backend: Arc<OmpBackend>, _scope, input: AgentEndpointListInput| async move {
             let _ = &input;
-            proto_json(&p::AgentEndpointListResult {
-                items: backend.store.list_endpoints().await.map_err(store_error)?,
-                next_page_token: None,
-            })
+            // 手工投影：pbjson 省略默认值而 schema 要求显式布尔（experimental、
+            // capabilities 的 false 位），这里逐字段输出保证完整。
+            let items = backend
+                .store
+                .list_endpoints()
+                .await
+                .map_err(store_error)?
+                .into_iter()
+                .map(|endpoint| {
+                    let capabilities = endpoint.capabilities.unwrap_or_default();
+                    json!({
+                        "id": endpoint.id,
+                        "nodeId": endpoint.node_id,
+                        "moduleInstanceId": endpoint.module_instance_id,
+                        "generation": endpoint.generation.to_string(),
+                        "adapter": endpoint.adapter,
+                        "backendVersion": endpoint.backend_version,
+                        "protocolVersion": endpoint.protocol_version,
+                        "experimental": endpoint.experimental,
+                        "capabilities": {
+                            "createConversation": capabilities.create_conversation,
+                            "continueConversation": capabilities.continue_conversation,
+                            "readHistory": capabilities.read_history,
+                            "streamMessages": capabilities.stream_messages,
+                            "cancelExecution": capabilities.cancel_execution,
+                            "approval": capabilities.approval,
+                            "userInput": capabilities.user_input,
+                            "listSubagents": capabilities.list_subagents,
+                            "cancelSubagent": capabilities.cancel_subagent,
+                            "steerExecution": capabilities.steer_execution,
+                            "attachExternal": capabilities.attach_external,
+                            "recoverActive": capabilities.recover_active,
+                        },
+                        "availability": endpoint.availability,
+                        "catalogScope": endpoint.catalog_scope,
+                        "limits": endpoint.limits.map(|limits| json!({
+                            "maxPageSize": limits.max_page_size,
+                            "maxSubmitBytes": limits.max_submit_bytes,
+                            "maxMessageReadBytes": limits.max_message_read_bytes,
+                        })),
+                        "displayName": endpoint.display_name,
+                    })
+                })
+                .collect::<Vec<_>>();
+            Ok(json!({ "items": items }))
         }
     );
     read_method!(
@@ -739,11 +808,15 @@ mod tests {
         Arc::new(OmpBackend {
             config: OmpAdapterConfig {
                 backend_binary: "omp".into(),
+                model: None,
+                tools: None,
+                approval_mode: None,
                 max_concurrent_sessions: 2,
                 workspaces: Vec::new(),
             },
             store,
             node_id: "01ARZ3NDEKTSV4RRFFQ69G5FAX".into(),
+            module_instance_id: "01ARZ3NDEKTSV4RRFFQ69G5FAY".into(),
             backend_version: "test".into(),
             sessions: Mutex::new(BTreeMap::new()),
             data_dir: std::env::temp_dir(),
@@ -798,6 +871,7 @@ async fn submit(
         .store
         .admit(
             scope,
+            &backend.module_instance_id,
             &AgentSubmitInput {
                 conversation_id: input.conversation_id.clone(),
                 idempotency_key: input.idempotency_key.clone(),
@@ -1129,7 +1203,6 @@ struct SessionActor {
     events: mpsc::Receiver<SessionEvent>,
     commands: mpsc::Receiver<SessionCommand>,
     exited: watch::Receiver<bool>,
-    pending: BTreeMap<String, Reply<Value>>,
     next_request_id: u64,
     omp_session_id: Option<String>,
     queued_dispatch: Option<(String, u64, String, Reply<()>)>,
@@ -1146,6 +1219,7 @@ impl SessionActor {
     }
 
     async fn write_line(&mut self, line: &str) -> Result<(), String> {
+        eprintln!("conex-agent omp: write {} bytes", line.len());
         if let Err(error) = self.stdin.write_all(line.as_bytes()).await {
             return Err(format!("omp stdin write: {error}"));
         }
@@ -1158,59 +1232,97 @@ impl SessionActor {
             .map_err(|error| format!("omp stdin write: {error}"))
     }
 
-    /// 发送命令并等待同 id 的 response 帧。
+    /// 发送命令并泵帧直到同 id 的 response 到达。bootstrap 阶段主循环尚未
+    /// 启动，oneshot 等待会死锁；这里直接顺序读帧，非本命令的帧交给
+    /// handle_frame（无活跃执行时为无操作或显式拒绝）。
     async fn request(&mut self, mut command: Value) -> Result<Value, String> {
+        eprintln!(
+            "conex-agent omp: request() enter {}",
+            command["type"].as_str().unwrap_or("?")
+        );
         let id = self.request_id();
         command["id"] = json!(id);
-        let (tx, rx) = oneshot::channel();
-        self.pending.insert(id.clone(), tx);
-        if let Err(error) = self.write_line(&command.to_string()).await {
-            self.pending.remove(&id);
-            return Err(error);
-        }
-        match tokio::time::timeout(COMMAND_TIMEOUT, rx).await {
-            Ok(Ok(result)) => result.map_err(|error| format!("omp refused: {error}")),
-            Ok(Err(_)) => Err("omp session dropped request".into()),
-            Err(_) => {
-                self.pending.remove(&id);
-                Err("omp command timeout".into())
+        self.write_line(&command.to_string()).await?;
+        eprintln!(
+            "conex-agent omp: sent {} waiting response",
+            command["type"].as_str().unwrap_or("?")
+        );
+        let deadline = Instant::now() + COMMAND_TIMEOUT;
+        loop {
+            if Instant::now() > deadline {
+                return Err("omp command timeout".into());
             }
+            let frame = self.next_frame().await?;
+            eprintln!(
+                "conex-agent omp: request {} frame {}",
+                command["type"].as_str().unwrap_or("?"),
+                frame["type"].as_str().unwrap_or("?")
+            );
+            if frame.get("type").and_then(Value::as_str) == Some("response")
+                && frame.get("id").and_then(Value::as_str) == Some(id.as_str())
+            {
+                return if frame.get("success").and_then(Value::as_bool) == Some(true) {
+                    Ok(frame.get("data").cloned().unwrap_or(Value::Null))
+                } else {
+                    Err(frame
+                        .get("error")
+                        .and_then(Value::as_str)
+                        .unwrap_or("refused")
+                        .to_string())
+                };
+            }
+            self.handle_frame(frame).await;
         }
     }
 
     async fn bootstrap(&mut self) -> Result<(), String> {
+        let started = Instant::now();
         let ready = self.next_frame().await?;
+        eprintln!(
+            "conex-agent omp: bootstrap ready at {}ms",
+            started.elapsed().as_millis()
+        );
         if ready.get("type").and_then(Value::as_str) != Some("ready") {
             return Err("first omp frame was not ready".into());
         }
-        let response = self
-            .request(json!({"type":"negotiate_protocol","protocolVersion":PROTOCOL_VERSION}))
+        // request() 成功即返回 data（失败已带 error 返回 Err）；bootstrap
+        // 不再二次检查 success——上一版在这里误判协商失败并静默吞掉，
+        // dispatch 永远排队，正是 live 验收卡住的根因。
+        self.request(json!({"type":"negotiate_protocol","protocolVersion":PROTOCOL_VERSION}))
             .await?;
-        if response.get("success").and_then(Value::as_bool) != Some(true) {
-            return Err(format!("protocol negotiation refused: {response}"));
-        }
+        eprintln!(
+            "conex-agent omp: negotiated at {}ms",
+            started.elapsed().as_millis()
+        );
         for command in [
             json!({"type":"set_event_filter","events":null,"messageUpdates":"delta"}),
             json!({"type":"set_subagent_subscription","level":"events"}),
         ] {
-            let response = self.request(command).await?;
-            if response.get("success").and_then(Value::as_bool) != Some(true) {
-                return Err(format!("omp config command refused: {response}"));
-            }
+            self.request(command).await?;
         }
+        eprintln!(
+            "conex-agent omp: session commands at {}ms",
+            started.elapsed().as_millis()
+        );
         let open = self
             .request(json!({
                 "type":"open_session",
                 "sessionDir": self.session_dir.display().to_string()
             }))
             .await?;
+        eprintln!(
+            "conex-agent omp: open_session done at {}ms",
+            started.elapsed().as_millis()
+        );
+        // request() 返回的就是 data 载荷；sessionId 在这一层直接取。
         let session_id = open
-            .get("data")
-            .and_then(|data| data.get("sessionId"))
+            .get("sessionId")
             .and_then(Value::as_str)
             .ok_or_else(|| format!("open_session without sessionId: {open}"))?
             .to_string();
+        eprintln!("conex-agent omp: session id {session_id}");
         self.omp_session_id = Some(session_id);
+        eprintln!("conex-agent omp: recording backend mapping");
         self.store
             .record_backend_mapping(
                 ADAPTER,
@@ -1220,6 +1332,7 @@ impl SessionActor {
             )
             .await
             .map_err(|error| error.to_string())?;
+        eprintln!("conex-agent omp: backend mapping recorded");
         Ok(())
     }
 
@@ -1309,6 +1422,9 @@ impl SessionActor {
                 boot_error = Some(error);
             }
         }
+        if let Some(error) = &boot_error {
+            eprintln!("conex-agent omp: bootstrap failed: {error}");
+        }
         if let Some((execution_id, generation, content, reply)) = self.queued_dispatch.take() {
             match &boot_error {
                 Some(error) => {
@@ -1349,6 +1465,20 @@ impl SessionActor {
                             if line.len() > MAX_PHYSICAL_FRAME {
                                 eprintln!("conex-agent omp: physical frame exceeds 1 MiB; closing session");
                                 break;
+                            }
+                            if line.len() > 200 {
+                                let parsed_head: Value = serde_json::from_str(line.trim()).unwrap_or(Value::Null);
+                                eprintln!(
+                                    "conex-agent omp: loop frame {} mid={} role={}",
+                                    parsed_head.get("type").and_then(Value::as_str).unwrap_or("?"),
+                                    parsed_head.get("messageId").and_then(Value::as_str).unwrap_or("-"),
+                                    parsed_head.get("message").and_then(|m| m.get("role")).and_then(Value::as_str).unwrap_or("-")
+                                );
+                            } else {
+                                eprintln!(
+                                    "conex-agent omp: loop frame {}",
+                                    line.get(..110).map(|s| s.to_string()).unwrap_or_default()
+                                );
                             }
                             let parsed = serde_json::from_str::<Value>(line.trim());
                             match parsed {
@@ -1508,17 +1638,18 @@ impl SessionActor {
             .await
         {
             let _ = reply.send(Err(error.clone()));
-            let _ = self
-                .store
-                .apply_backend(
-                    &execution_id,
-                    generation,
-                    BackendObservation::OutcomeUnknown {
-                        reason: format!("prompt send failed: {error}"),
-                    },
-                    now_ms(),
-                )
-                .await;
+            log_apply!(
+                self.store
+                    .apply_backend(
+                        &execution_id,
+                        generation,
+                        BackendObservation::OutcomeUnknown {
+                            reason: format!("prompt send failed: {error}"),
+                        },
+                        now_ms(),
+                    )
+                    .await
+            );
             return;
         }
         let _ = reply.send(Ok(()));
@@ -1531,17 +1662,18 @@ impl SessionActor {
             streamed_bytes: BTreeMap::new(),
             pending_status: None,
         });
-        let _ = self
-            .store
-            .apply_backend(
-                &execution_id,
-                generation,
-                BackendObservation::Started {
-                    backend_ref: Some(backend_ref),
-                },
-                now_ms(),
-            )
-            .await;
+        log_apply!(
+            self.store
+                .apply_backend(
+                    &execution_id,
+                    generation,
+                    BackendObservation::Started {
+                        backend_ref: Some(backend_ref),
+                    },
+                    now_ms(),
+                )
+                .await
+        );
     }
 
     async fn handle_frame(&mut self, frame: Value) {
@@ -1580,29 +1712,19 @@ impl SessionActor {
                 .to_string();
             let (execution_id, generation) = (active.execution_id.clone(), active.generation);
             self.active = None;
-            let _ = self
-                .store
-                .apply_backend(
-                    &execution_id,
-                    generation,
-                    BackendObservation::Quiescent {
-                        state: TerminalState::Failed(format!("backend_refused: {error}")),
-                    },
-                    now_ms(),
-                )
-                .await;
+            log_apply!(
+                self.store
+                    .apply_backend(
+                        &execution_id,
+                        generation,
+                        BackendObservation::Quiescent {
+                            state: TerminalState::Failed(format!("backend_refused: {error}")),
+                        },
+                        now_ms(),
+                    )
+                    .await
+            );
             return;
-        }
-        if let Some(reply) = self.pending.remove(&id) {
-            let _ = if frame.get("success").and_then(Value::as_bool) == Some(true) {
-                reply.send(Ok(frame.get("data").cloned().unwrap_or(Value::Null)))
-            } else {
-                reply.send(Err(frame
-                    .get("error")
-                    .and_then(Value::as_str)
-                    .unwrap_or("refused")
-                    .to_string()))
-            };
         }
     }
 
@@ -1669,18 +1791,19 @@ impl SessionActor {
                 {
                     *entry += delta.len();
                 }
-                let _ = self
-                    .store
-                    .apply_backend(
-                        &execution_id,
-                        generation,
-                        BackendObservation::TextAppended {
-                            message_id: node_message,
-                            text: delta.to_string(),
-                        },
-                        now_ms(),
-                    )
-                    .await;
+                log_apply!(
+                    self.store
+                        .apply_backend(
+                            &execution_id,
+                            generation,
+                            BackendObservation::TextAppended {
+                                message_id: node_message,
+                                text: delta.to_string(),
+                            },
+                            now_ms(),
+                        )
+                        .await
+                );
             }
             "toolcall_start" | "toolcall_end" => {
                 let name = event
@@ -1695,20 +1818,21 @@ impl SessionActor {
                 } else {
                     "completed"
                 };
-                let _ = self
-                    .store
-                    .apply_backend(
-                        &execution_id,
-                        generation,
-                        BackendObservation::ToolPartAppended {
-                            message_id: node_message,
-                            name,
-                            phase: phase.to_string(),
-                            summary: String::new(),
-                        },
-                        now_ms(),
-                    )
-                    .await;
+                log_apply!(
+                    self.store
+                        .apply_backend(
+                            &execution_id,
+                            generation,
+                            BackendObservation::ToolPartAppended {
+                                message_id: node_message,
+                                name,
+                                phase: phase.to_string(),
+                                summary: String::new(),
+                            },
+                            now_ms(),
+                        )
+                        .await
+                );
             }
             _ => {}
         }
@@ -1724,8 +1848,10 @@ impl SessionActor {
         let Some(node_message) = active.messages.get(omp_message).cloned() else {
             return;
         };
-        // *_end 是权威快照：累计流字节 < 权威文本长度 => 无法完整表示。
-        let authoritative = frame
+        // *_end 是权威快照。delta 过滤下用户消息常常只有 end 带全文：
+        // 累计流为 0 且权威文本非空时，把全文一次性补齐再收口（同一 store
+        // 事务语义：append 后 complete）；部分流到中途的差异才判 incomplete。
+        let authoritative_text = frame
             .get("message")
             .and_then(|message| message.get("content"))
             .and_then(Value::as_array)
@@ -1733,24 +1859,46 @@ impl SessionActor {
                 blocks
                     .iter()
                     .filter_map(|block| block.get("text").and_then(Value::as_str))
-                    .map(str::len)
-                    .sum::<usize>()
+                    .collect::<String>()
             })
-            .unwrap_or(0);
+            .unwrap_or_default();
         let streamed = active.streamed_bytes.get(omp_message).copied().unwrap_or(0);
         let (execution_id, generation) = (active.execution_id.clone(), active.generation);
-        let _ = self
-            .store
-            .apply_backend(
-                &execution_id,
-                generation,
-                BackendObservation::MessageCompleted {
-                    message_id: node_message,
-                    incomplete: authoritative > streamed,
-                },
-                now_ms(),
-            )
-            .await;
+        let mut incomplete = false;
+        if authoritative_text.len() > streamed {
+            if streamed == 0 {
+                log_apply!(
+                    self.store
+                        .apply_backend(
+                            &execution_id,
+                            generation,
+                            BackendObservation::TextAppended {
+                                message_id: node_message.clone(),
+                                text: authoritative_text,
+                            },
+                            now_ms(),
+                        )
+                        .await
+                );
+            } else {
+                incomplete = true;
+            }
+        } else if authoritative_text.len() < streamed {
+            incomplete = true;
+        }
+        log_apply!(
+            self.store
+                .apply_backend(
+                    &execution_id,
+                    generation,
+                    BackendObservation::MessageCompleted {
+                        message_id: node_message,
+                        incomplete,
+                    },
+                    now_ms(),
+                )
+                .await
+        );
     }
 
     async fn handle_prompt_result(&mut self, frame: Value) {
@@ -1806,19 +1954,35 @@ impl SessionActor {
             "aborted" => TerminalState::Cancelled("backend_aborted".into()),
             other => TerminalState::Failed(format!("backend_{other}")),
         };
-        let _ = self
-            .store
-            .apply_backend(
-                execution_id,
-                generation,
-                BackendObservation::Quiescent { state },
-                now_ms(),
-            )
-            .await;
+        log_apply!(
+            self.store
+                .apply_backend(
+                    execution_id,
+                    generation,
+                    BackendObservation::Quiescent { state },
+                    now_ms(),
+                )
+                .await
+        );
     }
 
     async fn handle_ui_request(&mut self, frame: Value) {
+        let request_id = frame.get("id").and_then(Value::as_str).map(str::to_string);
         let Some(active) = self.active.as_ref() else {
+            // 无执行上下文的 UI 请求（启动期扩展展示类）：通知类忽略，
+            // 需要答复的显式拒绝，不能静默挂起 OMP 的等待。
+            let method = frame.get("method").and_then(Value::as_str).unwrap_or("");
+            if let Some(request_id) = request_id
+                && matches!(method, "select" | "confirm" | "input" | "editor" | "ask")
+            {
+                let _ = self
+                    .write_line(
+                        &json!({"type":"extension_ui_response","id":request_id,"cancelled":true})
+                            .to_string(),
+                    )
+                    .await;
+            }
+            eprintln!("conex-agent omp: stray ui request {method} dropped (no active execution)");
             return;
         };
         let Some(request_id) = frame.get("id").and_then(Value::as_str) else {
@@ -1990,15 +2154,16 @@ impl SessionActor {
                     .await
                     .map(|execution| execution.generation)
                     .unwrap_or(0);
-                let _ = self
-                    .store
-                    .apply_backend(
-                        &execution_id,
-                        generation,
-                        BackendObservation::Quiescent { state },
-                        now_ms(),
-                    )
-                    .await;
+                log_apply!(
+                    self.store
+                        .apply_backend(
+                            &execution_id,
+                            generation,
+                            BackendObservation::Quiescent { state },
+                            now_ms(),
+                        )
+                        .await
+                );
                 // 终态关系保留历史质量；from 引用不变。
                 if let Some(from) = self
                     .store
@@ -2030,34 +2195,35 @@ impl SessionActor {
     async fn process_exit(&mut self) {
         // 自有进程确认退出：活跃执行 Quiescent(backend_terminated) 清槽（契约 §5）。
         if let Some(active) = self.active.take() {
-            let _ = self
-                .store
-                .apply_backend(
-                    &active.execution_id,
-                    active.generation,
-                    BackendObservation::Quiescent {
-                        state: TerminalState::Failed("backend_terminated".into()),
-                    },
-                    now_ms(),
-                )
-                .await;
+            log_apply!(
+                self.store
+                    .apply_backend(
+                        &active.execution_id,
+                        active.generation,
+                        BackendObservation::Quiescent {
+                            state: TerminalState::Failed("backend_terminated".into()),
+                        },
+                        now_ms(),
+                    )
+                    .await
+            );
         }
-        self.pending.clear();
     }
 
     async fn shutdown(&mut self, deadline: tokio::time::Instant) {
         if let Some(active) = self.active.take() {
-            let _ = self
-                .store
-                .apply_backend(
-                    &active.execution_id,
-                    active.generation,
-                    BackendObservation::OutcomeUnknown {
-                        reason: "adapter stopped".into(),
-                    },
-                    now_ms(),
-                )
-                .await;
+            log_apply!(
+                self.store
+                    .apply_backend(
+                        &active.execution_id,
+                        active.generation,
+                        BackendObservation::OutcomeUnknown {
+                            reason: "adapter stopped".into(),
+                        },
+                        now_ms(),
+                    )
+                    .await
+            );
         }
         let _ = self.stdin.shutdown().await;
         let _ = tokio::time::timeout_at(deadline, self.exited.changed()).await;
@@ -2071,6 +2237,7 @@ fn event_type_is_start(event: &Value) -> bool {
 /// 会话进程 spawn 与身份登记。同会话残留的上一代进程经身份核对后终止
 /// （自有进程；不误杀复用 PID 的无关进程），避免双写同一 session 目录。
 async fn spawn_session(
+    omp_config: &OmpAdapterConfig,
     omp_binary: &str,
     data_dir: &std::path::Path,
     conversation_id: &str,
@@ -2082,20 +2249,45 @@ async fn spawn_session(
     crate::process::ensure_private_dir(&session_dir)
         .map_err(|error| unavailable(format!("omp session dir: {error}")))?;
     terminate_previous_omp(data_dir, conversation_id).await;
+    // 实测（18.14.0）：ask 工具只在 --mode rpc-ui 下可用（rpc 模式直接退出
+    // "Built-in tool unavailable: ask"），且其扩展 UI 依赖扩展发现——
+    // --no-extensions 同样令其退出。因此配置了工具白名单（存在交互路径）
+    // 时用 rpc-ui 并保留扩展发现；纯文本会话用 rpc 并禁用扩展发现。
+    // approval-mode 的拒绝路径见交互处理（过期不自动批准，P0 证据 §3）。
+    let rpc_mode = if omp_config.tools.is_some() {
+        "rpc-ui"
+    } else {
+        "rpc"
+    };
+    let mut args = vec![
+        "--mode".to_string(),
+        rpc_mode.to_string(),
+        "--session-dir".to_string(),
+        session_dir.display().to_string(),
+        "--cwd".to_string(),
+        workspace_root.display().to_string(),
+        "--no-skills".to_string(),
+        "--no-rules".to_string(),
+        "--no-context-files".to_string(),
+        "--no-lsp".to_string(),
+    ];
+    if omp_config.tools.is_none() {
+        args.push("--no-extensions".to_string());
+    }
+    if let Some(model) = &omp_config.model {
+        args.push("--model".to_string());
+        args.push(model.clone());
+    }
+    if let Some(tools) = &omp_config.tools {
+        args.push("--tools".to_string());
+        args.push(tools.clone());
+    }
+    if let Some(mode) = &omp_config.approval_mode {
+        args.push("--approval-mode".to_string());
+        args.push(mode.clone());
+    }
     let mut child = Command::new(omp_binary)
-        .args([
-            "--mode",
-            "rpc",
-            "--session-dir",
-            &session_dir.display().to_string(),
-            "--cwd",
-            &workspace_root.display().to_string(),
-            "--no-extensions",
-            "--no-skills",
-            "--no-rules",
-            "--no-context-files",
-            "--no-lsp",
-        ])
+        .args(&args)
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
@@ -2143,7 +2335,6 @@ async fn spawn_session(
         events: event_rx,
         commands: command_rx,
         exited: exited_rx,
-        pending: BTreeMap::new(),
         next_request_id: 0,
         omp_session_id: None,
         queued_dispatch: None,
@@ -2156,8 +2347,13 @@ async fn spawn_session(
         commands: command_tx,
         done: done_rx,
     });
-    tokio::spawn(async move {
+    let task = tokio::spawn(async move {
         actor.run(done_tx).await;
+    });
+    tokio::spawn(async move {
+        if let Err(join) = task.await {
+            eprintln!("conex-agent omp: session actor failed: {join}");
+        }
     });
     Ok(handle)
 }

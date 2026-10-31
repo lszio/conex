@@ -19,6 +19,7 @@ pub fn run(suite: &str) -> Result<()> {
         "s2-plugins" => crate::s2_e2e::run(),
         "private-runtime" => crate::private_runtime_e2e::run(),
         "private-network" => crate::private_network_e2e::run(),
+        "agent-omp-live" => crate::agent_omp_live::run(),
         other => bail!("unknown e2e suite: {other}"),
     }
 }

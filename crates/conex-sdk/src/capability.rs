@@ -91,7 +91,13 @@ impl Method {
         self.handler = Some(Arc::new(move |context, value| {
             let handler = handler.clone();
             Box::pin(async move {
-                let input = serde_json::from_value(value).map_err(Error::decode)?;
+                let input = serde_json::from_value(value.clone()).map_err(|error| {
+                    eprintln!(
+                        "conex-sdk: input decode failed for {}: {error:?} VALUE={value}",
+                        std::any::type_name::<I>()
+                    );
+                    Error::decode(error)
+                })?;
                 let output = handler(context, input).await?;
                 serde_json::to_value(output).map_err(Error::decode)
             })
@@ -125,7 +131,13 @@ impl State {
         self.handler = Some(Arc::new(move |context, value, observer| {
             let handler = handler.clone();
             Box::pin(async move {
-                let input = serde_json::from_value(value).map_err(Error::decode)?;
+                let input = serde_json::from_value(value.clone()).map_err(|error| {
+                    eprintln!(
+                        "conex-sdk: input decode failed for {}: {error:?} VALUE={value}",
+                        std::any::type_name::<I>()
+                    );
+                    Error::decode(error)
+                })?;
                 handler(context, input, observer).await
             })
         }));

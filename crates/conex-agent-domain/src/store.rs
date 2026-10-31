@@ -1384,9 +1384,11 @@ impl Store {
     pub async fn admit(
         &self,
         authorized: &AuthorizedScope,
+        module_instance_id: &str,
         input: &AgentSubmitInput,
         now: u64,
     ) -> Result<Admission, StoreError> {
+        require_ulid(module_instance_id, "moduleInstanceId")?;
         require_ulid(&input.conversation_id, "conversationId")?;
         require_key(&input.idempotency_key)?;
         if input.content.is_empty() {
@@ -1399,7 +1401,9 @@ impl Store {
         }
         let authorized = authorized.clone();
         let input = input.clone();
+        let module_instance = module_instance_id.to_string();
         self.immediate(move |tx, ids, limits| {
+            let module_instance_id = module_instance.as_str();
             let conversation = load_conversation(tx, &input.conversation_id)?;
             let endpoint = conversation.endpoint_id.clone();
             let digest_value = digest(&[
@@ -1451,7 +1455,7 @@ impl Store {
                 id: execution_id.clone(),
                 conversation_id: conversation.id.clone(),
                 endpoint_id: endpoint.clone(),
-                module_instance_id: String::new(),
+                module_instance_id: module_instance_id.to_string(),
                 generation,
                 state: "accepted".into(),
                 revision: 1,
@@ -1745,6 +1749,9 @@ impl Store {
                         |row| row.get(0),
                     )?;
                     let message_id = ids.mint();
+                    // 零部件起步：全默认的空 text part 会被 pbjson 序列化成
+                    // {"text":{}}（默认值省略），无法反序列化回投影；首个部件
+                    // 由第一次 TextAppended/ToolPart 创建。
                     let message = AgentMessage {
                         id: message_id.clone(),
                         conversation_id: current.conversation_id.clone(),
@@ -1752,15 +1759,7 @@ impl Store {
                         role,
                         state: "streaming".into(),
                         revision: 1,
-                        parts: vec![conex_proto::AgentMessagePart {
-                            part: Some(agent_message_part::Part::Text(
-                                conex_proto::AgentTextPart {
-                                    text: String::new(),
-                                    offset_bytes: 0,
-                                    total_bytes: 0,
-                                },
-                            )),
-                        }],
+                        parts: vec![],
                     };
                     let meta = encode(&message)?;
                     if meta.len() > limits.max_message_meta_bytes {
@@ -3234,6 +3233,15 @@ fn append_text(
     }
     if message.state != "streaming" {
         return Err(StoreError::Conflict("message_not_active"));
+    }
+    if message.parts.is_empty() {
+        message.parts.push(conex_proto::AgentMessagePart {
+            part: Some(agent_message_part::Part::Text(conex_proto::AgentTextPart {
+                text: String::new(),
+                offset_bytes: 0,
+                total_bytes: 0,
+            })),
+        });
     }
     let (mut offset, chunk_count);
     {

@@ -38,7 +38,6 @@ pub fn build(descriptor_bytes: &[u8], out_dir: &Path) -> Result<()> {
 
 fn message_schema(m: &MessageDescriptor) -> Value {
     let mut props = Map::new();
-    let mut required: Vec<Value> = Vec::new();
     for field in m.fields() {
         let name = field.json_name().to_string();
         let schema = if field.is_map() {
@@ -53,9 +52,10 @@ fn message_schema(m: &MessageDescriptor) -> Value {
         } else {
             kind_schema(&field)
         };
-        if !field.is_map() && !field.is_list() && !field.supports_presence() {
-            required.push(Value::String(name.clone()));
-        }
+        // pbjson 序列化省略默认值标量（false/0/""），proto3 非 presence 字段
+        // 的缺失与默认值在 wire 上不可区分——标量与 singular message 都不能标
+        // required。真正的必填语义由 MethodContract.prepare 与领域层（ULID、
+        // 非空 content 等）执行，本 schema 只约束形状（见文件头注释）。
         props.insert(name, schema);
     }
 
@@ -63,10 +63,6 @@ fn message_schema(m: &MessageDescriptor) -> Value {
     out.insert("type".into(), json!("object"));
     out.insert("additionalProperties".into(), json!(false));
     out.insert("properties".into(), Value::Object(props));
-    if !required.is_empty() {
-        out.insert("required".into(), Value::Array(required));
-    }
-
     let mut oneof_constraints = Vec::new();
     for oneof in m.oneofs() {
         if oneof.is_synthetic() {

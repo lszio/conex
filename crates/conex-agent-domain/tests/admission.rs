@@ -76,7 +76,9 @@ async fn same_idempotency_key_yields_one_execution_and_no_second_permit() {
         let input = submit(&conversation.id, "same-key", "hello");
         tokio::spawn(async move {
             barrier.wait().await;
-            store.admit(&scope, &input, 2_000).await
+            store
+                .admit(&scope, "01ARZ3NDEKTSV4RRFFQ69G5FAX", &input, 2_000)
+                .await
         })
     };
     let second = {
@@ -86,7 +88,9 @@ async fn same_idempotency_key_yields_one_execution_and_no_second_permit() {
         let input = submit(&conversation.id, "same-key", "hello");
         tokio::spawn(async move {
             barrier.wait().await;
-            store.admit(&scope, &input, 2_000).await
+            store
+                .admit(&scope, "01ARZ3NDEKTSV4RRFFQ69G5FAX", &input, 2_000)
+                .await
         })
     };
     let first = first.await.expect("first task").expect("first admission");
@@ -134,14 +138,24 @@ async fn different_key_on_busy_conversation_is_rejected_without_consuming_key() 
         .await
         .expect("conversation");
     let admission = store
-        .admit(&scope, &submit(&conversation.id, "key-a", "hello"), 2_000)
+        .admit(
+            &scope,
+            "01ARZ3NDEKTSV4RRFFQ69G5FAX",
+            &submit(&conversation.id, "key-a", "hello"),
+            2_000,
+        )
         .await
         .expect("first admission");
     let Admission::Created { execution, .. } = admission else {
         panic!("first admission must create");
     };
     let busy = store
-        .admit(&scope, &submit(&conversation.id, "key-b", "other"), 2_100)
+        .admit(
+            &scope,
+            "01ARZ3NDEKTSV4RRFFQ69G5FAX",
+            &submit(&conversation.id, "key-b", "other"),
+            2_100,
+        )
         .await
         .expect_err("second key must be rejected while busy");
     match busy {
@@ -165,7 +179,12 @@ async fn different_key_on_busy_conversation_is_rejected_without_consuming_key() 
         .await
         .expect("quiescent");
     let retry = store
-        .admit(&scope, &submit(&conversation.id, "key-b", "other"), 2_200)
+        .admit(
+            &scope,
+            "01ARZ3NDEKTSV4RRFFQ69G5FAX",
+            &submit(&conversation.id, "key-b", "other"),
+            2_200,
+        )
         .await
         .expect("key was not consumed by the busy rejection");
     assert!(matches!(retry, Admission::Created { .. }));
@@ -185,12 +204,18 @@ async fn same_key_with_different_content_is_a_conflict() {
         .await
         .expect("conversation");
     store
-        .admit(&scope, &submit(&conversation.id, "key-a", "hello"), 2_000)
+        .admit(
+            &scope,
+            "01ARZ3NDEKTSV4RRFFQ69G5FAX",
+            &submit(&conversation.id, "key-a", "hello"),
+            2_000,
+        )
         .await
         .expect("first admission");
     let conflict = store
         .admit(
             &scope,
+            "01ARZ3NDEKTSV4RRFFQ69G5FAX",
             &submit(&conversation.id, "key-a", "different"),
             2_100,
         )
@@ -214,7 +239,12 @@ async fn user_message_is_chunked_into_bounded_delta_events() {
         .expect("conversation");
     let content = "é".repeat(5_000); // 10_000 UTF-8 bytes
     let admission = store
-        .admit(&scope, &submit(&conversation.id, "key-a", &content), 2_000)
+        .admit(
+            &scope,
+            "01ARZ3NDEKTSV4RRFFQ69G5FAX",
+            &submit(&conversation.id, "key-a", &content),
+            2_000,
+        )
         .await
         .expect("admission");
     let Admission::Created { execution, .. } = admission else {
@@ -351,7 +381,12 @@ async fn message_quota_isolates_the_endpoint_instead_of_growing_unbounded() {
         .await
         .expect("conversation");
     let admission = store
-        .admit(&scope, &submit(&conversation.id, "key-a", "hello"), 2_000)
+        .admit(
+            &scope,
+            "01ARZ3NDEKTSV4RRFFQ69G5FAX",
+            &submit(&conversation.id, "key-a", "hello"),
+            2_000,
+        )
         .await
         .expect("admission");
     let Admission::Created {
@@ -438,7 +473,12 @@ async fn natural_completion_wins_over_late_cancel_and_frees_the_slot() {
         .await
         .expect("conversation");
     let admission = store
-        .admit(&scope, &submit(&conversation.id, "key-a", "hello"), 2_000)
+        .admit(
+            &scope,
+            "01ARZ3NDEKTSV4RRFFQ69G5FAX",
+            &submit(&conversation.id, "key-a", "hello"),
+            2_000,
+        )
         .await
         .expect("admission");
     let Admission::Created {
@@ -485,8 +525,30 @@ async fn natural_completion_wins_over_late_cancel_and_frees_the_slot() {
     assert_eq!(cancel.state, "succeeded");
     // 槽已释放：新 key 可以再次准入。
     let next = store
-        .admit(&scope, &submit(&conversation.id, "key-b", "again"), 2_500)
+        .admit(
+            &scope,
+            "01ARZ3NDEKTSV4RRFFQ69G5FAX",
+            &submit(&conversation.id, "key-b", "again"),
+            2_500,
+        )
         .await
         .expect("slot must be free after a terminal state");
     assert!(matches!(next, Admission::Created { .. }));
+}
+
+#[test]
+fn scratch_pbjson_probe() {
+    use conex_proto::{AgentInteractionListInput, AgentMessage, AgentSubmitInput};
+    let v = serde_json::json!({"conversationId": "01ARZ3NDEKTSV4RRFFQ69G5FAX", "limit": 10});
+    let r: Result<AgentInteractionListInput, _> = serde_json::from_value(v);
+    println!("interaction input: {:?}", r.is_ok());
+    let v2 = serde_json::json!({"conversationId": "01ARZ3NDEKTSV4RRFFQ69G5FAX", "idempotencyKey": "k", "content": "hi"});
+    let r2: Result<AgentSubmitInput, _> = serde_json::from_value(v2);
+    println!("submit input: {:?}", r2.is_ok());
+    let msg = serde_json::json!({"id":"01ARZ3NDEKTSV4RRFFQ69G5FAX","conversationId":"01ARZ3NDEKTSV4RRFFQ69G5FAX","executionId":"01ARZ3NDEKTSV4RRFFQ69G5FAX","role":"user","state":"complete","revision":"1","parts":[{"text":{"text":"hi","totalBytes":"2"}}]});
+    let r3: Result<AgentMessage, _> = serde_json::from_value(msg);
+    println!("message decode: {:?}", r3.is_ok());
+    let empty_part = serde_json::json!({"id":"01ARZ3NDEKTSV4RRFFQ69G5FAX","conversationId":"01ARZ3NDEKTSV4RRFFQ69G5FAX","executionId":"01ARZ3NDEKTSV4RRFFQ69G5FAX","role":"user","state":"streaming","revision":"1","parts":[{"text":{}}]});
+    let r4: Result<AgentMessage, _> = serde_json::from_value(empty_part);
+    println!("empty part decode: {:?}", r4.is_ok());
 }

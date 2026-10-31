@@ -369,7 +369,7 @@ async fn dispatch_request(
     }
     let input = params
         .input
-        .map(serde_json::to_value)
+        .map(|value| conex_proto::wire::value_to_json(&value))
         .transpose()
         .map_err(|_| crate::node::failure("bad_request"))?
         .unwrap_or_else(|| json!({}));

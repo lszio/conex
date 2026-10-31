@@ -1,0 +1,10 @@
+# OMP 适配器应用包样例（非秘密）。模块无导出：会话仅经本地/直连入口消费。
+schema = "conex.application/1"
+app_id = "omp-agent"
+version = "0.1.0"
+owner_node_ref = "home-node"
+
+[[modules]]
+id = "agent"
+implementation = "omp"
+permissions = ["agent.read", "agent.create", "agent.execute", "agent.cancel", "agent.interact"]

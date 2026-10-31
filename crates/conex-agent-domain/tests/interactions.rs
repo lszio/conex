@@ -57,6 +57,7 @@ async fn pending_interaction(
     let admission = store
         .admit(
             scope,
+            "01ARZ3NDEKTSV4RRFFQ69G5FAX",
             &AgentSubmitInput {
                 conversation_id: conversation.id.clone(),
                 idempotency_key: "key-a".into(),

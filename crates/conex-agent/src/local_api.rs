@@ -155,9 +155,11 @@ async fn dispatch(node: &NodeHandle, caller: &TrustedCaller, request: p::Request
     {
         return Err(failure("forbidden"));
     }
+    // 入站 protobuf Value 的数字是 f64；整数归一化让 uint32 等字段能以
+    // JSON number 传入（wire 冻结的 JS Number 语义在此收敛回 i64）。
     let input = params
         .input
-        .map(serde_json::to_value)
+        .map(|value| conex_proto::wire::value_to_json(&value))
         .transpose()
         .map_err(|_| failure("bad_request"))?
         .unwrap_or_else(|| json!({}));

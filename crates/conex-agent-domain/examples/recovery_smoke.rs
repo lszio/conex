@@ -85,7 +85,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         execution: done_execution,
         dispatch_token,
     } = store
-        .admit(&scope, &submit(&done.id, "key-d", "done"), 1_100)
+        .admit(
+            &scope,
+            "01ARZ3NDEKTSV4RRFFQ69G5FAX",
+            &submit(&done.id, "key-d", "done"),
+            1_100,
+        )
         .await?
     else {
         return Err("expected a created admission".into());
@@ -114,7 +119,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .create_conversation(&scope, &endpoint, &workspace, "create-b", None, 1_400)
         .await?;
     store
-        .admit(&scope, &submit(&pending.id, "key-b", "pending"), 1_500)
+        .admit(
+            &scope,
+            "01ARZ3NDEKTSV4RRFFQ69G5FAX",
+            &submit(&pending.id, "key-b", "pending"),
+            1_500,
+        )
         .await?;
 
     // 会话 U：分派后流式产出正文，随后进程结束。
@@ -125,7 +135,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         execution: stream_execution,
         dispatch_token,
     } = store
-        .admit(&scope, &submit(&streaming.id, "key-u", "hello"), 1_700)
+        .admit(
+            &scope,
+            "01ARZ3NDEKTSV4RRFFQ69G5FAX",
+            &submit(&streaming.id, "key-u", "hello"),
+            1_700,
+        )
         .await?
     else {
         return Err("expected a created admission".into());

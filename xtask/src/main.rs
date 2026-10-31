@@ -1,5 +1,6 @@
 //! conex build/verification tasks: `cargo xtask <command>`.
 mod additivity;
+mod agent_omp_live;
 mod bench;
 mod check;
 mod conformance;

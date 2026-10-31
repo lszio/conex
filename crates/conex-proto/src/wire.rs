@@ -787,7 +787,7 @@ fn error_to_json(error: Option<&crate::Error>) -> Result<Value, ProtocolError> {
     Ok(Value::Object(out))
 }
 
-pub(crate) fn value_to_json(value: &pbjson_types::Value) -> Result<Value, ProtocolError> {
+pub fn value_to_json(value: &pbjson_types::Value) -> Result<Value, ProtocolError> {
     fn normalize_numbers(value: &mut Value) {
         match value {
             Value::Number(number) => {

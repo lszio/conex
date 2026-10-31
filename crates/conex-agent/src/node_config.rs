@@ -35,6 +35,18 @@ pub struct NodeConfig {
 pub struct OmpAdapterConfig {
     /// Approved binary (absolute path, or a name resolved via PATH at spawn).
     pub backend_binary: String,
+    /// Approved model ("provider/model", exact). Ambient OMP auth is used;
+    /// clients cannot select or override models.
+    #[serde(default)]
+    pub model: Option<String>,
+    /// Optional tool allowlist passed as --tools (comma-separated). Absent =
+    /// OMP default toolset; client payloads never choose tools.
+    #[serde(default)]
+    pub tools: Option<String>,
+    /// Session approval mode. yolo and auto-approve are refused by validation:
+    /// the adapter never runs an auto-approving backend.
+    #[serde(default)]
+    pub approval_mode: Option<String>,
     /// Concurrent owned OMP processes; new sessions beyond this fail
     /// unavailable instead of preempting an active session.
     #[serde(default)]
@@ -200,6 +212,20 @@ impl NodeConfig {
             }
             if omp.max_concurrent_sessions == 0 || omp.max_concurrent_sessions > 16 {
                 return Err("omp max_concurrent_sessions must be 1..=16".into());
+            }
+            if let Some(model) = &omp.model
+                && (!model.contains('/') || model.trim() != model || model.is_empty())
+            {
+                return Err("omp model must be an exact \"provider/model\" string".into());
+            }
+            if let Some(mode) = &omp.approval_mode
+                && !matches!(mode.as_str(), "always-ask" | "always-ask-cached" | "write")
+            {
+                return Err(
+                    "omp approval_mode must be always-ask, always-ask-cached or write; \
+                     auto-approving modes are refused"
+                        .into(),
+                );
             }
             let mut seen = std::collections::BTreeSet::new();
             for workspace in &omp.workspaces {

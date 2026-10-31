@@ -35,16 +35,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "issuer",
-        "principal",
-        "tenant",
-        "nodeId",
-        "nodeEpoch",
-        "jti",
-        "issuedAtMs",
-        "expiresAtMs"
-      ],
       "type": "object"
     },
     "conex.AccessGrantRequest": {
@@ -57,9 +47,6 @@
           "$ref": "#/$defs/conex.AccessGrantScope"
         }
       },
-      "required": [
-        "nodeId"
-      ],
       "type": "object"
     },
     "conex.AccessGrantResponse": {
@@ -83,13 +70,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "token",
-        "jti",
-        "nodeId",
-        "nodeEpoch",
-        "expiresAtMs"
-      ],
       "type": "object"
     },
     "conex.AccessGrantScope": {
@@ -137,13 +117,6 @@
           "type": "array"
         }
       },
-      "required": [
-        "spaceId",
-        "providerEndpointId",
-        "contractId",
-        "moduleGeneration",
-        "purpose"
-      ],
       "type": "object"
     },
     "conex.AccessRevocation": {
@@ -166,12 +139,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "revision",
-        "kind",
-        "target",
-        "effectiveAtMs"
-      ],
       "type": "object"
     },
     "conex.AccessRevocationSyncRequest": {
@@ -188,10 +155,6 @@
           "type": "integer"
         }
       },
-      "required": [
-        "afterRevision",
-        "limit"
-      ],
       "type": "object"
     },
     "conex.AccessRevocationSyncResult": {
@@ -212,10 +175,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "nextRevision",
-        "hasMore"
-      ],
       "type": "object"
     },
     "conex.AccessRevokeRequest": {
@@ -228,10 +187,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "kind",
-        "target"
-      ],
       "type": "object"
     },
     "conex.AccessRevokeResult": {
@@ -243,9 +198,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "revision"
-      ],
       "type": "object"
     },
     "conex.AccessTicketRequest": {
@@ -268,11 +220,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "ticket",
-        "expiresAtMs",
-        "profile"
-      ],
       "type": "object"
     },
     "conex.AgentAdapterEndpoint": {
@@ -320,18 +267,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "id",
-        "nodeId",
-        "moduleInstanceId",
-        "generation",
-        "adapter",
-        "backendVersion",
-        "protocolVersion",
-        "experimental",
-        "availability",
-        "catalogScope"
-      ],
       "type": "object"
     },
     "conex.AgentCapabilities": {
@@ -374,20 +309,6 @@
           "type": "boolean"
         }
       },
-      "required": [
-        "createConversation",
-        "continueConversation",
-        "readHistory",
-        "streamMessages",
-        "cancelExecution",
-        "approval",
-        "userInput",
-        "listSubagents",
-        "cancelSubagent",
-        "steerExecution",
-        "attachExternal",
-        "recoverActive"
-      ],
       "type": "object"
     },
     "conex.AgentConversationCreateInput": {
@@ -406,11 +327,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "endpointId",
-        "workspaceId",
-        "idempotencyKey"
-      ],
       "type": "object"
     },
     "conex.AgentConversationCreateResult": {
@@ -429,9 +345,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "conversationId"
-      ],
       "type": "object"
     },
     "conex.AgentConversationGetResult": {
@@ -458,9 +371,6 @@
           "type": "integer"
         }
       },
-      "required": [
-        "conversationId"
-      ],
       "type": "object"
     },
     "conex.AgentConversationHistoryResult": {
@@ -485,10 +395,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "hasMore",
-        "quality"
-      ],
       "type": "object"
     },
     "conex.AgentConversationListInput": {
@@ -509,9 +415,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "endpointId"
-      ],
       "type": "object"
     },
     "conex.AgentConversationListResult": {
@@ -545,10 +448,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "endpointId",
-        "root"
-      ],
       "type": "object"
     },
     "conex.AgentEndpointListInput": {
@@ -590,10 +489,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "nodeId",
-        "id"
-      ],
       "type": "object"
     },
     "conex.AgentEvent": {
@@ -1259,15 +1154,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "streamId",
-        "epoch",
-        "position",
-        "recordedAtMs",
-        "type",
-        "entityId",
-        "entityRevision"
-      ],
       "type": "object"
     },
     "conex.AgentEventCursor": {
@@ -1285,11 +1171,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "streamId",
-        "epoch",
-        "after"
-      ],
       "type": "object"
     },
     "conex.AgentEventReadInput": {
@@ -1332,11 +1213,6 @@
           "$ref": "#/$defs/conex.AgentEventCursor"
         }
       },
-      "required": [
-        "head",
-        "firstAvailable",
-        "hasMore"
-      ],
       "type": "object"
     },
     "conex.AgentExecutionCancelInput": {
@@ -1351,10 +1227,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "executionId",
-        "expectedGeneration"
-      ],
       "type": "object"
     },
     "conex.AgentExecutionCancelResult": {
@@ -1370,11 +1242,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "executionId",
-        "requested",
-        "state"
-      ],
       "type": "object"
     },
     "conex.AgentExecutionGetInput": {
@@ -1384,9 +1251,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "executionId"
-      ],
       "type": "object"
     },
     "conex.AgentExecutionGetResult": {
@@ -1416,12 +1280,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "executionId",
-        "expectedGeneration",
-        "idempotencyKey",
-        "content"
-      ],
       "type": "object"
     },
     "conex.AgentExecutionSteerResult": {
@@ -1434,10 +1292,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "executionId",
-        "accepted"
-      ],
       "type": "object"
     },
     "conex.AgentGap": {
@@ -1450,9 +1304,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "reason"
-      ],
       "type": "object"
     },
     "conex.AgentHistoryInfo": {
@@ -1465,9 +1316,6 @@
           "type": "boolean"
         }
       },
-      "required": [
-        "hasMore"
-      ],
       "type": "object"
     },
     "conex.AgentInteractionDecision": {
@@ -1489,9 +1337,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "kind"
-      ],
       "type": "object"
     },
     "conex.AgentInteractionListInput": {
@@ -1512,9 +1357,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "conversationId"
-      ],
       "type": "object"
     },
     "conex.AgentInteractionListResult": {
@@ -1547,10 +1389,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "interactionId",
-        "expectedRevision"
-      ],
       "type": "object"
     },
     "conex.AgentInteractionRespondResult": {
@@ -1581,11 +1419,6 @@
           "type": "integer"
         }
       },
-      "required": [
-        "maxPageSize",
-        "maxSubmitBytes",
-        "maxMessageReadBytes"
-      ],
       "type": "object"
     },
     "conex.AgentLinkSummary": {
@@ -1622,14 +1455,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "agentId",
-        "principalId",
-        "tenantId",
-        "generation",
-        "registeredAtMs",
-        "lastHeartbeatAtMs"
-      ],
       "type": "object"
     },
     "conex.AgentMessage": {
@@ -1662,14 +1487,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "id",
-        "conversationId",
-        "executionId",
-        "role",
-        "state",
-        "revision"
-      ],
       "type": "object"
     },
     "conex.AgentMessageCompleted": {
@@ -1687,11 +1504,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "messageId",
-        "revision",
-        "state"
-      ],
       "type": "object"
     },
     "conex.AgentMessageDelta": {
@@ -1714,12 +1526,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "messageId",
-        "partIndex",
-        "offsetBytes",
-        "text"
-      ],
       "type": "object"
     },
     "conex.AgentMessagePart": {
@@ -1809,12 +1615,6 @@
           "type": "integer"
         }
       },
-      "required": [
-        "conversationId",
-        "messageId",
-        "partIndex",
-        "offsetBytes"
-      ],
       "type": "object"
     },
     "conex.AgentMessageReadResult": {
@@ -1847,14 +1647,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "text",
-        "offsetBytes",
-        "nextOffsetBytes",
-        "totalBytes",
-        "state",
-        "revision"
-      ],
       "type": "object"
     },
     "conex.AgentPageInfo": {
@@ -1891,10 +1683,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "agentId",
-        "tenantId"
-      ],
       "type": "object"
     },
     "conex.AgentRegisterResult": {
@@ -1919,10 +1707,6 @@
           "type": "array"
         }
       },
-      "required": [
-        "agentId",
-        "linkId"
-      ],
       "type": "object"
     },
     "conex.AgentRelationshipListInput": {
@@ -1940,9 +1724,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "conversationId"
-      ],
       "type": "object"
     },
     "conex.AgentRelationshipListResult": {
@@ -2014,11 +1795,6 @@
           "type": "boolean"
         }
       },
-      "required": [
-        "firstAvailable",
-        "relationshipsHasMore",
-        "quality"
-      ],
       "type": "object"
     },
     "conex.AgentSnapshotInput": {
@@ -2028,9 +1804,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "conversationId"
-      ],
       "type": "object"
     },
     "conex.AgentSnapshotResult": {
@@ -2054,10 +1827,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "executionId",
-        "expectedGeneration"
-      ],
       "type": "object"
     },
     "conex.AgentSubagentCancelResult": {
@@ -2073,11 +1842,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "executionId",
-        "requested",
-        "state"
-      ],
       "type": "object"
     },
     "conex.AgentSubagentListInput": {
@@ -2095,9 +1859,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "executionId"
-      ],
       "type": "object"
     },
     "conex.AgentSubagentListResult": {
@@ -2116,9 +1877,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "quality"
-      ],
       "type": "object"
     },
     "conex.AgentSubmitInput": {
@@ -2134,11 +1892,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "conversationId",
-        "idempotencyKey",
-        "content"
-      ],
       "type": "object"
     },
     "conex.AgentSubmitResult": {
@@ -2167,11 +1920,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "text",
-        "offsetBytes",
-        "totalBytes"
-      ],
       "type": "object"
     },
     "conex.AgentToolPart": {
@@ -2187,11 +1935,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "name",
-        "phase",
-        "summary"
-      ],
       "type": "object"
     },
     "conex.AgentWorkspaceListInput": {
@@ -2209,9 +1952,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "endpointId"
-      ],
       "type": "object"
     },
     "conex.AgentWorkspaceListResult": {
@@ -2242,11 +1982,6 @@
           "type": "boolean"
         }
       },
-      "required": [
-        "method",
-        "root",
-        "subtree"
-      ],
       "type": "object"
     },
     "conex.BlobAccess": {
@@ -2265,11 +2000,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "endpointId",
-        "plane",
-        "resourceId"
-      ],
       "type": "object"
     },
     "conex.BlobCancelRequest": {
@@ -2282,9 +2012,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "uploadId"
-      ],
       "type": "object"
     },
     "conex.BlobCancelResponse": {
@@ -2311,12 +2038,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "uploadId",
-        "chunkIndex",
-        "chunkCid",
-        "chunkBytes"
-      ],
       "type": "object"
     },
     "conex.BlobChunkResponse": {
@@ -2338,11 +2059,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "chunkIndex",
-        "receivedBytes",
-        "remainingBytes"
-      ],
       "type": "object"
     },
     "conex.BlobCommitRequest": {
@@ -2363,10 +2079,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "uploadId",
-        "persistence"
-      ],
       "type": "object"
     },
     "conex.BlobCommitResponse": {
@@ -2387,12 +2099,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "resourceRootCid",
-        "committedBytes",
-        "persistence",
-        "receiptId"
-      ],
       "type": "object"
     },
     "conex.BlobGetRequest": {
@@ -2474,10 +2180,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "chunkBytes",
-        "eof"
-      ],
       "type": "object"
     },
     "conex.BlobHaveRequest": {
@@ -2533,10 +2235,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "pinId",
-        "expiresAtMs"
-      ],
       "type": "object"
     },
     "conex.BlobPutRequest": {
@@ -2565,12 +2263,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "formatVersion",
-        "declaredSizeBytes",
-        "declaredChunkSize",
-        "requestedLeaseMs"
-      ],
       "type": "object"
     },
     "conex.BlobPutResponse": {
@@ -2606,13 +2298,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "uploadId",
-        "chunkSize",
-        "leaseMs",
-        "maxBlobBytes",
-        "inlineThresholdBytes"
-      ],
       "type": "object"
     },
     "conex.BlobRef": {
@@ -2634,10 +2319,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "sizeBytes",
-        "mime"
-      ],
       "type": "object"
     },
     "conex.BlobUnpinRequest": {
@@ -2647,9 +2328,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "pinId"
-      ],
       "type": "object"
     },
     "conex.BlobUnpinResponse": {
@@ -2670,9 +2348,6 @@
           "type": "integer"
         }
       },
-      "required": [
-        "timeoutBudgetMs"
-      ],
       "type": "object"
     },
     "conex.ChunkEntry": {
@@ -2685,10 +2360,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "chunkCid",
-        "chunkLength"
-      ],
       "type": "object"
     },
     "conex.ChunkManifest": {
@@ -2711,11 +2382,6 @@
           "$ref": "#/$defs/conex.ManifestEntries"
         }
       },
-      "required": [
-        "formatVersion",
-        "chunkSize",
-        "contentLength"
-      ],
       "type": "object"
     },
     "conex.ClientHelloRequest": {
@@ -2731,10 +2397,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "targetLinkId",
-        "text"
-      ],
       "type": "object"
     },
     "conex.ClientHelloResult": {
@@ -2755,11 +2417,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "targetLinkId",
-        "roundTripMs",
-        "reply"
-      ],
       "type": "object"
     },
     "conex.ClientListRequest": {
@@ -2792,11 +2449,6 @@
           "type": "boolean"
         }
       },
-      "required": [
-        "displayName",
-        "group",
-        "visible"
-      ],
       "type": "object"
     },
     "conex.ClientProfileRequest": {
@@ -2842,10 +2494,6 @@
           "type": "integer"
         }
       },
-      "required": [
-        "clientsOnline",
-        "groupsOnline"
-      ],
       "type": "object"
     },
     "conex.ClientSummary": {
@@ -2885,16 +2533,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "linkId",
-        "principalId",
-        "tenantId",
-        "connectedAtMs",
-        "lastSeenAtMs",
-        "userAgent",
-        "groupKey",
-        "lastRoundTripMs"
-      ],
       "type": "object"
     },
     "conex.ClipAddedNotification": {
@@ -2913,9 +2551,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "chunkCid"
-      ],
       "type": "object"
     },
     "conex.ConnectionListRequest": {
@@ -3035,14 +2670,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "id",
-        "endpointId",
-        "workspaceId",
-        "createdAtMs",
-        "revision",
-        "quality"
-      ],
       "type": "object"
     },
     "conex.CounterAddInput": {
@@ -3054,9 +2681,6 @@
           "type": "integer"
         }
       },
-      "required": [
-        "delta"
-      ],
       "type": "object"
     },
     "conex.CounterReadInput": {
@@ -3078,10 +2702,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "count",
-        "revision"
-      ],
       "type": "object"
     },
     "conex.CounterStateValue": {
@@ -3093,9 +2713,6 @@
           "type": "integer"
         }
       },
-      "required": [
-        "count"
-      ],
       "type": "object"
     },
     "conex.DataChunk": {
@@ -3115,12 +2732,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "requestId",
-        "chunk",
-        "revision",
-        "eof"
-      ],
       "type": "object"
     },
     "conex.DedupKey": {
@@ -3148,14 +2759,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "tenantId",
-        "principalId",
-        "providerEndpointId",
-        "resourceId",
-        "method",
-        "operationId"
-      ],
       "type": "object"
     },
     "conex.EndpointListRequest": {
@@ -3236,13 +2839,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "endpointId",
-        "displayName",
-        "providerId",
-        "attachmentKind",
-        "connectionState"
-      ],
       "type": "object"
     },
     "conex.Error": {
@@ -3290,13 +2886,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "code",
-        "message",
-        "diagnosticId",
-        "execution",
-        "retry"
-      ],
       "type": "object"
     },
     "conex.Execution": {
@@ -3352,17 +2941,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "id",
-        "conversationId",
-        "endpointId",
-        "moduleInstanceId",
-        "generation",
-        "state",
-        "revision",
-        "createdAtMs",
-        "updatedAtMs"
-      ],
       "type": "object"
     },
     "conex.Failure": {
@@ -3417,16 +2995,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "groupKey",
-        "label",
-        "clientsOnline",
-        "lastRoundTripMs",
-        "avgRoundTripMs",
-        "roundTrips",
-        "filesShared",
-        "sharedBytes"
-      ],
       "type": "object"
     },
     "conex.HelloRequest": {
@@ -3456,10 +3024,6 @@
           "type": "array"
         }
       },
-      "required": [
-        "profileId",
-        "plane"
-      ],
       "type": "object"
     },
     "conex.HelloResponse": {
@@ -3500,12 +3064,6 @@
           "type": "array"
         }
       },
-      "required": [
-        "bindingId",
-        "expiresInMs",
-        "profileId",
-        "plane"
-      ],
       "type": "object"
     },
     "conex.InteractionChoice": {
@@ -3521,11 +3079,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "id",
-        "label",
-        "effect"
-      ],
       "type": "object"
     },
     "conex.InteractionRequest": {
@@ -3568,14 +3121,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "id",
-        "executionId",
-        "kind",
-        "state",
-        "revision",
-        "createdAtMs"
-      ],
       "type": "object"
     },
     "conex.Limits": {
@@ -3612,14 +3157,6 @@
           "type": "integer"
         }
       },
-      "required": [
-        "maxFrameBytes",
-        "maxInflight",
-        "maxQueuedBytes",
-        "timeoutMs",
-        "maxSubscriptions",
-        "maxModules"
-      ],
       "type": "object"
     },
     "conex.LinkIdentity": {
@@ -3635,11 +3172,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "linkId",
-        "peerId",
-        "tenantId"
-      ],
       "type": "object"
     },
     "conex.Manifest": {
@@ -3695,15 +3227,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "manifestVersion",
-        "id",
-        "endpointId",
-        "kind",
-        "display",
-        "plane",
-        "transport"
-      ],
       "type": "object"
     },
     "conex.ManifestEntries": {
@@ -3934,9 +3457,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "requestId"
-      ],
       "type": "object"
     },
     "conex.ModuleCancelResult": {
@@ -3946,9 +3466,6 @@
           "type": "boolean"
         }
       },
-      "required": [
-        "requested"
-      ],
       "type": "object"
     },
     "conex.ModuleInfo": {
@@ -3982,13 +3499,6 @@
           "type": "array"
         }
       },
-      "required": [
-        "providerEndpointId",
-        "registrationId",
-        "spaceId",
-        "integrationId",
-        "contractId"
-      ],
       "type": "object"
     },
     "conex.ModuleInvokeInput": {
@@ -3999,9 +3509,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "method"
-      ],
       "type": "object"
     },
     "conex.ModuleListInput": {
@@ -4011,9 +3518,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "spaceId"
-      ],
       "type": "object"
     },
     "conex.ModuleListResult": {
@@ -4044,12 +3548,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "spaceId",
-        "integrationId",
-        "providerEndpointId",
-        "contractId"
-      ],
       "type": "object"
     },
     "conex.ModuleRegisterResult": {
@@ -4071,13 +3569,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "registrationId",
-        "providerEndpointId",
-        "spaceId",
-        "integrationId",
-        "contractId"
-      ],
       "type": "object"
     },
     "conex.ModuleUnregisterInput": {
@@ -4090,10 +3581,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "providerEndpointId",
-        "registrationId"
-      ],
       "type": "object"
     },
     "conex.ModuleUnregisterResult": {
@@ -4103,9 +3590,6 @@
           "type": "boolean"
         }
       },
-      "required": [
-        "removed"
-      ],
       "type": "object"
     },
     "conex.NegotiatedCapabilities": {
@@ -4142,9 +3626,6 @@
           "$ref": "#/$defs/conex.CallParams"
         }
       },
-      "required": [
-        "method"
-      ],
       "type": "object"
     },
     "conex.OperationCancelRequest": {
@@ -4157,9 +3638,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "reason"
-      ],
       "type": "object"
     },
     "conex.OperationCancelResponse": {
@@ -4181,10 +3659,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "state",
-        "outcomeUnknown"
-      ],
       "type": "object"
     },
     "conex.OperationGetRequest": {
@@ -4239,12 +3713,6 @@
           "type": "object"
         }
       },
-      "required": [
-        "state",
-        "expiresAtMs",
-        "execution",
-        "acceptedAtMs"
-      ],
       "type": "object"
     },
     "conex.OperationRecord": {
@@ -4299,14 +3767,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "schemaVersion",
-        "state",
-        "executionClass",
-        "paramDigest",
-        "acceptedAtMs",
-        "expiresAtMs"
-      ],
       "type": "object"
     },
     "conex.ReadyRequest": {
@@ -4336,11 +3796,6 @@
           "type": "array"
         }
       },
-      "required": [
-        "negotiationId",
-        "profileId",
-        "plane"
-      ],
       "type": "object"
     },
     "conex.ReadyResponse": {
@@ -4373,11 +3828,6 @@
           "type": "array"
         }
       },
-      "required": [
-        "negotiationId",
-        "profileId",
-        "plane"
-      ],
       "type": "object"
     },
     "conex.RejectedCapability": {
@@ -4393,11 +3843,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "method",
-        "direction",
-        "reason"
-      ],
       "type": "object"
     },
     "conex.Relationship": {
@@ -4427,15 +3872,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "id",
-        "from",
-        "to",
-        "kind",
-        "source",
-        "quality",
-        "observedAtMs"
-      ],
       "type": "object"
     },
     "conex.RemoteTarget": {
@@ -4457,12 +3893,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "endpointId",
-        "resourceId",
-        "offset",
-        "length"
-      ],
       "type": "object"
     },
     "conex.Request": {
@@ -4478,10 +3908,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "requestId",
-        "method"
-      ],
       "type": "object"
     },
     "conex.RequestContext": {
@@ -4514,14 +3940,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "providerEndpointId",
-        "plane",
-        "principalId",
-        "tenantId",
-        "spaceId",
-        "registrationId"
-      ],
       "type": "object"
     },
     "conex.ResourceSummary": {
@@ -4551,12 +3969,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "resourceId",
-        "title",
-        "mime",
-        "kind"
-      ],
       "type": "object"
     },
     "conex.SearchHit": {
@@ -4569,9 +3981,6 @@
           "$ref": "#/$defs/conex.ResourceSummary"
         }
       },
-      "required": [
-        "excerpt"
-      ],
       "type": "object"
     },
     "conex.SessionBinding": {
@@ -4601,12 +4010,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "principalId",
-        "tenantId",
-        "providerEndpointId",
-        "plane"
-      ],
       "type": "object"
     },
     "conex.SessionCloseRequest": {
@@ -4627,11 +4030,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "sessionId",
-        "attachmentId",
-        "expectedEpoch"
-      ],
       "type": "object"
     },
     "conex.SessionCloseResponse": {
@@ -4646,10 +4044,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "sessionId",
-        "finalEpoch"
-      ],
       "type": "object"
     },
     "conex.SessionOpenRequest": {
@@ -4674,9 +4068,6 @@
           "type": "array"
         }
       },
-      "required": [
-        "recovery"
-      ],
       "type": "object"
     },
     "conex.SessionOpenResponse": {
@@ -4714,12 +4105,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "sessionId",
-        "recovery",
-        "attachmentEpoch",
-        "leaseMs"
-      ],
       "type": "object"
     },
     "conex.SessionRenewRequest": {
@@ -4742,12 +4127,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "sessionId",
-        "attachmentId",
-        "expectedEpoch",
-        "extendMs"
-      ],
       "type": "object"
     },
     "conex.SessionRenewResponse": {
@@ -4764,10 +4143,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "newEpoch",
-        "leaseMs"
-      ],
       "type": "object"
     },
     "conex.SessionResumeRequest": {
@@ -4791,11 +4166,6 @@
           "type": "array"
         }
       },
-      "required": [
-        "sessionId",
-        "attachmentId",
-        "expectedEpoch"
-      ],
       "type": "object"
     },
     "conex.SessionResumeResponse": {
@@ -4824,12 +4194,6 @@
           "type": "array"
         }
       },
-      "required": [
-        "sessionId",
-        "attachmentId",
-        "newEpoch",
-        "restoredWindowBytes"
-      ],
       "type": "object"
     },
     "conex.ShareChangedNotification": {
@@ -4853,12 +4217,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "ownerLinkId",
-        "kind",
-        "change",
-        "itemId"
-      ],
       "type": "object"
     },
     "conex.ShareClipboardImageRequest": {
@@ -4879,12 +4237,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "name",
-        "mime",
-        "sizeBytes",
-        "rootCid"
-      ],
       "type": "object"
     },
     "conex.ShareClipboardResponse": {
@@ -4903,9 +4255,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "text"
-      ],
       "type": "object"
     },
     "conex.ShareItem": {
@@ -4964,21 +4313,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "id",
-        "kind",
-        "name",
-        "mime",
-        "sizeBytes",
-        "rootCid",
-        "ownerLinkId",
-        "ownerName",
-        "groupKey",
-        "createdAtMs",
-        "previewBytes",
-        "inline",
-        "expiresAtMs"
-      ],
       "type": "object"
     },
     "conex.ShareListRequest": {
@@ -5016,12 +4350,6 @@
           "type": "integer"
         }
       },
-      "required": [
-        "maxItemBytes",
-        "maxItemsPerClient",
-        "maxClipsPerClient",
-        "clipTtlMs"
-      ],
       "type": "object"
     },
     "conex.ShareRemoveRequest": {
@@ -5031,9 +4359,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "id"
-      ],
       "type": "object"
     },
     "conex.ShareRemoveResponse": {
@@ -5048,9 +4373,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "uploadId"
-      ],
       "type": "object"
     },
     "conex.ShareUploadCancelResponse": {
@@ -5065,9 +4387,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "uploadId"
-      ],
       "type": "object"
     },
     "conex.ShareUploadCommitResponse": {
@@ -5113,13 +4432,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "name",
-        "mime",
-        "sizeBytes",
-        "chunkSize",
-        "kind"
-      ],
       "type": "object"
     },
     "conex.ShareUploadInitResponse": {
@@ -5149,13 +4461,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "uploadId",
-        "chunkSize",
-        "receivedCount",
-        "leaseMs",
-        "maxItemBytes"
-      ],
       "type": "object"
     },
     "conex.ShareUploadStatusResponse": {
@@ -5180,12 +4485,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "uploadId",
-        "receivedCount",
-        "receivedBytes",
-        "sizeBytes"
-      ],
       "type": "object"
     },
     "conex.SlowConsumerSignal": {
@@ -5203,11 +4502,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "streamId",
-        "reason",
-        "sinceMs"
-      ],
       "type": "object"
     },
     "conex.SourceListRequest": {
@@ -5225,9 +4519,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "root"
-      ],
       "type": "object"
     },
     "conex.SourceListResponse": {
@@ -5252,9 +4543,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "resourceId"
-      ],
       "type": "object"
     },
     "conex.SourceReadResponse": {
@@ -5293,10 +4581,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "root",
-        "query"
-      ],
       "type": "object"
     },
     "conex.SourceSearchResponse": {
@@ -5324,9 +4608,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "subscriptionId"
-      ],
       "type": "object"
     },
     "conex.StateSample": {
@@ -5347,11 +4628,6 @@
         },
         "value": {}
       },
-      "required": [
-        "revision",
-        "sampledAtMs",
-        "quality"
-      ],
       "type": "object"
     },
     "conex.StateSubscribeInput": {
@@ -5365,10 +4641,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "subscriptionId",
-        "state"
-      ],
       "type": "object"
     },
     "conex.StateSubscribeResult": {
@@ -5384,10 +4656,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "subscriptionId",
-        "registrationId"
-      ],
       "type": "object"
     },
     "conex.StateUnsubscribeInput": {
@@ -5397,9 +4665,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "subscriptionId"
-      ],
       "type": "object"
     },
     "conex.StateUnsubscribeResult": {
@@ -5409,9 +4674,6 @@
           "type": "boolean"
         }
       },
-      "required": [
-        "removed"
-      ],
       "type": "object"
     },
     "conex.StateUpdateInput": {
@@ -5429,10 +4691,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "subscriptionId",
-        "seq"
-      ],
       "type": "object"
     },
     "conex.StreamAckRequest": {
@@ -5458,13 +4716,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "sessionId",
-        "attachmentId",
-        "epoch",
-        "streamId",
-        "lastReceivedSeq"
-      ],
       "type": "object"
     },
     "conex.StreamAckResponse": {
@@ -5479,10 +4730,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "streamId",
-        "availableWindowBytes"
-      ],
       "type": "object"
     },
     "conex.StreamCursor": {
@@ -5502,11 +4749,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "streamId",
-        "lastReceivedSeq",
-        "consumedBytes"
-      ],
       "type": "object"
     },
     "conex.StreamFlowRequest": {
@@ -5537,14 +4779,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "sessionId",
-        "attachmentId",
-        "epoch",
-        "streamId",
-        "consumedBytes",
-        "requestedWindowBytes"
-      ],
       "type": "object"
     },
     "conex.StreamFlowResponse": {
@@ -5559,10 +4793,6 @@
           "type": "boolean"
         }
       },
-      "required": [
-        "newWindowBytes",
-        "zeroWindow"
-      ],
       "type": "object"
     },
     "conex.StreamFrame": {
@@ -5592,14 +4822,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "sessionId",
-        "attachmentId",
-        "epoch",
-        "streamId",
-        "seq",
-        "message"
-      ],
       "type": "object"
     },
     "conex.StreamReset": {
@@ -5615,10 +4837,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "streamId",
-        "reason"
-      ],
       "type": "object"
     },
     "conex.StreamResetRequest": {
@@ -5650,14 +4868,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "sessionId",
-        "attachmentId",
-        "epoch",
-        "streamId",
-        "afterSeq",
-        "reason"
-      ],
       "type": "object"
     },
     "conex.StreamResetResponse": {
@@ -5672,10 +4882,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "streamId",
-        "acceptedAfterSeq"
-      ],
       "type": "object"
     },
     "conex.StreamSpec": {
@@ -5698,12 +4904,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "streamId",
-        "kind",
-        "windowBytes",
-        "maxFrameBytes"
-      ],
       "type": "object"
     },
     "conex.Success": {
@@ -5714,9 +4914,6 @@
         },
         "result": {}
       },
-      "required": [
-        "requestId"
-      ],
       "type": "object"
     },
     "conex.UiLinkSummary": {
@@ -5757,16 +4954,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "linkId",
-        "principalId",
-        "tenantId",
-        "connectedAtMs",
-        "lastSeenAtMs",
-        "ticketsIssued",
-        "callsTotal",
-        "callsInFlight"
-      ],
       "type": "object"
     },
     "conex.WebTicket": {
@@ -5810,16 +4997,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "ticket",
-        "principalId",
-        "tenantId",
-        "origin",
-        "targetHost",
-        "peerRole",
-        "issuedAtMs",
-        "expiresAtMs"
-      ],
       "type": "object"
     },
     "conex.Workspace": {
@@ -5838,12 +5015,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "id",
-        "nodeId",
-        "displayName",
-        "rootRef"
-      ],
       "type": "object"
     },
     "conex.test.Scalars": {

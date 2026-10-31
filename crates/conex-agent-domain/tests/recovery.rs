@@ -64,7 +64,12 @@ async fn accepted_execution_is_failed_as_not_dispatched_and_frees_the_slot() {
         .await
         .expect("conversation");
     let admission = store
-        .admit(&scope, &submit(&conversation.id, "key-a", "hello"), 2_000)
+        .admit(
+            &scope,
+            "01ARZ3NDEKTSV4RRFFQ69G5FAX",
+            &submit(&conversation.id, "key-a", "hello"),
+            2_000,
+        )
         .await
         .expect("admission");
     let Admission::Created { execution, .. } = admission else {
@@ -103,7 +108,12 @@ async fn accepted_execution_is_failed_as_not_dispatched_and_frees_the_slot() {
     );
     // 槽释放后可以再次准入。
     let again = reopened
-        .admit(&scope, &submit(&conversation.id, "key-b", "retry"), 4_000)
+        .admit(
+            &scope,
+            "01ARZ3NDEKTSV4RRFFQ69G5FAX",
+            &submit(&conversation.id, "key-b", "retry"),
+            4_000,
+        )
         .await
         .expect("admission after recovery");
     assert!(matches!(again, Admission::Created { .. }));
@@ -123,7 +133,12 @@ async fn dispatching_execution_becomes_unknown_and_keeps_the_slot() {
         .await
         .expect("conversation");
     let admission = store
-        .admit(&scope, &submit(&conversation.id, "key-a", "hello"), 2_000)
+        .admit(
+            &scope,
+            "01ARZ3NDEKTSV4RRFFQ69G5FAX",
+            &submit(&conversation.id, "key-a", "hello"),
+            2_000,
+        )
         .await
         .expect("admission");
     let Admission::Created {
@@ -151,7 +166,12 @@ async fn dispatching_execution_becomes_unknown_and_keeps_the_slot() {
     assert_eq!(targets[0].state, "unknown");
     // 槽仍被占用：新提交必须 busy。
     let busy = reopened
-        .admit(&scope, &submit(&conversation.id, "key-b", "other"), 4_000)
+        .admit(
+            &scope,
+            "01ARZ3NDEKTSV4RRFFQ69G5FAX",
+            &submit(&conversation.id, "key-b", "other"),
+            4_000,
+        )
         .await
         .expect_err("unknown execution keeps the slot");
     assert!(matches!(busy, StoreError::ConversationBusy { .. }));
@@ -196,7 +216,12 @@ async fn restore_rotates_epoch_invalidates_old_cursor_and_keeps_dedup() {
         .await
         .expect("conversation");
     store
-        .admit(&scope, &submit(&conversation.id, "key-a", "hello"), 2_000)
+        .admit(
+            &scope,
+            "01ARZ3NDEKTSV4RRFFQ69G5FAX",
+            &submit(&conversation.id, "key-a", "hello"),
+            2_000,
+        )
         .await
         .expect("admission");
     let before = store
@@ -232,7 +257,12 @@ async fn restore_rotates_epoch_invalidates_old_cursor_and_keeps_dedup() {
     assert!(!after.gaps.is_empty(), "restore records a recovery gap");
     // 既有幂等键仍属于原节点：同键查回原对象，不产生第二次执行。
     let existing = restored
-        .admit(&scope, &submit(&conversation.id, "key-a", "hello"), 6_000)
+        .admit(
+            &scope,
+            "01ARZ3NDEKTSV4RRFFQ69G5FAX",
+            &submit(&conversation.id, "key-a", "hello"),
+            6_000,
+        )
         .await
         .expect("same key after restore");
     assert!(matches!(existing, Admission::Existing { .. }));
@@ -298,7 +328,12 @@ async fn cursor_boundaries_distinguish_resync_ahead_and_epoch_change() {
         .await
         .expect("conversation");
     store
-        .admit(&scope, &submit(&conversation.id, "key-a", "hello"), 2_000)
+        .admit(
+            &scope,
+            "01ARZ3NDEKTSV4RRFFQ69G5FAX",
+            &submit(&conversation.id, "key-a", "hello"),
+            2_000,
+        )
         .await
         .expect("admission");
     let snapshot = store
@@ -403,6 +438,7 @@ async fn snapshot_stays_within_budget_with_many_terminal_executions_and_a_long_r
         let admission = store
             .admit(
                 &scope,
+                "01ARZ3NDEKTSV4RRFFQ69G5FAX",
                 &submit(&conversation.id, &format!("key-{index}"), "work"),
                 2_000 + index,
             )
@@ -438,7 +474,12 @@ async fn snapshot_stays_within_budget_with_many_terminal_executions_and_a_long_r
     }
     // 一条远超单帧上限的长回复：正文必须可经分页补读，快照不得超预算。
     let admission = store
-        .admit(&scope, &submit(&conversation.id, "key-long", "long"), 3_000)
+        .admit(
+            &scope,
+            "01ARZ3NDEKTSV4RRFFQ69G5FAX",
+            &submit(&conversation.id, "key-long", "long"),
+            3_000,
+        )
         .await
         .expect("admission");
     let Admission::Created {
@@ -514,7 +555,12 @@ async fn pruning_advances_first_available_and_forces_resync() {
         .await
         .expect("conversation");
     store
-        .admit(&scope, &submit(&conversation.id, "key-a", "hello"), 2_000)
+        .admit(
+            &scope,
+            "01ARZ3NDEKTSV4RRFFQ69G5FAX",
+            &submit(&conversation.id, "key-a", "hello"),
+            2_000,
+        )
         .await
         .expect("admission");
     let snapshot = store
