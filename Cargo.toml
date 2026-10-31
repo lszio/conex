@@ -12,6 +12,7 @@ members = [
     "xtask",
     "crates/conex-agent",
     "crates/conex-agent-domain",
+    "crates/conex-access",
     "crates/conex-sdk",
 ]
 
@@ -34,6 +35,7 @@ conex-provider-http-catalog = { path = "crates/conex-provider-http-catalog", ver
 conex-assembly = { path = "crates/conex-assembly", version = "0.1.0" }
 conex-agent = { path = "crates/conex-agent", version = "0.1.0" }
 conex-host = { path = "crates/conex-host", version = "0.1.0" }
+conex-access = { path = "crates/conex-access", version = "0.1.0" }
 prost = "0.14"
 prost-build = "0.14"
 prost-types = "0.14"

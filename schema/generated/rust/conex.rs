@@ -2023,6 +2023,134 @@ pub struct Notification {
     #[prost(message, optional, tag = "2")]
     pub params: ::core::option::Option<CallParams>,
 }
+/// 授权范围：methods/states/workspace_ids/conversation_ids 精确匹配；
+/// "交集非空"不放行整个请求，每次操作的全部目标都必须在授权与节点
+/// 本地规则的交集中。purpose 固定 direct/relay，防止换路径扩权。
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AccessGrantScope {
+    #[prost(string, tag = "1")]
+    pub space_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub provider_endpoint_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub contract_id: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "4")]
+    pub module_generation: u64,
+    #[prost(string, repeated, tag = "5")]
+    pub methods: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    #[prost(string, repeated, tag = "6")]
+    pub states: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    #[prost(string, repeated, tag = "7")]
+    pub workspace_ids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    #[prost(string, repeated, tag = "8")]
+    pub conversation_ids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    #[prost(string, tag = "9")]
+    pub purpose: ::prost::alloc::string::String,
+}
+/// 客户端向中心申请 grant；principal 只来自认证上下文（cookie+CSRF 或
+/// 专用 bearer），请求参数中出现的 principal 一律拒绝。
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AccessGrantRequest {
+    #[prost(string, tag = "1")]
+    pub node_id: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "2")]
+    pub scope: ::core::option::Option<AccessGrantScope>,
+}
+/// token 是签出的 compact JWS；expires_at_ms 为硬截止（毫秒）。
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AccessGrantResponse {
+    #[prost(string, tag = "1")]
+    pub token: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub jti: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub node_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub node_epoch: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "5")]
+    pub expires_at_ms: u64,
+}
+/// 验证成功后的不可变授权上下文；只由 GrantVerifier 产出。
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AccessContext {
+    #[prost(string, tag = "1")]
+    pub issuer: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub principal: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub tenant: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub node_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub node_epoch: ::prost::alloc::string::String,
+    #[prost(string, tag = "6")]
+    pub jti: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "7")]
+    pub issued_at_ms: u64,
+    #[prost(uint64, tag = "8")]
+    pub expires_at_ms: u64,
+    #[prost(message, optional, tag = "9")]
+    pub scope: ::core::option::Option<AccessGrantScope>,
+}
+/// 撤权日志项：revision 单调递增，同 revision 重复应用幂等；缺口要求
+/// 完整快照，不以毫秒时间戳作为唯一游标。
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AccessRevocation {
+    #[prost(uint64, tag = "1")]
+    pub revision: u64,
+    /// jti | principal | kid；未知 kind 拒绝。
+    #[prost(string, tag = "2")]
+    pub kind: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub target: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "4")]
+    pub effective_at_ms: u64,
+}
+/// 节点从中心分页同步撤权：{afterRevision,limit}；
+/// 单页 <=128 项且 <=196608 bytes。
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AccessRevocationSyncRequest {
+    #[prost(uint64, tag = "1")]
+    pub after_revision: u64,
+    #[prost(uint32, tag = "2")]
+    pub limit: u32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AccessRevocationSyncResult {
+    #[prost(message, repeated, tag = "1")]
+    pub items: ::prost::alloc::vec::Vec<AccessRevocation>,
+    #[prost(uint64, tag = "2")]
+    pub next_revision: u64,
+    #[prost(bool, tag = "3")]
+    pub has_more: bool,
+}
+/// 管理操作者按 jti/principal/kid 撤销；范围与截止时间在处理层定义。
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AccessRevokeRequest {
+    #[prost(string, tag = "1")]
+    pub kind: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub target: ::prost::alloc::string::String,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AccessRevokeResult {
+    #[prost(uint64, tag = "1")]
+    pub revision: u64,
+}
+/// 节点直连一次性票据（POST <node>/private/tickets，Authorization 提交
+/// direct grant，Origin 必须精确批准）；ticket 不进 URL，仅经 WSS
+/// 子协议 `conex-ticket.<opaque>` 提交，服务端返回实际 profile 不回显票据。
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AccessTicketRequest {}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AccessTicketResult {
+    #[prost(string, tag = "1")]
+    pub ticket: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "2")]
+    pub expires_at_ms: u64,
+    #[prost(string, tag = "3")]
+    pub profile: ::prost::alloc::string::String,
+}
 /// Session 绑定基线（设计 §7.1）。
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct SessionBinding {

@@ -1,5 +1,280 @@
 {
   "$defs": {
+    "conex.AccessContext": {
+      "additionalProperties": false,
+      "properties": {
+        "expiresAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "issuedAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "issuer": {
+          "type": "string"
+        },
+        "jti": {
+          "type": "string"
+        },
+        "nodeEpoch": {
+          "type": "string"
+        },
+        "nodeId": {
+          "type": "string"
+        },
+        "principal": {
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/conex.AccessGrantScope"
+        },
+        "tenant": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "issuer",
+        "principal",
+        "tenant",
+        "nodeId",
+        "nodeEpoch",
+        "jti",
+        "issuedAtMs",
+        "expiresAtMs"
+      ],
+      "type": "object"
+    },
+    "conex.AccessGrantRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "nodeId": {
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/conex.AccessGrantScope"
+        }
+      },
+      "required": [
+        "nodeId"
+      ],
+      "type": "object"
+    },
+    "conex.AccessGrantResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "expiresAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "jti": {
+          "type": "string"
+        },
+        "nodeEpoch": {
+          "type": "string"
+        },
+        "nodeId": {
+          "type": "string"
+        },
+        "token": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "token",
+        "jti",
+        "nodeId",
+        "nodeEpoch",
+        "expiresAtMs"
+      ],
+      "type": "object"
+    },
+    "conex.AccessGrantScope": {
+      "additionalProperties": false,
+      "properties": {
+        "contractId": {
+          "type": "string"
+        },
+        "conversationIds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "methods": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "moduleGeneration": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "providerEndpointId": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "spaceId": {
+          "type": "string"
+        },
+        "states": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "workspaceIds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "spaceId",
+        "providerEndpointId",
+        "contractId",
+        "moduleGeneration",
+        "purpose"
+      ],
+      "type": "object"
+    },
+    "conex.AccessRevocation": {
+      "additionalProperties": false,
+      "properties": {
+        "effectiveAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "revision",
+        "kind",
+        "target",
+        "effectiveAtMs"
+      ],
+      "type": "object"
+    },
+    "conex.AccessRevocationSyncRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "afterRevision": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "limit": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "afterRevision",
+        "limit"
+      ],
+      "type": "object"
+    },
+    "conex.AccessRevocationSyncResult": {
+      "additionalProperties": false,
+      "properties": {
+        "hasMore": {
+          "type": "boolean"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/conex.AccessRevocation"
+          },
+          "type": "array"
+        },
+        "nextRevision": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "nextRevision",
+        "hasMore"
+      ],
+      "type": "object"
+    },
+    "conex.AccessRevokeRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "target"
+      ],
+      "type": "object"
+    },
+    "conex.AccessRevokeResult": {
+      "additionalProperties": false,
+      "properties": {
+        "revision": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "revision"
+      ],
+      "type": "object"
+    },
+    "conex.AccessTicketRequest": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    },
+    "conex.AccessTicketResult": {
+      "additionalProperties": false,
+      "properties": {
+        "expiresAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "profile": {
+          "type": "string"
+        },
+        "ticket": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ticket",
+        "expiresAtMs",
+        "profile"
+      ],
+      "type": "object"
+    },
     "conex.AgentAdapterEndpoint": {
       "additionalProperties": false,
       "properties": {

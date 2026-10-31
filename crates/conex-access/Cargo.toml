@@ -1,0 +1,21 @@
+[package]
+name = "conex-access"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "conex private-access grants: strict Ed25519 compact JWS issue/verify shared by hub and nodes"
+publish = false
+
+[dependencies]
+conex-proto.workspace = true
+base64 = "0.22"
+hex.workspace = true
+ring = "0.17"
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tempfile.workspace = true
+
+[dev-dependencies]

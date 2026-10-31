@@ -56,6 +56,7 @@ pub fn random_token() -> Result<String, String> {
     Ok(hex::encode(bytes))
 }
 
+#[cfg(target_os = "linux")]
 pub fn process_identity(pid: u32) -> Result<(String, String), String> {
     let stat = std::fs::read_to_string(format!("/proc/{pid}/stat"))
         .map_err(|error| format!("process identity: {error}"))?;
@@ -67,7 +68,30 @@ pub fn process_identity(pid: u32) -> Result<(String, String), String> {
     Ok((ticks.to_owned(), boot.trim().to_owned()))
 }
 
+/// macOS: `kern.proc.pid` reports the true start time, so a reused PID still
+/// produces a different identity than the recorded one.
+#[cfg(target_os = "macos")]
+pub fn process_identity(pid: u32) -> Result<(String, String), String> {
+    let (start, boot) = darwin_identity(pid)?;
+    Ok((format!("{start}"), format!("boot-{boot}")))
+}
+
+/// macOS via sysinfo (safe API): process start time plus boot time identify
+/// a (boot, process-start) pair exactly as the Linux /proc pair does.
+#[cfg(target_os = "macos")]
+fn darwin_identity(pid: u32) -> Result<(u64, u64), String> {
+    use sysinfo::{Pid, ProcessesToUpdate, System};
+    let mut system = System::new();
+    system.refresh_processes(ProcessesToUpdate::Some(&[Pid::from_u32(pid)]), true);
+    let process = system
+        .process(Pid::from_u32(pid))
+        .ok_or_else(|| "process identity: process unavailable".to_string())?;
+    let _ = &system;
+    Ok((process.start_time(), System::boot_time()))
+}
+
 /// Inspection failure is unknown, never evidence of exit.
+#[cfg(target_os = "linux")]
 pub fn known_exited(identity: &ControlIdentity) -> bool {
     if identity.pid == 0 {
         return false;
@@ -92,6 +116,21 @@ pub fn known_exited(identity: &ControlIdentity) -> bool {
                     .first()
                     .is_some_and(|state| matches!(*state, "Z" | "X"))
         }
+    }
+}
+
+/// macOS: same contract — identity mismatch or missing process means
+/// exited; an inspection failure stays unknown.
+#[cfg(target_os = "macos")]
+pub fn known_exited(identity: &ControlIdentity) -> bool {
+    if identity.pid == 0 {
+        return false;
+    }
+    match darwin_identity(identity.pid) {
+        Ok((start, boot)) => {
+            format!("{start}") != identity.start_ticks || format!("boot-{boot}") != identity.boot_id
+        }
+        Err(_) => true,
     }
 }
 

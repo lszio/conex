@@ -19,6 +19,7 @@ axum-server.workspace = true
 base64 = "0.22"
 tempfile.workspace = true
 sha2.workspace = true
+conex-access.workspace = true
 conex-assembly.workspace = true
 conex-core.workspace = true
 conex-proto.workspace = true
@@ -30,6 +31,7 @@ hex.workspace = true
 pbjson-types.workspace = true
 prost.workspace = true
 ring = "0.17"
+rusqlite = { version = "=0.41.1", default-features = false, features = ["bundled", "backup"] }
 rustls.workspace = true
 rustls-pemfile.workspace = true
 serde.workspace = true

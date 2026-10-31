@@ -18,6 +18,63 @@ pub struct NodeConfig {
     #[serde(default)]
     pub remote_endpoints: Vec<ApprovedRemoteConfig>,
     pub publication: PublicationConfig,
+    /// P5 private access. Present = the node verifies hub grants and serves
+    /// the direct-connection entry; absent keeps the P2 local-only behavior.
+    #[serde(default)]
+    pub private: Option<NodePrivateConfig>,
+    /// P3 OMP adapter backend. Present = the "omp" implementation is installable.
+    #[serde(default)]
+    pub omp: Option<OmpAdapterConfig>,
+}
+
+/// OMP 适配器批准配置（docs/plans/2026-10-31-conex-mvp-p3.md §1）。二进制路径、
+/// Workspace 真实根目录与并发上限全部由管理员固定；客户端 payload 不传任何
+/// 启动参数（契约 §4）。
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OmpAdapterConfig {
+    /// Approved binary (absolute path, or a name resolved via PATH at spawn).
+    pub backend_binary: String,
+    /// Concurrent owned OMP processes; new sessions beyond this fail
+    /// unavailable instead of preempting an active session.
+    #[serde(default)]
+    pub max_concurrent_sessions: usize,
+    /// rootRef key -> real root path. Real paths never leave the node.
+    #[serde(default)]
+    pub workspaces: Vec<ApprovedWorkspace>,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ApprovedWorkspace {
+    /// rootRef key clients reference; not a path.
+    pub id: String,
+    pub display_name: String,
+    pub root: PathBuf,
+}
+
+/// 节点私有访问配置（docs/plans/2026-10-29-conex-mvp-p5.md §3/P5.3）：
+/// 中心公钥允许表、直连地址与批准 Origin 都由管理员固定，不来自中心下发。
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NodePrivateConfig {
+    /// Grant issuer the node pins; grants from any other issuer are refused.
+    pub hub_issuer: String,
+    /// The private instance tenant; a valid grant with another tenant is a
+    /// mismatch, rejected before any resource check.
+    pub tenant: String,
+    /// kid -> raw Ed25519 public key (hex). Installed by the administrator;
+    /// nothing here is fetched from the network.
+    pub approved_public_keys: BTreeMap<String, String>,
+    /// Direct-entry listen address. Loopback by construction: a non-loopback
+    /// address additionally requires `allow_remote_direct` and TLS.
+    pub direct_listen: String,
+    /// Exact web origins allowed to fetch direct tickets (CORS + Origin).
+    #[serde(default)]
+    pub approved_web_origins: Vec<String>,
+    /// Explicit acknowledgement that the direct entry may leave this machine.
+    #[serde(default)]
+    pub allow_remote_direct: bool,
 }
 
 #[derive(Clone, Deserialize)]
@@ -43,6 +100,11 @@ pub struct ApprovedRemoteConfig {
 #[serde(deny_unknown_fields)]
 pub struct PublicationConfig {
     pub url: String,
+    /// Private nodes keep the publication link even with nothing to publish:
+    /// the link is how the hub learns the runtime epoch and how revocations
+    /// propagate. Set by Node::boot when [private] is configured.
+    #[serde(default)]
+    pub always_link: bool,
     pub token_backend: String,
     pub space_id: String,
     pub integration_id: String,
@@ -98,8 +160,75 @@ impl NodeConfig {
                 return Err("external counter needs both approved socket and token backend".into());
             }
         }
+        if let Some(private) = &config.private {
+            if private.hub_issuer.trim().is_empty() || private.tenant.trim().is_empty() {
+                return Err("node private entry requires hub issuer and tenant".into());
+            }
+            if private.approved_public_keys.is_empty() {
+                return Err("node private entry requires at least one approved public key".into());
+            }
+            for (kid, key) in &private.approved_public_keys {
+                if kid.is_empty() {
+                    return Err("approved public key kid must not be empty".into());
+                }
+                if key.len() != 64 || !key.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                    return Err(format!(
+                        "approved public key {kid} must be 64 hex characters (raw Ed25519)"
+                    ));
+                }
+            }
+            let listen: std::net::SocketAddr = private
+                .direct_listen
+                .parse()
+                .map_err(|_| "node direct_listen must be a socket address".to_string())?;
+            if !listen.ip().is_loopback() && !private.allow_remote_direct {
+                return Err(
+                    "non-loopback direct_listen requires allow_remote_direct and TLS".into(),
+                );
+            }
+            for origin in &private.approved_web_origins {
+                if !is_valid_origin(origin) {
+                    return Err(format!(
+                        "approved_web_origins entry {origin} must be a bare http:// or https:// origin"
+                    ));
+                }
+            }
+        }
+        if let Some(omp) = &config.omp {
+            if omp.backend_binary.trim().is_empty() {
+                return Err("omp backend_binary must not be empty".into());
+            }
+            if omp.max_concurrent_sessions == 0 || omp.max_concurrent_sessions > 16 {
+                return Err("omp max_concurrent_sessions must be 1..=16".into());
+            }
+            let mut seen = std::collections::BTreeSet::new();
+            for workspace in &omp.workspaces {
+                if workspace.id.is_empty()
+                    || workspace.display_name.is_empty()
+                    || !seen.insert(workspace.id.clone())
+                {
+                    return Err("omp workspace ids must be non-empty and unique".into());
+                }
+                if !workspace.root.is_absolute() {
+                    return Err("omp workspace root must be an absolute path".into());
+                }
+            }
+        }
         Ok(config)
     }
+}
+
+/// Same shape as the host's origin check: a bare scheme+authority string.
+fn is_valid_origin(origin: &str) -> bool {
+    let authority = origin
+        .strip_prefix("http://")
+        .or_else(|| origin.strip_prefix("https://"));
+    let Some(authority) = authority else {
+        return false;
+    };
+    !authority.is_empty()
+        && !authority.contains(['/', '?', '#', '@'])
+        && authority.chars().all(|c| !c.is_whitespace())
 }
 
 pub fn read_secret(backend: &str) -> Result<String, String> {

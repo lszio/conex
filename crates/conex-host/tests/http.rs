@@ -174,6 +174,7 @@ impl HttpFixture {
                 web_auth: None,
                 ui_links: Arc::new(conex_host::ui_links::UiLinkRegistry::new()),
                 shares: Arc::new(conex_host::share::ShareStore::new()),
+                private: None,
             }),
             build_p0_router(),
         );

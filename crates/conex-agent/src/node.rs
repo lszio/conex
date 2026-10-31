@@ -27,6 +27,15 @@ enum Request {
     Start(String, Reply),
     Stop(String, tokio::time::Instant, Reply),
     Invoke(TrustedCaller, String, String, u64, String, Value, Reply),
+    InvokeGranted(
+        Box<conex_access::VerifiedGrant>,
+        String,
+        String,
+        u64,
+        String,
+        Value,
+        Reply,
+    ),
     Shutdown(tokio::time::Instant, Reply),
 }
 
@@ -72,6 +81,31 @@ impl NodeHandle {
         self.send(|reply| {
             Request::Invoke(
                 caller, instance, module, generation, method, argument, reply,
+            )
+        })
+        .await
+    }
+
+    /// Direct-path invocation (P5): the caller is a verified grant, not a
+    /// local operator; authorization happens on the node against the grant.
+    pub async fn invoke_granted(
+        &self,
+        grant: conex_access::VerifiedGrant,
+        instance: String,
+        module: String,
+        generation: u64,
+        method: String,
+        argument: Value,
+    ) -> NodeResult {
+        self.send(|reply| {
+            Request::InvokeGranted(
+                Box::new(grant),
+                instance,
+                module,
+                generation,
+                method,
+                argument,
+                reply,
             )
         })
         .await
@@ -156,8 +190,13 @@ impl Node {
                 return Err("duplicate installed application".into());
             }
         }
+        let mut publication_config = config.publication.clone();
+        publication_config.always_link = config.private.is_some();
+        let link_hook = config.private.as_ref().and_then(|private| {
+            crate::runtime::node_link_hook(private, &config.node_id, &epoch, store.clone())
+        });
         let (publication, publication_task) =
-            crate::publication::Publication::spawn(config.publication.clone());
+            crate::publication::Publication::spawn_with_hook(publication_config, link_hook);
         let mut node = Self {
             config,
             store,
@@ -173,6 +212,21 @@ impl Node {
         };
         node.reconcile_resources().await?;
         Ok(node)
+    }
+
+    /// Direct-entry settings resolved from the booted node: the verifier and
+    /// epoch are real only after `begin_node_boot`.
+    pub fn direct_settings(&self) -> Option<crate::direct_api::DirectSettings> {
+        let private = self.config.private.as_ref()?;
+        let verifier = crate::runtime::direct_verifier(private, &self.config.node_id).ok()?;
+        Some(crate::direct_api::DirectSettings {
+            node_id: self.config.node_id.clone(),
+            node_epoch: self.epoch.clone(),
+            tenant: private.tenant.clone(),
+            verifier,
+            approved_web_origins: private.approved_web_origins.clone(),
+            listen: private.direct_listen.clone(),
+        })
     }
 
     pub fn record_startup_failure(&mut self, app: &str, error: &conex_sdk::Error) {
@@ -210,6 +264,20 @@ impl Node {
                     Request::Invoke(caller, id, module, generation, method, argument, reply) => {
                         let result = self
                             .invoke(&caller, &id, &module, generation, &method, argument)
+                            .await;
+                        let _ = reply.send(result);
+                    }
+                    Request::InvokeGranted(
+                        grant,
+                        id,
+                        module,
+                        generation,
+                        method,
+                        argument,
+                        reply,
+                    ) => {
+                        let result = self
+                            .invoke_granted(&grant, &id, &module, generation, &method, argument)
                             .await;
                         let _ = reply.send(result);
                     }
@@ -389,6 +457,69 @@ impl Node {
             return Err(source);
         }
         Ok(json!({"instanceId":id,"state":state}))
+    }
+
+    /// Direct-path invocation (P5): the caller is a verified grant, not a
+    /// local operator; authorization happens on the node against the grant.
+    async fn invoke_granted(
+        &self,
+        grant: &conex_access::VerifiedGrant,
+        id: &str,
+        name: &str,
+        generation: u64,
+        method: &str,
+        argument: Value,
+    ) -> NodeResult {
+        let instance = self
+            .instances
+            .get(id)
+            .ok_or_else(|| failure("unavailable"))?;
+        let module = instance
+            .modules
+            .iter()
+            .find(|module| module.name == name)
+            .ok_or_else(|| failure("forbidden"))?;
+        let started = module
+            .started
+            .lock()
+            .unwrap()
+            .clone()
+            .ok_or_else(|| failure("unavailable"))?;
+        let methods = started
+            .contract
+            .methods
+            .keys()
+            .filter(|method| module.permissions.contains(&method.replace('/', ".")))
+            .cloned()
+            .collect();
+        let Some(private) = self.config.private.as_ref() else {
+            return Err(failure("forbidden"));
+        };
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_millis() as u64)
+            .unwrap_or(0);
+        let scope = crate::access::authorize_grant(
+            grant,
+            crate::access::Target {
+                node_id: &self.config.node_id,
+                active: instance.state == "active",
+                generation: module.generation,
+                expected_generation: generation,
+                methods: &methods,
+            },
+            &private.tenant,
+            &self.epoch,
+            crate::access::Path::Direct,
+            method,
+            &[],
+            now,
+        )
+        .map_err(|reason| failure(&reason))?;
+        instance
+            .sdk
+            .invoke_local(name, method, argument, &scope.principal_id)
+            .await
     }
 
     async fn invoke(

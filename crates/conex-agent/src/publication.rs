@@ -36,8 +36,22 @@ pub struct Publication {
     cancel: watch::Sender<bool>,
 }
 
+/// Runs once on every authenticated publication link, before registration:
+/// the node announces its runtime identity and syncs hub revocations.
+pub type LinkHook = dyn Fn(conex_sdk::Client) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>
+    + Send
+    + Sync
+    + 'static;
+
 impl Publication {
     pub fn spawn(config: PublicationConfig) -> (Self, tokio::task::JoinHandle<()>) {
+        Self::spawn_with_hook(config, None)
+    }
+
+    pub fn spawn_with_hook(
+        config: PublicationConfig,
+        hook: Option<Arc<LinkHook>>,
+    ) -> (Self, tokio::task::JoinHandle<()>) {
         let shared = Arc::new(Mutex::new(State {
             applications: BTreeMap::new(),
             references: BTreeMap::new(),
@@ -52,7 +66,7 @@ impl Publication {
             changed,
             cancel,
         };
-        let driver = tokio::spawn(run(config, handle.shared.clone(), changes, cancelled));
+        let driver = tokio::spawn(run(config, handle.shared.clone(), changes, cancelled, hook));
         (handle, driver)
     }
 
@@ -241,6 +255,7 @@ async fn run(
     shared: Arc<Mutex<State>>,
     mut changes: watch::Receiver<()>,
     mut cancel: watch::Receiver<bool>,
+    hook: Option<Arc<LinkHook>>,
 ) {
     let mut client: Option<Client> = None;
     let mut live = BTreeMap::new();
@@ -250,12 +265,13 @@ async fn run(
         if *cancel.borrow() {
             break;
         }
-        let needs_link = shared
-            .lock()
-            .unwrap()
-            .applications
-            .values()
-            .any(|application| application.remote_bindings || !application.exports.is_empty());
+        let needs_link = config.always_link
+            || shared
+                .lock()
+                .unwrap()
+                .applications
+                .values()
+                .any(|application| application.remote_bindings || !application.exports.is_empty());
         if !needs_link {
             if let Some(connection) = client.take() {
                 connection.close().await;
@@ -281,7 +297,8 @@ async fn run(
             }
             let token = match crate::node_config::read_secret(&config.token_backend) {
                 Ok(token) => token,
-                Err(_) => {
+                Err(error) => {
+                    eprintln!("publication credential unavailable: {error}");
                     detach(
                         &shared,
                         "disconnected",
@@ -305,7 +322,8 @@ async fn run(
                 result = Client::connect(options) => result,
             };
             match connected {
-                Err(_) => {
+                Err(error) => {
+                    eprintln!("publication connect failed: {error}");
                     detach(
                         &shared,
                         "disconnected",
@@ -319,6 +337,9 @@ async fn run(
                     continue;
                 }
                 Ok(connection) => {
+                    if let Some(hook) = &hook {
+                        hook(connection.clone()).await;
+                    }
                     let mut state = shared.lock().unwrap();
                     state.client = Some(connection.clone());
                     for application in state.applications.values() {

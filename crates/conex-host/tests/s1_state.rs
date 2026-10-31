@@ -165,6 +165,7 @@ fn broker_with_state(registry: Arc<ModuleRegistry>, relay: Arc<StateRelay>) -> A
             capabilities: Some(registry),
             calls: None,
             state: Some(relay),
+            private: None,
         },
     ))
 }

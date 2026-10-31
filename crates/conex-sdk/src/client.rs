@@ -408,6 +408,49 @@ impl Client {
     pub fn hub_identity(&self) -> &p::LinkIdentity {
         &self.core().hub
     }
+    /// P5 控制方法（单独协商，不在 S1_METHODS）：节点在发布链路上声明
+    /// 运行身份，中心据此把 grant 绑定到节点当前 epoch。
+    pub async fn access_node_identity(
+        &self,
+        node_id: &str,
+        node_runtime_epoch: &str,
+    ) -> Result<serde_json::Value> {
+        self.core()
+            .request(
+                "access/node-identity",
+                broker(),
+                json_value(serde_json::json!({
+                    "nodeId": node_id,
+                    "nodeRuntimeEpoch": node_runtime_epoch,
+                }))?,
+                PendingKind::Rpc,
+                false,
+            )?
+            .result()
+            .await
+    }
+
+    /// P5 授权撤销分页同步：revision 游标由节点持久水位给出。
+    pub async fn access_revocations_sync(
+        &self,
+        after_revision: u64,
+        limit: u32,
+    ) -> Result<serde_json::Value> {
+        self.core()
+            .request(
+                "access/revocations/sync",
+                broker(),
+                json_value(serde_json::json!({
+                    "afterRevision": after_revision.to_string(),
+                    "limit": limit,
+                }))?,
+                PendingKind::Rpc,
+                false,
+            )?
+            .result()
+            .await
+    }
+
     pub async fn list_modules(&self, space_id: impl Into<String>) -> Result<p::ModuleListResult> {
         self.core()
             .request(

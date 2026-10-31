@@ -5,6 +5,7 @@ pub mod application;
 pub mod assembly;
 pub mod builtins;
 pub mod config;
+pub mod direct_api;
 pub mod local_api;
 pub mod node;
 pub mod node_config;

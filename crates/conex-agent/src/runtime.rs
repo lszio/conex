@@ -751,6 +751,7 @@ pub async fn run_node(config: crate::node_config::NodeConfig) -> Result<(), Stri
         .iter()
         .map(|application| application.app_id.clone())
         .collect();
+    let direct_store = store.clone();
     let mut node = crate::node::Node::boot(config, store, applications).await?;
     for app_id in app_ids {
         if let Err(error) = node.start_package(&app_id).await {
@@ -758,7 +759,16 @@ pub async fn run_node(config: crate::node_config::NodeConfig) -> Result<(), Stri
             node.record_startup_failure(&app_id, &error);
         }
     }
+    let direct_settings = node.direct_settings();
     let (handle, shutdown, task) = node.spawn();
+    let direct = direct_settings.map(|settings| {
+        crate::direct_api::DirectApi::spawn(
+            settings,
+            direct_store,
+            handle.clone(),
+            shutdown.clone(),
+        )
+    });
     let api = api.serve(handle.clone(), shutdown);
     tokio::pin!(api);
     let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
@@ -775,6 +785,156 @@ pub async fn run_node(config: crate::node_config::NodeConfig) -> Result<(), Stri
         }
     }
     task.await.map_err(|error| error.to_string())?;
+    if let Some(direct) = direct {
+        match direct.await {
+            Ok(result) => result?,
+            Err(error) => return Err(format!("direct entry task: {error}")),
+        }
+    }
     drop(lock);
     Ok(())
+}
+
+/// The publication link hook (P5.3/P5.4): announce the runtime identity on
+/// the authenticated configured-hub link, then keep the hub revocation log
+/// synced while the link is up. Nothing here talks to any other hub.
+pub(crate) fn node_link_hook(
+    private: &crate::node_config::NodePrivateConfig,
+    node_id: &str,
+    node_epoch: &str,
+    store: conex_agent_domain::Store,
+) -> Option<std::sync::Arc<crate::publication::LinkHook>> {
+    // The verifier is built here to fail fast on bad configuration; the
+    // direct entry rebuilds its own when it starts.
+    let _ = direct_verifier(private, node_id).ok()?;
+    let node_id = node_id.to_string();
+    let epoch = node_epoch.to_string();
+    Some(std::sync::Arc::new(move |client: conex_sdk::Client| {
+        let store = store.clone();
+        let node_id = node_id.clone();
+        let epoch = epoch.clone();
+        Box::pin(async move {
+            eprintln!("publication link up: registering node identity");
+            // A hub that is still warming up (store open, private entry
+            // wiring) may reject the first registration; retry on the same
+            // live link instead of waiting for a reconnect.
+            let mut registered = false;
+            for attempt in 0..30u32 {
+                match client.access_node_identity(&node_id, &epoch).await {
+                    Ok(_) => {
+                        registered = true;
+                        break;
+                    }
+                    Err(error) => {
+                        eprintln!("access/node-identity attempt {attempt}: {error}");
+                        tokio::select! {
+                            _ = client.wait_closed() => return,
+                            _ = tokio::time::sleep(std::time::Duration::from_millis(500)) => {}
+                        }
+                    }
+                }
+            }
+            if !registered {
+                eprintln!("access/node-identity never accepted; sync disabled");
+                return;
+            }
+            loop {
+                match sync_hub_revocations(&client, &store).await {
+                    Ok(applied) => {
+                        if applied > 0 {
+                            eprintln!("access revocations synced: {applied} new items");
+                        }
+                    }
+                    Err(error) => {
+                        eprintln!("access revocation sync failed: {error}");
+                        return;
+                    }
+                }
+                tokio::select! {
+                    _ = client.wait_closed() => return,
+                    _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {}
+                }
+            }
+        })
+    }))
+}
+
+/// Revision-keyed paging with idempotent apply; a watermark gap triggers one
+/// full resnapshot from revision 0 (contract §3.3: never a timestamp cursor).
+async fn sync_hub_revocations(
+    client: &conex_sdk::Client,
+    store: &conex_agent_domain::Store,
+) -> Result<u64, String> {
+    let mut applied_total = 0u64;
+    let mut watermark = store
+        .access_sync_watermark()
+        .await
+        .map_err(|error| error.to_string())?;
+    loop {
+        let page = client
+            .access_revocations_sync(watermark, 128)
+            .await
+            .map_err(|error| error.to_string())?;
+        let items: Vec<(u64, String, String, u64)> = page
+            .get("items")
+            .and_then(serde_json::Value::as_array)
+            .map(|rows| {
+                rows.iter()
+                    .filter_map(|row| {
+                        Some((
+                            parse_u64(row.get("revision")?.as_str()?)?,
+                            row.get("kind")?.as_str()?.to_string(),
+                            row.get("target")?.as_str()?.to_string(),
+                            parse_u64(row.get("effectiveAtMs")?.as_str()?).unwrap_or(0),
+                        ))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        if watermark > 0
+            && items
+                .first()
+                .is_some_and(|(revision, _, _, _)| *revision > watermark + 1)
+        {
+            watermark = 0;
+            continue;
+        }
+        let before = watermark;
+        watermark = store
+            .apply_hub_access_revocations(items)
+            .await
+            .map_err(|error| error.to_string())?;
+        applied_total += watermark.saturating_sub(before);
+        if !page
+            .get("hasMore")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+        {
+            return Ok(applied_total);
+        }
+    }
+}
+
+pub fn parse_u64(text: &str) -> Option<u64> {
+    if text.is_empty() || (text != "0" && text.starts_with('0')) {
+        return None;
+    }
+    text.parse::<u64>().ok()
+}
+
+pub(crate) fn direct_verifier(
+    private: &crate::node_config::NodePrivateConfig,
+    node_id: &str,
+) -> Result<conex_access::GrantVerifier, String> {
+    let keys = private
+        .approved_public_keys
+        .iter()
+        .map(|(kid, hex_key)| {
+            let bytes = hex::decode(hex_key)
+                .map_err(|_| format!("approved public key {kid} is not hex"))?;
+            Ok((kid.clone(), bytes))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    conex_access::GrantVerifier::new(&private.hub_issuer, &private.tenant, keys, node_id)
+        .map_err(|error| error.to_string())
 }

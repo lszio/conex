@@ -39,6 +39,7 @@ pub struct BuiltHost {
     pub catalog: Option<Arc<crate::catalog::EndpointCatalog>>,
     pub clients: Arc<crate::clients::ClientRegistry>,
     pub p1_provides: Vec<String>,
+    pub private: Option<Arc<crate::private_access::PrivateAccess>>,
 }
 
 pub const P1_PROVIDES: &[&str] = &[
@@ -279,6 +280,29 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
     let state_relay = capability_registry
         .as_ref()
         .map(|registry| crate::capability::StateRelay::new(registry.clone()));
+    // Private entry (MVP-P5): built only when [private] is configured; the
+    // historical anonymous paths keep running exactly as before.
+    let private = match config.private.as_ref() {
+        Some(private_config) if p1_active => Some(Arc::new(
+            crate::private_access::PrivateAccess::new(crate::private_access::PrivateSettings {
+                issuer: private_config.issuer.clone(),
+                kid: private_config.kid.clone(),
+                tenant: private_config.tenant.clone(),
+                signing_key_backend: private_config.signing_key_backend.clone(),
+                store_path: private_config.store_path.clone(),
+                principal: private_config.principal.clone(),
+                admin_principals: private_config.admin_principals.iter().cloned().collect(),
+                node_principals: private_config.node_principals.iter().cloned().collect(),
+            })?,
+        )),
+        Some(_) => {
+            return Err(invalid(
+                "private entry requires content_root/session_root/operation_root",
+            ));
+        }
+        None => None,
+    };
+
     let broker = if p1_active {
         let deps = BrokerDeps {
             content: content_store.clone(),
@@ -296,6 +320,7 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
             capabilities: capability_registry.clone(),
             calls: call_router.clone(),
             state: state_relay.clone(),
+            private: private.clone(),
         };
         Some(Arc::new(Broker::new(host.clone(), deps)))
     } else {
@@ -303,7 +328,14 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
     };
 
     let mut p1_provides: Vec<String> = if broker.is_some() {
-        P1_PROVIDES.iter().map(|s| s.to_string()).collect()
+        let mut provides: Vec<String> = P1_PROVIDES.iter().map(|s| s.to_string()).collect();
+        if private.is_some() {
+            provides.push(conex_proto::capability::ACCESS_NODE_IDENTITY.into());
+            provides.push(conex_proto::capability::ACCESS_REVOCATIONS_SYNC.into());
+        }
+        provides.sort();
+        provides.dedup();
+        provides
     } else {
         Vec::new()
     };
@@ -368,6 +400,7 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
         catalog,
         clients,
         p1_provides,
+        private,
     })
 }
 
@@ -395,6 +428,9 @@ pub fn build_router(config: &HostConfig) -> Result<Router, CallError> {
     });
     if let Some(broker) = built.broker.as_ref() {
         broker.attach_ui_links(ui_links.clone());
+    }
+    if let Some(private) = built.private.as_ref() {
+        private.set_web_auth(web_auth.clone());
     }
     // The share scene: bytes on disk under its own root, metadata in memory.
     // A host with no share root still serves the page, but every share route
@@ -460,6 +496,7 @@ pub fn build_router(config: &HostConfig) -> Result<Router, CallError> {
         ui_links,
         clients: built.clients.clone(),
         shares,
+        private: built.private.clone(),
     });
     let mut base = build_p0_router();
     if built.broker.is_some() && built.host_side.is_some() {

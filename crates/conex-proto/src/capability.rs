@@ -27,6 +27,11 @@ pub const METHOD_STATE_UNSUBSCRIBE: &str = "state/unsubscribe";
 pub const METHOD_STATE_UPDATE: &str = "state/update";
 pub const METHOD_STATE_END: &str = "state/end";
 
+/// P5 私有访问控制方法（docs/plans/2026-10-29-conex-mvp-p5.md）：节点在
+/// 已认证发布链路上单独协商，不进入 S1_METHODS 顶层清单。
+pub const ACCESS_NODE_IDENTITY: &str = "access/node-identity";
+pub const ACCESS_REVOCATIONS_SYNC: &str = "access/revocations/sync";
+
 pub const S1_METHODS: [&str; 9] = [
     METHOD_MODULE_REGISTER,
     METHOD_MODULE_UNREGISTER,

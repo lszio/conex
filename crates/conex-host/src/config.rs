@@ -93,6 +93,35 @@ pub struct HostConfig {
     /// 仅在 P1 后端（content/session/operation root）就绪时生效。
     #[serde(default)]
     pub capabilities: Option<CapabilityConfig>,
+    /// Private product entry (MVP-P5). Present = enabled; there is no
+    /// half-open switch. Mutually exclusive with `web_guest` at load.
+    #[serde(default)]
+    pub private: Option<PrivateConfig>,
+}
+
+/// 私有入口配置（docs/plans/2026-10-29-conex-mvp-p5.md §2/P5.2）。
+/// 私钥引用/公钥允许表/issuer/TTL/地址均在受限配置，示例不含秘密。
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PrivateConfig {
+    /// Grant issuer, e.g. `conex://hub.example`.
+    pub issuer: String,
+    /// Installed signing key id; nodes pin this kid's public key.
+    pub kid: String,
+    /// PKCS#8 Ed25519 signing key reference (`env:NAME`/`file:PATH`).
+    pub signing_key_backend: String,
+    /// The private instance tenant every grant carries.
+    pub tenant: String,
+    /// Hub-side private store (bootstrap codes, grant ledger, revocations).
+    pub store_path: PathBuf,
+    /// Principal the bootstrap code authenticates as.
+    pub principal: String,
+    /// Principals allowed to call `/private/revoke`.
+    #[serde(default)]
+    pub admin_principals: Vec<String>,
+    /// Publication-credential principals allowed to announce node identity.
+    #[serde(default)]
+    pub node_principals: Vec<String>,
 }
 
 /// S1 静态批准与预安装契约（docs/plans/2026-10-17-conex-s1.md T02）。
@@ -357,6 +386,11 @@ impl HostConfig {
             .parse()
             .map_err(|_| invalid(format!("listen must be a socket address: {}", self.listen)))?;
         if let Some(guest) = &self.web_guest {
+            if self.private.is_some() {
+                return Err(invalid(
+                    "private and web_guest are mutually exclusive; the private entry refuses anonymous visitors",
+                ));
+            }
             if guest.principal_id.trim().is_empty() {
                 return Err(invalid("web_guest.principal_id must not be empty"));
             }
@@ -572,6 +606,54 @@ impl HostConfig {
             let hash = token.token_hash.trim();
             if hash.len() != 64 || !hash.bytes().all(|byte| byte.is_ascii_hexdigit()) {
                 return Err(invalid("token_hash must be 64 hex characters"));
+            }
+        }
+        if let Some(private) = &self.private {
+            if private.issuer.trim().is_empty() {
+                return Err(invalid("private.issuer must not be empty"));
+            }
+            if private.kid.trim().is_empty() {
+                return Err(invalid("private.kid must not be empty"));
+            }
+            if private.tenant.trim().is_empty() {
+                return Err(invalid("private.tenant must not be empty"));
+            }
+            if private.principal.trim().is_empty() {
+                return Err(invalid("private.principal must not be empty"));
+            }
+            if private.store_path.as_os_str().is_empty() {
+                return Err(invalid("private.store_path must not be empty"));
+            }
+            if !valid_credential_source(&private.signing_key_backend) {
+                return Err(invalid(
+                    "private.signing_key_backend must be env:NAME or file:PATH",
+                ));
+            }
+            if private.admin_principals.is_empty() {
+                return Err(invalid(
+                    "private.admin_principals must name at least one administrator",
+                ));
+            }
+            if private.node_principals.is_empty() {
+                return Err(invalid(
+                    "private.node_principals must name at least one node principal",
+                ));
+            }
+            if private
+                .admin_principals
+                .iter()
+                .any(|principal| principal.trim().is_empty())
+            {
+                return Err(invalid(
+                    "private.admin_principals entries must not be empty",
+                ));
+            }
+            if self.tokens.iter().any(|token| {
+                private.node_principals.contains(&token.principal_id) && token.role == "ui"
+            }) {
+                return Err(invalid(
+                    "private.node_principals must not include ui-role token principals",
+                ));
             }
         }
         if self.tls.is_none() && !self.allow_loopback_http && !self.allow_plaintext_bind {

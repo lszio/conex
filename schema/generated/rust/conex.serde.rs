@@ -1,3 +1,1555 @@
+impl serde::Serialize for AccessContext {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.issuer.is_empty() {
+            len += 1;
+        }
+        if !self.principal.is_empty() {
+            len += 1;
+        }
+        if !self.tenant.is_empty() {
+            len += 1;
+        }
+        if !self.node_id.is_empty() {
+            len += 1;
+        }
+        if !self.node_epoch.is_empty() {
+            len += 1;
+        }
+        if !self.jti.is_empty() {
+            len += 1;
+        }
+        if self.issued_at_ms != 0 {
+            len += 1;
+        }
+        if self.expires_at_ms != 0 {
+            len += 1;
+        }
+        if self.scope.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AccessContext", len)?;
+        if !self.issuer.is_empty() {
+            struct_ser.serialize_field("issuer", &self.issuer)?;
+        }
+        if !self.principal.is_empty() {
+            struct_ser.serialize_field("principal", &self.principal)?;
+        }
+        if !self.tenant.is_empty() {
+            struct_ser.serialize_field("tenant", &self.tenant)?;
+        }
+        if !self.node_id.is_empty() {
+            struct_ser.serialize_field("nodeId", &self.node_id)?;
+        }
+        if !self.node_epoch.is_empty() {
+            struct_ser.serialize_field("nodeEpoch", &self.node_epoch)?;
+        }
+        if !self.jti.is_empty() {
+            struct_ser.serialize_field("jti", &self.jti)?;
+        }
+        if self.issued_at_ms != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("issuedAtMs", ToString::to_string(&self.issued_at_ms).as_str())?;
+        }
+        if self.expires_at_ms != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("expiresAtMs", ToString::to_string(&self.expires_at_ms).as_str())?;
+        }
+        if let Some(v) = self.scope.as_ref() {
+            struct_ser.serialize_field("scope", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AccessContext {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "issuer",
+            "principal",
+            "tenant",
+            "node_id",
+            "nodeId",
+            "node_epoch",
+            "nodeEpoch",
+            "jti",
+            "issued_at_ms",
+            "issuedAtMs",
+            "expires_at_ms",
+            "expiresAtMs",
+            "scope",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Issuer,
+            Principal,
+            Tenant,
+            NodeId,
+            NodeEpoch,
+            Jti,
+            IssuedAtMs,
+            ExpiresAtMs,
+            Scope,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "issuer" => Ok(GeneratedField::Issuer),
+                            "principal" => Ok(GeneratedField::Principal),
+                            "tenant" => Ok(GeneratedField::Tenant),
+                            "nodeId" | "node_id" => Ok(GeneratedField::NodeId),
+                            "nodeEpoch" | "node_epoch" => Ok(GeneratedField::NodeEpoch),
+                            "jti" => Ok(GeneratedField::Jti),
+                            "issuedAtMs" | "issued_at_ms" => Ok(GeneratedField::IssuedAtMs),
+                            "expiresAtMs" | "expires_at_ms" => Ok(GeneratedField::ExpiresAtMs),
+                            "scope" => Ok(GeneratedField::Scope),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AccessContext;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AccessContext")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AccessContext, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut issuer__ = None;
+                let mut principal__ = None;
+                let mut tenant__ = None;
+                let mut node_id__ = None;
+                let mut node_epoch__ = None;
+                let mut jti__ = None;
+                let mut issued_at_ms__ = None;
+                let mut expires_at_ms__ = None;
+                let mut scope__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Issuer => {
+                            if issuer__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("issuer"));
+                            }
+                            issuer__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Principal => {
+                            if principal__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("principal"));
+                            }
+                            principal__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Tenant => {
+                            if tenant__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("tenant"));
+                            }
+                            tenant__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::NodeId => {
+                            if node_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeId"));
+                            }
+                            node_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::NodeEpoch => {
+                            if node_epoch__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeEpoch"));
+                            }
+                            node_epoch__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Jti => {
+                            if jti__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("jti"));
+                            }
+                            jti__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::IssuedAtMs => {
+                            if issued_at_ms__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("issuedAtMs"));
+                            }
+                            issued_at_ms__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::ExpiresAtMs => {
+                            if expires_at_ms__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("expiresAtMs"));
+                            }
+                            expires_at_ms__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::Scope => {
+                            if scope__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("scope"));
+                            }
+                            scope__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(AccessContext {
+                    issuer: issuer__.unwrap_or_default(),
+                    principal: principal__.unwrap_or_default(),
+                    tenant: tenant__.unwrap_or_default(),
+                    node_id: node_id__.unwrap_or_default(),
+                    node_epoch: node_epoch__.unwrap_or_default(),
+                    jti: jti__.unwrap_or_default(),
+                    issued_at_ms: issued_at_ms__.unwrap_or_default(),
+                    expires_at_ms: expires_at_ms__.unwrap_or_default(),
+                    scope: scope__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AccessContext", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AccessGrantRequest {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.node_id.is_empty() {
+            len += 1;
+        }
+        if self.scope.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AccessGrantRequest", len)?;
+        if !self.node_id.is_empty() {
+            struct_ser.serialize_field("nodeId", &self.node_id)?;
+        }
+        if let Some(v) = self.scope.as_ref() {
+            struct_ser.serialize_field("scope", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AccessGrantRequest {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "node_id",
+            "nodeId",
+            "scope",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            NodeId,
+            Scope,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "nodeId" | "node_id" => Ok(GeneratedField::NodeId),
+                            "scope" => Ok(GeneratedField::Scope),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AccessGrantRequest;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AccessGrantRequest")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AccessGrantRequest, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut node_id__ = None;
+                let mut scope__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::NodeId => {
+                            if node_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeId"));
+                            }
+                            node_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Scope => {
+                            if scope__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("scope"));
+                            }
+                            scope__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(AccessGrantRequest {
+                    node_id: node_id__.unwrap_or_default(),
+                    scope: scope__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AccessGrantRequest", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AccessGrantResponse {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.token.is_empty() {
+            len += 1;
+        }
+        if !self.jti.is_empty() {
+            len += 1;
+        }
+        if !self.node_id.is_empty() {
+            len += 1;
+        }
+        if !self.node_epoch.is_empty() {
+            len += 1;
+        }
+        if self.expires_at_ms != 0 {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AccessGrantResponse", len)?;
+        if !self.token.is_empty() {
+            struct_ser.serialize_field("token", &self.token)?;
+        }
+        if !self.jti.is_empty() {
+            struct_ser.serialize_field("jti", &self.jti)?;
+        }
+        if !self.node_id.is_empty() {
+            struct_ser.serialize_field("nodeId", &self.node_id)?;
+        }
+        if !self.node_epoch.is_empty() {
+            struct_ser.serialize_field("nodeEpoch", &self.node_epoch)?;
+        }
+        if self.expires_at_ms != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("expiresAtMs", ToString::to_string(&self.expires_at_ms).as_str())?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AccessGrantResponse {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "token",
+            "jti",
+            "node_id",
+            "nodeId",
+            "node_epoch",
+            "nodeEpoch",
+            "expires_at_ms",
+            "expiresAtMs",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Token,
+            Jti,
+            NodeId,
+            NodeEpoch,
+            ExpiresAtMs,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "token" => Ok(GeneratedField::Token),
+                            "jti" => Ok(GeneratedField::Jti),
+                            "nodeId" | "node_id" => Ok(GeneratedField::NodeId),
+                            "nodeEpoch" | "node_epoch" => Ok(GeneratedField::NodeEpoch),
+                            "expiresAtMs" | "expires_at_ms" => Ok(GeneratedField::ExpiresAtMs),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AccessGrantResponse;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AccessGrantResponse")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AccessGrantResponse, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut token__ = None;
+                let mut jti__ = None;
+                let mut node_id__ = None;
+                let mut node_epoch__ = None;
+                let mut expires_at_ms__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Token => {
+                            if token__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("token"));
+                            }
+                            token__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Jti => {
+                            if jti__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("jti"));
+                            }
+                            jti__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::NodeId => {
+                            if node_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeId"));
+                            }
+                            node_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::NodeEpoch => {
+                            if node_epoch__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeEpoch"));
+                            }
+                            node_epoch__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ExpiresAtMs => {
+                            if expires_at_ms__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("expiresAtMs"));
+                            }
+                            expires_at_ms__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                    }
+                }
+                Ok(AccessGrantResponse {
+                    token: token__.unwrap_or_default(),
+                    jti: jti__.unwrap_or_default(),
+                    node_id: node_id__.unwrap_or_default(),
+                    node_epoch: node_epoch__.unwrap_or_default(),
+                    expires_at_ms: expires_at_ms__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AccessGrantResponse", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AccessGrantScope {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.space_id.is_empty() {
+            len += 1;
+        }
+        if !self.provider_endpoint_id.is_empty() {
+            len += 1;
+        }
+        if !self.contract_id.is_empty() {
+            len += 1;
+        }
+        if self.module_generation != 0 {
+            len += 1;
+        }
+        if !self.methods.is_empty() {
+            len += 1;
+        }
+        if !self.states.is_empty() {
+            len += 1;
+        }
+        if !self.workspace_ids.is_empty() {
+            len += 1;
+        }
+        if !self.conversation_ids.is_empty() {
+            len += 1;
+        }
+        if !self.purpose.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AccessGrantScope", len)?;
+        if !self.space_id.is_empty() {
+            struct_ser.serialize_field("spaceId", &self.space_id)?;
+        }
+        if !self.provider_endpoint_id.is_empty() {
+            struct_ser.serialize_field("providerEndpointId", &self.provider_endpoint_id)?;
+        }
+        if !self.contract_id.is_empty() {
+            struct_ser.serialize_field("contractId", &self.contract_id)?;
+        }
+        if self.module_generation != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("moduleGeneration", ToString::to_string(&self.module_generation).as_str())?;
+        }
+        if !self.methods.is_empty() {
+            struct_ser.serialize_field("methods", &self.methods)?;
+        }
+        if !self.states.is_empty() {
+            struct_ser.serialize_field("states", &self.states)?;
+        }
+        if !self.workspace_ids.is_empty() {
+            struct_ser.serialize_field("workspaceIds", &self.workspace_ids)?;
+        }
+        if !self.conversation_ids.is_empty() {
+            struct_ser.serialize_field("conversationIds", &self.conversation_ids)?;
+        }
+        if !self.purpose.is_empty() {
+            struct_ser.serialize_field("purpose", &self.purpose)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AccessGrantScope {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "space_id",
+            "spaceId",
+            "provider_endpoint_id",
+            "providerEndpointId",
+            "contract_id",
+            "contractId",
+            "module_generation",
+            "moduleGeneration",
+            "methods",
+            "states",
+            "workspace_ids",
+            "workspaceIds",
+            "conversation_ids",
+            "conversationIds",
+            "purpose",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            SpaceId,
+            ProviderEndpointId,
+            ContractId,
+            ModuleGeneration,
+            Methods,
+            States,
+            WorkspaceIds,
+            ConversationIds,
+            Purpose,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "spaceId" | "space_id" => Ok(GeneratedField::SpaceId),
+                            "providerEndpointId" | "provider_endpoint_id" => Ok(GeneratedField::ProviderEndpointId),
+                            "contractId" | "contract_id" => Ok(GeneratedField::ContractId),
+                            "moduleGeneration" | "module_generation" => Ok(GeneratedField::ModuleGeneration),
+                            "methods" => Ok(GeneratedField::Methods),
+                            "states" => Ok(GeneratedField::States),
+                            "workspaceIds" | "workspace_ids" => Ok(GeneratedField::WorkspaceIds),
+                            "conversationIds" | "conversation_ids" => Ok(GeneratedField::ConversationIds),
+                            "purpose" => Ok(GeneratedField::Purpose),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AccessGrantScope;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AccessGrantScope")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AccessGrantScope, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut space_id__ = None;
+                let mut provider_endpoint_id__ = None;
+                let mut contract_id__ = None;
+                let mut module_generation__ = None;
+                let mut methods__ = None;
+                let mut states__ = None;
+                let mut workspace_ids__ = None;
+                let mut conversation_ids__ = None;
+                let mut purpose__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::SpaceId => {
+                            if space_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("spaceId"));
+                            }
+                            space_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ProviderEndpointId => {
+                            if provider_endpoint_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("providerEndpointId"));
+                            }
+                            provider_endpoint_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ContractId => {
+                            if contract_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("contractId"));
+                            }
+                            contract_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ModuleGeneration => {
+                            if module_generation__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("moduleGeneration"));
+                            }
+                            module_generation__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::Methods => {
+                            if methods__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("methods"));
+                            }
+                            methods__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::States => {
+                            if states__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("states"));
+                            }
+                            states__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::WorkspaceIds => {
+                            if workspace_ids__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("workspaceIds"));
+                            }
+                            workspace_ids__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ConversationIds => {
+                            if conversation_ids__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("conversationIds"));
+                            }
+                            conversation_ids__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Purpose => {
+                            if purpose__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("purpose"));
+                            }
+                            purpose__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(AccessGrantScope {
+                    space_id: space_id__.unwrap_or_default(),
+                    provider_endpoint_id: provider_endpoint_id__.unwrap_or_default(),
+                    contract_id: contract_id__.unwrap_or_default(),
+                    module_generation: module_generation__.unwrap_or_default(),
+                    methods: methods__.unwrap_or_default(),
+                    states: states__.unwrap_or_default(),
+                    workspace_ids: workspace_ids__.unwrap_or_default(),
+                    conversation_ids: conversation_ids__.unwrap_or_default(),
+                    purpose: purpose__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AccessGrantScope", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AccessRevocation {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.revision != 0 {
+            len += 1;
+        }
+        if !self.kind.is_empty() {
+            len += 1;
+        }
+        if !self.target.is_empty() {
+            len += 1;
+        }
+        if self.effective_at_ms != 0 {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AccessRevocation", len)?;
+        if self.revision != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("revision", ToString::to_string(&self.revision).as_str())?;
+        }
+        if !self.kind.is_empty() {
+            struct_ser.serialize_field("kind", &self.kind)?;
+        }
+        if !self.target.is_empty() {
+            struct_ser.serialize_field("target", &self.target)?;
+        }
+        if self.effective_at_ms != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("effectiveAtMs", ToString::to_string(&self.effective_at_ms).as_str())?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AccessRevocation {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "revision",
+            "kind",
+            "target",
+            "effective_at_ms",
+            "effectiveAtMs",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Revision,
+            Kind,
+            Target,
+            EffectiveAtMs,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "revision" => Ok(GeneratedField::Revision),
+                            "kind" => Ok(GeneratedField::Kind),
+                            "target" => Ok(GeneratedField::Target),
+                            "effectiveAtMs" | "effective_at_ms" => Ok(GeneratedField::EffectiveAtMs),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AccessRevocation;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AccessRevocation")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AccessRevocation, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut revision__ = None;
+                let mut kind__ = None;
+                let mut target__ = None;
+                let mut effective_at_ms__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Revision => {
+                            if revision__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("revision"));
+                            }
+                            revision__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::Kind => {
+                            if kind__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("kind"));
+                            }
+                            kind__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Target => {
+                            if target__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("target"));
+                            }
+                            target__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::EffectiveAtMs => {
+                            if effective_at_ms__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("effectiveAtMs"));
+                            }
+                            effective_at_ms__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                    }
+                }
+                Ok(AccessRevocation {
+                    revision: revision__.unwrap_or_default(),
+                    kind: kind__.unwrap_or_default(),
+                    target: target__.unwrap_or_default(),
+                    effective_at_ms: effective_at_ms__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AccessRevocation", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AccessRevocationSyncRequest {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.after_revision != 0 {
+            len += 1;
+        }
+        if self.limit != 0 {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AccessRevocationSyncRequest", len)?;
+        if self.after_revision != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("afterRevision", ToString::to_string(&self.after_revision).as_str())?;
+        }
+        if self.limit != 0 {
+            struct_ser.serialize_field("limit", &self.limit)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AccessRevocationSyncRequest {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "after_revision",
+            "afterRevision",
+            "limit",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            AfterRevision,
+            Limit,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "afterRevision" | "after_revision" => Ok(GeneratedField::AfterRevision),
+                            "limit" => Ok(GeneratedField::Limit),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AccessRevocationSyncRequest;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AccessRevocationSyncRequest")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AccessRevocationSyncRequest, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut after_revision__ = None;
+                let mut limit__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::AfterRevision => {
+                            if after_revision__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("afterRevision"));
+                            }
+                            after_revision__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::Limit => {
+                            if limit__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("limit"));
+                            }
+                            limit__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                    }
+                }
+                Ok(AccessRevocationSyncRequest {
+                    after_revision: after_revision__.unwrap_or_default(),
+                    limit: limit__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AccessRevocationSyncRequest", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AccessRevocationSyncResult {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.items.is_empty() {
+            len += 1;
+        }
+        if self.next_revision != 0 {
+            len += 1;
+        }
+        if self.has_more {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AccessRevocationSyncResult", len)?;
+        if !self.items.is_empty() {
+            struct_ser.serialize_field("items", &self.items)?;
+        }
+        if self.next_revision != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("nextRevision", ToString::to_string(&self.next_revision).as_str())?;
+        }
+        if self.has_more {
+            struct_ser.serialize_field("hasMore", &self.has_more)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AccessRevocationSyncResult {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "items",
+            "next_revision",
+            "nextRevision",
+            "has_more",
+            "hasMore",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Items,
+            NextRevision,
+            HasMore,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "items" => Ok(GeneratedField::Items),
+                            "nextRevision" | "next_revision" => Ok(GeneratedField::NextRevision),
+                            "hasMore" | "has_more" => Ok(GeneratedField::HasMore),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AccessRevocationSyncResult;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AccessRevocationSyncResult")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AccessRevocationSyncResult, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut items__ = None;
+                let mut next_revision__ = None;
+                let mut has_more__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Items => {
+                            if items__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("items"));
+                            }
+                            items__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::NextRevision => {
+                            if next_revision__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nextRevision"));
+                            }
+                            next_revision__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::HasMore => {
+                            if has_more__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("hasMore"));
+                            }
+                            has_more__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(AccessRevocationSyncResult {
+                    items: items__.unwrap_or_default(),
+                    next_revision: next_revision__.unwrap_or_default(),
+                    has_more: has_more__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AccessRevocationSyncResult", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AccessRevokeRequest {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.kind.is_empty() {
+            len += 1;
+        }
+        if !self.target.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AccessRevokeRequest", len)?;
+        if !self.kind.is_empty() {
+            struct_ser.serialize_field("kind", &self.kind)?;
+        }
+        if !self.target.is_empty() {
+            struct_ser.serialize_field("target", &self.target)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AccessRevokeRequest {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "kind",
+            "target",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Kind,
+            Target,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "kind" => Ok(GeneratedField::Kind),
+                            "target" => Ok(GeneratedField::Target),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AccessRevokeRequest;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AccessRevokeRequest")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AccessRevokeRequest, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut kind__ = None;
+                let mut target__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Kind => {
+                            if kind__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("kind"));
+                            }
+                            kind__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Target => {
+                            if target__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("target"));
+                            }
+                            target__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(AccessRevokeRequest {
+                    kind: kind__.unwrap_or_default(),
+                    target: target__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AccessRevokeRequest", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AccessRevokeResult {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.revision != 0 {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AccessRevokeResult", len)?;
+        if self.revision != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("revision", ToString::to_string(&self.revision).as_str())?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AccessRevokeResult {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "revision",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Revision,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "revision" => Ok(GeneratedField::Revision),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AccessRevokeResult;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AccessRevokeResult")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AccessRevokeResult, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut revision__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Revision => {
+                            if revision__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("revision"));
+                            }
+                            revision__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                    }
+                }
+                Ok(AccessRevokeResult {
+                    revision: revision__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AccessRevokeResult", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AccessTicketRequest {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let len = 0;
+        let struct_ser = serializer.serialize_struct("conex.AccessTicketRequest", len)?;
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AccessTicketRequest {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                            Err(serde::de::Error::unknown_field(value, FIELDS))
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AccessTicketRequest;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AccessTicketRequest")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AccessTicketRequest, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                while map_.next_key::<GeneratedField>()?.is_some() {
+                    let _ = map_.next_value::<serde::de::IgnoredAny>()?;
+                }
+                Ok(AccessTicketRequest {
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AccessTicketRequest", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for AccessTicketResult {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.ticket.is_empty() {
+            len += 1;
+        }
+        if self.expires_at_ms != 0 {
+            len += 1;
+        }
+        if !self.profile.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.AccessTicketResult", len)?;
+        if !self.ticket.is_empty() {
+            struct_ser.serialize_field("ticket", &self.ticket)?;
+        }
+        if self.expires_at_ms != 0 {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("expiresAtMs", ToString::to_string(&self.expires_at_ms).as_str())?;
+        }
+        if !self.profile.is_empty() {
+            struct_ser.serialize_field("profile", &self.profile)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for AccessTicketResult {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "ticket",
+            "expires_at_ms",
+            "expiresAtMs",
+            "profile",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Ticket,
+            ExpiresAtMs,
+            Profile,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "ticket" => Ok(GeneratedField::Ticket),
+                            "expiresAtMs" | "expires_at_ms" => Ok(GeneratedField::ExpiresAtMs),
+                            "profile" => Ok(GeneratedField::Profile),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = AccessTicketResult;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.AccessTicketResult")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<AccessTicketResult, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut ticket__ = None;
+                let mut expires_at_ms__ = None;
+                let mut profile__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Ticket => {
+                            if ticket__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("ticket"));
+                            }
+                            ticket__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ExpiresAtMs => {
+                            if expires_at_ms__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("expiresAtMs"));
+                            }
+                            expires_at_ms__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::Profile => {
+                            if profile__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("profile"));
+                            }
+                            profile__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(AccessTicketResult {
+                    ticket: ticket__.unwrap_or_default(),
+                    expires_at_ms: expires_at_ms__.unwrap_or_default(),
+                    profile: profile__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.AccessTicketResult", FIELDS, GeneratedVisitor)
+    }
+}
 impl serde::Serialize for AgentAdapterEndpoint {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>

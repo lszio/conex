@@ -155,6 +155,7 @@ fn broker_with(registry: Arc<ModuleRegistry>, calls: Option<Arc<CallRouter>>) ->
             capabilities: Some(registry),
             calls,
             state: None,
+            private: None,
         },
     ))
 }

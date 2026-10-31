@@ -80,6 +80,11 @@ const STEPS: &[Step] = &[
         "cargo",
         &["xtask", "e2e", "--suite", "private-runtime"],
     ),
+    (
+        "Private network (real grants, tickets, revocations)",
+        "cargo",
+        &["xtask", "e2e", "--suite", "private-network"],
+    ),
 ];
 
 pub fn run() -> Result<()> {

@@ -100,6 +100,16 @@ function launch(args: string[], input?: string) {
 
 async function processIdentity(pid: number): Promise<string | undefined> {
   try {
+    // Same semantic as the Rust side: (boot identity, process start time),
+    // compared only for equality across time on the same pid.
+    if (process.platform === "darwin") {
+      const boot = Bun.spawnSync(["sysctl", "-n", "kern.boottime"], { stdout: "pipe" });
+      const start = Bun.spawnSync(["ps", "-o", "lstart=", "-p", String(pid)], { stdout: "pipe" });
+      const bootText = boot.stdout.toString().trim();
+      const startText = start.stdout.toString().trim();
+      if (!bootText || start.exitCode !== 0 || !startText) return undefined;
+      return `${bootText}:${startText}`;
+    }
     const stat = await Bun.file(`/proc/${pid}/stat`).text();
     const fields = stat.slice(stat.lastIndexOf(")") + 1).trim().split(/\s+/);
     if (!fields[19] || fields[0] === "Z" || fields[0] === "X") return undefined;

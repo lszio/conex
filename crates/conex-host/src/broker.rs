@@ -101,6 +101,8 @@ pub struct BrokerDeps {
     /// S1 状态中继（T04）：opening/active 订阅表 + 有序有界交付。`None` 时
     /// `state/*` 返回 unavailable。
     pub state: Option<Arc<crate::capability::StateRelay>>,
+    /// P5 私有入口控制方法（access/*）。`None` 时 access/* 不可用。
+    pub private: Option<Arc<crate::private_access::PrivateAccess>>,
 }
 
 pub struct Broker {
@@ -174,6 +176,9 @@ impl Broker {
         if call.method.starts_with("module/") {
             return self.dispatch_module(&call).await;
         }
+        if call.method.starts_with("access/") {
+            return Self::dispatch_access(self, &call).await;
+        }
         if call.method.starts_with("state/") {
             return self.dispatch_state(&call).await;
         }
@@ -187,6 +192,42 @@ impl Broker {
                 duration,
             )
             .await
+    }
+
+    /// P5 access/* control plane: node identity registration and revocation
+    /// sync. Both run only for authenticated non-UI links (checked here), and
+    /// node identity is accepted only from an approved node principal.
+    async fn dispatch_access(broker: &Broker, call: &BrokerCall) -> CallResult<Value> {
+        let Some(private) = broker.deps().private.clone() else {
+            return Err(CallError::new(
+                conex_proto::ErrorCode::Unavailable,
+                "private access is not configured",
+            ));
+        };
+        if call.role == "ui" {
+            return Err(CallError::new(
+                conex_proto::ErrorCode::Forbidden,
+                "access methods are node control plane only",
+            ));
+        }
+        let input = call.input.clone();
+        match call.method.as_str() {
+            conex_proto::capability::ACCESS_NODE_IDENTITY => {
+                crate::private_access::access_node_identity(
+                    &private,
+                    &call.caller.principal_id,
+                    &input,
+                )
+                .await
+            }
+            conex_proto::capability::ACCESS_REVOCATIONS_SYNC => {
+                crate::private_access::access_revocations_sync(&private, &input).await
+            }
+            other => Err(CallError::new(
+                conex_proto::ErrorCode::UnknownMethod,
+                format!("unknown access method {other}"),
+            )),
+        }
     }
 
     async fn dispatch_blob(&self, call: &BrokerCall) -> CallResult<Value> {

@@ -19,6 +19,7 @@ fn config(dir: &TempDir) -> HostConfig {
         listen: "127.0.0.1:0".into(),
         allow_loopback_http: true,
         allow_plaintext_bind: false,
+        private: None,
         audience: Some("host.local".into()),
         tls: None,
         audit_file: None,

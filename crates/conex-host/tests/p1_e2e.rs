@@ -82,6 +82,7 @@ async fn make_broker(
         capabilities: None,
         calls: None,
         state: None,
+        private: None,
     };
     Arc::new(Broker::new(host, deps))
 }

@@ -49,6 +49,9 @@ pub struct HttpState {
     /// Group-scoped file sharing for the landing page's file scene. Bytes
     /// live only while the owner is connected.
     pub shares: Arc<crate::share::ShareStore>,
+    /// Private product entry (MVP-P5). `None` keeps every `/private/*`
+    /// route unavailable; the historical landing behavior is untouched.
+    pub private: Option<Arc<crate::private_access::PrivateAccess>>,
 }
 
 /// Build the P0 `/rpc` router without any shared state attached. Callers
@@ -113,6 +116,15 @@ pub fn attach_p1(base: Router) -> Router {
             post(crate::share_http::uploads::cancel_upload),
         )
         .route("/web/logout", post(crate::web_auth::logout))
+        .route(
+            "/private/session",
+            post(crate::private_access::private_session),
+        )
+        .route("/private/grant", post(crate::private_access::private_grant))
+        .route(
+            "/private/revoke",
+            post(crate::private_access::private_revoke),
+        )
         .route("/oidc/authorize", post(tickets::oidc_authorize))
         .route("/oidc/token", post(tickets::oidc_token))
 }

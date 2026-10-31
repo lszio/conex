@@ -147,6 +147,7 @@ fn broker(registry: Option<Arc<ModuleRegistry>>) -> Arc<Broker> {
                 .as_ref()
                 .map(|registry| conex_host::capability::CallRouter::new(registry.clone())),
             state: None,
+            private: None,
         },
     ))
 }

@@ -8,6 +8,13 @@ fn collect_protos(dir: &Path, out: &mut Vec<PathBuf>) {
             .filter_map(|e| e.ok())
             .map(|e| e.path())
             .filter(|p| p.extension().map(|x| x == "proto").unwrap_or(false))
+            // Skip macOS AppleDouble sidecars (`._foo.proto`).
+            .filter(|p| {
+                !p.file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .starts_with("._")
+            })
             .collect();
         paths.sort();
         out.extend(paths);

@@ -141,3 +141,16 @@ endpoint_id = "notes-b"
 actions = ["list", "read", "search"]
 root = "team"
 subtree = true
+# --- Private product entry (MVP-P5; docs/runbooks/private-network.md) ---
+# Presence of [private] enables the private entry and is mutually exclusive
+# with [web_guest]; the host refuses to start with both configured. Real
+# values belong to the operator's secret store — this example stays secret-free.
+# [private]
+# issuer = "conex://hub.example"
+# kid = "hub-2026q4"
+# signing_key_backend = "file:/etc/conex/hub-signing.pkcs8"   # pkcs8 Ed25519, 0600
+# tenant = "private"
+# store_path = "/var/lib/conex/private.sqlite"
+# principal = "owner"            # principal the bootstrap code authenticates as
+# admin_principals = ["owner"]   # /private/revoke operators
+# node_principals = ["node-a"]   # publication principals allowed to register identity

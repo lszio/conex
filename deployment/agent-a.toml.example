@@ -22,3 +22,17 @@ integration_id = "local-apps"
 endpoint_prefix = "node-a"
 exposure_principals = []
 exposure_tenants = []
+
+# --- Private access (MVP-P5; docs/runbooks/private-network.md) ---
+# Present only when this node verifies hub grants and serves the direct entry.
+# The hub issuer/tenant must match the hub's [private]; public keys are
+# installed here and never fetched from the network. direct_listen stays
+# loopback unless allow_remote_direct is explicitly true (which requires TLS).
+# [private]
+# hub_issuer = "conex://hub.example"
+# tenant = "private"
+# direct_listen = "127.0.0.1:7451"
+# approved_web_origins = ["https://landing.example.com"]
+# allow_remote_direct = false
+# [private.approved_public_keys]
+# "hub-2026q4" = "<64 hex chars of the hub's raw Ed25519 public key>"

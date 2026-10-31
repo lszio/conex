@@ -59,7 +59,16 @@ fn collect_protos(root: &Path) -> Result<Vec<PathBuf>> {
         if let Ok(entries) = fs::read_dir(&path) {
             for entry in entries.filter_map(|e| e.ok()) {
                 let p = entry.path();
-                if p.extension().map(|x| x == "proto").unwrap_or(false) {
+                let is_proto = p.extension().map(|x| x == "proto").unwrap_or(false);
+                // Skip macOS AppleDouble sidecars (`._foo.proto`): they are
+                // not schema sources and protoc cannot parse them.
+                if is_proto
+                    && !p
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .starts_with("._")
+                {
                     protos.push(p);
                 }
             }
@@ -191,7 +200,9 @@ fn collect_files(dir: &Path) -> Result<BTreeMap<String, PathBuf>> {
         return Ok(out);
     }
     for entry in WalkDir::new(dir).into_iter().filter_map(|e| e.ok()) {
-        if entry.file_type().is_file() {
+        // macOS AppleDouble sidecars (`._*`) are filesystem noise, not
+        // generated artifacts; comparing them would fail the check forever.
+        if entry.file_type().is_file() && !entry.file_name().to_string_lossy().starts_with("._") {
             let rel = entry
                 .path()
                 .strip_prefix(dir)?

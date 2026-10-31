@@ -1,0 +1,100 @@
+syntax = "proto3";
+
+package conex;
+
+// P5 私有访问与网络（docs/plans/2026-10-29-conex-mvp-p5.md §2、
+// docs/contracts/private-runtime.md §3-§4）：grant 申请/签发、撤权同步与
+// 节点直连一次性票据的唯一结构源。
+// 边界：grant 是 compact JWS JWT（EdDSA/Ed25519），JWT 时间为标准整秒
+// JSON 整数，不适用 Conex protobuf uint64 字符串规则；本文件中的 uint64
+// （expires_at_ms/revision）在 wire JSON 中是规范十进制字符串。
+// AccessContext 只在验证后的可信执行环境构造，客户端 payload 中的同名
+// 结构一律拒绝，不参与真实 Caller 构建。
+
+// 授权范围：methods/states/workspace_ids/conversation_ids 精确匹配；
+// "交集非空"不放行整个请求，每次操作的全部目标都必须在授权与节点
+// 本地规则的交集中。purpose 固定 direct/relay，防止换路径扩权。
+message AccessGrantScope {
+  string space_id = 1;
+  string provider_endpoint_id = 2;
+  string contract_id = 3;
+  uint64 module_generation = 4;
+  repeated string methods = 5;
+  repeated string states = 6;
+  repeated string workspace_ids = 7;
+  repeated string conversation_ids = 8;
+  string purpose = 9;
+}
+
+// 客户端向中心申请 grant；principal 只来自认证上下文（cookie+CSRF 或
+// 专用 bearer），请求参数中出现的 principal 一律拒绝。
+message AccessGrantRequest {
+  string node_id = 1;
+  AccessGrantScope scope = 2;
+}
+
+// token 是签出的 compact JWS；expires_at_ms 为硬截止（毫秒）。
+message AccessGrantResponse {
+  string token = 1;
+  string jti = 2;
+  string node_id = 3;
+  string node_epoch = 4;
+  uint64 expires_at_ms = 5;
+}
+
+// 验证成功后的不可变授权上下文；只由 GrantVerifier 产出。
+message AccessContext {
+  string issuer = 1;
+  string principal = 2;
+  string tenant = 3;
+  string node_id = 4;
+  string node_epoch = 5;
+  string jti = 6;
+  uint64 issued_at_ms = 7;
+  uint64 expires_at_ms = 8;
+  AccessGrantScope scope = 9;
+}
+
+// 撤权日志项：revision 单调递增，同 revision 重复应用幂等；缺口要求
+// 完整快照，不以毫秒时间戳作为唯一游标。
+message AccessRevocation {
+  uint64 revision = 1;
+  // jti | principal | kid；未知 kind 拒绝。
+  string kind = 2;
+  string target = 3;
+  uint64 effective_at_ms = 4;
+}
+
+// 节点从中心分页同步撤权：{afterRevision,limit}；
+// 单页 <=128 项且 <=196608 bytes。
+message AccessRevocationSyncRequest {
+  uint64 after_revision = 1;
+  uint32 limit = 2;
+}
+
+message AccessRevocationSyncResult {
+  repeated AccessRevocation items = 1;
+  uint64 next_revision = 2;
+  bool has_more = 3;
+}
+
+// 管理操作者按 jti/principal/kid 撤销；范围与截止时间在处理层定义。
+message AccessRevokeRequest {
+  string kind = 1;
+  string target = 2;
+}
+
+message AccessRevokeResult {
+  uint64 revision = 1;
+}
+
+// 节点直连一次性票据（POST <node>/private/tickets，Authorization 提交
+// direct grant，Origin 必须精确批准）；ticket 不进 URL，仅经 WSS
+// 子协议 `conex-ticket.<opaque>` 提交，服务端返回实际 profile 不回显票据。
+message AccessTicketRequest {}
+
+message AccessTicketResult {
+  string ticket = 1;
+  uint64 expires_at_ms = 2;
+  string profile = 3;
+}

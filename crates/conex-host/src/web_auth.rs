@@ -411,6 +411,73 @@ impl WebAuth {
         }
     }
 
+    /// Private-entry session: the caller already authenticated with a
+    /// one-time bootstrap code, so the principal/tenant come from the
+    /// resolved private configuration, never from the request. Guest and
+    /// private entries are mutually exclusive at config load.
+    pub fn login_private(
+        &self,
+        principal: String,
+        tenant: String,
+        observed_origin: &str,
+    ) -> Result<Arc<WebSession>, CallError> {
+        let mut sessions = self.sessions.lock().expect("web session registry poisoned");
+        let now = now_ms();
+        sessions.retain(|_, session| session.is_active());
+        let principal_count = sessions
+            .values()
+            .filter(|session| session.caller.principal_id == principal)
+            .count();
+        if principal_count >= MAX_SESSIONS_PER_PRINCIPAL || sessions.len() >= MAX_SESSIONS_GLOBAL {
+            return Err(CallError::new(
+                conex_proto::ErrorCode::QuotaExceeded,
+                "web session capacity exceeded",
+            ));
+        }
+        let session = Arc::new(WebSession {
+            id: random_token(),
+            csrf: random_token(),
+            caller: conex_core::Caller {
+                principal_id: principal,
+                tenant_id: tenant,
+                actor_peer_id: "private-bootstrap".into(),
+            },
+            role: "ui".into(),
+            origin: if self.accepts_origin(observed_origin) {
+                observed_origin.to_string()
+            } else {
+                request_origin(&self.origins).to_string()
+            },
+            expires_at_ms: std::sync::atomic::AtomicU64::new(now + SESSION_TTL_MS),
+            idle_ttl_ms: None,
+            links: Mutex::new(HashSet::new()),
+            revoked: std::sync::atomic::AtomicBool::new(false),
+            revoked_signal: Notify::new(),
+        });
+        sessions.insert(session.id.clone(), session.clone());
+        Ok(session)
+    }
+
+    /// Drop every live session belonging to `principal`: the hub-side half of
+    /// a principal revocation. Node-side effects go through revision sync.
+    pub fn revoke_all_for_principal(&self, principal: &str) {
+        let dead: Vec<String> = {
+            let mut sessions = self.sessions.lock().expect("web session registry poisoned");
+            let ids: Vec<String> = sessions
+                .iter()
+                .filter(|(_, session)| session.caller.principal_id == principal)
+                .map(|(id, _)| id.clone())
+                .collect();
+            for id in &ids {
+                sessions.remove(id);
+            }
+            ids
+        };
+        for id in dead {
+            self.tickets.revoke_session(&id);
+        }
+    }
+
     pub fn session_from_headers(&self, headers: &HeaderMap) -> Result<Arc<WebSession>, CallError> {
         let id = cookie_value(headers, SESSION_COOKIE)
             .ok_or_else(|| unauthorized("web session cookie required"))?;

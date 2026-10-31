@@ -13,6 +13,11 @@ name = "conex-agent"
 path = "src/main.rs"
 
 [dependencies]
+axum = { version = "0.8", features = ["ws"] }
+sysinfo = { version = "0.32", default-features = false, features = ["system"] }
+base64 = "0.22"
+ring = "0.17"
+conex-access.workspace = true
 prost.workspace = true
 conex-core.workspace = true
 conex-proto.workspace = true
