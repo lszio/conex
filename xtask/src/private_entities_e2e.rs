@@ -165,7 +165,7 @@ fn run_scenarios(socket: &Path) -> Result<()> {
             "method": "metrics/read",
             "argument": {}
         }),
-    )?["result"]["items"]
+    )?["items"]
         .as_array()
         .cloned()
         .context("metric items")?;
@@ -235,10 +235,7 @@ fn run_scenarios(socket: &Path) -> Result<()> {
     // relations/list 面向会话；空库返回空 items（错误只允许不存在）。
     match endpoints {
         Ok(reply) => {
-            let items = reply["result"]["items"]
-                .as_array()
-                .cloned()
-                .unwrap_or_default();
+            let items = reply["items"].as_array().cloned().unwrap_or_default();
             println!("entities M2 relations/list ok items={}", items.len());
         }
         Err(error) => {
@@ -250,7 +247,16 @@ fn run_scenarios(socket: &Path) -> Result<()> {
             println!("entities M2 relations/list rejected unknown conversation (ok)");
         }
     }
-    let entity_id = NODE_ULID;
+    // 标注对象必须是真实存在的实体：从节点自有端点目录发现 id（模块在
+    // 启动时写入的 endpoint 行），而不是臆造一个 ULID。
+    let catalog = call(socket, "node/snapshot", json!({}))?;
+    let entity_id = catalog["endpoints"]
+        .as_array()
+        .and_then(|endpoints| endpoints.first())
+        .and_then(|endpoint| endpoint["id"].as_str())
+        .context("endpoint catalog")?
+        .to_string();
+    assert!(!entity_id.is_empty(), "endpoint id must be present");
     call(
         socket,
         "node/invoke",
@@ -272,7 +278,7 @@ fn run_scenarios(socket: &Path) -> Result<()> {
             "method": "tags/list",
             "argument": {"entityKind": "endpoint", "entityId": entity_id}
         }),
-    )?["result"]["items"]
+    )?["items"]
         .as_array()
         .cloned()
         .context("tag items")?;
@@ -301,7 +307,7 @@ fn run_scenarios(socket: &Path) -> Result<()> {
             "method": "tags/list",
             "argument": {"entityKind": "endpoint", "entityId": entity_id}
         }),
-    )?["result"]["items"]
+    )?["items"]
         .as_array()
         .cloned()
         .unwrap_or_default();

@@ -8,7 +8,7 @@ use crate::adapters::omp::stable_ulid;
 use crate::node_types::RuntimeFactory;
 use conex_agent_domain::Store;
 use conex_proto as p;
-use conex_sdk::{Contract, Error, Execution, Method, StartedModule};
+use conex_sdk::{Contract, Execution, Method, StartedModule};
 use serde_json::json;
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;

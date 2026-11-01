@@ -49,7 +49,7 @@ pub fn factory(_config: crate::node_config::MetricsModuleConfig) -> RuntimeFacto
             let list = {
                 let store = store.clone();
                 Method::new(
-                    "conex.RelationshipListInput",
+                    "conex.AgentRelationshipListInput",
                     "conex.AgentRelationshipListResult",
                     Execution::ReadOnly,
                 )
@@ -73,10 +73,10 @@ pub fn factory(_config: crate::node_config::MetricsModuleConfig) -> RuntimeFacto
                                         "never",
                                     )
                                 })?;
-                            Ok(proto_json(&p::AgentRelationshipListResult {
+                            proto_json(&p::AgentRelationshipListResult {
                                 items,
                                 next_page_token: None,
-                            })?)
+                            })
                         }
                     },
                 )
@@ -102,7 +102,7 @@ pub fn factory(_config: crate::node_config::MetricsModuleConfig) -> RuntimeFacto
                                     "never",
                                 )
                             })?;
-                        Ok(proto_json(&TagsListResult { items })?)
+                        proto_json(&TagsListResult { items })
                     }
                 })
             };
@@ -117,8 +117,9 @@ pub fn factory(_config: crate::node_config::MetricsModuleConfig) -> RuntimeFacto
                     let store = store.clone();
                     let principal = context.caller.principal_id.clone();
                     async move {
+                        let _ = &principal;
                         // 调用方标注记 user 所有权；节点自身维护 node 行。
-                        let owner = if principal.is_empty() { "user" } else { "user" };
+                        let owner = "user";
                         store
                             .record_tag(
                                 owner,

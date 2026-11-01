@@ -318,10 +318,10 @@ fn agent_contract(backend: Arc<CodexBackend>) -> Result<Arc<Contract>, Error> {
         AgentEndpointListInput,
         AgentEndpointListResult,
         |backend: Arc<CodexBackend>, _scope, _input: AgentEndpointListInput| async move {
-            Ok(proto_json(&p::AgentEndpointListResult {
+            proto_json(&p::AgentEndpointListResult {
                 items: backend.store.list_endpoints().await.map_err(store_error)?,
                 next_page_token: None,
-            })?)
+            })
         }
     );
     read_method!(
@@ -340,10 +340,10 @@ fn agent_contract(backend: Arc<CodexBackend>) -> Result<Arc<Contract>, Error> {
                     root_ref: workspace.id.clone(),
                 })
                 .collect();
-            Ok(proto_json(&p::AgentWorkspaceListResult {
+            proto_json(&p::AgentWorkspaceListResult {
                 items,
                 next_page_token: None,
-            })?)
+            })
         }
     );
     read_method!(
@@ -357,10 +357,10 @@ fn agent_contract(backend: Arc<CodexBackend>) -> Result<Arc<Contract>, Error> {
                 .await
                 .map_err(store_error)?;
             conversations.truncate(input.limit.unwrap_or(50).clamp(1, 100) as usize);
-            Ok(proto_json(&p::AgentConversationListResult {
+            proto_json(&p::AgentConversationListResult {
                 items: conversations,
                 next_page_token: None,
-            })?)
+            })
         }
     );
     read_method!(
@@ -373,9 +373,9 @@ fn agent_contract(backend: Arc<CodexBackend>) -> Result<Arc<Contract>, Error> {
                 .read_conversation(&input.conversation_id)
                 .await
                 .map_err(store_error)?;
-            Ok(proto_json(&p::AgentConversationGetResult {
+            proto_json(&p::AgentConversationGetResult {
                 conversation: Some(conversation),
-            })?)
+            })
         }
     );
     read_method!(
@@ -392,12 +392,12 @@ fn agent_contract(backend: Arc<CodexBackend>) -> Result<Arc<Contract>, Error> {
                 )
                 .await
                 .map_err(store_error)?;
-            Ok(proto_json(&p::AgentConversationHistoryResult {
+            proto_json(&p::AgentConversationHistoryResult {
                 messages,
                 has_more,
                 quality: "current".into(),
                 gaps: Vec::new(),
-            })?)
+            })
         }
     );
     read_method!(
@@ -417,7 +417,7 @@ fn agent_contract(backend: Arc<CodexBackend>) -> Result<Arc<Contract>, Error> {
                 )
                 .await
                 .map_err(store_error)?;
-            Ok(proto_json(&result)?)
+            proto_json(&result)
         }
     );
     read_method!(
@@ -430,9 +430,9 @@ fn agent_contract(backend: Arc<CodexBackend>) -> Result<Arc<Contract>, Error> {
                 .read_execution(&input.execution_id)
                 .await
                 .map_err(store_error)?;
-            Ok(proto_json(&p::AgentExecutionGetResult {
+            proto_json(&p::AgentExecutionGetResult {
                 execution: Some(execution),
-            })?)
+            })
         }
     );
     read_method!(
@@ -449,10 +449,10 @@ fn agent_contract(backend: Arc<CodexBackend>) -> Result<Arc<Contract>, Error> {
                 )
                 .await
                 .map_err(store_error)?;
-            Ok(proto_json(&p::AgentInteractionListResult {
+            proto_json(&p::AgentInteractionListResult {
                 items,
                 next_page_token: None,
-            })?)
+            })
         }
     );
     read_method!(
@@ -468,10 +468,10 @@ fn agent_contract(backend: Arc<CodexBackend>) -> Result<Arc<Contract>, Error> {
                 )
                 .await
                 .map_err(store_error)?;
-            Ok(proto_json(&p::AgentRelationshipListResult {
+            proto_json(&p::AgentRelationshipListResult {
                 items,
                 next_page_token: None,
-            })?)
+            })
         }
     );
     read_method!(
@@ -484,11 +484,11 @@ fn agent_contract(backend: Arc<CodexBackend>) -> Result<Arc<Contract>, Error> {
                 .list_subagents(&input.execution_id, input.limit.unwrap_or(50).clamp(1, 100))
                 .await
                 .map_err(store_error)?;
-            Ok(proto_json(&p::AgentSubagentListResult {
+            proto_json(&p::AgentSubagentListResult {
                 items,
                 next_page_token: None,
                 quality,
-            })?)
+            })
         }
     );
     read_method!(
@@ -501,9 +501,9 @@ fn agent_contract(backend: Arc<CodexBackend>) -> Result<Arc<Contract>, Error> {
                 .snapshot(&scope, &input.conversation_id)
                 .await
                 .map_err(store_error)?;
-            Ok(proto_json(&p::AgentSnapshotResult {
+            proto_json(&p::AgentSnapshotResult {
                 snapshot: Some(snapshot),
-            })?)
+            })
         }
     );
     read_method!(
@@ -516,7 +516,7 @@ fn agent_contract(backend: Arc<CodexBackend>) -> Result<Arc<Contract>, Error> {
                 .read_events(&scope, &input.cursor.expect("cursor required"), input.limit)
                 .await
                 .map_err(store_error)?;
-            Ok(proto_json(&result)?)
+            proto_json(&result)
         }
     );
     write_method!(
@@ -538,9 +538,9 @@ fn agent_contract(backend: Arc<CodexBackend>) -> Result<Arc<Contract>, Error> {
                 )
                 .await
                 .map_err(store_error)?;
-            Ok(proto_json(&p::AgentConversationCreateResult {
+            proto_json(&p::AgentConversationCreateResult {
                 conversation: Some(conversation),
-            })?)
+            })
         }
     );
     write_method!(
@@ -614,8 +614,7 @@ fn agent_contract(backend: Arc<CodexBackend>) -> Result<Arc<Contract>, Error> {
             if target.requested
                 && let Some((session, backend_ref)) =
                     backend.session_for_execution(&input.execution_id).await?
-            {
-                if let (Some(thread_id), Some(turn_id)) = (
+                && let (Some(thread_id), Some(turn_id)) = (
                     backend_ref,
                     backend
                         .store
@@ -623,16 +622,16 @@ fn agent_contract(backend: Arc<CodexBackend>) -> Result<Arc<Contract>, Error> {
                         .await
                         .ok()
                         .and_then(|e| e.backend_ref),
-                ) {
-                    // turn/interrupt 定位 (threadId, turnId)；threadId 在 backend_ref。
-                    session.interrupt(thread_id, turn_id).await;
-                }
+                )
+            {
+                // turn/interrupt 定位 (threadId, turnId)；threadId 在 backend_ref。
+                session.interrupt(thread_id, turn_id).await;
             }
-            Ok(proto_json(&p::AgentExecutionCancelResult {
+            proto_json(&p::AgentExecutionCancelResult {
                 execution_id: target.execution_id,
                 requested: target.requested,
                 state: target.state,
-            })?)
+            })
         }
     );
     write_method!(
@@ -765,11 +764,11 @@ fn agent_contract(backend: Arc<CodexBackend>) -> Result<Arc<Contract>, Error> {
                 )
                 .await
                 .map_err(store_error)?;
-            Ok(proto_json(&p::AgentSubagentCancelResult {
+            proto_json(&p::AgentSubagentCancelResult {
                 execution_id: target.execution_id,
                 requested: target.requested,
                 state: target.state,
-            })?)
+            })
         }
     );
     Ok(Arc::new(Contract::new(
@@ -1158,27 +1157,26 @@ impl SessionActor {
         }
         if let Some(active) = self.active.as_ref()
             && frame.get("id").is_some()
-            && frame["id"].to_string() == active.request_id.to_string()
+            && frame["id"] == active.request_id
+            && frame.get("error").is_some()
         {
-            if frame.get("error").is_some() {
-                let error = frame["error"]["message"]
-                    .as_str()
-                    .unwrap_or("turn refused")
-                    .to_string();
-                let (execution_id, generation) = (active.execution_id.clone(), active.generation);
-                self.active = None;
-                let _ = self
-                    .store
-                    .apply_backend(
-                        &execution_id,
-                        generation,
-                        BackendObservation::Quiescent {
-                            state: TerminalState::Failed(format!("backend_refused: {error}")),
-                        },
-                        now_ms(),
-                    )
-                    .await;
-            }
+            let error = frame["error"]["message"]
+                .as_str()
+                .unwrap_or("turn refused")
+                .to_string();
+            let (execution_id, generation) = (active.execution_id.clone(), active.generation);
+            self.active = None;
+            let _ = self
+                .store
+                .apply_backend(
+                    &execution_id,
+                    generation,
+                    BackendObservation::Quiescent {
+                        state: TerminalState::Failed(format!("backend_refused: {error}")),
+                    },
+                    now_ms(),
+                )
+                .await;
         }
     }
 

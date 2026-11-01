@@ -723,9 +723,19 @@ impl Node {
         let resources: Vec<_> = resources.into_iter().map(|resource| json!({
             "id":resource.id,"moduleKey":resource.module_key,"generation":resource.generation.to_string(),"state":resource.state.as_str(),
         })).collect();
+        // 节点自有的端点目录：运维/验收从这里发现可标注的真实实体 id。
+        let endpoints = self
+            .store
+            .list_endpoints()
+            .await
+            .map_err(|error| failure(&error.to_string()))?;
+        let endpoints: Vec<_> = endpoints.into_iter().map(|endpoint| json!({
+            "id":endpoint.id,"adapter":endpoint.adapter,"generation":endpoint.generation.to_string(),
+            "availability":endpoint.availability,
+        })).collect();
         Ok(
             json!({"nodeId":self.config.node_id,"nodeRuntimeEpoch":self.epoch,"instances":instances,
-            "installedApplications":self.packages.keys().collect::<Vec<_>>(),"startupErrors":self.startup_errors,"resources":resources,"publication":self.publication.diagnostics(),"recoveryPendingAtBoot":self.recovery_pending_at_boot}),
+            "installedApplications":self.packages.keys().collect::<Vec<_>>(),"startupErrors":self.startup_errors,"resources":resources,"endpoints":endpoints,"publication":self.publication.diagnostics(),"recoveryPendingAtBoot":self.recovery_pending_at_boot}),
         )
     }
 
