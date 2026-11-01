@@ -494,23 +494,6 @@ fn wait_active(socket: &Path) -> Result<Value> {
             if let Ok(snapshot) = call(socket, "node/snapshot", json!({})) {
                 eprintln!("omp-live: last snapshot: {snapshot}");
             }
-            if let Ok(log) = std::fs::read_to_string(
-                socket
-                    .parent()
-                    .map(|dir| dir.join("../node.log"))
-                    .unwrap_or_default(),
-            ) {
-                eprintln!(
-                    "omp-live: node log tail: {}",
-                    &log.chars()
-                        .rev()
-                        .take(2000)
-                        .collect::<String>()
-                        .chars()
-                        .rev()
-                        .collect::<String>()
-                );
-            }
             bail!("node never reached active state with the omp module");
         }
         std::thread::sleep(POLL);

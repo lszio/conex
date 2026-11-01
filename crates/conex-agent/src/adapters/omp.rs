@@ -1724,7 +1724,6 @@ impl SessionActor {
                     )
                     .await
             );
-            return;
         }
     }
 
