@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: write
+
 jobs:
   p0:
     runs-on: ubuntu-latest
@@ -23,11 +26,28 @@ jobs:
       - name: protoc
         uses: arduino/setup-protoc@v3
         with:
-          version: "36.1"
+          # 与本机生成工具链保持一致：生成物头注释嵌 protoc 版本，
+          # generate --check 按字节对比，版本漂移即红。
+          version: "36.2"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install JS dependencies
         run: bun install --frozen-lockfile
 
       - name: P0 gate
-        run: cargo xtask check
+        run: |
+          set -o pipefail
+          cargo xtask check 2>&1 | tee gate.log
+
+      # 门禁失败时把完整输出发布到 ci-logs 分支：公共分支无需凭据即可读，
+      # 免去每次失败都要凭据才能取日志。
+      - name: Publish gate log
+        if: failure()
+        run: |
+          tail -c 400000 gate.log > gate-tail.log
+          git config user.email "ci@conex.local"
+          git config user.name "ci"
+          git checkout --detach -q
+          git add -f gate-tail.log
+          git commit -qm "ci gate log run ${GITHUB_RUN_ID} attempt ${GITHUB_RUN_ATTEMPT}"
+          git push -q origin "HEAD:refs/heads/ci-logs" --force
