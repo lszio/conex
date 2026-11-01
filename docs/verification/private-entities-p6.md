@@ -2,6 +2,8 @@
 
 日期:2026-11-01。范围:[P6 计划](../plans/2026-10-31-conex-mvp-p6.md) §2–§5。运行平台 macOS(darwin/arm64);**Linux 真实采样核对是本包 live gate,未执行**——按计划随 P9 两机验收,本机 smoke 只证明代码路径与量纲。
 
+**状态:模块与套件代码已交付,crate 测试(47,含真实采集)在本地构建环境失效前全绿;`private-entities` e2e 因本机 rustc 全量挂死(0% CPU 僵进程,最小 crate 亦无法编译)尚未跑绿——构建环境恢复后执行 `cargo build -p conex-agent && cargo xtask e2e --suite private-entities` 即为剩余动作(生成物已刷新,defs 217 含 MetricsReadInput)。**
+
 ## 1. 交付内容
 
 | 交付物 | 位置 | 证据类型 |
