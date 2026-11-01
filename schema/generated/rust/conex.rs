@@ -500,6 +500,81 @@ pub struct AgentPageInfo {
     #[prost(string, optional, tag = "1")]
     pub next_page_token: ::core::option::Option<::prost::alloc::string::String>,
 }
+/// 一次真实采样。CPU 是按相邻采样差计算的百分比（0..=100）；内存/磁盘为
+/// 字节。platform 为 os/arch 字符串；quality=live/stale——采样循环停止后
+/// 投影过期而不删除历史样本。数值以 JSON number 表达（double 可精确容纳）。
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MetricSample {
+    #[prost(string, tag = "1")]
+    pub kind: ::prost::alloc::string::String,
+    #[prost(double, tag = "2")]
+    pub value: f64,
+    #[prost(string, tag = "3")]
+    pub unit: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub platform: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub quality: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "6")]
+    pub sampled_at_ms: u64,
+}
+/// 标注：Tags 是标注不是权限（架构基线 §关系）。所有权分节点/用户；
+/// 同 (owner,entity) 内 name 唯一。
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct EntityTag {
+    #[prost(string, tag = "1")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub owner: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub entity_kind: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub entity_id: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "5")]
+    pub created_at_ms: u64,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct MetricsReadInput {
+    #[prost(uint32, optional, tag = "1")]
+    pub limit: ::core::option::Option<u32>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MetricsReadResult {
+    #[prost(message, repeated, tag = "1")]
+    pub items: ::prost::alloc::vec::Vec<MetricSample>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct TagsListInput {
+    #[prost(string, tag = "1")]
+    pub entity_kind: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub entity_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct TagsListResult {
+    #[prost(message, repeated, tag = "1")]
+    pub items: ::prost::alloc::vec::Vec<EntityTag>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct TagsPutInput {
+    #[prost(string, tag = "1")]
+    pub entity_kind: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub entity_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub name: ::prost::alloc::string::String,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct TagsPutResult {}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct TagsDeleteInput {
+    #[prost(string, tag = "1")]
+    pub entity_kind: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub entity_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub name: ::prost::alloc::string::String,
+}
 /// 契约 AgentEndpoint 记录：既有 agent.proto 的同名消息是控制面注册结构，
 /// 领域记录因此加 Adapter 前缀（wire JSON 不含消息名，字段与契约一致）。
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]

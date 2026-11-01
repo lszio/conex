@@ -3182,6 +3182,7 @@ dependencies = [
  "ring",
  "serde_json",
  "sha2",
+ "sysinfo",
  "tempfile",
  "tokio",
  "tokio-tungstenite 0.30.0",

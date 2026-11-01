@@ -8,6 +8,7 @@ pub mod builtins;
 pub mod config;
 pub mod direct_api;
 pub mod local_api;
+pub mod modules;
 pub mod node;
 pub mod node_config;
 pub mod node_types;

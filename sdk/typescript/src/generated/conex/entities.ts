@@ -155,6 +155,64 @@ export interface AgentPageInfo {
   nextPageToken?: string | undefined;
 }
 
+/**
+ * 一次真实采样。CPU 是按相邻采样差计算的百分比（0..=100）；内存/磁盘为
+ * 字节。platform 为 os/arch 字符串；quality=live/stale——采样循环停止后
+ * 投影过期而不删除历史样本。数值以 JSON number 表达（double 可精确容纳）。
+ */
+export interface MetricSample {
+  kind?: string | undefined;
+  value?: number | undefined;
+  unit?: string | undefined;
+  platform?: string | undefined;
+  quality?: string | undefined;
+  sampledAtMs?: string | undefined;
+}
+
+/**
+ * 标注：Tags 是标注不是权限（架构基线 §关系）。所有权分节点/用户；
+ * 同 (owner,entity) 内 name 唯一。
+ */
+export interface EntityTag {
+  name?: string | undefined;
+  owner?: string | undefined;
+  entityKind?: string | undefined;
+  entityId?: string | undefined;
+  createdAtMs?: string | undefined;
+}
+
+export interface MetricsReadInput {
+  limit?: number | undefined;
+}
+
+export interface MetricsReadResult {
+  items?: MetricSample[] | undefined;
+}
+
+export interface TagsListInput {
+  entityKind?: string | undefined;
+  entityId?: string | undefined;
+}
+
+export interface TagsListResult {
+  items?: EntityTag[] | undefined;
+}
+
+export interface TagsPutInput {
+  entityKind?: string | undefined;
+  entityId?: string | undefined;
+  name?: string | undefined;
+}
+
+export interface TagsPutResult {
+}
+
+export interface TagsDeleteInput {
+  entityKind?: string | undefined;
+  entityId?: string | undefined;
+  name?: string | undefined;
+}
+
 function createBaseAgentEntityRef(): AgentEntityRef {
   return { nodeId: "", id: "" };
 }
@@ -2532,6 +2590,886 @@ export const AgentPageInfo: MessageFns<AgentPageInfo> = {
     return message;
   },
 };
+
+function createBaseMetricSample(): MetricSample {
+  return { kind: "", value: 0, unit: "", platform: "", quality: "", sampledAtMs: "0" };
+}
+
+export const MetricSample: MessageFns<MetricSample> = {
+  encode(message: MetricSample, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.kind !== undefined && message.kind !== "") {
+      writer.uint32(10).string(message.kind);
+    }
+    if (message.value !== undefined && message.value !== 0) {
+      writer.uint32(17).double(message.value);
+    }
+    if (message.unit !== undefined && message.unit !== "") {
+      writer.uint32(26).string(message.unit);
+    }
+    if (message.platform !== undefined && message.platform !== "") {
+      writer.uint32(34).string(message.platform);
+    }
+    if (message.quality !== undefined && message.quality !== "") {
+      writer.uint32(42).string(message.quality);
+    }
+    if (message.sampledAtMs !== undefined && message.sampledAtMs !== "0") {
+      writer.uint32(48).uint64(message.sampledAtMs);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MetricSample {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseMetricSample();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.kind = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 17) {
+              break;
+            }
+
+            message.value = reader.double();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.unit = reader.string();
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.platform = reader.string();
+            continue;
+          }
+          case 5: {
+            if (tag !== 42) {
+              break;
+            }
+
+            message.quality = reader.string();
+            continue;
+          }
+          case 6: {
+            if (tag !== 48) {
+              break;
+            }
+
+            message.sampledAtMs = reader.uint64().toString();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): MetricSample {
+    return {
+      kind: isSet(object.kind) ? globalThis.String(object.kind) : "",
+      value: isSet(object.value) ? globalThis.Number(object.value) : 0,
+      unit: isSet(object.unit) ? globalThis.String(object.unit) : "",
+      platform: isSet(object.platform) ? globalThis.String(object.platform) : "",
+      quality: isSet(object.quality) ? globalThis.String(object.quality) : "",
+      sampledAtMs: isSet(object.sampledAtMs)
+        ? globalThis.String(object.sampledAtMs)
+        : isSet(object.sampled_at_ms)
+        ? globalThis.String(object.sampled_at_ms)
+        : "0",
+    };
+  },
+
+  toJSON(message: MetricSample): unknown {
+    const obj: any = {};
+    if (message.kind !== undefined && message.kind !== "") {
+      obj.kind = message.kind;
+    }
+    if (message.value !== undefined && message.value !== 0) {
+      obj.value = floatToJson(message.value);
+    }
+    if (message.unit !== undefined && message.unit !== "") {
+      obj.unit = message.unit;
+    }
+    if (message.platform !== undefined && message.platform !== "") {
+      obj.platform = message.platform;
+    }
+    if (message.quality !== undefined && message.quality !== "") {
+      obj.quality = message.quality;
+    }
+    if (message.sampledAtMs !== undefined && message.sampledAtMs !== "0") {
+      obj.sampledAtMs = message.sampledAtMs;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<MetricSample>, I>>(base?: I): MetricSample {
+    return MetricSample.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<MetricSample>, I>>(object: I): MetricSample {
+    const message = createBaseMetricSample();
+    message.kind = object.kind ?? "";
+    message.value = object.value ?? 0;
+    message.unit = object.unit ?? "";
+    message.platform = object.platform ?? "";
+    message.quality = object.quality ?? "";
+    message.sampledAtMs = object.sampledAtMs ?? "0";
+    return message;
+  },
+};
+
+function createBaseEntityTag(): EntityTag {
+  return { name: "", owner: "", entityKind: "", entityId: "", createdAtMs: "0" };
+}
+
+export const EntityTag: MessageFns<EntityTag> = {
+  encode(message: EntityTag, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.name !== undefined && message.name !== "") {
+      writer.uint32(10).string(message.name);
+    }
+    if (message.owner !== undefined && message.owner !== "") {
+      writer.uint32(18).string(message.owner);
+    }
+    if (message.entityKind !== undefined && message.entityKind !== "") {
+      writer.uint32(26).string(message.entityKind);
+    }
+    if (message.entityId !== undefined && message.entityId !== "") {
+      writer.uint32(34).string(message.entityId);
+    }
+    if (message.createdAtMs !== undefined && message.createdAtMs !== "0") {
+      writer.uint32(40).uint64(message.createdAtMs);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EntityTag {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseEntityTag();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.name = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.owner = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.entityKind = reader.string();
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.entityId = reader.string();
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.createdAtMs = reader.uint64().toString();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): EntityTag {
+    return {
+      name: isSet(object.name) ? globalThis.String(object.name) : "",
+      owner: isSet(object.owner) ? globalThis.String(object.owner) : "",
+      entityKind: isSet(object.entityKind)
+        ? globalThis.String(object.entityKind)
+        : isSet(object.entity_kind)
+        ? globalThis.String(object.entity_kind)
+        : "",
+      entityId: isSet(object.entityId)
+        ? globalThis.String(object.entityId)
+        : isSet(object.entity_id)
+        ? globalThis.String(object.entity_id)
+        : "",
+      createdAtMs: isSet(object.createdAtMs)
+        ? globalThis.String(object.createdAtMs)
+        : isSet(object.created_at_ms)
+        ? globalThis.String(object.created_at_ms)
+        : "0",
+    };
+  },
+
+  toJSON(message: EntityTag): unknown {
+    const obj: any = {};
+    if (message.name !== undefined && message.name !== "") {
+      obj.name = message.name;
+    }
+    if (message.owner !== undefined && message.owner !== "") {
+      obj.owner = message.owner;
+    }
+    if (message.entityKind !== undefined && message.entityKind !== "") {
+      obj.entityKind = message.entityKind;
+    }
+    if (message.entityId !== undefined && message.entityId !== "") {
+      obj.entityId = message.entityId;
+    }
+    if (message.createdAtMs !== undefined && message.createdAtMs !== "0") {
+      obj.createdAtMs = message.createdAtMs;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<EntityTag>, I>>(base?: I): EntityTag {
+    return EntityTag.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<EntityTag>, I>>(object: I): EntityTag {
+    const message = createBaseEntityTag();
+    message.name = object.name ?? "";
+    message.owner = object.owner ?? "";
+    message.entityKind = object.entityKind ?? "";
+    message.entityId = object.entityId ?? "";
+    message.createdAtMs = object.createdAtMs ?? "0";
+    return message;
+  },
+};
+
+function createBaseMetricsReadInput(): MetricsReadInput {
+  return { limit: undefined };
+}
+
+export const MetricsReadInput: MessageFns<MetricsReadInput> = {
+  encode(message: MetricsReadInput, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.limit !== undefined) {
+      writer.uint32(8).uint32(message.limit);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MetricsReadInput {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseMetricsReadInput();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 8) {
+              break;
+            }
+
+            message.limit = reader.uint32();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): MetricsReadInput {
+    return { limit: isSet(object.limit) ? globalThis.Number(object.limit) : undefined };
+  },
+
+  toJSON(message: MetricsReadInput): unknown {
+    const obj: any = {};
+    if (message.limit !== undefined) {
+      obj.limit = Math.round(message.limit);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<MetricsReadInput>, I>>(base?: I): MetricsReadInput {
+    return MetricsReadInput.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<MetricsReadInput>, I>>(object: I): MetricsReadInput {
+    const message = createBaseMetricsReadInput();
+    message.limit = object.limit ?? undefined;
+    return message;
+  },
+};
+
+function createBaseMetricsReadResult(): MetricsReadResult {
+  return { items: [] };
+}
+
+export const MetricsReadResult: MessageFns<MetricsReadResult> = {
+  encode(message: MetricsReadResult, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.items !== undefined && message.items.length !== 0) {
+      for (const v of message.items) {
+        MetricSample.encode(v!, writer.uint32(10).fork()).join();
+      }
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MetricsReadResult {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseMetricsReadResult();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            const el = MetricSample.decode(reader, reader.uint32());
+            if (el !== undefined) {
+              message.items!.push(el);
+            }
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): MetricsReadResult {
+    return {
+      items: globalThis.Array.isArray(object?.items) ? object.items.map((e: any) => MetricSample.fromJSON(e)) : [],
+    };
+  },
+
+  toJSON(message: MetricsReadResult): unknown {
+    const obj: any = {};
+    if (message.items?.length) {
+      obj.items = message.items.map((e) => MetricSample.toJSON(e));
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<MetricsReadResult>, I>>(base?: I): MetricsReadResult {
+    return MetricsReadResult.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<MetricsReadResult>, I>>(object: I): MetricsReadResult {
+    const message = createBaseMetricsReadResult();
+    message.items = object.items?.map((e) => MetricSample.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseTagsListInput(): TagsListInput {
+  return { entityKind: "", entityId: "" };
+}
+
+export const TagsListInput: MessageFns<TagsListInput> = {
+  encode(message: TagsListInput, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.entityKind !== undefined && message.entityKind !== "") {
+      writer.uint32(10).string(message.entityKind);
+    }
+    if (message.entityId !== undefined && message.entityId !== "") {
+      writer.uint32(18).string(message.entityId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): TagsListInput {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseTagsListInput();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.entityKind = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.entityId = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): TagsListInput {
+    return {
+      entityKind: isSet(object.entityKind)
+        ? globalThis.String(object.entityKind)
+        : isSet(object.entity_kind)
+        ? globalThis.String(object.entity_kind)
+        : "",
+      entityId: isSet(object.entityId)
+        ? globalThis.String(object.entityId)
+        : isSet(object.entity_id)
+        ? globalThis.String(object.entity_id)
+        : "",
+    };
+  },
+
+  toJSON(message: TagsListInput): unknown {
+    const obj: any = {};
+    if (message.entityKind !== undefined && message.entityKind !== "") {
+      obj.entityKind = message.entityKind;
+    }
+    if (message.entityId !== undefined && message.entityId !== "") {
+      obj.entityId = message.entityId;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<TagsListInput>, I>>(base?: I): TagsListInput {
+    return TagsListInput.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<TagsListInput>, I>>(object: I): TagsListInput {
+    const message = createBaseTagsListInput();
+    message.entityKind = object.entityKind ?? "";
+    message.entityId = object.entityId ?? "";
+    return message;
+  },
+};
+
+function createBaseTagsListResult(): TagsListResult {
+  return { items: [] };
+}
+
+export const TagsListResult: MessageFns<TagsListResult> = {
+  encode(message: TagsListResult, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.items !== undefined && message.items.length !== 0) {
+      for (const v of message.items) {
+        EntityTag.encode(v!, writer.uint32(10).fork()).join();
+      }
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): TagsListResult {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseTagsListResult();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            const el = EntityTag.decode(reader, reader.uint32());
+            if (el !== undefined) {
+              message.items!.push(el);
+            }
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): TagsListResult {
+    return {
+      items: globalThis.Array.isArray(object?.items) ? object.items.map((e: any) => EntityTag.fromJSON(e)) : [],
+    };
+  },
+
+  toJSON(message: TagsListResult): unknown {
+    const obj: any = {};
+    if (message.items?.length) {
+      obj.items = message.items.map((e) => EntityTag.toJSON(e));
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<TagsListResult>, I>>(base?: I): TagsListResult {
+    return TagsListResult.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<TagsListResult>, I>>(object: I): TagsListResult {
+    const message = createBaseTagsListResult();
+    message.items = object.items?.map((e) => EntityTag.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseTagsPutInput(): TagsPutInput {
+  return { entityKind: "", entityId: "", name: "" };
+}
+
+export const TagsPutInput: MessageFns<TagsPutInput> = {
+  encode(message: TagsPutInput, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.entityKind !== undefined && message.entityKind !== "") {
+      writer.uint32(10).string(message.entityKind);
+    }
+    if (message.entityId !== undefined && message.entityId !== "") {
+      writer.uint32(18).string(message.entityId);
+    }
+    if (message.name !== undefined && message.name !== "") {
+      writer.uint32(26).string(message.name);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): TagsPutInput {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseTagsPutInput();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.entityKind = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.entityId = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.name = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): TagsPutInput {
+    return {
+      entityKind: isSet(object.entityKind)
+        ? globalThis.String(object.entityKind)
+        : isSet(object.entity_kind)
+        ? globalThis.String(object.entity_kind)
+        : "",
+      entityId: isSet(object.entityId)
+        ? globalThis.String(object.entityId)
+        : isSet(object.entity_id)
+        ? globalThis.String(object.entity_id)
+        : "",
+      name: isSet(object.name) ? globalThis.String(object.name) : "",
+    };
+  },
+
+  toJSON(message: TagsPutInput): unknown {
+    const obj: any = {};
+    if (message.entityKind !== undefined && message.entityKind !== "") {
+      obj.entityKind = message.entityKind;
+    }
+    if (message.entityId !== undefined && message.entityId !== "") {
+      obj.entityId = message.entityId;
+    }
+    if (message.name !== undefined && message.name !== "") {
+      obj.name = message.name;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<TagsPutInput>, I>>(base?: I): TagsPutInput {
+    return TagsPutInput.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<TagsPutInput>, I>>(object: I): TagsPutInput {
+    const message = createBaseTagsPutInput();
+    message.entityKind = object.entityKind ?? "";
+    message.entityId = object.entityId ?? "";
+    message.name = object.name ?? "";
+    return message;
+  },
+};
+
+function createBaseTagsPutResult(): TagsPutResult {
+  return {};
+}
+
+export const TagsPutResult: MessageFns<TagsPutResult> = {
+  encode(_: TagsPutResult, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): TagsPutResult {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseTagsPutResult();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(_: any): TagsPutResult {
+    return {};
+  },
+
+  toJSON(_: TagsPutResult): unknown {
+    const obj: any = {};
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<TagsPutResult>, I>>(base?: I): TagsPutResult {
+    return TagsPutResult.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<TagsPutResult>, I>>(_: I): TagsPutResult {
+    const message = createBaseTagsPutResult();
+    return message;
+  },
+};
+
+function createBaseTagsDeleteInput(): TagsDeleteInput {
+  return { entityKind: "", entityId: "", name: "" };
+}
+
+export const TagsDeleteInput: MessageFns<TagsDeleteInput> = {
+  encode(message: TagsDeleteInput, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.entityKind !== undefined && message.entityKind !== "") {
+      writer.uint32(10).string(message.entityKind);
+    }
+    if (message.entityId !== undefined && message.entityId !== "") {
+      writer.uint32(18).string(message.entityId);
+    }
+    if (message.name !== undefined && message.name !== "") {
+      writer.uint32(26).string(message.name);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): TagsDeleteInput {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const previousRecursionDepth = (reader as any).__tsProtoDecodeDepth ?? 0;
+    if (previousRecursionDepth >= 100) {
+      throw new globalThis.Error("protobuf decode recursion limit exceeded");
+    }
+    (reader as any).__tsProtoDecodeDepth = previousRecursionDepth + 1;
+    try {
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseTagsDeleteInput();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.entityKind = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.entityId = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.name = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    } finally {
+      (reader as any).__tsProtoDecodeDepth = previousRecursionDepth;
+    }
+  },
+
+  fromJSON(object: any): TagsDeleteInput {
+    return {
+      entityKind: isSet(object.entityKind)
+        ? globalThis.String(object.entityKind)
+        : isSet(object.entity_kind)
+        ? globalThis.String(object.entity_kind)
+        : "",
+      entityId: isSet(object.entityId)
+        ? globalThis.String(object.entityId)
+        : isSet(object.entity_id)
+        ? globalThis.String(object.entity_id)
+        : "",
+      name: isSet(object.name) ? globalThis.String(object.name) : "",
+    };
+  },
+
+  toJSON(message: TagsDeleteInput): unknown {
+    const obj: any = {};
+    if (message.entityKind !== undefined && message.entityKind !== "") {
+      obj.entityKind = message.entityKind;
+    }
+    if (message.entityId !== undefined && message.entityId !== "") {
+      obj.entityId = message.entityId;
+    }
+    if (message.name !== undefined && message.name !== "") {
+      obj.name = message.name;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<TagsDeleteInput>, I>>(base?: I): TagsDeleteInput {
+    return TagsDeleteInput.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<TagsDeleteInput>, I>>(object: I): TagsDeleteInput {
+    const message = createBaseTagsDeleteInput();
+    message.entityKind = object.entityKind ?? "";
+    message.entityId = object.entityId ?? "";
+    message.name = object.name ?? "";
+    return message;
+  },
+};
+
+function floatToJson(value: number | null | undefined): number | string | null | undefined {
+  return typeof value === "number" && !globalThis.Number.isFinite(value) ? globalThis.String(value) : value;
+}
 
 type Builtin = Date | Function | Uint8Array | string | number | boolean | undefined;
 

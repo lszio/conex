@@ -150,7 +150,8 @@ impl Store {
                 1 => migrate_to_v2(&db)?,
                 2 => migrate_to_v3(&db)?,
                 3 => migrate_to_v4(&db)?,
-                4 => {}
+                4 => migrate_to_v5(&db)?,
+                5 => {}
                 other => {
                     return Err(StoreError::InvalidArgument(format!(
                         "restored database version {other} is not supported"
@@ -438,6 +439,24 @@ fn migrate_to_v4(db: &Connection) -> Result<(), StoreError> {
     Ok(())
 }
 
+/// v4→v5 增量（P6.3）：只加实体标注表；必须与 schema.sql 的 v5 段一致。
+const MIGRATE_V4_TO_V5: &str = "
+CREATE TABLE entity_tags(
+ name TEXT NOT NULL, owner TEXT NOT NULL CHECK(owner IN ('node','user')),
+ entity_kind TEXT NOT NULL, entity_id TEXT NOT NULL,
+ created_at_ms INTEGER NOT NULL,
+ PRIMARY KEY(owner, entity_kind, entity_id, name)
+);
+PRAGMA user_version=5;
+";
+
+fn migrate_to_v5(db: &Connection) -> Result<(), StoreError> {
+    let tx = rusqlite::Transaction::new_unchecked(db, TransactionBehavior::Immediate)?;
+    tx.execute_batch(MIGRATE_V4_TO_V5)?;
+    tx.commit()?;
+    Ok(())
+}
+
 /// 保留最近 7 份本机迁移备份（契约 §6）。只清理本库路径 `*.backup-v<N>.*`
 /// 前缀文件，不触碰用户显式 backup_to 的任意路径备份。
 const MIGRATION_BACKUP_KEEP: usize = 7;
@@ -548,6 +567,13 @@ fn init_or_verify(db: &Connection, path: &Path, node_id: &str) -> Result<(), Sto
         4 => {
             verify_identity(db, node_id)?;
             require_integrity(db)?;
+            snapshot_before_migration(db, path, 4)?;
+            retain_migration_backups(path, 4)?;
+            migrate_to_v5(db)
+        }
+        5 => {
+            verify_identity(db, node_id)?;
+            require_integrity(db)?;
             Ok(())
         }
         newer => Err(StoreError::InvalidArgument(format!(
@@ -558,7 +584,7 @@ fn init_or_verify(db: &Connection, path: &Path, node_id: &str) -> Result<(), Sto
 
 fn verify_backup(db: &Connection, node_id: &str) -> Result<(), StoreError> {
     match current_version(db)? {
-        1..=4 => {}
+        1..=5 => {}
         other => {
             return Err(StoreError::InvalidArgument(format!(
                 "backup version {other} is not supported (expected 1-2)"
@@ -3001,6 +3027,140 @@ impl Store {
                     relationship.observed_at_ms as i64,
                     projection
                 ],
+            )?;
+            Ok(())
+        })
+        .await
+    }
+
+    /// 登记/覆盖实体标注（P6.3：Tags 是标注不是权限）。同 owner+entity 内
+    /// name 幂等覆盖；entity 必须已存在（endpoint/conversation/workspace）。
+    pub async fn record_tag(
+        &self,
+        owner: &str,
+        entity_kind: &str,
+        entity_id: &str,
+        name: &str,
+        now: u64,
+    ) -> Result<(), StoreError> {
+        match owner {
+            "node" | "user" => {}
+            other => {
+                return Err(StoreError::InvalidArgument(format!(
+                    "unknown tag owner {other}"
+                )));
+            }
+        }
+        match entity_kind {
+            "endpoint" | "conversation" | "workspace" => {}
+            other => {
+                return Err(StoreError::InvalidArgument(format!(
+                    "unknown tag entity kind {other}"
+                )));
+            }
+        }
+        if name.trim().is_empty() || name.len() > 128 {
+            return Err(StoreError::InvalidArgument(
+                "tag name must be 1..=128 bytes".into(),
+            ));
+        }
+        require_ulid(entity_id, "entityId")?;
+        let (owner, entity_kind, entity, name) = (
+            owner.to_string(),
+            entity_kind.to_string(),
+            entity_id.to_string(),
+            name.to_string(),
+        );
+        self.immediate(move |tx, _ids, _limits| {
+            let exists: bool = tx.query_row(
+                "SELECT COUNT(*) FROM entities WHERE id=?1 AND kind=?2",
+                params![entity, entity_kind],
+                |row| row.get::<_, i64>(0),
+            )? > 0;
+            if !exists {
+                return Err(StoreError::NotFound {
+                    entity: "entity",
+                    id: entity,
+                });
+            }
+            tx.execute(
+                "INSERT INTO entity_tags(name,owner,entity_kind,entity_id,created_at_ms)
+                 VALUES (?1,?2,?3,?4,?5)
+                 ON CONFLICT(owner,entity_kind,entity_id,name)
+                 DO UPDATE SET created_at_ms=excluded.created_at_ms",
+                params![name, owner, entity_kind, entity, now as i64],
+            )?;
+            Ok(())
+        })
+        .await
+    }
+
+    /// 列出实体标注；按 (owner,name) 稳定排序，上限受限。
+    pub async fn list_tags(
+        &self,
+        entity_kind: &str,
+        entity_id: &str,
+    ) -> Result<Vec<conex_proto::EntityTag>, StoreError> {
+        require_ulid(entity_id, "entityId")?;
+        let entity = entity_id.to_string();
+        let kind = entity_kind.to_string();
+        self.readonly(move |tx, _gen, _limits| {
+            let mut stmt = tx.prepare(
+                "SELECT name, owner, entity_kind, entity_id, created_at_ms
+                 FROM entity_tags WHERE entity_kind=?1 AND entity_id=?2
+                 ORDER BY owner, name",
+            )?;
+            let mut out = Vec::new();
+            let rows = stmt.query_map(params![kind, entity], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, i64>(4)?,
+                ))
+            })?;
+            for row in rows {
+                let (name, owner, entity_kind, entity_id, created_at_ms) = row?;
+                out.push(conex_proto::EntityTag {
+                    name,
+                    owner,
+                    entity_kind,
+                    entity_id,
+                    created_at_ms: created_at_ms as u64,
+                });
+            }
+            Ok(out)
+        })
+        .await
+    }
+
+    /// 删除标注；只删标注行，不影响任何实体或执行（P6.3）。
+    pub async fn delete_tag(
+        &self,
+        owner: &str,
+        entity_kind: &str,
+        entity_id: &str,
+        name: &str,
+    ) -> Result<(), StoreError> {
+        match owner {
+            "node" | "user" => {}
+            other => {
+                return Err(StoreError::InvalidArgument(format!(
+                    "unknown tag owner {other}"
+                )));
+            }
+        }
+        let (owner, entity_kind, entity, name) = (
+            owner.to_string(),
+            entity_kind.to_string(),
+            entity_id.to_string(),
+            name.to_string(),
+        );
+        self.immediate(move |tx, _ids, _limits| {
+            tx.execute(
+                "DELETE FROM entity_tags WHERE owner=?1 AND entity_kind=?2 AND entity_id=?3 AND name=?4",
+                params![owner, entity_kind, entity, name],
             )?;
             Ok(())
         })

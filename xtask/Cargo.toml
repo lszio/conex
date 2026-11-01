@@ -9,6 +9,7 @@ description = "Repository automation for conex: code generation, conformance, e2
 publish = false
 
 [dependencies]
+sysinfo = { version = "0.32", default-features = false, features = ["system"] }
 anyhow = "1"
 base64 = "0.22"
 conex-access = { path = "../crates/conex-access" }

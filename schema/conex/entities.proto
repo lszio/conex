@@ -150,3 +150,58 @@ message AgentHistoryInfo {
 message AgentPageInfo {
   optional string next_page_token = 1;
 }
+
+// ---- P6 指标与标注（docs/plans/2026-10-31-conex-mvp-p6.md §2-§3）----------
+
+// 一次真实采样。CPU 是按相邻采样差计算的百分比（0..=100）；内存/磁盘为
+// 字节。platform 为 os/arch 字符串；quality=live/stale——采样循环停止后
+// 投影过期而不删除历史样本。数值以 JSON number 表达（double 可精确容纳）。
+message MetricSample {
+  string kind = 1;
+  double value = 2;
+  string unit = 3;
+  string platform = 4;
+  string quality = 5;
+  uint64 sampled_at_ms = 6;
+}
+
+// 标注：Tags 是标注不是权限（架构基线 §关系）。所有权分节点/用户；
+// 同 (owner,entity) 内 name 唯一。
+message EntityTag {
+  string name = 1;
+  string owner = 2;
+  string entity_kind = 3;
+  string entity_id = 4;
+  uint64 created_at_ms = 5;
+}
+
+message MetricsReadInput {
+  optional uint32 limit = 1;
+}
+
+message MetricsReadResult {
+  repeated MetricSample items = 1;
+}
+
+message TagsListInput {
+  string entity_kind = 1;
+  string entity_id = 2;
+}
+
+message TagsListResult {
+  repeated EntityTag items = 1;
+}
+
+message TagsPutInput {
+  string entity_kind = 1;
+  string entity_id = 2;
+  string name = 3;
+}
+
+message TagsPutResult {}
+
+message TagsDeleteInput {
+  string entity_kind = 1;
+  string entity_id = 2;
+  string name = 3;
+}

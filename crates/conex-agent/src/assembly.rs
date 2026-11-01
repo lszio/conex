@@ -123,6 +123,54 @@ pub fn load_applications(config: &NodeConfig) -> Result<Vec<PreparedApplication>
             SourceStrategy::DirectOnly,
         )?);
     }
+    // P6 内置领域模块：指标与关系投影，像普通模块一样提供自身契约。
+    if config.metrics.is_some() {
+        let factory: ApprovedFactory = Arc::new(|value| {
+            if !value.is_null() {
+                return Err("node-metrics implementation does not take package config".into());
+            }
+            Ok(crate::modules::metrics::factory(
+                crate::node_config::MetricsModuleConfig { enabled: true },
+            ))
+        });
+        entries.push(ImplementationEntry::new(
+            "node-metrics",
+            factory,
+            BTreeMap::from([(
+                "conex.metrics".to_string(),
+                BTreeSet::from(["metrics/read".to_string()]),
+            )]),
+            BTreeMap::new(),
+            config.permissions.clone(),
+            SourceStrategy::DirectOnly,
+        )?);
+    }
+    {
+        let factory: ApprovedFactory = Arc::new(|value| {
+            if !value.is_null() {
+                return Err("node-relations implementation does not take package config".into());
+            }
+            Ok(crate::modules::relations::factory(
+                crate::node_config::MetricsModuleConfig { enabled: true },
+            ))
+        });
+        entries.push(ImplementationEntry::new(
+            "node-relations",
+            factory,
+            BTreeMap::from([(
+                "conex.relations".to_string(),
+                BTreeSet::from([
+                    "relations/list".to_string(),
+                    "tags/list".to_string(),
+                    "tags/put".to_string(),
+                    "tags/delete".to_string(),
+                ]),
+            )]),
+            BTreeMap::new(),
+            config.permissions.clone(),
+            SourceStrategy::DirectOnly,
+        )?);
+    }
     let approved_remotes = config
         .remote_endpoints
         .iter()

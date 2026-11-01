@@ -106,4 +106,11 @@ CREATE TABLE relationships(
  observed_at_ms INTEGER NOT NULL, projection BLOB NOT NULL
 );
 CREATE INDEX relationships_conversation ON relationships(conversation_id, observed_at_ms);
-PRAGMA user_version=4;
+-- v5（P6.3）：实体标注（Tags 是标注不是权限；所有权分 node/user）。
+CREATE TABLE entity_tags(
+ name TEXT NOT NULL, owner TEXT NOT NULL CHECK(owner IN ('node','user')),
+ entity_kind TEXT NOT NULL, entity_id TEXT NOT NULL,
+ created_at_ms INTEGER NOT NULL,
+ PRIMARY KEY(owner, entity_kind, entity_id, name)
+);
+PRAGMA user_version=5;

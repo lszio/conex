@@ -29,6 +29,19 @@ pub struct NodeConfig {
     /// installable (owned stdio app-server form).
     #[serde(default)]
     pub codex: Option<CodexAdapterConfig>,
+    /// P6 metrics module. Present = the "node-metrics" implementation is
+    /// installable.
+    #[serde(default)]
+    pub metrics: Option<MetricsModuleConfig>,
+}
+
+/// 指标模块配置（P6.1）。采样间隔与保留上限当前为编译期常量（有界）；
+/// 配置位留作批准项扩展。
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MetricsModuleConfig {
+    #[serde(default)]
+    pub enabled: bool,
 }
 
 /// Codex 适配器批准配置（docs/plans/2026-10-31-conex-mvp-p4.md §1）。

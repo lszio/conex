@@ -2841,6 +2841,29 @@
       },
       "type": "object"
     },
+    "conex.EntityTag": {
+      "additionalProperties": false,
+      "properties": {
+        "createdAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "entityId": {
+          "type": "string"
+        },
+        "entityKind": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "conex.Error": {
       "additionalProperties": false,
       "properties": {
@@ -3446,6 +3469,55 @@
         },
         "success": {
           "$ref": "#/$defs/conex.Success"
+        }
+      },
+      "type": "object"
+    },
+    "conex.MetricSample": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "string"
+        },
+        "quality": {
+          "type": "string"
+        },
+        "sampledAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "unit": {
+          "type": "string"
+        },
+        "value": {
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "conex.MetricsReadInput": {
+      "additionalProperties": false,
+      "properties": {
+        "limit": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "conex.MetricsReadResult": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/conex.MetricSample"
+          },
+          "type": "array"
         }
       },
       "type": "object"
@@ -4914,6 +4986,65 @@
         },
         "result": {}
       },
+      "type": "object"
+    },
+    "conex.TagsDeleteInput": {
+      "additionalProperties": false,
+      "properties": {
+        "entityId": {
+          "type": "string"
+        },
+        "entityKind": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "conex.TagsListInput": {
+      "additionalProperties": false,
+      "properties": {
+        "entityId": {
+          "type": "string"
+        },
+        "entityKind": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "conex.TagsListResult": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/conex.EntityTag"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "conex.TagsPutInput": {
+      "additionalProperties": false,
+      "properties": {
+        "entityId": {
+          "type": "string"
+        },
+        "entityKind": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "conex.TagsPutResult": {
+      "additionalProperties": false,
+      "properties": {},
       "type": "object"
     },
     "conex.UiLinkSummary": {
