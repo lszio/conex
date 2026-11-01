@@ -6,7 +6,7 @@ conex 的文档按「规范 / 契约 / 计划 / 证据 / 操作」分层，每�
 
 已确认 [私有分布式能力组合平台 MVP 架构基线](design/2026-10-29-conex-private-platform.md)：单用户私有、自治节点与协调入口、私网主动 WSS 接入、获准直连/转发、OMP/Codex 适配器、对话及图谱、服务器指标；MVP 同时支持 Web 与最小 Emacs 原生客户端。Desktop/Mobile 后续扩展；不把 Astro、多用户治理、自动打洞或插件市场作为前置条件。
 
-按 [实施总计划](plans/2026-10-29-conex-private-mvp.md) 推进；[P0 调查](verification/agent-protocol-probes.md)、[P1 领域存储](verification/agent-domain-p1.md)、[P2 自治节点](verification/private-runtime-p2.md)、[P5 私有访问](verification/private-network-p5.md) 与 [P3 OMP 适配器](verification/agent-omp-p3.md) 已实现。P5 已验证私有登录/Ed25519 grant/中心票据/节点直连 WSS/revision 撤权同步与跨重启语义（loopback 真实进程；真实 TLS 与公网入口归 P9）。**完整 MVP 尚未交付**；P3/P4 后端、P6 指标关系、Web/Emacs 与产品 A01–A16 仍按后续包验收，三者的文件级计划已落盘（2026-10-31）：[P3 OMP](plans/2026-10-31-conex-mvp-p3.md)、[P4 Codex](plans/2026-10-31-conex-mvp-p4.md)、[P6 指标与关系](plans/2026-10-31-conex-mvp-p6.md)。
+按 [实施总计划](plans/2026-10-29-conex-private-mvp.md) 推进；[P0 调查](verification/agent-protocol-probes.md)、[P1 领域存储](verification/agent-domain-p1.md)、[P2 自治节点](verification/private-runtime-p2.md)、[P5 私有访问](verification/private-network-p5.md)、[P3 OMP 适配器](verification/agent-omp-p3.md) 已实现;[P4 Codex 适配器](verification/agent-codex-p4.md) 离线已实现、live 被后端形态漂移阻断。P5 已验证私有登录/Ed25519 grant/中心票据/节点直连 WSS/revision 撤权同步与跨重启语义（loopback 真实进程；真实 TLS 与公网入口归 P9）。**完整 MVP 尚未交付**；P3/P4 后端、P6 指标关系、Web/Emacs 与产品 A01–A16 仍按后续包验收，三者的文件级计划已落盘（2026-10-31）：[P3 OMP](plans/2026-10-31-conex-mvp-p3.md)、[P4 Codex](plans/2026-10-31-conex-mvp-p4.md)、[P6 指标与关系](plans/2026-10-31-conex-mvp-p6.md)。
 
 既有 [S1 契约](contracts/s1-capabilities.md) 保持 wire/代次语义；[S2 契约](contracts/s2-plugins.md) 已迁移为业务/发布分离。历史证据见 [S1](verification/s1-capabilities.md)、[S2](verification/s2-plugins.md)，自治迁移见 [P2](verification/private-runtime-p2.md)。静态中心批准仍不能代替节点离线 grant 授权。
 
@@ -40,7 +40,7 @@ conex 的文档按「规范 / 契约 / 计划 / 证据 / 操作」分层，每�
 | 计划 | [MVP-P2 自治运行](plans/2026-10-29-conex-mvp-p2.md) | 本地生命周期、应用装配及发布解耦 | 已实现，见 [P2 证据](verification/private-runtime-p2.md) 与 [运行手册](runbooks/private-runtime.md) |
 | 计划 | [MVP-P5 私有访问](plans/2026-10-29-conex-mvp-p5.md) | 节点/客户端授权、真实直连/转发与安全迁移 | 已实现 loopback 范围，见 [P5 证据](verification/private-network-p5.md) 与 [运行手册](runbooks/private-network.md) |
 | 计划 | [MVP-P3 OMP 适配器](plans/2026-10-31-conex-mvp-p3.md) | OMP RPC 进程监管、会话映射、领域操作与 live 验收 | 已实现,见 [P3 实施记录](verification/agent-omp-p3.md) |
-| 计划 | [MVP-P4 Codex 适配器](plans/2026-10-31-conex-mvp-p4.md) | thread/turn/item 协议、外部服务所有权与 live 验收 | P4 实施前 |
+| 计划 | [MVP-P4 Codex 适配器](plans/2026-10-31-conex-mvp-p4.md) | thread/turn/item 协议、外部服务所有权与 live 验收 | 离线已实现;live 被后端形态漂移阻断,见 [P4 实施记录](verification/agent-codex-p4.md) |
 | 计划 | [MVP-P6 指标与关系](plans/2026-10-31-conex-mvp-p6.md) | 指标采集、关系/Tags/绑定投影与查询 | P6 实施前 |
 | 历史设计 | [上一版架构](design/2026-10-17-conex-architecture.md) | 2026-10-17 方向和 S1–S5 切片 | 追溯既有决策 |
 | 历史盘点 | [旧迁移盘点](design/2026-10-17-conex-migration-assessment.md) | 当时的静态源码证据，缺口可能已由 S1/S2 填补 | 追溯迁移，不能据此重做已交付功能 |

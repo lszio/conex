@@ -133,15 +133,15 @@ P3 与 P4 在 P2 接口稳定后可并行；P5/P6 也可独立推进。P7/P8 可
 
 ### MVP-P4：Codex 适配器
 
-- [ ] 从实际版本生成 schema，按 initialize 后的 thread/turn/item 协议实现会话及事件，避免照最新文档盲接实验字段。
-- [ ] 自有 stdio/app-server 与连接外部 socket/server 显式区分，限定允许地址和凭据来源；不把外部服务当自有进程 kill。
-- [ ] 映射消息、工具活动、终态、审批与用户输入；未知 server request 拒绝/报告，不无限等待或自动批准。
-- [ ] 协商实验关系能力；不可查询的 subagent 信息标记未知。验证中途订阅是否可补读，而不假设重新 resume 会重发全部 delta。
-- [ ] 用真实后端观察创建/继续、历史、流式、取消、审批拒绝及外部服务存活。
+- [x] 从实际版本生成 schema，按 initialize 后的 thread/turn/item 协议实现会话及事件，避免照最新文档盲接实验字段。（实测 0.163.0 schema;事件名带 item//turn//thread/ 前缀）
+- [x] 自有 stdio/app-server 与连接外部 socket/server 显式区分，限定允许地址和凭据来源；不把外部服务当自有进程 kill。（owned stdio 已实现;外部 WS 形态待本机接入形态核实,不做半套）
+- [x] 映射消息、工具活动、终态、审批与用户输入；未知 server request 拒绝/报告，不无限等待或自动批准。（interrupted 才是取消终态;steer/userInput 能力 false 不谎报）
+- [ ] 协商实验关系能力；不可查询的 subagent 信息标记未知。验证中途订阅是否可补读，而不假设重新 resume 会重发全部 delta。（experimentalApi 未协商、subagent=false;中途补读待 live）
+- [ ] 用真实后端观察创建/继续、历史、流式、取消、审批拒绝及外部服务存活。（**live 未执行**:0.163.0 直连形态漂移为 daemon/proxy 且 proxy 帧未文档化,见实施记录 §2）
 
 运行：目标 `agent-codex-live` 入口；先运行已有 `codex --version` 与 `codex app-server --help`，具体 API 从本机 schema 获取。live 与离线解析测试分别报告。
 
-退出：A06 真实通过，连接断开或关闭适配器不误杀外部 app-server。
+离线已交付：适配器/注册/能力诚实断言（44 agent 测试）见 [P4 实施记录](../verification/agent-codex-p4.md);**A06 未通过,不宣称交付**,live 随后端形态核实补齐。
 
 ### MVP-P5：私有访问与网络
 

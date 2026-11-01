@@ -25,6 +25,26 @@ pub struct NodeConfig {
     /// P3 OMP adapter backend. Present = the "omp" implementation is installable.
     #[serde(default)]
     pub omp: Option<OmpAdapterConfig>,
+    /// P4 Codex adapter backend. Present = the "codex" implementation is
+    /// installable (owned stdio app-server form).
+    #[serde(default)]
+    pub codex: Option<CodexAdapterConfig>,
+}
+
+/// Codex 适配器批准配置（docs/plans/2026-10-31-conex-mvp-p4.md §1）。
+/// approvalPolicy/sandbox 全部来自批准配置（契约 §4 禁止客户端覆盖审批策略）。
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CodexAdapterConfig {
+    pub backend_binary: String,
+    /// e.g. "untrusted" / "on-request"; forwarded to thread/start.
+    #[serde(default)]
+    pub approval_policy: Option<String>,
+    /// e.g. "read-only" / "workspace-write".
+    #[serde(default)]
+    pub sandbox: Option<String>,
+    #[serde(default)]
+    pub workspaces: Vec<ApprovedWorkspace>,
 }
 
 /// OMP 适配器批准配置（docs/plans/2026-10-31-conex-mvp-p3.md §1）。二进制路径、
@@ -203,6 +223,23 @@ impl NodeConfig {
                     return Err(format!(
                         "approved_web_origins entry {origin} must be a bare http:// or https:// origin"
                     ));
+                }
+            }
+        }
+        if let Some(codex) = &config.codex {
+            if codex.backend_binary.trim().is_empty() {
+                return Err("codex backend_binary must not be empty".into());
+            }
+            let mut seen = std::collections::BTreeSet::new();
+            for workspace in &codex.workspaces {
+                if workspace.id.is_empty()
+                    || workspace.display_name.is_empty()
+                    || !seen.insert(workspace.id.clone())
+                {
+                    return Err("codex workspace ids must be non-empty and unique".into());
+                }
+                if !workspace.root.is_absolute() {
+                    return Err("codex workspace root must be an absolute path".into());
                 }
             }
         }

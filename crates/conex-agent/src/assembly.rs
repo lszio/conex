@@ -104,6 +104,25 @@ pub fn load_applications(config: &NodeConfig) -> Result<Vec<PreparedApplication>
             SourceStrategy::DirectOnly,
         )?);
     }
+    // Codex 适配器：owned stdio app-server 形态（外部 WS 形态待本机接入
+    // 形态核实后接线，见 adapters/codex.rs 头注）。
+    if let Some(codex) = &config.codex {
+        let codex = codex.clone();
+        let factory: ApprovedFactory = Arc::new(move |value| {
+            if !value.is_null() {
+                return Err("codex implementation does not take package config".into());
+            }
+            Ok(crate::adapters::codex::factory(codex.clone()))
+        });
+        entries.push(ImplementationEntry::new(
+            "codex",
+            factory,
+            crate::adapters::codex::codex_registry_contracts()?,
+            BTreeMap::new(),
+            config.permissions.clone(),
+            SourceStrategy::DirectOnly,
+        )?);
+    }
     let approved_remotes = config
         .remote_endpoints
         .iter()

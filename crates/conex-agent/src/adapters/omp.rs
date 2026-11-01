@@ -66,7 +66,7 @@ fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
-fn store_error(error: conex_agent_domain::StoreError) -> Error {
+pub(crate) fn store_error(error: conex_agent_domain::StoreError) -> Error {
     use conex_agent_domain::StoreError as E;
     let (code, execution, retry) = match &error {
         E::InvalidArgument(_) => (p::ErrorCode::BadRequest, "not_started", "never"),
