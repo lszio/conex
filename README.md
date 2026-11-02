@@ -9,7 +9,7 @@
 
 **目标基线已确认（2026-10-29）：** 单用户私有、自治节点、协调入口；私网节点主动 WSS 接入公网，支持获准直连与转发。领域契约连接 OMP/Codex 等适配器和不同客户端，组合可以继续导出能力。见 [MVP 架构基线](docs/design/2026-10-29-conex-private-platform.md) 与 [实施总计划](docs/plans/2026-10-29-conex-private-mvp.md)。**这是目标，不是已交付能力**；下方演示、命令与证据描述现有实现。
 
-**当前实施进度：** [MVP-P0 协议调查](docs/plans/2026-10-29-conex-mvp-p0.md)、[MVP-P1 领域存储](docs/verification/agent-domain-p1.md) 与 [MVP-P2 自治节点](docs/verification/private-runtime-p2.md) 已实现。P2 包含严格应用包、持久代际/所有权、中心离线本地运行、独立发布重连、双 SDK 生命周期迁移和受限 Unix LocalApi；见 [节点运行手册](docs/runbooks/private-runtime.md)。当前实际节点模块是受控/外部 counter，不代表 OMP/Codex Adapter、Web/Emacs 直连或公网私有认证已交付；未部署新平台。
+**当前实施进度：** 私有平台 MVP 的 P0–P7 已按各自证据页交付——[P0 协议调查](docs/plans/2026-10-29-conex-mvp-p0.md)、[P1 领域存储](docs/verification/agent-domain-p1.md)、[P2 自治节点](docs/verification/private-runtime-p2.md)、[P3 OMP 适配器](docs/verification/agent-omp-p3.md)、[P4 Codex 适配器（离线）](docs/verification/agent-codex-p4.md)、[P5 私有认证与直连](docs/verification/private-network-p5.md)、[P6 指标与关系](docs/verification/private-entities-p6.md)、[P7 Web 工作台](docs/verification/web-p7.md)。P8（Emacs）与 P9（两机公网全链路）未开始。线上已部署私有形态（引导码登录 + 节点直连），见 [私有 MVP 运行手册](docs/runbooks/private-mvp.md)。
 
 **S1 既有实现：** TS/JS 与独立 Rust SDK 已实现同连接发布/发现/调用/取消/状态订阅。共同传输为 JSON WSS；HTTP 仅消费目录/调用/取消，不支持订阅。使用预安装契约和静态批准，不代表新私有平台的节点侧离线授权已经完成；禁止据此公开多用户服务。见 [三进程样例](examples/s1/README.md)、[运行手册](docs/runbooks/s1-capabilities.md) 与 [实际验证记录](docs/verification/s1-capabilities.md)。
 

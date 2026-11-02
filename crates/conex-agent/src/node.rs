@@ -159,6 +159,9 @@ pub struct Node {
     publication: crate::publication::Publication,
     publication_task: Option<tokio::task::JoinHandle<()>>,
     recovery_pending_at_boot: usize,
+    /// 发布链 hook 在 boot 时创建、handle 在 spawn 时才存在；目录清单经此
+    /// 槽位交给 hook，链接建立后即可读取当前运行时形状。
+    inventory_slot: Arc<std::sync::Mutex<Option<NodeHandle>>>,
 }
 
 impl Node {
@@ -192,8 +195,16 @@ impl Node {
         }
         let mut publication_config = config.publication.clone();
         publication_config.always_link = config.private.is_some();
+        let inventory_slot: Arc<std::sync::Mutex<Option<NodeHandle>>> =
+            Arc::new(std::sync::Mutex::new(None));
         let link_hook = config.private.as_ref().and_then(|private| {
-            crate::runtime::node_link_hook(private, &config.node_id, &epoch, store.clone())
+            crate::runtime::node_link_hook(
+                private,
+                &config.node_id,
+                &epoch,
+                store.clone(),
+                inventory_slot.clone(),
+            )
         });
         let (publication, publication_task) =
             crate::publication::Publication::spawn_with_hook(publication_config, link_hook);
@@ -209,6 +220,7 @@ impl Node {
             publication,
             publication_task: Some(publication_task),
             recovery_pending_at_boot,
+            inventory_slot,
         };
         node.reconcile_resources().await?;
         Ok(node)
@@ -247,6 +259,8 @@ impl Node {
             tx,
             stop_targets: self.stop_targets.clone(),
         };
+        // 私有目录清单的来源：链接建立晚于实例启动也只延迟一轮 5 秒同步。
+        *self.inventory_slot.lock().expect("inventory slot poisoned") = Some(handle.clone());
         let task = tokio::spawn(async move {
             while let Some(request) = rx.recv().await {
                 match request {
@@ -702,8 +716,17 @@ impl Node {
     async fn snapshot(&self) -> NodeResult {
         let instances: Vec<_> = self.instances.values().map(|instance| {
             let modules: Vec<_> = instance.modules.iter().map(|module| {
-                let process = module.started.lock().unwrap().as_ref().and_then(|started| started.service.clone())
+                let started = module.started.lock().unwrap().clone();
+                let process = started.as_ref().and_then(|started| started.service.clone())
                     .and_then(|service| service.downcast::<CounterService>().ok()).map(|service| service.identity.pid);
+                // 私有目录清单需要契约与方法名；对本地 socket 与发布链 hook 是
+                // 同一份只读元数据（模块名、代际、契约、方法），不含业务正文。
+                let contract = started.as_ref().map(|started| {
+                    json!({
+                        "contractId": started.contract.id,
+                        "methods": started.contract.methods.keys().collect::<Vec<_>>(),
+                    })
+                });
                 let (publication, reference) = if module.exported && instance.state == "active" {
                     self.publication.module(&format!("{}-{}-{}",self.config.publication.endpoint_prefix,instance.app_id,module.name))
                 } else { (if instance.state == "active" { "unpublished" } else { "revoked" }, None) };
@@ -711,7 +734,7 @@ impl Node {
                     "spaceId":reference.space_id,"providerEndpointId":reference.provider_endpoint_id,
                     "registrationId":reference.registration_id,"contractId":reference.contract_id,
                 }));
-                json!({"name":module.name,"moduleKey":module.module_key,"generation":module.generation.to_string(),"publication":publication,"processId":process,"reference":reference})
+                json!({"name":module.name,"moduleKey":module.module_key,"generation":module.generation.to_string(),"publication":publication,"processId":process,"reference":reference,"contract":contract})
             }).collect();
             json!({"id":instance.id,"appId":instance.app_id,"state":instance.state,"modules":modules})
         }).collect();

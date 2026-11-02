@@ -503,7 +503,14 @@ pub fn build_router(config: &HostConfig) -> Result<Router, CallError> {
         base = attach_p1(base);
     }
     if let Some(root) = config.web_root.as_deref() {
-        base = crate::web::WebAssets::load(root)?.router().merge(base);
+        // 私有部署放宽页面 CSP 的 connect-src：工作台必须直连节点地址。
+        let assets = crate::web::WebAssets::load(root)?;
+        let assets = if config.private.is_some() {
+            assets.with_private_csp()
+        } else {
+            assets
+        };
+        base = assets.router().merge(base);
     }
     Ok(attach_state(http_state, base))
 }

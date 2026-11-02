@@ -13,7 +13,13 @@ use axum::routing::get;
 use axum::{Extension, Router};
 use conex_core::CallError;
 
+/// Guest/landing CSP: the page talks only to its own origin (plus same-site
+/// ws for the connected landing).
 const CSP: &str = "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' ws: wss:; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
+/// Private workbench CSP: the page dials known node addresses directly
+/// (P5 direct grants, arbitrary http(s)/ws(s) node origins by design), so
+/// connect-src cannot stay same-origin. Scripts/styles stay pinned to 'self'.
+const CSP_PRIVATE: &str = "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' ws: wss: http: https:; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
 
 #[derive(Clone)]
 pub struct WebAssets {
@@ -29,6 +35,8 @@ pub struct WebAssets {
     /// Machine-readable site summary for LLM crawlers. Optional: a build
     /// without it must still serve the human page.
     llms: Option<Arc<Vec<u8>>>,
+    /// connect-src 由部署形态决定：私有工作台直连节点地址，需放宽。
+    csp: &'static str,
 }
 
 impl WebAssets {
@@ -51,7 +59,14 @@ impl WebAssets {
             app_gzip: gzip(&app).map(Arc::new),
             style: Arc::new(read_asset(&root, "style.css")?),
             llms: read_asset(&root, "llms.txt").ok().map(Arc::new),
+            csp: CSP,
         })
+    }
+
+    /// 私有部署放宽 connect-src（节点直连），其余指令保持不变。
+    pub fn with_private_csp(mut self) -> Self {
+        self.csp = CSP_PRIVATE;
+        self
     }
 
     pub fn router(self) -> Router {
@@ -94,7 +109,13 @@ fn read_asset(root: &Path, name: &str) -> Result<Vec<u8>, CallError> {
 }
 
 async fn index(Extension(assets): Extension<WebAssets>) -> Response {
-    asset_response(&assets.index, "text/html; charset=utf-8", true, false)
+    asset_response(
+        &assets.index,
+        assets.csp,
+        "text/html; charset=utf-8",
+        true,
+        false,
+    )
 }
 
 async fn app(Extension(assets): Extension<WebAssets>, headers: axum::http::HeaderMap) -> Response {
@@ -103,9 +124,21 @@ async fn app(Extension(assets): Extension<WebAssets>, headers: axum::http::Heade
     if accepts_gzip(&headers)
         && let Some(gzipped) = assets.app_gzip.as_deref()
     {
-        return asset_response(gzipped, "text/javascript; charset=utf-8", false, true);
+        return asset_response(
+            gzipped,
+            assets.csp,
+            "text/javascript; charset=utf-8",
+            false,
+            true,
+        );
     }
-    asset_response(&assets.app, "text/javascript; charset=utf-8", false, false)
+    asset_response(
+        &assets.app,
+        assets.csp,
+        "text/javascript; charset=utf-8",
+        false,
+        false,
+    )
 }
 
 /// Whether the client offered gzip. `q=0` is an explicit refusal, so the
@@ -135,17 +168,29 @@ fn accepts_gzip(headers: &axum::http::HeaderMap) -> bool {
 }
 
 async fn style(Extension(assets): Extension<WebAssets>) -> Response {
-    asset_response(&assets.style, "text/css; charset=utf-8", false, false)
+    asset_response(
+        &assets.style,
+        assets.csp,
+        "text/css; charset=utf-8",
+        false,
+        false,
+    )
 }
 
 async fn llms_txt(Extension(assets): Extension<WebAssets>) -> Response {
     // The route only exists when the file loaded, so the missing arm cannot
     // fire; serving an empty body is still safer than an HTML fallback.
     let bytes: &[u8] = assets.llms.as_deref().map(|b| b.as_slice()).unwrap_or(&[]);
-    asset_response(bytes, "text/plain; charset=utf-8", false, false)
+    asset_response(bytes, assets.csp, "text/plain; charset=utf-8", false, false)
 }
 
-fn asset_response(bytes: &[u8], content_type: &'static str, html: bool, gzipped: bool) -> Response {
+fn asset_response(
+    bytes: &[u8],
+    csp: &'static str,
+    content_type: &'static str,
+    html: bool,
+    gzipped: bool,
+) -> Response {
     let mut response = (StatusCode::OK, Body::from(bytes.to_vec())).into_response();
     let headers = response.headers_mut();
     headers.insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type));
@@ -159,7 +204,7 @@ fn asset_response(bytes: &[u8], content_type: &'static str, html: bool, gzipped:
     headers.insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
     headers.insert(
         header::CONTENT_SECURITY_POLICY,
-        HeaderValue::from_static(CSP),
+        HeaderValue::from_static(csp),
     );
     headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     if html {

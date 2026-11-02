@@ -1,6 +1,6 @@
 # Dokploy 部署运行手册
 
-> 当前部署（2026-10-19）：`https://conex.lszio.space` 由 Dokploy 跟踪 `dev`，运行 `fa75832`；入口通过 Authentik `conex-users` 组限制访问，目前仅 `lszio`。旧公开免登录演示已改为受限工作台；应用内部仍使用 guest 会话，不等于 S4 用户/Space 授权完成。实测见 [验证记录 §9](../verification/landing-page.md#9-authentik-受限部署2026-10-19)。
+> **（2026-11-03）线上已是私有产品形态**：`docker/host.toml` 换为私有 hub（引导码登录，无访客入口），部署步骤见 [私有 MVP 运行手册](private-mvp.md)。本页以下描述的受限访客工作台形态已被替换，保留为历史与回退参考。
 >
 > 上游：[connected-landing 契约](../contracts/connected-landing.md)、[connected-landing 运行手册](connected-landing.md)、[设计 v6](../design/2026-09-14-conex-design.md)。
 

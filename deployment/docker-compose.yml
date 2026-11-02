@@ -1,13 +1,11 @@
-# Public landing deployment for Dokploy.
+# Private hub deployment for Dokploy (MVP-P5/P7 shape).
 #
-# One container, guest-only, no secrets: the image bakes `docker/host.toml`,
-# so a fresh clone deploys without any file mounts or environment variables.
-# Visitors connect, see each other and exchange hellos; there is no data
-# endpoint and no credential in this shape.
-#
-# For a real multi-host deployment (reverse-connected agents, per-principal
-# tokens, TLS pinning) use deployment/host.toml.example instead, which needs
-# Secrets + File Mounts and is documented in docs/runbooks/dokploy.md.
+# The image bakes the private `docker/host.toml`: bootstrap-code login, no
+# guest entry. Two operator inputs are required before the container can
+# start (fail-fast by design) and are documented in
+# docs/runbooks/private-mvp.md:
+#   - CONEX_HUB_SIGNING_KEY env var (base64 pkcs8 DER of the grant key)
+#   - a persistent volume for /var/lib/conex (private store + P1 roots)
 
 services:
   host:
@@ -24,13 +22,13 @@ services:
     tmpfs:
       - /tmp
     volumes:
-      - conex-content:/var/lib/conex/content
-      - conex-session:/var/lib/conex/session
-      - conex-operation:/var/lib/conex/operation
+      - conex-data:/var/lib/conex
+    environment:
+      # Set in the Dokploy secret manager; the container exits without it.
+      - CONEX_HUB_SIGNING_KEY
     restart: unless-stopped
     healthcheck:
-      # The landing page returns 200 for anonymous visitors, so this is a
-      # liveness probe rather than a strict readiness gate.
+      # The login page is static; this is a liveness probe, not an auth gate.
       test: ["CMD-SHELL", "curl --fail --silent http://127.0.0.1:8787/ >/dev/null"]
       interval: 30s
       timeout: 5s
@@ -38,6 +36,4 @@ services:
       retries: 3
 
 volumes:
-  conex-content:
-  conex-session:
-  conex-operation:
+  conex-data:

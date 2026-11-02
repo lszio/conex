@@ -409,20 +409,27 @@ impl Client {
         &self.core().hub
     }
     /// P5 控制方法（单独协商，不在 S1_METHODS）：节点在发布链路上声明
-    /// 运行身份，中心据此把 grant 绑定到节点当前 epoch。
+    /// 运行身份，中心据此把 grant 绑定到节点当前 epoch。`inventory` 是节点
+    /// 自报的应用/模块/代际清单（仅元数据，无业务正文），中心私有目录据此
+    /// 向已认证的私有会话展示可直连目标；None 保持 P5 形状不变。
     pub async fn access_node_identity(
         &self,
         node_id: &str,
         node_runtime_epoch: &str,
+        inventory: Option<serde_json::Value>,
     ) -> Result<serde_json::Value> {
+        let mut body = serde_json::json!({
+            "nodeId": node_id,
+            "nodeRuntimeEpoch": node_runtime_epoch,
+        });
+        if let Some(inventory) = inventory {
+            body["inventory"] = inventory;
+        }
         self.core()
             .request(
                 "access/node-identity",
                 broker(),
-                json_value(serde_json::json!({
-                    "nodeId": node_id,
-                    "nodeRuntimeEpoch": node_runtime_epoch,
-                }))?,
+                json_value(body)?,
                 PendingKind::Rpc,
                 false,
             )?
@@ -805,6 +812,7 @@ where
         loop {
             match ws.next().await {
                 Some(Ok(WsMessage::Text(text))) => {
+                    eprintln!("conex-sdk handshake reply: {text}");
                     let message = p::wire::decode_wire(text.as_bytes()).map_err(Error::protocol)?;
                     let raw: Value = serde_json::from_str(&text).map_err(Error::decode)?;
                     return match message.body {

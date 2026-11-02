@@ -107,7 +107,8 @@ const DECISION_KINDS = ["approval", "selection", "input"];
 const EFFECTS = ["allow_once", "deny", "select", "submit"];
 const AVAILABILITY = ["ready", "unreachable", "unknown", "stopped"];
 const CATALOG_SCOPES = ["node-managed", "backend"];
-const ADAPTERS = ["omp", "codex"];
+// "builtin"：P6 内置领域模块（指标/关系）自报的节点端点适配器。
+const ADAPTERS = ["omp", "codex", "builtin"];
 
 /** 规范 uint64 字段名：输出侧逐键校验十进制规范形（无前导零、<=u64::MAX）。 */
 const UINT64_KEYS = [
@@ -154,12 +155,19 @@ function requireUlid(map: Record<string, unknown>, key: string): void {
   if (!isUlid(value)) fail(`${key} must be a ULID`);
 }
 
+const utf8Encoder = new TextEncoder();
+
+function utf8Length(value: string): number {
+  // 浏览器与 Bun 共同可用的字节长度；不引入 Node 的 Buffer 全局。
+  return utf8Encoder.encode(value).length;
+}
+
 function requireBounded(map: Record<string, unknown>, key: string, maxBytes: number): void {
   const value = get(map, key);
   if (value === undefined) fail(`${key} is required`);
   if (typeof value !== "string") fail(`${key} must be a string`);
   if (value === "") fail(`${key} must not be empty`);
-  if (Buffer.byteLength(value, "utf8") > maxBytes) {
+  if (utf8Length(value) > maxBytes) {
     fail(`${key} exceeds ${maxBytes} UTF-8 bytes`);
   }
 }

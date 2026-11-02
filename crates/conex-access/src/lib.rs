@@ -260,11 +260,24 @@ fn new_jti() -> String {
 
 /// Approved credential source, identical rules to the node's secret reader:
 /// `env:NAME` or a regular 0600 file of at most 4096 bytes.
+fn decode_env64(value: String) -> Result<Vec<u8>, GrantError> {
+    base64::Engine::decode(&base64::engine::general_purpose::STANDARD, value.trim())
+        .map_err(|_| GrantError::Internal("approved credential env is not valid base64".into()))
+}
+
 fn read_secret(backend: &str) -> Result<Vec<u8>, GrantError> {
     if let Some(name) = backend.strip_prefix("env:") {
         return std::env::var(name)
             .map(|value| value.into_bytes())
             .map_err(|_| GrantError::Internal("approved credential env missing".into()));
+    }
+    if let Some(name) = backend.strip_prefix("env64:") {
+        // Secret managers hold printable values; DER keys are binary. The
+        // base64 variant lets an operator pass the pkcs8 document through an
+        // environment variable without a temp file.
+        return std::env::var(name)
+            .map_err(|_| GrantError::Internal("approved credential env missing".into()))
+            .and_then(decode_env64);
     }
     if let Some(path) = backend.strip_prefix("file:") {
         use std::os::unix::fs::MetadataExt;
@@ -847,6 +860,20 @@ mod tests {
                 ttl,
             )
             .unwrap()
+    }
+
+    #[test]
+    fn env64_decode_roundtrip() {
+        // env64 is read_secret's base64 arm for secret managers; the decoder
+        // is pure, so the DER roundtrip is asserted without env mutation.
+        let document = test_pkcs8("env64-1");
+        let encoded = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &document);
+        assert_eq!(
+            decode_env64(encoded).unwrap(),
+            document,
+            "the decoded bytes must be the original DER document"
+        );
+        assert!(decode_env64("not-base64!!!".to_string()).is_err());
     }
 
     #[test]

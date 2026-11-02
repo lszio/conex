@@ -178,7 +178,8 @@ const DECISION_KINDS: [&str; 3] = ["approval", "selection", "input"];
 const EFFECTS: [&str; 4] = ["allow_once", "deny", "select", "submit"];
 const AVAILABILITY: [&str; 4] = ["ready", "unreachable", "unknown", "stopped"];
 const CATALOG_SCOPES: [&str; 2] = ["node-managed", "backend"];
-const ADAPTERS: [&str; 2] = ["omp", "codex"];
+// "builtin"：P6 内置领域模块（指标/关系）自报的节点端点适配器。
+const ADAPTERS: [&str; 3] = ["omp", "codex", "builtin"];
 
 /// 规范 uint64 字段名：输出侧逐键校验十进制规范形（无前导零、<=u64::MAX）。
 const UINT64_KEYS: [&str; 15] = [

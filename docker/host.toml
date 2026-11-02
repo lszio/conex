@@ -1,53 +1,198 @@
-# Runtime config for the public conex hello page (baked into the image).
+# Private product hub (MVP-P5/P7) — single-user, bootstrap-code entry.
 #
-# READ-ONLY DEMO: visitors connect, see each other, and exchange hellos.
-# There is no content browsing, no write path and no credential here.
+# This replaces the guest landing shape: there is no [web_guest] here (the two
+# are mutually exclusive at config load), so the served page is the private
+# workbench behind a one-time bootstrap code login.
+#
+# Secrets never live in this file:
+#   - the grant signing key arrives via the CONEX_HUB_SIGNING_KEY environment
+#     variable (base64 of the raw pkcs8 DER; see docs/runbooks/private-mvp.md).
+#     Without it the host refuses to start, by design.
+#   - the node publication token exists here only as its sha256; the raw value
+#     lives in the operator's node configuration (~/.conex/home-node).
 
-# Bind inside the container. TLS terminates at the Dokploy reverse proxy, so
-# the listener is plaintext on a non-loopback address — that requires the
-# explicit `allow_plaintext_bind`, not `allow_loopback_http` (which asserts
-# the plaintext never leaves this machine, and is false in a container).
 listen = "0.0.0.0:8787"
 allow_plaintext_bind = true
 
-audience = "conex.landing"
-host_origin = "conex://landing"
-
-# Public origin the page is served from. Session cookies, CSRF and the ticket
-# Origin check all compare against this exact value, so changing the domain
-# means changing this line and rebuilding.
+audience = "conex.lszio.space"
+host_origin = "conex://conex.lszio.space"
 web_origin = "https://conex.lszio.space"
 web_root = "/opt/conex/web"
 
-# Additional accepted origins. One image is served under several domains: the
-# production host plus one preview domain per pull request
-# (`<previewWildcard>.lszio.space`). Without this a preview deployment loads the
-# page and then fails every call, because the Origin check would only accept
-# the production domain.
-#
-# The wildcard is expanded here, not templated, so the shipped file stays a
-# plain, auditable config. Add a line per preview domain pattern you use.
 web_origins = [
   "https://preview-conex.lszio.space",
 ]
 
-# P1 persistent roots (sessions back the UI links; the others are required for
-# the P1 backends to be considered complete).
 content_root = "/var/lib/conex/content"
 session_root = "/var/lib/conex/session"
 operation_root = "/var/lib/conex/operation"
 
-# Anonymous read-only visitors. Without this section every visitor would get a
-# 401 and the page would have nothing to show; quotas are independent of
-# authenticated users.
-[web_guest]
-principal_id = "guest"
-tenant_id = "demo"
-max_sessions = 256
-idle_ttl_ms = 1800000
-max_issue_per_minute = 120
+# Node publication credential: sha256 of the raw token; the principal is the
+# node publication identity and must appear in [private].node_principals.
+[[tokens]]
+token_hash = "2ece673b2a111cb2eb2683b7d811980dcbc212c5f2e06ecd97926d9ac04cd8c7"
+principal_id = "home-node"
+tenant_id = "private"
+audience = "conex.lszio.space"
+role = "service"
 
-# No [[tokens]] and no [[endpoints]]: this demo is guest-only and serves no
-# data. Service credentials and data endpoints belong in
-# deployment/host.toml.example, whose token_hash values are sha256 digests of
-# secrets that never enter the repository.
+# S1 static approval: the node publishes nothing to the relay plane (all
+# private modules are direct-only), but S1 capability negotiation must be
+# configured for the publication link to negotiate module/register.
+[[capabilities.contracts]]
+contract_id = "conex.agent"
+[[capabilities.contracts.methods]]
+name = "agent/endpoints/list"
+input_schema = "conex.AgentEndpointListInput"
+output_schema = "conex.AgentEndpointListResult"
+action = "agent.read"
+execution = "read_only"
+[[capabilities.contracts.methods]]
+name = "agent/workspaces/list"
+input_schema = "conex.AgentWorkspaceListInput"
+output_schema = "conex.AgentWorkspaceListResult"
+action = "agent.read"
+execution = "read_only"
+[[capabilities.contracts.methods]]
+name = "agent/conversations/list"
+input_schema = "conex.AgentConversationListInput"
+output_schema = "conex.AgentConversationListResult"
+action = "agent.read"
+execution = "read_only"
+[[capabilities.contracts.methods]]
+name = "agent/conversations/get"
+input_schema = "conex.AgentConversationGetInput"
+output_schema = "conex.AgentConversationGetResult"
+action = "agent.read"
+execution = "read_only"
+[[capabilities.contracts.methods]]
+name = "agent/conversations/history"
+input_schema = "conex.AgentConversationHistoryInput"
+output_schema = "conex.AgentConversationHistoryResult"
+action = "agent.read"
+execution = "read_only"
+[[capabilities.contracts.methods]]
+name = "agent/messages/read"
+input_schema = "conex.AgentMessageReadInput"
+output_schema = "conex.AgentMessageReadResult"
+action = "agent.read"
+execution = "read_only"
+[[capabilities.contracts.methods]]
+name = "agent/executions/get"
+input_schema = "conex.AgentExecutionGetInput"
+output_schema = "conex.AgentExecutionGetResult"
+action = "agent.read"
+execution = "read_only"
+[[capabilities.contracts.methods]]
+name = "agent/interactions/list"
+input_schema = "conex.AgentInteractionListInput"
+output_schema = "conex.AgentInteractionListResult"
+action = "agent.read"
+execution = "read_only"
+[[capabilities.contracts.methods]]
+name = "agent/relationships/list"
+input_schema = "conex.AgentRelationshipListInput"
+output_schema = "conex.AgentRelationshipListResult"
+action = "agent.read"
+execution = "read_only"
+[[capabilities.contracts.methods]]
+name = "agent/subagents/list"
+input_schema = "conex.AgentSubagentListInput"
+output_schema = "conex.AgentSubagentListResult"
+action = "agent.read"
+execution = "read_only"
+[[capabilities.contracts.methods]]
+name = "events/snapshot"
+input_schema = "conex.AgentSnapshotInput"
+output_schema = "conex.AgentSnapshotResult"
+action = "agent.read"
+execution = "read_only"
+[[capabilities.contracts.methods]]
+name = "events/read"
+input_schema = "conex.AgentEventReadInput"
+output_schema = "conex.AgentEventReadResult"
+action = "agent.read"
+execution = "read_only"
+[[capabilities.contracts.methods]]
+name = "agent/conversations/create"
+input_schema = "conex.AgentConversationCreateInput"
+output_schema = "conex.AgentConversationCreateResult"
+action = "agent.create"
+execution = "non_replayable"
+[[capabilities.contracts.methods]]
+name = "agent/executions/submit"
+input_schema = "conex.AgentSubmitInput"
+output_schema = "conex.AgentSubmitResult"
+action = "agent.execute"
+execution = "non_replayable"
+[[capabilities.contracts.methods]]
+name = "agent/executions/cancel"
+input_schema = "conex.AgentExecutionCancelInput"
+output_schema = "conex.AgentExecutionCancelResult"
+action = "agent.cancel"
+execution = "non_replayable"
+[[capabilities.contracts.methods]]
+name = "agent/executions/steer"
+input_schema = "conex.AgentExecutionSteerInput"
+output_schema = "conex.AgentExecutionSteerResult"
+action = "agent.execute"
+execution = "non_replayable"
+[[capabilities.contracts.methods]]
+name = "agent/interactions/respond"
+input_schema = "conex.AgentInteractionRespondInput"
+output_schema = "conex.AgentInteractionRespondResult"
+action = "agent.interact"
+execution = "non_replayable"
+[[capabilities.contracts.methods]]
+name = "agent/subagents/cancel"
+input_schema = "conex.AgentSubagentCancelInput"
+output_schema = "conex.AgentSubagentCancelResult"
+action = "agent.cancel"
+execution = "non_replayable"
+
+[[capabilities.contracts]]
+contract_id = "conex.metrics"
+[[capabilities.contracts.methods]]
+name = "metrics/read"
+input_schema = "conex.MetricsReadInput"
+output_schema = "conex.MetricsReadResult"
+action = "metrics.read"
+execution = "read_only"
+
+[[capabilities.contracts]]
+contract_id = "conex.relations"
+[[capabilities.contracts.methods]]
+name = "relations/list"
+input_schema = "conex.AgentRelationshipListInput"
+output_schema = "conex.AgentRelationshipListResult"
+action = "relations.read"
+execution = "read_only"
+[[capabilities.contracts.methods]]
+name = "tags/list"
+input_schema = "conex.TagsListInput"
+output_schema = "conex.TagsListResult"
+action = "tags.list"
+execution = "read_only"
+[[capabilities.contracts.methods]]
+name = "tags/put"
+input_schema = "conex.TagsPutInput"
+output_schema = "conex.TagsPutResult"
+action = "tags.put"
+execution = "non_replayable"
+[[capabilities.contracts.methods]]
+name = "tags/delete"
+input_schema = "conex.TagsDeleteInput"
+output_schema = "conex.TagsDeleteResult"
+action = "tags.delete"
+execution = "non_replayable"
+
+[private]
+issuer = "conex://conex.lszio.space"
+kid = "hub-2026q4"
+# Base64 (pkcs8 DER) via secret manager env; see docs/runbooks/private-mvp.md.
+signing_key_backend = "env64:CONEX_HUB_SIGNING_KEY"
+tenant = "private"
+store_path = "/var/lib/conex/private.sqlite"
+principal = "owner"
+admin_principals = ["owner"]
+node_principals = ["home-node"]

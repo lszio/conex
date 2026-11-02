@@ -172,15 +172,16 @@ P3 与 P4 在 P2 接口稳定后可并行；P5/P6 也可独立推进。P7/P8 可
 
 ### MVP-P7：Web
 
-- [ ] 在现有 React/Bun 应用内建立领域客户端和独立会话 hook，不能把 OMP/Codex 判断塞进 use-hello-page。
-- [ ] 真实 Agent/会话列表，Workspace 选择，发送/流式/取消，忙碌/过期/未知/不支持状态，审批和输入。
-- [ ] 图谱与对话共用实体 ID，展示 Agent/会话/Workspace/Tags/status/subagent 关联；关系和可执行绑定用不同操作表达。
-- [ ] 服务器列表与详情展示真实采样和过期；断线/恢复保持可理解，不用演示数据填空。
-- [ ] 浏览器验证实际登录、操作和图谱跳转，含窄屏基本可用、键盘访问与错误状态；关闭页面不停止 Agent。
+- [x] 在现有 React/Bun 应用内建立领域客户端和独立会话 hook，不能把 OMP/Codex 判断塞进 use-hello-page。（domain client 在 TS SDK `private.ts` + `use-workbench.ts`；旧 use-hello-page 未动，legacy 页只在无 [private] 时渲染）
+- [x] 真实 Agent/会话列表，Workspace 选择，发送/流式/取消，忙碌/过期/未知/不支持状态，审批和输入。
+- [x] 图谱与对话共用实体 ID，展示 Agent/会话/Workspace/Tags/status/subagent 关联；关系和可执行绑定用不同操作表达。
+- [x] 服务器列表与详情展示真实采样和过期；断线/恢复保持可理解，不用演示数据填空。（最新样本 stale 才显示过期；历史样本 stale 是有界保留的预期）
+- [x] 浏览器验证实际登录、操作和图谱跳转，含窄屏基本可用、键盘访问与错误状态；关闭页面不停止 Agent。（真实 Chrome 11/11 场景；窄屏与键盘为响应式布局+原生控件，未做专项录屏）
 
 运行：现有 `bun run typecheck` 与 `bun run build:web`（实现时一次集成）；实际浏览器打开私有入口，保留截图及操作证据。不为 UI 引入仅验证 mock 回显的测试。
+已完成：真实 Chrome 对真实 hub+node 的 11/11 场景（真模型流式、审批拒绝、取消终态、真实指标、Tags 往返）见 [P7 实施记录](../verification/web-p7.md)，截图 `docs/verification/assets/p7-0*.png`。
 
-退出：A08/A10 的 Web 部分真实通过，前端产物和正在运行的 Host 源码一致。
+退出：A08/A10 的 Web 部分真实通过，前端产物和正在运行的 Host 源码一致。（A08 的 Emacs 半边归 P8）
 
 ### MVP-P8：Emacs
 
@@ -237,4 +238,4 @@ P3 与 P4 在 P2 接口稳定后可并行；P5/P6 也可独立推进。P7/P8 可
 
 ## 8. 现在的下一步
 
-P0–P6 已按各分项证据交付（P4 live、P6 Linux 采样核对等必需 live 缺项除外,见各实施记录）;下一包为 P7 Web 领域工作台。进入代码修改前仍须影响分析及必要依赖授权。不要先搭UI壳或部署公网；完整交付终点仍是A01–A16。
+P0–P7 已按各分项证据交付（P4 live、P6 Linux 采样核对、P7 公网直连 PNA 预检等必需 live 缺项除外,见各实施记录）;下一包为 P8 Emacs。用户已明确授权私有产品公网部署（2026-11-03），部署运行手册见 docs/runbooks/private-mvp.md；完整交付终点仍是A01–A16。

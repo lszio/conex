@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::http::{HeaderMap, StatusCode, header};
+use axum::http::{HeaderMap, HeaderName, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use base64::Engine as _;
 use futures::SinkExt;
@@ -160,29 +160,31 @@ async fn ticket_preflight(api: axum::Extension<Arc<DirectApi>>, headers: HeaderM
         Ok(origin) => origin,
         Err(response) => return response,
     };
-    (
-        StatusCode::NO_CONTENT,
-        [
-            (header::ACCESS_CONTROL_ALLOW_ORIGIN, origin.to_string()),
-            (
-                header::ACCESS_CONTROL_ALLOW_METHODS,
-                "POST, OPTIONS".to_string(),
-            ),
-            (
-                header::ACCESS_CONTROL_ALLOW_HEADERS,
-                "Authorization, Content-Type".to_string(),
-            ),
-            (
-                header::HeaderName::from_static("access-control-max-age"),
-                "600".to_string(),
-            ),
-            (
-                header::HeaderName::from_static("vary"),
-                "Origin".to_string(),
-            ),
-        ],
-    )
-        .into_response()
+    (StatusCode::NO_CONTENT, allow_origin_headers(origin)).into_response()
+}
+
+/// CORS 回显：预检与实际响应都必须带 Allow-Origin，否则浏览器在真实 POST
+/// 上照样拦截。逐字回显批准的 Origin（不带凭据的通配不是这里需要的形状）。
+fn allow_origin_headers(origin: &str) -> [(HeaderName, String); 5] {
+    [
+        (header::ACCESS_CONTROL_ALLOW_ORIGIN, origin.to_string()),
+        (
+            header::ACCESS_CONTROL_ALLOW_METHODS,
+            "POST, OPTIONS".to_string(),
+        ),
+        (
+            header::ACCESS_CONTROL_ALLOW_HEADERS,
+            "Authorization, Content-Type".to_string(),
+        ),
+        (
+            header::HeaderName::from_static("access-control-max-age"),
+            "600".to_string(),
+        ),
+        (
+            header::HeaderName::from_static("vary"),
+            "Origin".to_string(),
+        ),
+    ]
 }
 
 /// `POST /private/tickets` with `Authorization: Bearer <direct grant>` and an
@@ -212,13 +214,14 @@ async fn ticket_route(api: axum::Extension<Arc<DirectApi>>, headers: HeaderMap) 
             ticket.clone(),
             TicketEntry {
                 grant,
-                origin,
+                origin: origin.clone(),
                 expires_at_ms: now + TICKET_TTL_MS,
             },
         );
     }
     (
         StatusCode::OK,
+        allow_origin_headers(&origin),
         axum::Json(json!({
             "ticket": ticket,
             "expiresAtMs": (now + TICKET_TTL_MS).to_string(),

@@ -122,6 +122,10 @@ pub fn attach_p1(base: Router) -> Router {
         )
         .route("/private/grant", post(crate::private_access::private_grant))
         .route(
+            "/private/directory",
+            get(crate::private_access::private_directory),
+        )
+        .route(
             "/private/revoke",
             post(crate::private_access::private_revoke),
         )

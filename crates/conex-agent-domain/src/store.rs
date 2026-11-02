@@ -1377,6 +1377,13 @@ impl Store {
                  revision,projection) VALUES (?1,?2,?3,NULL,1,?4)",
                 params![conversation_id, endpoint, workspace, projection],
             )?;
+            // 会话也是实体（P6 标注的存在性校验以 entities 表为准）；与端点/
+            // 工作区一致：创建即登记，标注永远指向已存在实体。
+            tx.execute(
+                "INSERT INTO entities(id,kind,revision,projection) VALUES (?1,'conversation',1,?2)
+                 ON CONFLICT(id) DO UPDATE SET revision=revision+1, projection=?2",
+                params![conversation_id, encode(&conversation)?],
+            )?;
             insert_dedup(
                 tx,
                 &authorized.principal_id,

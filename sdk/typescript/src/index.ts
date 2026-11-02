@@ -54,6 +54,7 @@ export type {
 } from "./generated/conex/capability";
 export * from "./agent-domain";
 export * from "./events";
+export * from "./private";
 export type {
   AgentMessage,
   Conversation as AgentConversation,

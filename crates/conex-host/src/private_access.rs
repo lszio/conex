@@ -57,6 +57,9 @@ pub struct NodeIdentity {
     pub node_id: String,
     pub node_epoch: String,
     pub registered_at_ms: u64,
+    /// P7：节点经发布链自报的应用清单（实例/模块/代际/契约/方法，纯元数据）。
+    /// 只用于已认证私有会话的目录展示，不参与授权判定。
+    pub inventory: Option<Value>,
 }
 
 impl PrivateAccess {
@@ -110,6 +113,7 @@ impl PrivateAccess {
         node_id: &str,
         node_epoch: &str,
         now_ms: u64,
+        inventory: Option<Value>,
     ) -> Result<(), conex_core::CallError> {
         if self.settings.tenant.is_empty() {
             return Err(unavailable("private tenant is not configured"));
@@ -123,9 +127,32 @@ impl PrivateAccess {
                 node_id: node_id.to_owned(),
                 node_epoch: node_epoch.to_owned(),
                 registered_at_ms: now_ms,
+                inventory,
             },
         );
         Ok(())
+    }
+
+    /// P7 私有目录：已注册节点及其自报清单的只读快照。调用方必须是已认证的
+    /// 私有会话；这里不做第二层过滤（MVP 单用户，全部私有会话同属 owner）。
+    pub fn directory(&self) -> Value {
+        let nodes = self.nodes.lock().expect("node registry poisoned");
+        let items: Vec<Value> = nodes
+            .iter()
+            .map(|(principal, identity)| {
+                json!({
+                    "principal": principal,
+                    "nodeId": identity.node_id,
+                    "nodeEpoch": identity.node_epoch,
+                    "registeredAtMs": identity.registered_at_ms.to_string(),
+                    "instances": identity.inventory.as_ref()
+                        .and_then(|inventory| inventory.get("instances"))
+                        .cloned()
+                        .unwrap_or_else(|| json!([])),
+                })
+            })
+            .collect();
+        json!({ "nodes": items })
     }
 
     pub fn node_identity(&self, principal: &str) -> Option<NodeIdentity> {
@@ -491,9 +518,36 @@ pub async fn access_node_identity(
         .get("nodeRuntimeEpoch")
         .and_then(Value::as_str)
         .ok_or_else(|| forbidden("nodeRuntimeEpoch is required"))?;
-    private.register_node_identity(principal, node_id, node_epoch, now_ms())?;
+    // P7：可选清单。存在即必须是对象；实例数组留给目录展示，不参与授权。
+    let inventory = match input.get("inventory") {
+        None | Some(Value::Null) => None,
+        Some(value) if value.is_object() => Some(value.clone()),
+        Some(_) => return Err(forbidden("inventory must be a JSON object")),
+    };
+    private.register_node_identity(principal, node_id, node_epoch, now_ms(), inventory)?;
     let revision = private.store.latest_revision().await?;
     Ok(json!({"accepted": true, "revocationRevision": revision.to_string()}))
+}
+
+/// `GET /private/directory`: registered nodes with their self-reported
+/// inventory, for authenticated private browser sessions only. A read that
+/// changes nothing: the session cookie is the boundary, no CSRF (matching
+/// every other cookie-authenticated GET in this host).
+pub async fn private_directory(
+    axum::extract::Extension(state): axum::extract::Extension<Arc<crate::http::HttpState>>,
+    headers: HeaderMap,
+) -> Response {
+    let Some(private) = state.private.as_ref() else {
+        return not_found();
+    };
+    let web = match private.web() {
+        Ok(web) => web,
+        Err(error) => return crate::web_auth::error_response(error),
+    };
+    if let Err(error) = web.session_from_headers(&headers) {
+        return crate::web_auth::error_response(error);
+    }
+    (StatusCode::OK, axum::Json(private.directory())).into_response()
 }
 
 /// `access/revocations/sync`: paged, revision-keyed. A page is at most 128
@@ -602,4 +656,96 @@ fn unavailable(message: &str) -> conex_core::CallError {
 
 fn not_found() -> Response {
     (StatusCode::NOT_FOUND, "not found").into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_access() -> PrivateAccess {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let key = ring::signature::Ed25519KeyPair::generate_pkcs8(&ring::rand::SystemRandom::new())
+            .expect("generate ed25519 key");
+        let key_path = dir.path().join("signing.pkcs8");
+        std::fs::write(&key_path, key.as_ref()).expect("write key");
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&key_path, std::fs::Permissions::from_mode(0o600))
+            .expect("key mode");
+        let access = PrivateAccess::new(PrivateSettings {
+            issuer: "conex://hub.test".into(),
+            kid: "test-1".into(),
+            tenant: "private".into(),
+            signing_key_backend: format!("file:{}", key_path.display()),
+            store_path: dir.path().join("private.sqlite"),
+            principal: "owner".into(),
+            admin_principals: BTreeSet::from(["owner".to_string()]),
+            node_principals: BTreeSet::from(["node-a".to_string()]),
+        })
+        .expect("private access");
+        // The node registry lives in memory, but the SQLite store outlives the
+        // tempdir; the WAL files are test artifacts, not secrets.
+        std::mem::forget(dir);
+        access
+    }
+
+    #[test]
+    fn directory_reports_registered_nodes_with_inventory() {
+        let access = test_access();
+        assert_eq!(
+            access.directory()["nodes"].as_array().map(Vec::len),
+            Some(0)
+        );
+        access
+            .register_node_identity(
+                "node-a",
+                "01ARZ3NDEKTSV4RRFFQ69G5FAX",
+                "01ARZ3NDEKTSV4RRFFQ69G5FBX",
+                1_000,
+                Some(json!({"instances": [{"id": "inst", "modules": []}]})),
+            )
+            .expect("register");
+        let nodes = access.directory()["nodes"]
+            .as_array()
+            .expect("nodes")
+            .clone();
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0]["principal"], json!("node-a"));
+        assert_eq!(nodes[0]["nodeEpoch"], json!("01ARZ3NDEKTSV4RRFFQ69G5FBX"));
+        assert_eq!(
+            nodes[0]["instances"][0]["id"],
+            json!("inst"),
+            "the inventory reaches the directory verbatim"
+        );
+        // Re-registration replaces the inventory instead of accumulating.
+        access
+            .register_node_identity(
+                "node-a",
+                "01ARZ3NDEKTSV4RRFFQ69G5FAX",
+                "01ARZ3NDEKTSV4RRFFQ69G5FBX",
+                2_000,
+                None,
+            )
+            .expect("re-register");
+        let nodes = access.directory()["nodes"]
+            .as_array()
+            .expect("nodes")
+            .clone();
+        assert_eq!(nodes[0]["instances"].as_array().map(Vec::len), Some(0));
+        assert_eq!(nodes[0]["registeredAtMs"], json!("2000"));
+    }
+
+    #[test]
+    fn identity_requires_canonical_ulids() {
+        let access = test_access();
+        let error = access
+            .register_node_identity(
+                "node-a",
+                "not-a-ulid",
+                "01ARZ3NDEKTSV4RRFFQ69G5FBX",
+                1,
+                None,
+            )
+            .expect_err("non-ULID node id must be refused");
+        assert_eq!(error.code(), conex_proto::ErrorCode::Forbidden as i32);
+    }
 }

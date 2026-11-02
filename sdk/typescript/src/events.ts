@@ -198,8 +198,11 @@ export class EventFollower {
         resync("page cursor stream/epoch does not match");
       }
     }
-    if (!Array.isArray(page.events)) resync("page.events must be an array");
-    for (const event of page.events as unknown[]) this.applyEvent(event);
+    // proto3 JSON 省略空数组：无新事件的页不带 events 字段，按空页处理。
+    if (!Array.isArray(page.events) && page.events !== undefined) {
+      resync("page.events must be an array when present");
+    }
+    for (const event of (page.events ?? []) as unknown[]) this.applyEvent(event);
     if (isRecord(next) && typeof next.after === "string" && next.after !== cursor.after) {
       resync(`page nextCursor ${next.after} disagrees with applied position ${cursor.after}`);
     }
@@ -259,6 +262,18 @@ export class EventFollower {
         if (completed?.revision) message.revision = completed.revision;
         return;
       }
+      case "message.part": {
+        // 工具活动部件按事件顺序追加（store append_event "message.part"）；
+        // 与 delta 不同，part 追加不携带偏移，重复交付由去重键拦截。
+        const part = event.messagePart;
+        const id = requireString(event.entityId, "message.part target");
+        const message = projection.messages?.find((item) => item.id === id);
+        if (!message) resync(`part for unknown message ${id}`);
+        if (!part) resync("message.part payload is missing");
+        if (!Array.isArray(message.parts)) message.parts = [];
+        message.parts.push(part);
+        return;
+      }
       case "relationship.updated":
         upsert(projection.relationships, event.relationshipUpdated, event.entityId);
         return;
@@ -270,7 +285,10 @@ export class EventFollower {
     }
   }
 
-  /** 文本仅经 delta 追加；offsetBytes 必须等于该 part 当前已知 totalBytes。 */
+  /** 文本仅经 delta 追加。续接点是"客户端已应用的内容字节数" =
+   * part.offsetBytes + 已累积 text 的 UTF-8 字节数；part.totalBytes 是后端
+   * 声明的完整内容大小（可先于内容出现，快照允许空窗口 + 正确 totalBytes），
+   * 不是续接点，也不随 delta 改写。 */
   private appendDelta(delta: AgentMessageDelta | undefined): void {
     if (!delta) resync("message.delta payload is missing");
     const messageId = requireString(delta.messageId, "delta.messageId");
@@ -298,12 +316,11 @@ export class EventFollower {
     }
     const textPart = part.text;
     if (!textPart) resync(`delta targets non-text part ${partIndex}`);
-    const total = textPart.totalBytes ?? "0";
-    if (offset !== total) {
-      resync(`delta offset ${offset} does not continue part at ${total}`);
+    const applied = BigInt(textPart.offsetBytes ?? "0") + BigInt(encoder.encode(textPart.text ?? "").length);
+    if (BigInt(offset) !== applied) {
+      resync(`delta offset ${offset} does not continue part at ${applied}`);
     }
     textPart.text = (textPart.text ?? "") + delta.text;
     if (textPart.offsetBytes === undefined) textPart.offsetBytes = "0";
-    textPart.totalBytes = (BigInt(total) + BigInt(encoder.encode(delta.text).length)).toString();
   }
 }

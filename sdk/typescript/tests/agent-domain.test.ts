@@ -163,7 +163,9 @@ test("reducer: snapshot then pages advance cursor and append text once", async (
   await follower.start();
   const message = follower.projection?.messages?.[0];
   expect(message?.parts?.[0]?.text?.text).toBe("Hello world");
-  expect(message?.parts?.[0]?.text?.totalBytes).toBe("11");
+  // totalBytes 是后端声明的完整内容大小，Follower 不随 delta 改写；
+  // 续接点是 offsetBytes + 已应用字节（见 events.ts appendDelta）。
+  expect(message?.parts?.[0]?.text?.totalBytes).toBe("0");
   expect(message?.state).toBe("complete");
   expect(follower.cursor?.after).toBe("5");
   expect(follower.cursor?.epoch).toBe(EPOCH);

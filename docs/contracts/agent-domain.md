@@ -18,7 +18,7 @@ ID 为仓库惯例的 ULID（26 字符，大小写规范沿用现有验证器）
 
 | 类型 | 必须字段 | 可选字段及约束 |
 |---|---|---|
-| AgentEndpoint | id,nodeId,moduleInstanceId,generation,adapter,backendVersion,protocolVersion,experimental,capabilities,availability,catalogScope,limits | displayName；adapter 为 omp/codex；availability 为 ready/unreachable/unknown/stopped；catalogScope=node-managed/backend；limits 为实际支持的领域限额 |
+| AgentEndpoint | id,nodeId,moduleInstanceId,generation,adapter,backendVersion,protocolVersion,experimental,capabilities,availability,catalogScope,limits | displayName；adapter 为 omp/codex/builtin（builtin=P6 内置领域模块端点）；availability 为 ready/unreachable/unknown/stopped；catalogScope=node-managed/backend；limits 为实际支持的领域限额 |
 | Workspace | id,nodeId,displayName,rootRef | rootRef 是节点批准的配置键，不是客户端任意路径；真实根路径仅节点保存 |
 | Conversation | id,endpointId,workspaceId,createdAtMs,revision,quality | title,activeExecutionId；quality=current/stale/unknown；revision 为本记录修订，不等于事件位置 |
 | Execution | id,conversationId,endpointId,moduleInstanceId,generation,state,revision,createdAtMs,updatedAtMs | parentExecutionId,terminalReason,cancelRequestedAtMs,backendRef；backendRef 仅受限节点记录，默认不进入客户端投影 |

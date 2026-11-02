@@ -391,7 +391,10 @@ fn agent_contract(backend: Arc<OmpBackend>) -> Result<Arc<Contract>, Error> {
                 .into_iter()
                 .map(|endpoint| {
                     let capabilities = endpoint.capabilities.unwrap_or_default();
-                    json!({
+                    // proto3 JSON：可缺席字段在 None 时必须省略，不能写显式 null
+                    //（TS 域校验按生成 Schema 拒绝 null；生成 serde 的 proto_json
+                    // 即此语义，这里手工拼接保持同一形状）。
+                    let mut item = json!({
                         "id": endpoint.id,
                         "nodeId": endpoint.node_id,
                         "moduleInstanceId": endpoint.module_instance_id,
@@ -416,13 +419,18 @@ fn agent_contract(backend: Arc<OmpBackend>) -> Result<Arc<Contract>, Error> {
                         },
                         "availability": endpoint.availability,
                         "catalogScope": endpoint.catalog_scope,
-                        "limits": endpoint.limits.map(|limits| json!({
+                    });
+                    if let Some(limits) = &endpoint.limits {
+                        item["limits"] = json!({
                             "maxPageSize": limits.max_page_size,
                             "maxSubmitBytes": limits.max_submit_bytes,
                             "maxMessageReadBytes": limits.max_message_read_bytes,
-                        })),
-                        "displayName": endpoint.display_name,
-                    })
+                        });
+                    }
+                    if let Some(name) = &endpoint.display_name {
+                        item["displayName"] = json!(name);
+                    }
+                    item
                 })
                 .collect::<Vec<_>>();
             Ok(json!({ "items": items }))
@@ -1740,6 +1748,12 @@ impl SessionActor {
             .and_then(Value::as_str)
             .unwrap_or("assistant")
             .to_string();
+        if role == "user" {
+            // 提交路径已在 admit 时记录用户消息（事件 §4：created 空窗口 +
+            // delta + completed）；OMP 对本次提交的 user 回显不再映射成第二条
+            // 消息，否则会话出现重复的"你"。
+            return;
+        }
         let result = self
             .store
             .apply_backend(

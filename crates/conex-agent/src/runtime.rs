@@ -798,11 +798,14 @@ pub async fn run_node(config: crate::node_config::NodeConfig) -> Result<(), Stri
 /// The publication link hook (P5.3/P5.4): announce the runtime identity on
 /// the authenticated configured-hub link, then keep the hub revocation log
 /// synced while the link is up. Nothing here talks to any other hub.
+/// P7：身份注册携带应用清单（实例/模块/代际/契约，纯元数据），hub 私有目录
+/// 据此向浏览器展示可直连目标；清单随 5 秒同步循环刷新，变化才重发。
 pub(crate) fn node_link_hook(
     private: &crate::node_config::NodePrivateConfig,
     node_id: &str,
     node_epoch: &str,
     store: conex_agent_domain::Store,
+    inventory: Arc<std::sync::Mutex<Option<crate::node::NodeHandle>>>,
 ) -> Option<std::sync::Arc<crate::publication::LinkHook>> {
     // The verifier is built here to fail fast on bad configuration; the
     // direct entry rebuilds its own when it starts.
@@ -813,6 +816,7 @@ pub(crate) fn node_link_hook(
         let store = store.clone();
         let node_id = node_id.clone();
         let epoch = epoch.clone();
+        let inventory = inventory.clone();
         Box::pin(async move {
             eprintln!("publication link up: registering node identity");
             // A hub that is still warming up (store open, private entry
@@ -820,7 +824,7 @@ pub(crate) fn node_link_hook(
             // live link instead of waiting for a reconnect.
             let mut registered = false;
             for attempt in 0..30u32 {
-                match client.access_node_identity(&node_id, &epoch).await {
+                match client.access_node_identity(&node_id, &epoch, None).await {
                     Ok(_) => {
                         registered = true;
                         break;
@@ -838,6 +842,7 @@ pub(crate) fn node_link_hook(
                 eprintln!("access/node-identity never accepted; sync disabled");
                 return;
             }
+            let mut announced = String::new();
             loop {
                 match sync_hub_revocations(&client, &store).await {
                     Ok(applied) => {
@@ -850,6 +855,8 @@ pub(crate) fn node_link_hook(
                         return;
                     }
                 }
+                announced =
+                    announce_inventory(&client, &inventory, &node_id, &epoch, announced).await;
                 tokio::select! {
                     _ = client.wait_closed() => return,
                     _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {}
@@ -857,6 +864,40 @@ pub(crate) fn node_link_hook(
             }
         })
     }))
+}
+
+/// 读取运行时快照并只把实例清单（实例 id、appId、state、模块名/代际/契约/
+/// 方法）发给 hub；序列化后与上次相同则跳过。失败不打断撤销同步主循环。
+async fn announce_inventory(
+    client: &conex_sdk::Client,
+    slot: &Arc<std::sync::Mutex<Option<crate::node::NodeHandle>>>,
+    node_id: &str,
+    epoch: &str,
+    previous: String,
+) -> String {
+    let Some(handle) = slot.lock().expect("inventory slot poisoned").clone() else {
+        return previous;
+    };
+    let Ok(snapshot) = handle.snapshot().await else {
+        return previous;
+    };
+    let inventory = serde_json::json!({
+        "instances": snapshot.get("instances").cloned().unwrap_or(serde_json::json!([])),
+    });
+    let serialized = inventory.to_string();
+    if serialized == previous {
+        return previous;
+    }
+    match client
+        .access_node_identity(node_id, epoch, Some(inventory))
+        .await
+    {
+        Ok(_) => serialized,
+        Err(error) => {
+            eprintln!("access inventory announce failed: {error}");
+            previous
+        }
+    }
 }
 
 /// Revision-keyed paging with idempotent apply; a watermark gap triggers one
