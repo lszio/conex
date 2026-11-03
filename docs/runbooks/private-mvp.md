@@ -1,7 +1,8 @@
 # 私有 MVP 部署运行手册（公网 hub + 私网节点）
 
-> 用户于 2026-11-03 明确授权私有产品公网部署（替换原 Authentik 受限访客演示）。
-> 验收边界：A02 的"两台真实机器"与 Linux 采样核对仍归 P9；本手册交付单 hub + 单节点的可用部署。
+> 用户于 2026-11-03 明确授权私有产品公网部署（已执行；原 Authentik 受限访客演示已替换）。
+> 2026-11-04 实际状态：hub 已上线（`CONEX_HUB_SIGNING_KEY` 已配置、`conex-data` 卷挂载 `/var/lib/conex`、Authentik 中间件已从域名移除）；本机节点已通过 wss 连接并注册。验收边界：A02 的"两台真实机器"与 Linux 采样核对仍归 P9。
+> 域名上曾有的 Authentik 中间件必须摘除的原因：它会拦截节点的 WSS 发布链握手（无 SSO 会话的连接被 302），产品自身的引导码认证是其唯一入口。若需恢复双重认证，在 Dokploy 域名设置里把 `authentik-auth@file` 加回 middlewares（但这会同时使节点无法连接）。
 
 ## 0. 拓扑
 
@@ -22,16 +23,10 @@
 
 首次部署/换钥需要操作者完成的步骤：
 
-1. **注入签名私钥**（Dokploy → Application → Environment）：
+1. **签名私钥（已完成）**：`CONEX_HUB_SIGNING_KEY`（base64 pkcs8 DER）已写入 Dokploy 环境变量，本机留档 `~/.conex/home-node/hub-key.txt`（第 1 行公钥 hex，第 2 行 base64 私钥）。没有该变量 hub 拒绝启动（fail-fast）。
+   轮换：生成新钥 → 节点先装新 kid 公钥 → hub 改 `kid` 并换 env → 旧钥保留至最后授权 exp + 60 秒（详见 [P5 手册 §2](private-network.md)）。注意 host 配置校验支持 `env:`/`env64:`/`file:` 三种凭据来源（4e508ab 修复）。
 
-   ```
-   CONEX_HUB_SIGNING_KEY = <base64(pkcs8 DER)>
-   ```
-
-   本机生成结果保存在 `~/.conex/home-node/hub-key.txt` 第 2 行（第 1 行是节点要装的公钥 hex）。没有这个环境变量 hub 拒绝启动（fail-fast，属预期）。
-   轮换：生成新钥 → 节点先装新 kid 公钥 → hub 改 `kid` 并换 env → 旧钥保留至最后授权 exp + 60 秒（详见 [P5 手册 §2](private-network.md)）。
-
-2. **持久卷**：`/var/lib/conex` 必须挂持久卷（含 `private.sqlite`、content/session/operation 根）。容器内明文监听由 Dokploy 反代终结 TLS（`allow_plaintext_bind`）。
+2. **持久卷（已完成）**：`conex-data` 卷已挂载 `/var/lib/conex`（含 `private.sqlite`、content/session/operation 根）。容器内明文监听由 Dokploy 反代终结 TLS（`allow_plaintext_bind`）。
 
 3. **引导码登录**（每次 hub 重启后会话失效，需重新引导）：
 
@@ -70,13 +65,15 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:7451/wss   # 400（入
 echo node/snapshot | 私有 socket ~/.conex/home-node/data/operator.sock  # 实例/模块/代际
 ```
 
-## 3. 首次使用清单
+## 3. 首次使用清单（2026-11-04 状态：第 1–2、4 步已完成）
 
-1. push dev → Dokploy 构建完成。
-2. Dokploy 设置 `CONEX_HUB_SIGNING_KEY`，重启应用。
-3. 容器控制台生成引导码 → 浏览器登录。
-4. 本机 `~/.conex/home-node/start.sh` 启动节点（保持运行；建议 `nohup … &` 或后续配 launchd）。
-5. 工作台出现节点身份与"直连"徽标 → 选端点/Workspace → 新建会话发消息。
+1. ~~push dev → Dokploy 构建完成。~~（已上线）
+2. ~~Dokploy 设置 `CONEX_HUB_SIGNING_KEY`，重启应用。~~（已配置）
+3. **待用户执行**：Dokploy 面板 → conex 应用 → 容器终端执行
+   `conex-host private-bootstrap --config /etc/conex/host.toml`
+   → 43 位引导码（5 分钟、单次消费）→ https://conex.lszio.space 登录。
+4. ~~本机 `~/.conex/home-node/start.sh` 启动节点~~（已在运行并注册；hub 重启后会自动重连重注册）。
+5. 登录后工作台出现节点身份与"直连"徽标 → 选端点/Workspace → 新建会话发消息。
 
 ## 4. 边界与回退
 
