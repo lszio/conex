@@ -804,8 +804,11 @@ fn valid_web_origin(origin: &str) -> bool {
 }
 
 fn valid_credential_source(source: &str) -> bool {
+    // `env64:` 是 base64 变体（secret manager 只收可打印值，DER 是二进制），
+    // 与 env:/file: 一样在 read_secret 处统一加载。
     source
         .strip_prefix("env:")
+        .or_else(|| source.strip_prefix("env64:"))
         .or_else(|| source.strip_prefix("file:"))
         .is_some_and(|value| !value.trim().is_empty())
 }
