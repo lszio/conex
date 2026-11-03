@@ -299,6 +299,9 @@ impl Client {
         request
             .headers_mut()
             .insert("sec-websocket-protocol", HeaderValue::from_static(PROFILE));
+        // rustls 无法在双 crypto feature 下自动选默认 provider；任何 wss
+        // 升级前都必须已安装。幂等：已安装时返回 Err，忽略即可。
+        let _ = rustls::crypto::ring::default_provider().install_default();
         let config = WebSocketConfig::default()
             .max_message_size(Some(options.limits.max_frame_bytes as usize))
             .max_frame_size(Some(options.limits.max_frame_bytes as usize));
