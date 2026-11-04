@@ -238,7 +238,6 @@ fn prepare_test_read(value: &Value) -> CallResult<PreparedInput> {
             action: "read".into(),
             subtree: false,
         },
-        ..Default::default()
     })
 }
 
@@ -274,6 +273,7 @@ fn test_factory(installation: &Installation) -> CallResult<Vec<Route>> {
                 output_schema: "test.ReadResponse",
                 prepare: prepare_test_read,
                 validate_output: validate_test_output,
+                claim_post: None,
             },
             handler: handler.clone(),
             target: installation.target.clone(),

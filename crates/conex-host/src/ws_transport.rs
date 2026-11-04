@@ -1987,10 +1987,10 @@ pub fn _unused_helper() {
                     action: String::new(),
                     subtree: false,
                 },
-                binding: Default::default(),
             })
         },
         validate_output: |_| Ok(()),
+        claim_post: None,
     };
 }
 
