@@ -46,6 +46,7 @@ conex 的文档按「规范 / 契约 / 计划 / 证据 / 操作」分层，每�
 | 历史盘点 | [旧迁移盘点](design/2026-10-17-conex-migration-assessment.md) | 当时的静态源码证据，缺口可能已由 S1/S2 填补 | 追溯迁移，不能据此重做已交付功能 |
 | 契约 | [S1 双向能力与状态订阅](contracts/s1-capabilities.md) | 通用注册、调用、取消、状态快照与更新、限额和验收场景 | S1 实施、对接与验收 |
 | 契约 | [S1 模块消费主体](contracts/s1-module-principals.md) | 组合模块远程消费的模块粒度授权与归属；A14 消费侧前置 | 已评审（2026-11-05），按实施计划推进 |
+| 计划 | [S1 模块消费主体实施计划](plans/2026-11-05-conex-s1-module-principals.md) | schema tag8 → 中心三步判定 → 双 SDK 身份 → 审计/向量/证据 | 待实施 |
 | 历史计划 | [S1 实施计划](plans/2026-10-17-conex-s1.md) | 九个任务、A01–A12 覆盖及原 Paca 编号；已交付证据另见验证记录 | 追溯 S1 实施 |
 | 证据 | [S1 验证记录](verification/s1-capabilities.md) | 真实命令、A01–A12 跨进程与 SUPPORT 行为证据、总门禁状态 | 验收与排障 |
 | 操作 | [S1 运行手册](runbooks/s1-capabilities.md) | TS/Rust 三进程样例、静态批准、HTTP 限制、取消和未知结果 | 本机联调与 SDK 接入 |
