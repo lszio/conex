@@ -2,7 +2,7 @@
 //! 会话、派生执行）从既有 store 表派生——投影不二次存储；能力绑定是独立
 //! 查询（需单独授权），本版经同一契约但分开的操作暴露。Tags 是标注不是
 //! 权限；用户删除标注不取消任何执行。
-use crate::adapters::omp::stable_ulid;
+use crate::adapters::common::stable_ulid;
 use crate::node_types::RuntimeFactory;
 use conex_proto as p;
 use conex_proto::{Relationship, TagsListInput, TagsListResult};

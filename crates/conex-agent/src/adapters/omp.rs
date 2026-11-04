@@ -9,24 +9,24 @@
 //! 发送前必须持久化 dispatching；abort 回执不是终态，prompt_result+settled 才是；
 //! 交互过期不自动批准——confirm 走 cancelled:false（显式 deny），select/input
 //! 无法无歧义拒绝时 abort 并等真实静止（契约 §7、P0 证据 §3）。
-use crate::node_config::OmpAdapterConfig;
+use super::common::{
+    AgentBackend, Reply, agent_contract, now_ms, probe_version, proto_json, stable_ulid,
+    store_error, unavailable, unknown_outcome,
+};
+use crate::node_config::{ApprovedWorkspace, OmpAdapterConfig};
 use crate::node_types::RuntimeFactory;
 use conex_agent_domain::{
     Admission, AuthorizedScope, BackendObservation, BackendResponseOutcome, Store, TerminalState,
 };
 use conex_proto as p;
 use conex_proto::{
-    AgentConversationCreateInput, AgentConversationGetInput, AgentConversationHistoryInput,
-    AgentConversationListInput, AgentEndpointListInput, AgentEventReadInput,
-    AgentExecutionCancelInput, AgentExecutionGetInput, AgentExecutionSteerInput,
-    AgentInteractionListInput, AgentInteractionRespondInput, AgentMessageReadInput,
-    AgentRelationshipListInput, AgentSnapshotInput, AgentSubagentCancelInput,
-    AgentSubagentListInput, AgentSubmitInput, AgentWorkspaceListInput,
+    AgentExecutionCancelInput, AgentInteractionRespondInput, AgentSubagentCancelInput,
+    AgentSubmitInput,
 };
-use conex_sdk::{Contract, Error, Execution as SdkExecution, Method, StartedModule};
+use conex_sdk::{Error, StartedModule};
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::future::Future;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -35,74 +35,12 @@ use tokio::process::Command;
 use tokio::sync::{Mutex, mpsc, oneshot, watch};
 
 pub const ADAPTER: &str = "omp";
-pub const CONTRACT_ID: &str = "conex.agent";
 const PROTOCOL_VERSION: u32 = 2;
 const MAX_PHYSICAL_FRAME: usize = 1024 * 1024;
 const MAX_REASSEMBLED: usize = 64 * 1024 * 1024;
 /// 契约 §7：后端没有截止时间时节点上限 10 分钟；过期不自动批准。
 const NODE_INTERACTION_TTL_MS: u64 = 10 * 60 * 1000;
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
-
-type Reply<T> = oneshot::Sender<Result<T, String>>;
-
-/// 由种子确定性派生合法 ULID（26 字符 Crockford base32，首字符 ≤'7'）。
-/// 端点/Workspace 的稳定身份跨节点进程重启保留；不是熵池随机数。
-pub fn stable_ulid(seed: &str) -> String {
-    const ALPHABET: &[u8] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
-    let digest = Sha256::digest(seed.as_bytes());
-    let mut value = u128::from_le_bytes(digest[..16].try_into().expect("16 bytes")) << 2;
-    let mut out = [b'0'; 26];
-    for slot in out.iter_mut().rev() {
-        *slot = ALPHABET[(value & 0x1f) as usize];
-        value >>= 5;
-    }
-    String::from_utf8(out.to_vec()).expect("crockford alphabet is ASCII")
-}
-
-fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
-        .unwrap_or(0)
-}
-
-pub(crate) fn store_error(error: conex_agent_domain::StoreError) -> Error {
-    use conex_agent_domain::StoreError as E;
-    let (code, execution, retry) = match &error {
-        E::InvalidArgument(_) => (p::ErrorCode::BadRequest, "not_started", "never"),
-        E::NotFound { .. } => (p::ErrorCode::UnknownProvider, "not_started", "never"),
-        E::ConversationBusy { .. } | E::IdempotencyMismatch { .. } | E::Conflict(_) => {
-            (p::ErrorCode::Conflict, "not_started", "never")
-        }
-        E::StaleRevision { .. } => (p::ErrorCode::StaleRevision, "not_started", "never"),
-        E::PayloadTooLarge { .. } => (p::ErrorCode::PayloadTooLarge, "not_started", "never"),
-        E::QuotaExceeded(_) => (p::ErrorCode::QuotaExceeded, "not_started", "never"),
-        E::OutcomeUnknown(_) => (p::ErrorCode::OutcomeUnknown, "unknown", "never"),
-        E::ResumeUnavailable { .. } => (p::ErrorCode::ResumeUnavailable, "not_started", "safe"),
-        E::NodeMismatch { .. } | E::Db(_) | E::Closed => {
-            (p::ErrorCode::Internal, "not_started", "never")
-        }
-    };
-    Error::new(code, error.to_string(), execution, retry)
-}
-
-fn unavailable(message: impl std::fmt::Display) -> Error {
-    Error::new(
-        p::ErrorCode::Unavailable,
-        message.to_string(),
-        "not_started",
-        "never",
-    )
-}
-
-fn unknown_outcome(message: impl std::fmt::Display) -> Error {
-    Error::new(
-        p::ErrorCode::OutcomeUnknown,
-        message.to_string(),
-        "unknown",
-        "never",
-    )
-}
 
 /// 领域观察不允许静默丢弃：失败落日志并终止当前帧处理（契约可观察性）。
 macro_rules! log_apply {
@@ -115,17 +53,6 @@ macro_rules! log_apply {
             }
         }
     };
-}
-
-fn proto_json<T: serde::Serialize>(value: &T) -> Result<Value, Error> {
-    serde_json::to_value(value).map_err(|error| {
-        Error::new(
-            p::ErrorCode::Internal,
-            error.to_string(),
-            "not_started",
-            "never",
-        )
-    })
 }
 
 /// 应用包可见的端点能力（契约 §3）。steer 未实测一律 false，live 验收取得
@@ -162,26 +89,6 @@ pub struct OmpBackend {
 }
 
 impl OmpBackend {
-    fn workspace_root(&self, workspace_id: &str) -> Result<PathBuf, Error> {
-        // conversation.workspace_id 是登记到 store 的稳定 ULID；
-        // 配置里的 id 是 rootRef 键，二者以派生函数对应。
-        self.config
-            .workspaces
-            .iter()
-            .find(|workspace| {
-                stable_ulid(&format!("workspace:{}:{}", self.node_id, workspace.id)) == workspace_id
-            })
-            .map(|workspace| workspace.root.clone())
-            .ok_or_else(|| {
-                Error::new(
-                    p::ErrorCode::BadRequest,
-                    "unknown workspaceId for this endpoint",
-                    "not_started",
-                    "never",
-                )
-            })
-    }
-
     async fn ensure_session(
         &self,
         conversation_id: &str,
@@ -309,508 +216,126 @@ pub fn factory(config: OmpAdapterConfig) -> RuntimeFactory {
     })
 }
 
-async fn probe_version(binary: &str) -> String {
-    let attempt = tokio::time::timeout(
-        Duration::from_secs(10),
-        Command::new(binary).arg("--version").output(),
-    )
-    .await;
-    match attempt {
-        Ok(Ok(output)) if output.status.success() => {
-            String::from_utf8_lossy(&output.stdout).trim().to_string()
-        }
-        _ => "unknown".into(),
+impl AgentBackend for OmpBackend {
+    fn store(&self) -> &Store {
+        &self.store
+    }
+
+    fn node_id(&self) -> &str {
+        &self.node_id
+    }
+
+    fn workspace_entries(&self) -> &[ApprovedWorkspace] {
+        &self.config.workspaces
+    }
+
+    fn submit(
+        &self,
+        scope: AuthorizedScope,
+        input: AgentSubmitInput,
+    ) -> impl Future<Output = Result<Value, Error>> + Send {
+        submit(self, scope, input)
+    }
+
+    fn cancel_execution(
+        &self,
+        scope: AuthorizedScope,
+        input: AgentExecutionCancelInput,
+    ) -> impl Future<Output = Result<Value, Error>> + Send {
+        cancel_execution(self, scope, input)
+    }
+
+    fn respond(
+        &self,
+        scope: AuthorizedScope,
+        input: AgentInteractionRespondInput,
+    ) -> impl Future<Output = Result<Value, Error>> + Send {
+        respond(self, scope, input)
+    }
+
+    fn cancel_subagent(
+        &self,
+        scope: AuthorizedScope,
+        input: AgentSubagentCancelInput,
+    ) -> impl Future<Output = Result<Value, Error>> + Send {
+        cancel_subagent(self, scope, input)
     }
 }
 
-/// `conex.agent/1` 契约：操作名即方法名，schema 为生成消息名（契约 §4）。
-fn agent_contract(backend: Arc<OmpBackend>) -> Result<Arc<Contract>, Error> {
-    let mut methods = BTreeMap::new();
-    let read = |input: &str, output: &str| Method::new(input, output, SdkExecution::ReadOnly);
-    let write = |input: &str, output: &str| Method::new(input, output, SdkExecution::NonReplayable);
-    macro_rules! read_method {
-        ($name:expr, $input:ty, $input_name:expr, $output_name:expr, $body:expr) => {
-            methods.insert(
-                $name.to_string(),
-                read(
-                    concat!("conex.", $input_name),
-                    concat!("conex.", $output_name),
-                )
-                .with_handler({
-                    let captured = backend.clone();
-                    move |context, input: $input| {
-                        let backend = captured.clone();
-                        let body = $body;
-                        async move {
-                            let scope = AuthorizedScope::new(context.caller.principal_id.clone())
-                                .map_err(store_error)?;
-                            body(backend.clone(), scope, input).await
-                        }
-                    }
-                }),
-            );
-        };
+/// 取消：request_cancel 后经会话 actor abort；abort 回执不是终态，
+/// prompt_result+settled 才是（契约 §5）。
+async fn cancel_execution(
+    backend: &OmpBackend,
+    scope: AuthorizedScope,
+    input: AgentExecutionCancelInput,
+) -> Result<Value, Error> {
+    let target = backend
+        .store
+        .request_cancel(
+            &scope,
+            &input.execution_id,
+            input.expected_generation,
+            now_ms(),
+        )
+        .await
+        .map_err(store_error)?;
+    if target.requested
+        && let Some(session) = backend.session_for_execution(&input.execution_id).await?
+    {
+        session.abort(&input.execution_id).await;
     }
-    macro_rules! write_method {
-        ($name:expr, $input:ty, $input_name:expr, $output_name:expr, $body:expr) => {
-            methods.insert(
-                $name.to_string(),
-                write(
-                    concat!("conex.", $input_name),
-                    concat!("conex.", $output_name),
-                )
-                .with_handler({
-                    let captured = backend.clone();
-                    move |context, input: $input| {
-                        let backend = captured.clone();
-                        let body = $body;
-                        async move {
-                            let scope = AuthorizedScope::new(context.caller.principal_id.clone())
-                                .map_err(store_error)?;
-                            body(backend.clone(), scope, input).await
-                        }
-                    }
-                }),
-            );
-        };
-    }
-    read_method!(
-        "agent/endpoints/list",
-        AgentEndpointListInput,
-        "AgentEndpointListInput",
-        "AgentEndpointListResult",
-        |backend: Arc<OmpBackend>, _scope, input: AgentEndpointListInput| async move {
-            let _ = &input;
-            // 手工投影：pbjson 省略默认值而 schema 要求显式布尔（experimental、
-            // capabilities 的 false 位），这里逐字段输出保证完整。
-            let items = backend
-                .store
-                .list_endpoints()
-                .await
-                .map_err(store_error)?
-                .into_iter()
-                .map(|endpoint| {
-                    let capabilities = endpoint.capabilities.unwrap_or_default();
-                    // proto3 JSON：可缺席字段在 None 时必须省略，不能写显式 null
-                    //（TS 域校验按生成 Schema 拒绝 null；生成 serde 的 proto_json
-                    // 即此语义，这里手工拼接保持同一形状）。
-                    let mut item = json!({
-                        "id": endpoint.id,
-                        "nodeId": endpoint.node_id,
-                        "moduleInstanceId": endpoint.module_instance_id,
-                        "generation": endpoint.generation.to_string(),
-                        "adapter": endpoint.adapter,
-                        "backendVersion": endpoint.backend_version,
-                        "protocolVersion": endpoint.protocol_version,
-                        "experimental": endpoint.experimental,
-                        "capabilities": {
-                            "createConversation": capabilities.create_conversation,
-                            "continueConversation": capabilities.continue_conversation,
-                            "readHistory": capabilities.read_history,
-                            "streamMessages": capabilities.stream_messages,
-                            "cancelExecution": capabilities.cancel_execution,
-                            "approval": capabilities.approval,
-                            "userInput": capabilities.user_input,
-                            "listSubagents": capabilities.list_subagents,
-                            "cancelSubagent": capabilities.cancel_subagent,
-                            "steerExecution": capabilities.steer_execution,
-                            "attachExternal": capabilities.attach_external,
-                            "recoverActive": capabilities.recover_active,
-                        },
-                        "availability": endpoint.availability,
-                        "catalogScope": endpoint.catalog_scope,
-                    });
-                    if let Some(limits) = &endpoint.limits {
-                        item["limits"] = json!({
-                            "maxPageSize": limits.max_page_size,
-                            "maxSubmitBytes": limits.max_submit_bytes,
-                            "maxMessageReadBytes": limits.max_message_read_bytes,
-                        });
-                    }
-                    if let Some(name) = &endpoint.display_name {
-                        item["displayName"] = json!(name);
-                    }
-                    item
-                })
-                .collect::<Vec<_>>();
-            Ok(json!({ "items": items }))
-        }
-    );
-    read_method!(
-        "agent/workspaces/list",
-        AgentWorkspaceListInput,
-        "AgentWorkspaceListInput",
-        "AgentWorkspaceListResult",
-        |backend: Arc<OmpBackend>, _scope, input: AgentWorkspaceListInput| async move {
-            let workspaces = backend
-                .config
-                .workspaces
-                .iter()
-                .map(|workspace| p::Workspace {
-                    id: stable_ulid(&format!("workspace:{}:{}", backend.node_id, workspace.id)),
-                    node_id: backend.node_id.clone(),
-                    display_name: workspace.display_name.clone(),
-                    root_ref: workspace.id.clone(),
-                })
-                .collect();
-            let _ = &input;
-            proto_json(&p::AgentWorkspaceListResult {
-                items: workspaces,
-                next_page_token: None,
-            })
-        }
-    );
-    read_method!(
-        "agent/conversations/list",
-        AgentConversationListInput,
-        "AgentConversationListInput",
-        "AgentConversationListResult",
-        |backend: Arc<OmpBackend>, _scope, input: AgentConversationListInput| async move {
-            let mut conversations = backend
-                .store
-                .list_conversations(&input.endpoint_id, input.workspace_id.as_deref())
-                .await
-                .map_err(store_error)?;
-            // catalogScope=node-managed：只列本节点登记会话；单页上限 100。
-            conversations.truncate(input.limit.unwrap_or(50).clamp(1, 100) as usize);
-            proto_json(&p::AgentConversationListResult {
-                items: conversations,
-                next_page_token: None,
-            })
-        }
-    );
-    read_method!(
-        "agent/conversations/get",
-        AgentConversationGetInput,
-        "AgentConversationGetInput",
-        "AgentConversationGetResult",
-        |backend: Arc<OmpBackend>, _scope, input: AgentConversationGetInput| async move {
-            let conversation = backend
-                .store
-                .read_conversation(&input.conversation_id)
-                .await
-                .map_err(store_error)?;
-            proto_json(&p::AgentConversationGetResult {
-                conversation: Some(conversation),
-            })
-        }
-    );
-    read_method!(
-        "agent/conversations/history",
-        AgentConversationHistoryInput,
-        "AgentConversationHistoryInput",
-        "AgentConversationHistoryResult",
-        |backend: Arc<OmpBackend>, _scope, input: AgentConversationHistoryInput| async move {
-            let (messages, has_more) = backend
-                .store
-                .read_history(
-                    &input.conversation_id,
-                    input.before_message_id.as_deref(),
-                    input.limit.unwrap_or(50).clamp(1, 100),
-                )
-                .await
-                .map_err(store_error)?;
-            // 消息表是权威持久投影；历史翻页不跨保留边界，无缺口。
-            proto_json(&p::AgentConversationHistoryResult {
-                messages,
-                has_more,
-                quality: "current".into(),
-                gaps: Vec::new(),
-            })
-        }
-    );
-    read_method!(
-        "agent/messages/read",
-        AgentMessageReadInput,
-        "AgentMessageReadInput",
-        "AgentMessageReadResult",
-        |backend: Arc<OmpBackend>, scope, input: AgentMessageReadInput| async move {
-            let result = backend
-                .store
-                .read_message(
-                    &scope,
-                    &input.conversation_id,
-                    &input.message_id,
-                    input.part_index,
-                    input.offset_bytes,
-                    input.max_bytes.unwrap_or(4096).min(65536),
-                )
-                .await
-                .map_err(store_error)?;
-            proto_json(&result)
-        }
-    );
-    read_method!(
-        "agent/executions/get",
-        AgentExecutionGetInput,
-        "AgentExecutionGetInput",
-        "AgentExecutionGetResult",
-        |backend: Arc<OmpBackend>, _scope, input: AgentExecutionGetInput| async move {
-            let execution = backend
-                .store
-                .read_execution(&input.execution_id)
-                .await
-                .map_err(store_error)?;
-            proto_json(&p::AgentExecutionGetResult {
-                execution: Some(execution),
-            })
-        }
-    );
-    read_method!(
-        "agent/interactions/list",
-        AgentInteractionListInput,
-        "AgentInteractionListInput",
-        "AgentInteractionListResult",
-        |backend: Arc<OmpBackend>, _scope, input: AgentInteractionListInput| async move {
-            let items = backend
-                .store
-                .list_interactions(
-                    &input.conversation_id,
-                    input.execution_id.as_deref(),
-                    input.limit.unwrap_or(50).clamp(1, 100),
-                )
-                .await
-                .map_err(store_error)?;
-            proto_json(&p::AgentInteractionListResult {
-                items,
-                next_page_token: None,
-            })
-        }
-    );
-    read_method!(
-        "agent/relationships/list",
-        AgentRelationshipListInput,
-        "AgentRelationshipListInput",
-        "AgentRelationshipListResult",
-        |backend: Arc<OmpBackend>, _scope, input: AgentRelationshipListInput| async move {
-            let items = backend
-                .store
-                .list_relationships(
-                    &input.conversation_id,
-                    input.limit.unwrap_or(50).clamp(1, 100),
-                )
-                .await
-                .map_err(store_error)?;
-            proto_json(&p::AgentRelationshipListResult {
-                items,
-                next_page_token: None,
-            })
-        }
-    );
-    read_method!(
-        "agent/subagents/list",
-        AgentSubagentListInput,
-        "AgentSubagentListInput",
-        "AgentSubagentListResult",
-        |backend: Arc<OmpBackend>, _scope, input: AgentSubagentListInput| async move {
-            let (items, quality) = backend
-                .store
-                .list_subagents(&input.execution_id, input.limit.unwrap_or(50).clamp(1, 100))
-                .await
-                .map_err(store_error)?;
-            proto_json(&p::AgentSubagentListResult {
-                items,
-                next_page_token: None,
-                quality,
-            })
-        }
-    );
-    read_method!(
-        "events/snapshot",
-        AgentSnapshotInput,
-        "AgentSnapshotInput",
-        "AgentSnapshotResult",
-        |backend: Arc<OmpBackend>, scope, input: AgentSnapshotInput| async move {
-            let snapshot = backend
-                .store
-                .snapshot(&scope, &input.conversation_id)
-                .await
-                .map_err(store_error)?;
-            proto_json(&p::AgentSnapshotResult {
-                snapshot: Some(snapshot),
-            })
-        }
-    );
-    read_method!(
-        "events/read",
-        AgentEventReadInput,
-        "AgentEventReadInput",
-        "AgentEventReadResult",
-        |backend: Arc<OmpBackend>, scope, input: AgentEventReadInput| async move {
-            let result = backend
-                .store
-                .read_events(&scope, &input.cursor.expect("cursor required"), input.limit)
-                .await
-                .map_err(store_error)?;
-            proto_json(&result)
-        }
-    );
-    write_method!(
-        "agent/conversations/create",
-        AgentConversationCreateInput,
-        "AgentConversationCreateInput",
-        "AgentConversationCreateResult",
-        |backend: Arc<OmpBackend>, scope, input: AgentConversationCreateInput| async move {
-            // create 只建节点侧空会话；backend mapping 在首次受控执行后登记。
-            let conversation = backend
-                .store
-                .create_conversation(
-                    &scope,
-                    &input.endpoint_id,
-                    &input.workspace_id,
-                    &input.idempotency_key,
-                    input.title.as_deref(),
-                    now_ms(),
-                )
-                .await
-                .map_err(store_error)?;
-            proto_json(&p::AgentConversationCreateResult {
-                conversation: Some(conversation),
-            })
-        }
-    );
-    write_method!(
-        "agent/executions/submit",
-        AgentSubmitInput,
-        "AgentSubmitInput",
-        "AgentSubmitResult",
-        |backend: Arc<OmpBackend>, scope, input: AgentSubmitInput| async move {
-            submit(&backend, &scope, input).await
-        }
-    );
-    write_method!(
-        "agent/executions/cancel",
-        AgentExecutionCancelInput,
-        "AgentExecutionCancelInput",
-        "AgentExecutionCancelResult",
-        |backend: Arc<OmpBackend>, scope, input: AgentExecutionCancelInput| async move {
-            let target = backend
-                .store
-                .request_cancel(
-                    &scope,
-                    &input.execution_id,
-                    input.expected_generation,
-                    now_ms(),
-                )
-                .await
-                .map_err(store_error)?;
-            if target.requested
-                && let Some(session) = backend.session_for_execution(&input.execution_id).await?
-            {
-                session.abort(&input.execution_id).await;
-            }
-            proto_json(&p::AgentExecutionCancelResult {
-                execution_id: target.execution_id,
-                requested: target.requested,
-                state: target.state,
-            })
-        }
-    );
-    // steer 已进契约以便语义化错误；能力开关为 false（未取得 live 证据），
-    // 调用返回 unsupported_capability 而不是静默成功。
-    write_method!(
-        "agent/executions/steer",
-        AgentExecutionSteerInput,
-        "AgentExecutionSteerInput",
-        "AgentExecutionSteerResult",
-        |_backend: Arc<OmpBackend>, _scope, input: AgentExecutionSteerInput| async move {
-            let _ = input;
-            let refused: Result<Value, Error> = Err(Error::new(
-                p::ErrorCode::UnsupportedCapability,
-                "steer_execution is not enabled for this endpoint",
-                "not_started",
-                "never",
-            ));
-            refused
-        }
-    );
-    write_method!(
-        "agent/interactions/respond",
-        AgentInteractionRespondInput,
-        "AgentInteractionRespondInput",
-        "AgentInteractionRespondResult",
-        |backend: Arc<OmpBackend>, scope, input: AgentInteractionRespondInput| async move {
-            respond(&backend, &scope, input).await
-        }
-    );
-    write_method!(
-        "agent/subagents/cancel",
-        AgentSubagentCancelInput,
-        "AgentSubagentCancelInput",
-        "AgentSubagentCancelResult",
-        |backend: Arc<OmpBackend>, scope, input: AgentSubagentCancelInput| async move {
-            let target = backend
-                .store
-                .request_cancel(
-                    &scope,
-                    &input.execution_id,
-                    input.expected_generation,
-                    now_ms(),
-                )
-                .await
-                .map_err(store_error)?;
-            if target.requested
-                && let Some(session) = backend.session_for_execution(&input.execution_id).await?
-            {
-                let execution = backend
-                    .store
-                    .read_execution(&input.execution_id)
-                    .await
-                    .map_err(store_error)?;
-                if let Some(backend_ref) = execution.backend_ref.as_deref() {
-                    session.cancel_subagent(backend_ref).await;
-                }
-            }
-            proto_json(&p::AgentExecutionCancelResult {
-                execution_id: target.execution_id,
-                requested: target.requested,
-                state: target.state,
-            })
-            .map(|mut value| {
-                value["__kind"] = json!("subagent");
-                value
-            })
-        }
-    );
-    Ok(Arc::new(Contract::new(
-        CONTRACT_ID,
-        methods,
-        BTreeMap::new(),
-    )?))
+    proto_json(&p::AgentExecutionCancelResult {
+        execution_id: target.execution_id,
+        requested: target.requested,
+        state: target.state,
+    })
 }
 
-/// 注册表方法清单（application.rs 校验用）。名字与 agent_contract 的键由
-/// 下方测试强制一致；schema 不进注册表，运行时以契约为准。
-pub fn registry_contracts() -> Result<BTreeMap<String, BTreeSet<String>>, String> {
-    let names: BTreeSet<String> = [
-        "agent/endpoints/list",
-        "agent/workspaces/list",
-        "agent/conversations/list",
-        "agent/conversations/get",
-        "agent/conversations/history",
-        "agent/messages/read",
-        "agent/executions/get",
-        "agent/interactions/list",
-        "agent/relationships/list",
-        "agent/subagents/list",
-        "events/snapshot",
-        "events/read",
-        "agent/conversations/create",
-        "agent/executions/submit",
-        "agent/executions/cancel",
-        "agent/interactions/respond",
-        "agent/subagents/cancel",
-        "agent/executions/steer",
-    ]
-    .into_iter()
-    .map(str::to_string)
-    .collect();
-    Ok(BTreeMap::from([(CONTRACT_ID.to_string(), names)]))
+/// 取消子代理：request_cancel 后按登记的 backend_ref 通知会话 actor。
+/// 输出沿用 AgentExecutionCancelResult，附 __kind=subagent 投影标记。
+async fn cancel_subagent(
+    backend: &OmpBackend,
+    scope: AuthorizedScope,
+    input: AgentSubagentCancelInput,
+) -> Result<Value, Error> {
+    let target = backend
+        .store
+        .request_cancel(
+            &scope,
+            &input.execution_id,
+            input.expected_generation,
+            now_ms(),
+        )
+        .await
+        .map_err(store_error)?;
+    if target.requested
+        && let Some(session) = backend.session_for_execution(&input.execution_id).await?
+    {
+        let execution = backend
+            .store
+            .read_execution(&input.execution_id)
+            .await
+            .map_err(store_error)?;
+        if let Some(backend_ref) = execution.backend_ref.as_deref() {
+            session.cancel_subagent(backend_ref).await;
+        }
+    }
+    proto_json(&p::AgentExecutionCancelResult {
+        execution_id: target.execution_id,
+        requested: target.requested,
+        state: target.state,
+    })
+    .map(|mut value| {
+        value["__kind"] = json!("subagent");
+        value
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::adapters::common::{CONTRACT_ID, agent_registry_contracts};
+    use std::collections::BTreeSet;
 
     fn test_backend(store: Store) -> Arc<OmpBackend> {
         Arc::new(OmpBackend {
@@ -839,7 +364,7 @@ mod tests {
             .unwrap();
         let contract = agent_contract(test_backend(store)).unwrap();
         let installed: BTreeSet<String> = contract.methods.keys().cloned().collect();
-        let registered = registry_contracts().unwrap()[CONTRACT_ID].clone();
+        let registered = agent_registry_contracts().unwrap()[CONTRACT_ID].clone();
         assert_eq!(installed, registered);
         // 每个方法都必须落在权限类映射内，否则永远不可调用。
         for name in &installed {
@@ -862,8 +387,8 @@ mod tests {
 
 /// 提交 → 准入 → 会话进程 → dispatching → 单次 prompt（契约 §5）。
 async fn submit(
-    backend: &Arc<OmpBackend>,
-    scope: &AuthorizedScope,
+    backend: &OmpBackend,
+    scope: AuthorizedScope,
     input: AgentSubmitInput,
 ) -> Result<Value, Error> {
     let conversation = backend
@@ -878,7 +403,7 @@ async fn submit(
     match backend
         .store
         .admit(
-            scope,
+            &scope,
             &backend.module_instance_id,
             &AgentSubmitInput {
                 conversation_id: input.conversation_id.clone(),
@@ -926,13 +451,13 @@ async fn submit(
 
 /// 交互答复：CAS 一次发送；发送失败转 unknown（契约 §7）。
 async fn respond(
-    backend: &Arc<OmpBackend>,
-    scope: &AuthorizedScope,
+    backend: &OmpBackend,
+    scope: AuthorizedScope,
     input: AgentInteractionRespondInput,
 ) -> Result<Value, Error> {
     let permit = backend
         .store
-        .begin_response(scope, &input, now_ms())
+        .begin_response(&scope, &input, now_ms())
         .await
         .map_err(store_error)?;
     let decision_kind = input
