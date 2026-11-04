@@ -14,8 +14,9 @@
 //! - The server may not advertise a profile that differs from `hello`;
 //!   repeated `ready` is rejected.
 //!
-//! This module is a pure state machine; no Tokio / WS I/O. The transport
-//! crate (`conex-transport-ws`) is responsible for wiring it onto axum/hyper.
+//! This module is a pure state machine; no Tokio / WS I/O. Wiring onto
+//! axum/hyper lives with the processes that speak this protocol today:
+//! `conex-host` (server side) and `conex-agent` (client side).
 #![forbid(unsafe_code)]
 
 use std::collections::HashSet;
