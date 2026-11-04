@@ -89,14 +89,12 @@ pub struct PrincipalTenant {
 pub struct PreparedInput {
     pub canonical: serde_json::Value,
     pub claim: ResourceClaim,
-    /// Principal/tenant expected to be filled by the host's dispatcher from
-    /// the authenticated caller. Contracts that compute it themselves may set
-    /// it directly; the dispatcher will refuse to overwrite a non-empty
-    /// value with the caller's claim.
-    pub binding: PrincipalTenant,
 }
 
 /// A method's behavior contract. `prepare` is the authoritative strict decoder.
+/// `claim_post` is the route-level claim policy (data, not a copied contract
+/// file): applied by the dispatcher right after `prepare`, before any policy
+/// check — e.g. a provider that serves a whole partition claims source-wide.
 #[derive(Clone)]
 pub struct MethodContract {
     pub adapter_id: &'static str,
@@ -104,6 +102,7 @@ pub struct MethodContract {
     pub output_schema: &'static str,
     pub prepare: fn(&serde_json::Value) -> CallResult<PreparedInput>,
     pub validate_output: fn(&serde_json::Value) -> CallResult<()>,
+    pub claim_post: Option<fn(ResourceClaim) -> ResourceClaim>,
 }
 
 impl fmt::Debug for MethodContract {

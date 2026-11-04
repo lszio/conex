@@ -1,9 +1,20 @@
 //! Shared source MethodContracts: strict decode, claim extraction, output check.
-use conex_core::{CallError, CallResult, MethodContract, PreparedInput};
+use conex_core::{CallError, CallResult, MethodContract, PreparedInput, ResourceClaim};
 use conex_proto;
 use serde_json::{Map, Value, json};
 
 use crate::resource::{read_claim, subtree_claim};
+
+/// Route-level claim policy for providers that serve a whole partition: the
+/// claim covers every resource in the source, not one request anchor. Declared
+/// as contract data (`MethodContract.claim_post`), not a copied contract file.
+pub fn source_wide_post(claim: ResourceClaim) -> ResourceClaim {
+    ResourceClaim {
+        resource_id: String::new(),
+        action: claim.action,
+        subtree: true,
+    }
+}
 
 pub const SOURCE_LIST: &str = "source/list";
 pub const SOURCE_READ: &str = "source/read";
@@ -25,6 +36,7 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
                 output_schema: "conex.SourceListResponse",
                 prepare: prepare_list,
                 validate_output: validate_list_output,
+                claim_post: None,
             },
         ),
         (
@@ -35,6 +47,7 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
                 output_schema: "conex.SourceReadResponse",
                 prepare: prepare_read,
                 validate_output: validate_read_output,
+                claim_post: None,
             },
         ),
         (
@@ -45,6 +58,7 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
                 output_schema: "conex.SourceSearchResponse",
                 prepare: prepare_search,
                 validate_output: validate_search_output,
+                claim_post: None,
             },
         ),
     ]
@@ -108,11 +122,7 @@ pub fn prepare_list(input: &Value) -> CallResult<PreparedInput> {
     let cursor = optional_cursor(map)?;
     let claim = subtree_claim(&root, "list")?;
     let canonical = json!({"root": root, "limit": limit, "cursor": cursor});
-    Ok(PreparedInput {
-        canonical,
-        claim,
-        ..Default::default()
-    })
+    Ok(PreparedInput { canonical, claim })
 }
 
 pub fn prepare_read(input: &Value) -> CallResult<PreparedInput> {
@@ -121,11 +131,7 @@ pub fn prepare_read(input: &Value) -> CallResult<PreparedInput> {
     let resource = required_string(map, "resourceId")?;
     let claim = read_claim(&resource)?;
     let canonical = json!({"resourceId": resource});
-    Ok(PreparedInput {
-        canonical,
-        claim,
-        ..Default::default()
-    })
+    Ok(PreparedInput { canonical, claim })
 }
 
 pub fn prepare_search(input: &Value) -> CallResult<PreparedInput> {
@@ -141,11 +147,7 @@ pub fn prepare_search(input: &Value) -> CallResult<PreparedInput> {
     let cursor = optional_cursor(map)?;
     let claim = subtree_claim(&root, "search")?;
     let canonical = json!({"root": root, "query": query, "limit": limit, "cursor": cursor});
-    Ok(PreparedInput {
-        canonical,
-        claim,
-        ..Default::default()
-    })
+    Ok(PreparedInput { canonical, claim })
 }
 
 fn summary(value: &Value) -> CallResult<()> {

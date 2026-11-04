@@ -98,7 +98,7 @@ pub fn load_applications(config: &NodeConfig) -> Result<Vec<PreparedApplication>
         entries.push(ImplementationEntry::new(
             "omp",
             factory,
-            crate::adapters::omp::registry_contracts()?,
+            crate::adapters::common::agent_registry_contracts()?,
             BTreeMap::new(),
             config.permissions.clone(),
             SourceStrategy::DirectOnly,
@@ -117,7 +117,7 @@ pub fn load_applications(config: &NodeConfig) -> Result<Vec<PreparedApplication>
         entries.push(ImplementationEntry::new(
             "codex",
             factory,
-            crate::adapters::codex::codex_registry_contracts()?,
+            crate::adapters::common::agent_registry_contracts()?,
             BTreeMap::new(),
             config.permissions.clone(),
             SourceStrategy::DirectOnly,

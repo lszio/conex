@@ -2,6 +2,7 @@
 //! 普通节点模块：`conex.agent/1` 契约的方法经既有 invoke 路径分派，不新增顶层
 //! JSON-RPC 方法；领域状态机以节点 SQLite 为唯一权威，后端帧只提供观察。
 pub mod codex;
+pub(crate) mod common;
 pub mod omp;
 
 /// 契约 §1 权限类到 agent/* 操作的映射。方法名与权限类不一致时不允许

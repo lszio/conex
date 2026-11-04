@@ -4,7 +4,7 @@
 //!
 //! Linux 真实采样核对是本包 live gate；本机 smoke 只证明代码路径与量纲
 //! （P6 计划 §2），Linux 核对随 P9 两机验收执行。
-use crate::adapters::omp::stable_ulid;
+use crate::adapters::common::stable_ulid;
 use crate::node_types::RuntimeFactory;
 use conex_agent_domain::Store;
 use conex_proto as p;

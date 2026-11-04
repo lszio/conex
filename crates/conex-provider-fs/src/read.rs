@@ -182,21 +182,12 @@ impl Handler for ReadHandler {
     async fn execute(
         &self,
         ctx: &CallContext,
-        input: Value,
+        _input: Value,
         _io: ExecutionIo,
     ) -> CallResult<Value> {
-        let resource = input
-            .get("resourceId")
-            .and_then(Value::as_str)
-            .ok_or_else(|| {
-                CallError::new(conex_proto::ErrorCode::BadRequest, "resourceId is required")
-            })?;
-        if ctx.claim.resource_id != resource {
-            return Err(CallError::new(
-                conex_proto::ErrorCode::Forbidden,
-                "resource does not match the authorized claim",
-            ));
-        }
+        // 资源身份取自授权 claim（prepare 派生、policy 核验过），不从请求
+        // 重新解析——分派器是唯一信任边界（RangeReader 同一约定）。
+        let resource = ctx.claim.resource_id.as_str();
         let (len, mtime_ns) = self.root.stat(resource)?;
         let revision = Some(mtime_ns.to_string());
         let ext = resource.rsplit_once('.').map(|(_, extension)| extension);

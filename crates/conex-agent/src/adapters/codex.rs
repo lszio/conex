@@ -14,24 +14,24 @@
 //! 退出（daemon 化，proxy 帧格式未随 schema 文档化）；live 验收被该后端
 //! 形态漂移阻断。协议映射以下列单元测试与 P0 证据页（§4 实测事件名）为
 //! 基线；live 证据在形态核实后补齐（P4 计划 §6 允许 live 与离线分别报告）。
-use crate::adapters::omp::{registry_contracts, stable_ulid, store_error};
-use crate::node_config::CodexAdapterConfig;
+use super::common::{
+    AgentBackend, Reply, agent_contract, now_ms, probe_version, proto_json, stable_ulid,
+    store_error, unavailable, unknown_outcome,
+};
+use crate::node_config::{ApprovedWorkspace, CodexAdapterConfig};
 use crate::node_types::RuntimeFactory;
 use conex_agent_domain::{
     Admission, AuthorizedScope, BackendObservation, BackendResponseOutcome, Store, TerminalState,
 };
 use conex_proto as p;
 use conex_proto::{
-    AgentConversationCreateInput, AgentConversationGetInput, AgentConversationHistoryInput,
-    AgentConversationListInput, AgentEndpointListInput, AgentEventReadInput,
-    AgentExecutionCancelInput, AgentExecutionGetInput, AgentExecutionSteerInput,
-    AgentInteractionListInput, AgentInteractionRespondInput, AgentMessageReadInput,
-    AgentRelationshipListInput, AgentSnapshotInput, AgentSubagentCancelInput,
-    AgentSubagentListInput, AgentSubmitInput, AgentWorkspaceListInput,
+    AgentExecutionCancelInput, AgentInteractionRespondInput, AgentSubagentCancelInput,
+    AgentSubmitInput,
 };
-use conex_sdk::{Contract, Error, Execution as SdkExecution, Method, StartedModule};
+use conex_sdk::{Error, StartedModule};
 use serde_json::{Value, json};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::future::Future;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -40,46 +40,7 @@ use tokio::process::Command;
 use tokio::sync::{Mutex, mpsc, oneshot, watch};
 
 pub const ADAPTER: &str = "codex";
-pub const CONTRACT_ID: &str = "conex.agent";
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(45);
-
-type Reply<T> = oneshot::Sender<Result<T, String>>;
-
-fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
-        .unwrap_or(0)
-}
-
-fn unavailable(message: impl std::fmt::Display) -> Error {
-    Error::new(
-        p::ErrorCode::Unavailable,
-        message.to_string(),
-        "not_started",
-        "never",
-    )
-}
-
-fn unknown_outcome(message: impl std::fmt::Display) -> Error {
-    Error::new(
-        p::ErrorCode::OutcomeUnknown,
-        message.to_string(),
-        "unknown",
-        "never",
-    )
-}
-
-fn proto_json<T: serde::Serialize>(value: &T) -> Result<Value, Error> {
-    serde_json::to_value(value).map_err(|error| {
-        Error::new(
-            p::ErrorCode::Internal,
-            error.to_string(),
-            "not_started",
-            "never",
-        )
-    })
-}
 
 /// 端点能力（契约 §3）。approval/cancel/recoverActive 有 P0 live 证据；
 /// steer/userInput/listSubagents 未实测一律 false（P0：subagent 查询需
@@ -111,24 +72,6 @@ pub struct CodexBackend {
 }
 
 impl CodexBackend {
-    fn workspace_root(&self, workspace_id: &str) -> Result<PathBuf, Error> {
-        self.config
-            .workspaces
-            .iter()
-            .find(|workspace| {
-                stable_ulid(&format!("workspace:{}:{}", self.node_id, workspace.id)) == workspace_id
-            })
-            .map(|workspace| workspace.root.clone())
-            .ok_or_else(|| {
-                Error::new(
-                    p::ErrorCode::BadRequest,
-                    "unknown workspaceId for this endpoint",
-                    "not_started",
-                    "never",
-                )
-            })
-    }
-
     async fn ensure_session(
         &self,
         conversation_id: &str,
@@ -246,536 +189,266 @@ pub fn factory(config: CodexAdapterConfig) -> RuntimeFactory {
     })
 }
 
-async fn probe_version(binary: &str) -> String {
-    let attempt = tokio::time::timeout(
-        Duration::from_secs(10),
-        Command::new(binary).arg("--version").output(),
-    )
-    .await;
-    match attempt {
-        Ok(Ok(output)) if output.status.success() => {
-            String::from_utf8_lossy(&output.stdout).trim().to_string()
-        }
-        _ => "unknown".into(),
+impl AgentBackend for CodexBackend {
+    fn store(&self) -> &Store {
+        &self.store
+    }
+
+    fn node_id(&self) -> &str {
+        &self.node_id
+    }
+
+    fn workspace_entries(&self) -> &[ApprovedWorkspace] {
+        &self.config.workspaces
+    }
+
+    fn submit(
+        &self,
+        scope: AuthorizedScope,
+        input: AgentSubmitInput,
+    ) -> impl Future<Output = Result<Value, Error>> + Send {
+        submit(self, scope, input)
+    }
+
+    fn cancel_execution(
+        &self,
+        scope: AuthorizedScope,
+        input: AgentExecutionCancelInput,
+    ) -> impl Future<Output = Result<Value, Error>> + Send {
+        cancel_execution(self, scope, input)
+    }
+
+    fn respond(
+        &self,
+        scope: AuthorizedScope,
+        input: AgentInteractionRespondInput,
+    ) -> impl Future<Output = Result<Value, Error>> + Send {
+        respond(self, scope, input)
+    }
+
+    fn cancel_subagent(
+        &self,
+        scope: AuthorizedScope,
+        input: AgentSubagentCancelInput,
+    ) -> impl Future<Output = Result<Value, Error>> + Send {
+        cancel_subagent(self, scope, input)
     }
 }
 
-/// `conex.agent/1` 契约。域读方法面与 OMP 共用同一 store 直读语义
-/// （重写而非共享抽象是已知的两包重复，集成所有者合并时统一——P4 计划
-/// §1 共享层条款）。
-fn agent_contract(backend: Arc<CodexBackend>) -> Result<Arc<Contract>, Error> {
-    let read = |input: &str, output: &str| Method::new(input, output, SdkExecution::ReadOnly);
-    let write = |input: &str, output: &str| Method::new(input, output, SdkExecution::NonReplayable);
-    let mut methods: BTreeMap<String, Method> = BTreeMap::new();
-    macro_rules! read_method {
-        ($name:expr, $input:ty, $output:ty, $body:expr) => {
-            methods.insert(
-                $name.to_string(),
-                read(
-                    concat!("conex.", stringify!($input)),
-                    concat!("conex.", stringify!($output)),
-                )
-                .with_handler({
-                    let captured = backend.clone();
-                    move |context, input: $input| {
-                        let backend = captured.clone();
-                        let body = $body;
-                        async move {
-                            let scope = AuthorizedScope::new(context.caller.principal_id.clone())
-                                .map_err(store_error)?;
-                            body(backend.clone(), scope, input).await
-                        }
-                    }
-                }),
-            );
-        };
-    }
-    macro_rules! write_method {
-        ($name:expr, $input:ty, $output:ty, $body:expr) => {
-            methods.insert(
-                $name.to_string(),
-                write(
-                    concat!("conex.", stringify!($input)),
-                    concat!("conex.", stringify!($output)),
-                )
-                .with_handler({
-                    let captured = backend.clone();
-                    move |context, input: $input| {
-                        let backend = captured.clone();
-                        let body = $body;
-                        async move {
-                            let scope = AuthorizedScope::new(context.caller.principal_id.clone())
-                                .map_err(store_error)?;
-                            body(backend.clone(), scope, input).await
-                        }
-                    }
-                }),
-            );
-        };
-    }
-    read_method!(
-        "agent/endpoints/list",
-        AgentEndpointListInput,
-        AgentEndpointListResult,
-        |backend: Arc<CodexBackend>, _scope, _input: AgentEndpointListInput| async move {
-            proto_json(&p::AgentEndpointListResult {
-                items: backend.store.list_endpoints().await.map_err(store_error)?,
-                next_page_token: None,
-            })
-        }
-    );
-    read_method!(
-        "agent/workspaces/list",
-        AgentWorkspaceListInput,
-        AgentWorkspaceListResult,
-        |backend: Arc<CodexBackend>, _scope, _input: AgentWorkspaceListInput| async move {
-            let items = backend
-                .config
-                .workspaces
-                .iter()
-                .map(|workspace| p::Workspace {
-                    id: stable_ulid(&format!("workspace:{}:{}", backend.node_id, workspace.id)),
-                    node_id: backend.node_id.clone(),
-                    display_name: workspace.display_name.clone(),
-                    root_ref: workspace.id.clone(),
-                })
-                .collect();
-            proto_json(&p::AgentWorkspaceListResult {
-                items,
-                next_page_token: None,
-            })
-        }
-    );
-    read_method!(
-        "agent/conversations/list",
-        AgentConversationListInput,
-        AgentConversationListResult,
-        |backend: Arc<CodexBackend>, _scope, input: AgentConversationListInput| async move {
-            let mut conversations = backend
+/// 提交：ensure_session → admit → dispatching → 单次 turn；进程写入失败
+/// 转 unknown，不自动重发（契约 §5）。
+async fn submit(
+    backend: &CodexBackend,
+    scope: AuthorizedScope,
+    input: AgentSubmitInput,
+) -> Result<Value, Error> {
+    let conversation = backend
+        .store
+        .read_conversation(&input.conversation_id)
+        .await
+        .map_err(store_error)?;
+    let session = backend
+        .ensure_session(&conversation.id, &conversation.workspace_id)
+        .await?;
+    let now = now_ms();
+    match backend
+        .store
+        .admit(&scope, &backend.module_instance_id, &input, now)
+        .await
+        .map_err(store_error)?
+    {
+        Admission::Existing { execution } => proto_json(&p::AgentSubmitResult {
+            execution: Some(execution),
+        }),
+        Admission::Created {
+            execution,
+            dispatch_token,
+        } => {
+            let permit = backend
                 .store
-                .list_conversations(&input.endpoint_id, input.workspace_id.as_deref())
-                .await
-                .map_err(store_error)?;
-            conversations.truncate(input.limit.unwrap_or(50).clamp(1, 100) as usize);
-            proto_json(&p::AgentConversationListResult {
-                items: conversations,
-                next_page_token: None,
-            })
-        }
-    );
-    read_method!(
-        "agent/conversations/get",
-        AgentConversationGetInput,
-        AgentConversationGetResult,
-        |backend: Arc<CodexBackend>, _scope, input: AgentConversationGetInput| async move {
-            let conversation = backend
-                .store
-                .read_conversation(&input.conversation_id)
-                .await
-                .map_err(store_error)?;
-            proto_json(&p::AgentConversationGetResult {
-                conversation: Some(conversation),
-            })
-        }
-    );
-    read_method!(
-        "agent/conversations/history",
-        AgentConversationHistoryInput,
-        AgentConversationHistoryResult,
-        |backend: Arc<CodexBackend>, _scope, input: AgentConversationHistoryInput| async move {
-            let (messages, has_more) = backend
-                .store
-                .read_history(
-                    &input.conversation_id,
-                    input.before_message_id.as_deref(),
-                    input.limit.unwrap_or(50).clamp(1, 100),
+                .mark_dispatching(
+                    &execution.id,
+                    execution.generation,
+                    dispatch_token,
+                    now_ms(),
                 )
                 .await
                 .map_err(store_error)?;
-            proto_json(&p::AgentConversationHistoryResult {
-                messages,
-                has_more,
-                quality: "current".into(),
-                gaps: Vec::new(),
-            })
-        }
-    );
-    read_method!(
-        "agent/messages/read",
-        AgentMessageReadInput,
-        AgentMessageReadResult,
-        |backend: Arc<CodexBackend>, scope, input: AgentMessageReadInput| async move {
-            let result = backend
-                .store
-                .read_message(
-                    &scope,
-                    &input.conversation_id,
-                    &input.message_id,
-                    input.part_index,
-                    input.offset_bytes,
-                    input.max_bytes.unwrap_or(4096).min(65536),
+            session
+                .turn(
+                    execution.id.clone(),
+                    execution.generation,
+                    input.content.clone(),
                 )
                 .await
-                .map_err(store_error)?;
-            proto_json(&result)
-        }
-    );
-    read_method!(
-        "agent/executions/get",
-        AgentExecutionGetInput,
-        AgentExecutionGetResult,
-        |backend: Arc<CodexBackend>, _scope, input: AgentExecutionGetInput| async move {
-            let execution = backend
-                .store
-                .read_execution(&input.execution_id)
-                .await
-                .map_err(store_error)?;
-            proto_json(&p::AgentExecutionGetResult {
+                .map_err(unknown_outcome)?;
+            let _ = permit;
+            proto_json(&p::AgentSubmitResult {
                 execution: Some(execution),
             })
         }
-    );
-    read_method!(
-        "agent/interactions/list",
-        AgentInteractionListInput,
-        AgentInteractionListResult,
-        |backend: Arc<CodexBackend>, _scope, input: AgentInteractionListInput| async move {
-            let items = backend
+    }
+}
+
+/// 取消：request_cancel 后按 (threadId, turnId) interrupt；interrupt 回执
+/// 不是终态，turn/completed|interrupted 才是（契约 §5）。
+async fn cancel_execution(
+    backend: &CodexBackend,
+    scope: AuthorizedScope,
+    input: AgentExecutionCancelInput,
+) -> Result<Value, Error> {
+    let target = backend
+        .store
+        .request_cancel(
+            &scope,
+            &input.execution_id,
+            input.expected_generation,
+            now_ms(),
+        )
+        .await
+        .map_err(store_error)?;
+    if target.requested
+        && let Some((session, backend_ref)) =
+            backend.session_for_execution(&input.execution_id).await?
+        && let (Some(thread_id), Some(turn_id)) = (
+            backend_ref,
+            backend
                 .store
-                .list_interactions(
-                    &input.conversation_id,
-                    input.execution_id.as_deref(),
-                    input.limit.unwrap_or(50).clamp(1, 100),
-                )
+                .read_execution(&input.execution_id)
                 .await
-                .map_err(store_error)?;
-            proto_json(&p::AgentInteractionListResult {
-                items,
-                next_page_token: None,
-            })
+                .ok()
+                .and_then(|e| e.backend_ref),
+        )
+    {
+        // turn/interrupt 定位 (threadId, turnId)；threadId 在 backend_ref。
+        session.interrupt(thread_id, turn_id).await;
+    }
+    proto_json(&p::AgentExecutionCancelResult {
+        execution_id: target.execution_id,
+        requested: target.requested,
+        state: target.state,
+    })
+}
+
+/// 交互答复：CAS 一次发送；deny 语义固定落显式 decline（契约 §7/P0 §4.1）。
+async fn respond(
+    backend: &CodexBackend,
+    scope: AuthorizedScope,
+    input: AgentInteractionRespondInput,
+) -> Result<Value, Error> {
+    let permit = backend
+        .store
+        .begin_response(&scope, &input, now_ms())
+        .await
+        .map_err(store_error)?;
+    let decision = input.decision.as_ref().expect("validated");
+    let codex_decision = match decision.kind.as_str() {
+        "approval" => {
+            if decision.choice_id.as_deref() == Some("deny") {
+                "decline"
+            } else {
+                "accept"
+            }
         }
-    );
-    read_method!(
-        "agent/relationships/list",
-        AgentRelationshipListInput,
-        AgentRelationshipListResult,
-        |backend: Arc<CodexBackend>, _scope, input: AgentRelationshipListInput| async move {
-            let items = backend
+        other => {
+            let reason = format!("decision kind {other} is not an approval");
+            backend
                 .store
-                .list_relationships(
-                    &input.conversation_id,
-                    input.limit.unwrap_or(50).clamp(1, 100),
-                )
-                .await
-                .map_err(store_error)?;
-            proto_json(&p::AgentRelationshipListResult {
-                items,
-                next_page_token: None,
-            })
-        }
-    );
-    read_method!(
-        "agent/subagents/list",
-        AgentSubagentListInput,
-        AgentSubagentListResult,
-        |backend: Arc<CodexBackend>, _scope, input: AgentSubagentListInput| async move {
-            let (items, quality) = backend
-                .store
-                .list_subagents(&input.execution_id, input.limit.unwrap_or(50).clamp(1, 100))
-                .await
-                .map_err(store_error)?;
-            proto_json(&p::AgentSubagentListResult {
-                items,
-                next_page_token: None,
-                quality,
-            })
-        }
-    );
-    read_method!(
-        "events/snapshot",
-        AgentSnapshotInput,
-        AgentSnapshotResult,
-        |backend: Arc<CodexBackend>, scope, input: AgentSnapshotInput| async move {
-            let snapshot = backend
-                .store
-                .snapshot(&scope, &input.conversation_id)
-                .await
-                .map_err(store_error)?;
-            proto_json(&p::AgentSnapshotResult {
-                snapshot: Some(snapshot),
-            })
-        }
-    );
-    read_method!(
-        "events/read",
-        AgentEventReadInput,
-        AgentEventReadResult,
-        |backend: Arc<CodexBackend>, scope, input: AgentEventReadInput| async move {
-            let result = backend
-                .store
-                .read_events(&scope, &input.cursor.expect("cursor required"), input.limit)
-                .await
-                .map_err(store_error)?;
-            proto_json(&result)
-        }
-    );
-    write_method!(
-        "agent/conversations/create",
-        AgentConversationCreateInput,
-        AgentConversationCreateResult,
-        |backend: Arc<CodexBackend>, scope, input: AgentConversationCreateInput| async move {
-            // workspace 归属校验（ULID 由 rootRef 键派生）。
-            backend.workspace_root(&input.workspace_id)?;
-            let conversation = backend
-                .store
-                .create_conversation(
-                    &scope,
-                    &input.endpoint_id,
-                    &input.workspace_id,
-                    &input.idempotency_key,
-                    input.title.as_deref(),
+                .finish_response(
+                    permit,
+                    BackendResponseOutcome::Invalidated {
+                        reason: reason.clone(),
+                    },
                     now_ms(),
                 )
                 .await
                 .map_err(store_error)?;
-            proto_json(&p::AgentConversationCreateResult {
-                conversation: Some(conversation),
-            })
-        }
-    );
-    write_method!(
-        "agent/executions/submit",
-        AgentSubmitInput,
-        AgentSubmitResult,
-        |backend: Arc<CodexBackend>, scope, input: AgentSubmitInput| async move {
-            let conversation = backend
-                .store
-                .read_conversation(&input.conversation_id)
-                .await
-                .map_err(store_error)?;
-            let session = backend
-                .ensure_session(&conversation.id, &conversation.workspace_id)
-                .await?;
-            let now = now_ms();
-            match backend
-                .store
-                .admit(&scope, &backend.module_instance_id, &input, now)
-                .await
-                .map_err(store_error)?
-            {
-                Admission::Existing { execution } => Ok(proto_json(&p::AgentSubmitResult {
-                    execution: Some(execution),
-                })?),
-                Admission::Created {
-                    execution,
-                    dispatch_token,
-                } => {
-                    let permit = backend
-                        .store
-                        .mark_dispatching(
-                            &execution.id,
-                            execution.generation,
-                            dispatch_token,
-                            now_ms(),
-                        )
-                        .await
-                        .map_err(store_error)?;
-                    session
-                        .turn(
-                            execution.id.clone(),
-                            execution.generation,
-                            input.content.clone(),
-                        )
-                        .await
-                        .map_err(unknown_outcome)?;
-                    let _ = permit;
-                    Ok(proto_json(&p::AgentSubmitResult {
-                        execution: Some(execution),
-                    })?)
-                }
-            }
-        }
-    );
-    write_method!(
-        "agent/executions/cancel",
-        AgentExecutionCancelInput,
-        AgentExecutionCancelResult,
-        |backend: Arc<CodexBackend>, scope, input: AgentExecutionCancelInput| async move {
-            let target = backend
-                .store
-                .request_cancel(
-                    &scope,
-                    &input.execution_id,
-                    input.expected_generation,
-                    now_ms(),
-                )
-                .await
-                .map_err(store_error)?;
-            if target.requested
-                && let Some((session, backend_ref)) =
-                    backend.session_for_execution(&input.execution_id).await?
-                && let (Some(thread_id), Some(turn_id)) = (
-                    backend_ref,
-                    backend
-                        .store
-                        .read_execution(&input.execution_id)
-                        .await
-                        .ok()
-                        .and_then(|e| e.backend_ref),
-                )
-            {
-                // turn/interrupt 定位 (threadId, turnId)；threadId 在 backend_ref。
-                session.interrupt(thread_id, turn_id).await;
-            }
-            proto_json(&p::AgentExecutionCancelResult {
-                execution_id: target.execution_id,
-                requested: target.requested,
-                state: target.state,
-            })
-        }
-    );
-    write_method!(
-        "agent/interactions/respond",
-        AgentInteractionRespondInput,
-        AgentInteractionRespondResult,
-        |backend: Arc<CodexBackend>, scope, input: AgentInteractionRespondInput| async move {
-            let permit = backend
-                .store
-                .begin_response(&scope, &input, now_ms())
-                .await
-                .map_err(store_error)?;
-            let decision = input.decision.as_ref().expect("validated");
-            // decline 语义固定：审批拒绝必须落到显式 decline（契约 §7/P0 §4.1）。
-            let codex_decision = match decision.kind.as_str() {
-                "approval" => {
-                    if decision.choice_id.as_deref() == Some("deny") {
-                        "decline"
-                    } else {
-                        "accept"
-                    }
-                }
-                other => {
-                    let reason = format!("decision kind {other} is not an approval");
-                    backend
-                        .store
-                        .finish_response(
-                            permit,
-                            BackendResponseOutcome::Invalidated {
-                                reason: reason.clone(),
-                            },
-                            now_ms(),
-                        )
-                        .await
-                        .map_err(store_error)?;
-                    return Err(Error::new(
-                        p::ErrorCode::BadRequest,
-                        reason,
-                        "not_started",
-                        "never",
-                    ));
-                }
-            };
-            // 定位持有该审批的会话：审批登记在会话 actor 内，逐个询问。
-            let holders: Vec<Arc<SessionHandle>> =
-                backend.sessions.lock().await.values().cloned().collect();
-            let mut located = None;
-            for session in holders {
-                if let Some(hit) = session.locate_interaction(permit.interaction_id()).await {
-                    located = Some((session, hit));
-                    break;
-                }
-            }
-            let Some((session, (server_request_id, _))) = located else {
-                backend
-                    .store
-                    .finish_response(
-                        permit,
-                        BackendResponseOutcome::Invalidated {
-                            reason: "backend request not tracked".into(),
-                        },
-                        now_ms(),
-                    )
-                    .await
-                    .map_err(store_error)?;
-                return Err(unknown_outcome("backend request not tracked"));
-            };
-            match session
-                .respond_approval(server_request_id, codex_decision.to_string())
-                .await
-            {
-                Ok(()) => {
-                    let resolved = backend
-                        .store
-                        .finish_response(permit, BackendResponseOutcome::Confirmed, now_ms())
-                        .await
-                        .map_err(store_error)?;
-                    Ok(proto_json(&p::AgentInteractionRespondResult {
-                        interaction: Some(resolved),
-                    })?)
-                }
-                Err(error) => {
-                    backend
-                        .store
-                        .finish_response(
-                            permit,
-                            BackendResponseOutcome::Unknown {
-                                reason: error.clone(),
-                            },
-                            now_ms(),
-                        )
-                        .await
-                        .map_err(store_error)?;
-                    Err(unknown_outcome(format!(
-                        "codex approval send failed: {error}"
-                    )))
-                }
-            }
-        }
-    );
-    // steer 能力为 false：显式 unsupported，不静默成功。
-    write_method!(
-        "agent/executions/steer",
-        AgentExecutionSteerInput,
-        AgentExecutionSteerResult,
-        |_backend, _scope, input: AgentExecutionSteerInput| async move {
-            let _ = input;
-            let refused: Result<Value, Error> = Err(Error::new(
-                p::ErrorCode::UnsupportedCapability,
-                "steer_execution is not enabled for this endpoint",
+            return Err(Error::new(
+                p::ErrorCode::BadRequest,
+                reason,
                 "not_started",
                 "never",
             ));
-            refused
         }
-    );
-    // subagents/cancel 同样依赖 listSubagents=false 的能力边界。
-    write_method!(
-        "agent/subagents/cancel",
-        AgentSubagentCancelInput,
-        AgentSubagentCancelResult,
-        |backend: Arc<CodexBackend>, scope, input: AgentSubagentCancelInput| async move {
-            let target = backend
+    };
+    // 定位持有该审批的会话：审批登记在会话 actor 内，逐个询问。
+    let holders: Vec<Arc<SessionHandle>> =
+        backend.sessions.lock().await.values().cloned().collect();
+    let mut located = None;
+    for session in holders {
+        if let Some(hit) = session.locate_interaction(permit.interaction_id()).await {
+            located = Some((session, hit));
+            break;
+        }
+    }
+    let Some((session, (server_request_id, _))) = located else {
+        backend
+            .store
+            .finish_response(
+                permit,
+                BackendResponseOutcome::Invalidated {
+                    reason: "backend request not tracked".into(),
+                },
+                now_ms(),
+            )
+            .await
+            .map_err(store_error)?;
+        return Err(unknown_outcome("backend request not tracked"));
+    };
+    match session
+        .respond_approval(server_request_id, codex_decision.to_string())
+        .await
+    {
+        Ok(()) => {
+            let resolved = backend
                 .store
-                .request_cancel(
-                    &scope,
-                    &input.execution_id,
-                    input.expected_generation,
+                .finish_response(permit, BackendResponseOutcome::Confirmed, now_ms())
+                .await
+                .map_err(store_error)?;
+            proto_json(&p::AgentInteractionRespondResult {
+                interaction: Some(resolved),
+            })
+        }
+        Err(error) => {
+            backend
+                .store
+                .finish_response(
+                    permit,
+                    BackendResponseOutcome::Unknown {
+                        reason: error.clone(),
+                    },
                     now_ms(),
                 )
                 .await
                 .map_err(store_error)?;
-            proto_json(&p::AgentSubagentCancelResult {
-                execution_id: target.execution_id,
-                requested: target.requested,
-                state: target.state,
-            })
+            Err(unknown_outcome(format!(
+                "codex approval send failed: {error}"
+            )))
         }
-    );
-    Ok(Arc::new(Contract::new(
-        CONTRACT_ID,
-        methods,
-        BTreeMap::new(),
-    )?))
+    }
+}
+
+/// 取消子代理：listSubagents=false 的能力边界内，仅登记取消请求（契约 §3）。
+async fn cancel_subagent(
+    backend: &CodexBackend,
+    scope: AuthorizedScope,
+    input: AgentSubagentCancelInput,
+) -> Result<Value, Error> {
+    let target = backend
+        .store
+        .request_cancel(
+            &scope,
+            &input.execution_id,
+            input.expected_generation,
+            now_ms(),
+        )
+        .await
+        .map_err(store_error)?;
+    proto_json(&p::AgentSubagentCancelResult {
+        execution_id: target.execution_id,
+        requested: target.requested,
+        state: target.state,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -1558,14 +1231,11 @@ async fn spawn_session(
     Ok(handle)
 }
 
-/// 注册表方法面与 OMP 同一 conex.agent 契约。
-pub fn codex_registry_contracts() -> Result<BTreeMap<String, BTreeSet<String>>, String> {
-    registry_contracts()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::adapters::common::{CONTRACT_ID, agent_registry_contracts};
+    use std::collections::BTreeSet;
 
     fn test_backend(store: Store) -> Arc<CodexBackend> {
         Arc::new(CodexBackend {
@@ -1591,7 +1261,7 @@ mod tests {
             .unwrap();
         let contract = agent_contract(test_backend(store)).unwrap();
         let installed: BTreeSet<String> = contract.methods.keys().cloned().collect();
-        assert_eq!(installed, codex_registry_contracts().unwrap()[CONTRACT_ID]);
+        assert_eq!(installed, agent_registry_contracts().unwrap()[CONTRACT_ID]);
         for name in &installed {
             assert!(crate::adapters::agent_permission_class(name).is_some());
         }

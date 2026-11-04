@@ -306,11 +306,6 @@ pub fn prepare_blob_put(input: &Value) -> CallResult<PreparedInput> {
             action: "blob.upload".into(),
             subtree: false,
         },
-        binding: crate::types::PrincipalTenant {
-            principal_id: String::new(),
-            tenant_id: String::new(),
-        },
-        // filled by dispatcher from caller:
     })
 }
 
@@ -346,7 +341,6 @@ pub fn prepare_blob_chunk(input: &Value) -> CallResult<PreparedInput> {
             action: "blob.upload".into(),
             subtree: false,
         },
-        binding: crate::types::PrincipalTenant::default(),
     })
 }
 
@@ -388,7 +382,6 @@ pub fn prepare_blob_commit(input: &Value) -> CallResult<PreparedInput> {
             action: "blob.upload".into(),
             subtree: false,
         },
-        binding: crate::types::PrincipalTenant::default(),
     })
 }
 
@@ -417,7 +410,6 @@ pub fn prepare_blob_pin(input: &Value) -> CallResult<PreparedInput> {
             action: "blob.pin".into(),
             subtree: false,
         },
-        binding: crate::types::PrincipalTenant::default(),
     })
 }
 
@@ -436,7 +428,6 @@ pub fn prepare_blob_unpin(input: &Value) -> CallResult<PreparedInput> {
             action: "blob.unpin".into(),
             subtree: false,
         },
-        binding: crate::types::PrincipalTenant::default(),
     })
 }
 
@@ -466,7 +457,6 @@ pub fn prepare_blob_have(input: &Value) -> CallResult<PreparedInput> {
             action: "blob.have".into(),
             subtree: false,
         },
-        binding: crate::types::PrincipalTenant::default(),
     })
 }
 
@@ -490,7 +480,6 @@ pub fn prepare_blob_get(input: &Value) -> CallResult<PreparedInput> {
                 action: "blob.get".into(),
                 subtree: false,
             },
-            binding: crate::types::PrincipalTenant::default(),
         });
     }
     let target = object(remote.expect("exactly-one check above"))?;
@@ -530,7 +519,6 @@ pub fn prepare_blob_get(input: &Value) -> CallResult<PreparedInput> {
             action: "read".into(),
             subtree: false,
         },
-        binding: crate::types::PrincipalTenant::default(),
     })
 }
 
@@ -559,7 +547,6 @@ pub fn prepare_blob_cancel(input: &Value) -> CallResult<PreparedInput> {
             action: "blob.cancel".into(),
             subtree: false,
         },
-        binding: crate::types::PrincipalTenant::default(),
     })
 }
 
@@ -631,7 +618,6 @@ pub fn prepare_session_open(input: &Value) -> CallResult<PreparedInput> {
             action: "session.attach".into(),
             subtree: false,
         },
-        binding: crate::types::PrincipalTenant::default(),
     })
 }
 
@@ -670,7 +656,6 @@ pub fn prepare_session_resume(input: &Value) -> CallResult<PreparedInput> {
             action: "session.resume".into(),
             subtree: false,
         },
-        binding: crate::types::PrincipalTenant::default(),
     })
 }
 
@@ -697,7 +682,6 @@ pub fn prepare_session_renew(input: &Value) -> CallResult<PreparedInput> {
             action: "session.renew".into(),
             subtree: false,
         },
-        binding: crate::types::PrincipalTenant::default(),
     })
 }
 
@@ -724,7 +708,6 @@ pub fn prepare_session_close(input: &Value) -> CallResult<PreparedInput> {
             action: "session.close".into(),
             subtree: false,
         },
-        binding: crate::types::PrincipalTenant::default(),
     })
 }
 
@@ -750,7 +733,6 @@ pub fn prepare_operation_get(input: &Value) -> CallResult<PreparedInput> {
             action: "operation.get".into(),
             subtree: false,
         },
-        binding: crate::types::PrincipalTenant::default(),
     })
 }
 
@@ -778,7 +760,6 @@ pub fn prepare_operation_cancel(input: &Value) -> CallResult<PreparedInput> {
             action: "operation.cancel".into(),
             subtree: false,
         },
-        binding: crate::types::PrincipalTenant::default(),
     })
 }
 
@@ -994,6 +975,7 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
                 output_schema: "conex.BlobPutResponse",
                 prepare: prepare_blob_put,
                 validate_output: validate_blob_put_output,
+                claim_post: None,
             },
         ),
         (
@@ -1004,6 +986,7 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
                 output_schema: "conex.BlobChunkResponse",
                 prepare: prepare_blob_chunk,
                 validate_output: validate_blob_chunk_output,
+                claim_post: None,
             },
         ),
         (
@@ -1014,6 +997,7 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
                 output_schema: "conex.BlobCommitResponse",
                 prepare: prepare_blob_commit,
                 validate_output: validate_blob_commit_output,
+                claim_post: None,
             },
         ),
         (
@@ -1024,6 +1008,7 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
                 output_schema: "conex.BlobPinResponse",
                 prepare: prepare_blob_pin,
                 validate_output: validate_blob_pin_output,
+                claim_post: None,
             },
         ),
         (
@@ -1034,6 +1019,7 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
                 output_schema: "conex.BlobUnpinResponse",
                 prepare: prepare_blob_unpin,
                 validate_output: pass,
+                claim_post: None,
             },
         ),
         (
@@ -1044,6 +1030,7 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
                 output_schema: "conex.BlobHaveResponse",
                 prepare: prepare_blob_have,
                 validate_output: validate_blob_have_output,
+                claim_post: None,
             },
         ),
         (
@@ -1054,6 +1041,7 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
                 output_schema: "conex.BlobGetResponse",
                 prepare: prepare_blob_get,
                 validate_output: validate_blob_get_output,
+                claim_post: None,
             },
         ),
         (
@@ -1064,6 +1052,7 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
                 output_schema: "conex.BlobCancelResponse",
                 prepare: prepare_blob_cancel,
                 validate_output: pass,
+                claim_post: None,
             },
         ),
         (
@@ -1074,6 +1063,7 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
                 output_schema: "conex.SessionOpenResponse",
                 prepare: prepare_session_open,
                 validate_output: validate_session_open_output,
+                claim_post: None,
             },
         ),
         (
@@ -1084,6 +1074,7 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
                 output_schema: "conex.SessionResumeResponse",
                 prepare: prepare_session_resume,
                 validate_output: validate_session_resume_output,
+                claim_post: None,
             },
         ),
         (
@@ -1094,6 +1085,7 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
                 output_schema: "conex.SessionRenewResponse",
                 prepare: prepare_session_renew,
                 validate_output: validate_session_renew_output,
+                claim_post: None,
             },
         ),
         (
@@ -1104,6 +1096,7 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
                 output_schema: "conex.SessionCloseResponse",
                 prepare: prepare_session_close,
                 validate_output: validate_session_close_output,
+                claim_post: None,
             },
         ),
         (
@@ -1114,6 +1107,7 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
                 output_schema: "conex.OperationGetResponse",
                 prepare: prepare_operation_get,
                 validate_output: validate_operation_get_output,
+                claim_post: None,
             },
         ),
         (
@@ -1124,6 +1118,7 @@ pub fn contracts() -> Vec<(&'static str, MethodContract)> {
                 output_schema: "conex.OperationCancelResponse",
                 prepare: prepare_operation_cancel,
                 validate_output: validate_operation_cancel_output,
+                claim_post: None,
             },
         ),
     ]

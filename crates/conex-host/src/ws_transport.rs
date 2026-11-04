@@ -10,9 +10,9 @@
 //! `conex-protobuf-wss` agree on envelope shape after handshake (they
 //! differ only in the bootstrap body); the protobuf business profile is
 //! layered on top of `decode_wire`/`encode_wire` as soon as negotiation
-//! completes. For P1 only the JSON profile is required; the protobuf path
-//! is recognised by `accepts_profile` and falls through to a `not_implemented`
-//! business error.
+//! completes. Both profiles are implemented: JSON text frames and protobuf
+//! binary frames share the same pending-result routing, admission and
+//! dispatch barrier (see `handle_connection`).
 #![forbid(unsafe_code)]
 
 use std::collections::HashMap;
@@ -594,6 +594,8 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
             return;
         }
     };
+    // 业务帧回包统一按协商档位编码；分派流水线对 JSON/protobuf 无感。
+    let codec = WireCodec::of_profile(business_profile);
     let limits = handshake.limits();
     if let (Some(registry), Some(link_id)) = (state.ui_links.as_ref(), state.ui_link_id.as_ref()) {
         registry.touch(link_id);
@@ -730,15 +732,11 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                 conex_proto::ErrorCode::BadRequest,
                                 "text business frames require the JSON profile",
                             );
-                            if let Some(bytes) = encode_proto_message(&failure)
-                                && !enqueue_message(
-                                    &out_tx,
-                                    &queued_bytes,
-                                    max_queued,
-                                    Message::Binary(bytes.into()),
-                                ) {
-                                    break;
-                                }
+                            if let Some(reply) = codec.encode_frame(&failure)
+                                && !enqueue_message(&out_tx, &queued_bytes, max_queued, reply)
+                            {
+                                break;
+                            }
                             continue;
                         }
                         // A client answering a pushed hello arrives as a
@@ -761,7 +759,9 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                         let message = match decode_frame(text.as_bytes(), Boundary::Client) {
                             Ok(message) => message,
                             Err(error) => {
-                                if route_rejected_state_update(&state, generation, text.as_bytes()).await {
+                                if route_rejected_state_update(&state, generation, text.as_bytes())
+                                    .await
+                                {
                                     continue;
                                 }
                                 let failure = wire_failure(
@@ -770,15 +770,11 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                         .unwrap_or(conex_proto::ErrorCode::ParseError),
                                     error.message,
                                 );
-                                if let Some(reply) = encode_json_message(&failure)
-                                    && !enqueue_message(
-                                        &out_tx,
-                                        &queued_bytes,
-                                        max_queued,
-                                        reply,
-                                    ) {
-                                        break;
-                                    }
+                                if let Some(reply) = codec.encode_frame(&failure)
+                                    && !enqueue_message(&out_tx, &queued_bytes, max_queued, reply)
+                                {
+                                    break;
+                                }
                                 continue;
                             }
                         };
@@ -789,174 +785,61 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                     .unwrap_or(conex_proto::ErrorCode::BadRequest),
                                 error.message,
                             );
-                            if let Some(reply) = encode_json_message(&failure)
-                                && !enqueue_message(&out_tx, &queued_bytes, max_queued, reply) {
-                                    break;
-                                }
-                            continue;
-                        }
-                        match message.body.as_ref() {
-                            Some(conex_proto::message::Body::Success(success)) => {
-                                let value = success
-                                    .result
-                                    .as_ref()
-                                    .map(|result| serde_json::to_value(result).unwrap_or(Value::Null))
-                                    .unwrap_or(Value::Null);
-                                let _ = pending.route(generation, &success.request_id, Ok(crate::ws_transport::AgentReply::Value(value))).await;
-                                continue;
-                            }
-                            Some(conex_proto::message::Body::DataChunk(chunk)) => {
-                                let _ = pending.route(
-                                    generation,
-                                    &chunk.request_id,
-                                    Ok(crate::ws_transport::AgentReply::Chunk(chunk.clone())),
-                                )
-                                .await;
-                                continue;
-                            }
-                            Some(conex_proto::message::Body::Failure(failure)) => {
-                                if let Some(id) = failure.request_id.as_ref() {
-                                    let error = failure
-                                        .error
-                                        .clone()
-                                        .map(CallError::from_wire)
-                                        .unwrap_or_else(|| {
-                                            CallError::new(
-                                                conex_proto::ErrorCode::BadRequest,
-                                                "remote failure",
-                                            )
-                                        });
-                                    let _ = pending.route(generation, id, Err(error)).await;
-                                }
-                                continue;
-                            }
-                            Some(conex_proto::message::Body::Request(_)) => {}
-                            Some(conex_proto::message::Body::Notification(notification)) => {
-                                route_s1_state_notification(&state, generation, notification).await;
-                                continue;
-                            }
-                            None => continue,
-                        }
-                        let frame = match broker_frame_from_message(message) {
-                            Ok(Some(frame)) => frame,
-                            Ok(None) => continue,
-                            Err(error) => {
-                                if let Ok(bytes) = encode_wire(&conex_proto::Message {
-                                    body: Some(conex_proto::message::Body::Failure(conex_proto::Failure {
-                                        request_id: None,
-                                        error: Some(to_wire_error(&error)),
-                                    })),
-                                })
-                                    && !enqueue_message(
-                                        &out_tx,
-                                        &queued_bytes,
-                                        max_queued,
-                                        Message::Text(String::from_utf8_lossy(&bytes).into_owned().into()),
-                                    ) {
-                                    break;
-                                    }
-                                continue;
-                            }
-                        };
-                        if let Some(session) = &state.web_session
-                            && !session.is_active() {
+                            if let Some(reply) = codec.encode_frame(&failure)
+                                && !enqueue_message(&out_tx, &queued_bytes, max_queued, reply)
+                            {
                                 break;
                             }
-                        if state.role == "ui"
-                            && (!crate::web_auth::allowed_ui_method(&frame.method)
-                                || !state.capability_caps.iter().any(|cap| cap == &frame.method))
-                        {
-                            let failure = wire_failure(
-                                Some(frame.request_id.clone()),
-                                conex_proto::ErrorCode::Forbidden,
-                                "method is not allowed on UI links",
-                            );
-                            if let Some(reply) = encode_json_message(&failure)
-                                && !enqueue_message(&out_tx, &queued_bytes, max_queued, reply) {
-                                    break;
-                                }
                             continue;
                         }
-                        let request_id = frame.request_id.clone();
-                        // T04: response_enqueued 键（response 帧移走 request_id
-                        // 后仍需按消费者请求 ID 找到 opening）。
-                        let subscribe_key = request_id.clone();
-                        let slot = if matches!(frame.method.as_str(), "module/cancel" | "state/unsubscribe") {
-                            control_slot.clone()
-                        } else {
-                            inflight.clone()
-                        };
-                        let permit = match slot.try_acquire_owned() {
-                            Ok(permit) => permit,
-                            Err(_) => {
-                                let failure = conex_proto::Message {
-                                    body: Some(conex_proto::message::Body::Failure(conex_proto::Failure {
-                                        request_id: Some(request_id),
-                                        error: Some(to_wire_error(&CallError::new(
-                                            conex_proto::ErrorCode::QuotaExceeded,
-                                            "too many in-flight requests",
-                                        ))),
-                                    })),
-                                };
-                                if let Ok(bytes) = encode_wire(&failure)
-                                    && !enqueue_message(
-                                        &out_tx,
-                                        &queued_bytes,
-                                        max_queued,
-                                        Message::Text(String::from_utf8_lossy(&bytes).into_owned().into()),
-                                    ) {
-                                        break;
+                        match route_message_bodies(&state, &pending, generation, message).await {
+                            RoutedFrame::Consumed => continue,
+                            RoutedFrame::Request(message) => {
+                                let frame = match broker_frame_from_message(*message) {
+                                    Ok(Some(frame)) => frame,
+                                    Ok(None) => continue,
+                                    Err(error) => {
+                                        let failure = wire_failure(
+                                            None,
+                                            conex_proto::ErrorCode::try_from(error.code())
+                                                .unwrap_or(conex_proto::ErrorCode::BadRequest),
+                                            error.message(),
+                                        );
+                                        if let Some(reply) = codec.encode_frame(&failure)
+                                            && !enqueue_message(
+                                                &out_tx,
+                                                &queued_bytes,
+                                                max_queued,
+                                                reply,
+                                            )
+                                        {
+                                            break;
+                                        }
+                                        continue;
                                     }
-                                continue;
-                            }
-                        };
-                        let task_state = state.clone();
-                        let task_tx = out_tx.clone();
-                        let task_queued = queued_bytes.clone();
-                        let close_task = close_tx.clone();
-                        dispatch_tasks.spawn(async move {
-                            let method = frame.method.clone();
-                            let result = dispatch_business(&task_state, frame, business_profile, generation, limits).await;
-                            // T04：快照成功响应入消费者队列后，状态中继才放行
-                            // 该订阅的 update（B2 屏障，契约 §8.1 两跳同规则）。
-                            let is_subscribe_ok =
-                                result.is_ok() && method == "state/subscribe";
-                            let response = conex_proto::Message {
-                                body: Some(match result {
-                                    Ok(value) => conex_proto::message::Body::Success(conex_proto::Success {
-                                        request_id,
-                                        result: Some(crate::http::json_to_pbjson(value)),
-                                    }),
-                                    Err(error) => conex_proto::message::Body::Failure(conex_proto::Failure {
-                                        request_id: Some(request_id),
-                                        error: Some(to_wire_error(&error)),
-                                    }),
-                                }),
-                            };
-                            let mut response_enqueued = false;
-                            if let Ok(bytes) = encode_wire(&response) {
-                                if bytes.len() > max_frame
-                                    || !enqueue_message(
-                                        &task_tx,
-                                        &task_queued,
-                                        max_queued,
-                                        Message::Text(String::from_utf8_lossy(&bytes).into_owned().into()),
-                                    )
+                                };
+                                if !dispatch_frame_request(
+                                    &state,
+                                    &out_tx,
+                                    &queued_bytes,
+                                    &close_tx,
+                                    &mut dispatch_tasks,
+                                    &inflight,
+                                    &control_slot,
+                                    max_frame,
+                                    max_queued,
+                                    frame,
+                                    business_profile,
+                                    generation,
+                                    limits,
+                                    codec,
+                                )
+                                .await
                                 {
-                                    let _ = close_task.send(());
-                                } else {
-                                    response_enqueued = true;
+                                    break;
                                 }
-                            } else {
-                                let _ = close_task.send(());
                             }
-                            if response_enqueued && is_subscribe_ok
-                                && let Some(relay) = task_state.broker.deps().state.as_ref()
-                            {
-                                relay.response_enqueued(generation, &subscribe_key).await;
-                            }
-                            drop(permit);
-                        });
+                        }
                     }
                     Message::Binary(bytes) => {
                         if business_profile != ProfileId::ProtobufWss {
@@ -965,10 +848,11 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                 conex_proto::ErrorCode::BadRequest,
                                 "binary business frames require the protobuf profile",
                             );
-                            if let Some(reply) = encode_json_message(&failure)
-                                && !enqueue_message(&out_tx, &queued_bytes, max_queued, reply) {
-                                    break;
-                                }
+                            if let Some(reply) = codec.encode_frame(&failure)
+                                && !enqueue_message(&out_tx, &queued_bytes, max_queued, reply)
+                            {
+                                break;
+                            }
                             continue;
                         }
                         let message = match conex_proto::Message::decode(bytes.as_ref()) {
@@ -979,15 +863,11 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                     conex_proto::ErrorCode::ParseError,
                                     format!("cannot decode protobuf frame: {error}"),
                                 );
-                                if let Some(bytes) = encode_proto_message(&failure)
-                                    && !enqueue_message(
-                                        &out_tx,
-                                        &queued_bytes,
-                                        max_queued,
-                                        Message::Binary(bytes.into()),
-                                    ) {
-                                        break;
-                                    }
+                                if let Some(reply) = codec.encode_frame(&failure)
+                                    && !enqueue_message(&out_tx, &queued_bytes, max_queued, reply)
+                                {
+                                    break;
+                                }
                                 continue;
                             }
                         };
@@ -998,177 +878,61 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
                                     .unwrap_or(conex_proto::ErrorCode::BadRequest),
                                 error.message,
                             );
-                            if let Some(bytes) = encode_proto_message(&failure)
-                                && !enqueue_message(
-                                    &out_tx,
-                                    &queued_bytes,
-                                    max_queued,
-                                    Message::Binary(bytes.into()),
-                                ) {
-                                    break;
-                                }
-                            continue;
-                        }
-                        match message.body.as_ref() {
-                            Some(conex_proto::message::Body::Success(success)) => {
-                                let value = success
-                                    .result
-                                    .as_ref()
-                                    .map(|result| serde_json::to_value(result).unwrap_or(Value::Null))
-                                    .unwrap_or(Value::Null);
-                                let _ = pending.route(generation, &success.request_id, Ok(crate::ws_transport::AgentReply::Value(value))).await;
-                                continue;
-                            }
-                            Some(conex_proto::message::Body::DataChunk(chunk)) => {
-                                let _ = pending.route(
-                                    generation,
-                                    &chunk.request_id,
-                                    Ok(crate::ws_transport::AgentReply::Chunk(chunk.clone())),
-                                )
-                                .await;
-                                continue;
-                            }
-                            Some(conex_proto::message::Body::Failure(failure)) => {
-                                if let Some(id) = failure.request_id.as_ref() {
-                                    let error = failure
-                                        .error
-                                        .clone()
-                                        .map(CallError::from_wire)
-                                        .unwrap_or_else(|| {
-                                            CallError::new(
-                                                conex_proto::ErrorCode::BadRequest,
-                                                "remote failure",
-                                            )
-                                        });
-                                    let _ = pending.route(generation, id, Err(error)).await;
-                                }
-                                continue;
-                            }
-                            Some(conex_proto::message::Body::Notification(notification)) => {
-                                route_s1_state_notification(&state, generation, notification).await;
-                                continue;
-                            }
-                            _ => {}
-                        }
-                        let frame = match broker_frame_from_message(message) {
-                            Ok(Some(frame)) => frame,
-                            Ok(None) => continue,
-                            Err(error) => {
-                                let failure = wire_failure(
-                                    None,
-                                    conex_proto::ErrorCode::try_from(error.code())
-                                        .unwrap_or(conex_proto::ErrorCode::BadRequest),
-                                    error.message(),
-                                );
-                                if let Some(buf) = encode_proto_message(&failure)
-                                    && !enqueue_message(
-                                        &out_tx,
-                                        &queued_bytes,
-                                        max_queued,
-                                        Message::Binary(buf.into()),
-                                    ) {
-                                        break;
-                                    }
-                                continue;
-                            }
-                        };
-                        if let Some(session) = &state.web_session
-                            && !session.is_active() {
+                            if let Some(reply) = codec.encode_frame(&failure)
+                                && !enqueue_message(&out_tx, &queued_bytes, max_queued, reply)
+                            {
                                 break;
                             }
-                        if state.role == "ui"
-                            && (!crate::web_auth::allowed_ui_method(&frame.method)
-                                || !state.capability_caps.iter().any(|cap| cap == &frame.method))
-                        {
-                            let failure = wire_failure(
-                                Some(frame.request_id.clone()),
-                                conex_proto::ErrorCode::Forbidden,
-                                "method is not allowed on UI links",
-                            );
-                            if let Some(buf) = encode_proto_message(&failure)
-                                && !enqueue_message(&out_tx, &queued_bytes, max_queued, Message::Binary(buf.into())) {
-                                    break;
-                                }
                             continue;
                         }
-                        let request_id = frame.request_id.clone();
-                        // T04: response_enqueued 键（response 帧移走 request_id
-                        // 后仍需按消费者请求 ID 找到 opening）。
-                        let subscribe_key = request_id.clone();
-                        let slot = if matches!(frame.method.as_str(), "module/cancel" | "state/unsubscribe") {
-                            control_slot.clone()
-                        } else {
-                            inflight.clone()
-                        };
-                        let permit = match slot.try_acquire_owned() {
-                            Ok(permit) => permit,
-                            Err(_) => {
-                                let failure = conex_proto::Message {
-                                    body: Some(conex_proto::message::Body::Failure(conex_proto::Failure {
-                                        request_id: Some(request_id),
-                                        error: Some(to_wire_error(&CallError::new(
-                                            conex_proto::ErrorCode::QuotaExceeded,
-                                            "too many in-flight requests",
-                                        ))),
-                                    })),
+                        match route_message_bodies(&state, &pending, generation, message).await {
+                            RoutedFrame::Consumed => continue,
+                            RoutedFrame::Request(message) => {
+                                let frame = match broker_frame_from_message(*message) {
+                                    Ok(Some(frame)) => frame,
+                                    Ok(None) => continue,
+                                    Err(error) => {
+                                        let failure = wire_failure(
+                                            None,
+                                            conex_proto::ErrorCode::try_from(error.code())
+                                                .unwrap_or(conex_proto::ErrorCode::BadRequest),
+                                            error.message(),
+                                        );
+                                        if let Some(reply) = codec.encode_frame(&failure)
+                                            && !enqueue_message(
+                                                &out_tx,
+                                                &queued_bytes,
+                                                max_queued,
+                                                reply,
+                                            )
+                                        {
+                                            break;
+                                        }
+                                        continue;
+                                    }
                                 };
-                                let mut buf = Vec::new();
-                                if failure.encode(&mut buf).is_ok() {
-                                    let _ = enqueue_message(
-                                        &out_tx,
-                                        &queued_bytes,
-                                        max_queued,
-                                        Message::Binary(buf.into()),
-                                    );
-                                }
-                                continue;
-                            }
-                        };
-                        let task_state = state.clone();
-                        let task_tx = out_tx.clone();
-                        let task_queued = queued_bytes.clone();
-                        let close_task = close_tx.clone();
-                        dispatch_tasks.spawn(async move {
-                            let method = frame.method.clone();
-                            let result = dispatch_business(&task_state, frame, business_profile, generation, limits).await;
-                            // T04：快照成功响应入消费者队列后，状态中继才放行
-                            // 该订阅的 update（B2 屏障，契约 §8.1 两跳同规则）。
-                            let is_subscribe_ok =
-                                result.is_ok() && method == "state/subscribe";
-                            let response = conex_proto::Message {
-                                body: Some(match result {
-                                    Ok(value) => conex_proto::message::Body::Success(conex_proto::Success {
-                                        request_id,
-                                        result: Some(crate::http::json_to_pbjson(value)),
-                                    }),
-                                    Err(error) => conex_proto::message::Body::Failure(conex_proto::Failure {
-                                        request_id: Some(request_id),
-                                        error: Some(to_wire_error(&error)),
-                                    }),
-                                }),
-                            };
-                            let mut response_enqueued = false;
-                            let mut buf = Vec::new();
-                            if response.encode(&mut buf).is_ok()
-                                && buf.len() <= max_frame
-                                && enqueue_message(
-                                    &task_tx,
-                                    &task_queued,
+                                if !dispatch_frame_request(
+                                    &state,
+                                    &out_tx,
+                                    &queued_bytes,
+                                    &close_tx,
+                                    &mut dispatch_tasks,
+                                    &inflight,
+                                    &control_slot,
+                                    max_frame,
                                     max_queued,
-                                    Message::Binary(buf.into()),
+                                    frame,
+                                    business_profile,
+                                    generation,
+                                    limits,
+                                    codec,
                                 )
-                            {
-                                response_enqueued = true;
-                            } else {
-                                let _ = close_task.send(());
+                                .await
+                                {
+                                    break;
+                                }
                             }
-                            if response_enqueued && is_subscribe_ok
-                                && let Some(relay) = task_state.broker.deps().state.as_ref()
-                            {
-                                relay.response_enqueued(generation, &subscribe_key).await;
-                            }
-                            drop(permit);
-                        });
+                        }
                     }
                     Message::Ping(payload) => {
                         let _ = enqueue_message(&out_tx, &queued_bytes, max_queued, Message::Pong(payload));
@@ -1276,6 +1040,205 @@ async fn handle_connection(socket: WebSocket, state: Arc<WssState>) {
 /// envelopes at the socket boundary.
 ///
 /// Notifications return `None` because they do not have a response.
+/// 业务帧回包编码（协商档位唯一知晓处）：分派流水线对档位无感，只有这里
+/// 知道一个回包帧是 JSON 文本还是 protobuf 二进制。
+#[derive(Clone, Copy)]
+enum WireCodec {
+    Json,
+    Proto,
+}
+
+impl WireCodec {
+    fn of_profile(profile: ProfileId) -> Self {
+        if profile == ProfileId::JsonRpc2Wss {
+            Self::Json
+        } else {
+            Self::Proto
+        }
+    }
+
+    /// 回包帧一律按**协商档位**编码：JSON 链路上的二进制帧、protobuf 链路上
+    /// 的文本帧，错误回包也走对端的协商档位。
+    fn encode_frame(&self, failure: &conex_proto::Message) -> Option<Message> {
+        match self {
+            Self::Json => encode_json_message(failure),
+            Self::Proto => encode_proto_message(failure).map(|bytes| Message::Binary(bytes.into())),
+        }
+    }
+}
+
+/// 消息体路由结果：响应/通知已完全处理，或客户端请求继续进入 broker 分派。
+enum RoutedFrame {
+    Consumed,
+    Request(Box<conex_proto::Message>),
+}
+
+/// 响应形状的消息体先于 broker 请求路径处理：成功/失败/分块路由给等待方，
+/// S1 通知进状态中继（JSON 与 protobuf 业务帧共用；`validate_message` 已
+/// 保证有 body）。
+async fn route_message_bodies(
+    state: &WssState,
+    pending: &PendingRequests,
+    generation: u64,
+    message: conex_proto::Message,
+) -> RoutedFrame {
+    match message.body.as_ref() {
+        Some(conex_proto::message::Body::Success(success)) => {
+            let value = success
+                .result
+                .as_ref()
+                .map(|result| serde_json::to_value(result).unwrap_or(Value::Null))
+                .unwrap_or(Value::Null);
+            let _ = pending
+                .route(
+                    generation,
+                    &success.request_id,
+                    Ok(AgentReply::Value(value)),
+                )
+                .await;
+            RoutedFrame::Consumed
+        }
+        Some(conex_proto::message::Body::DataChunk(chunk)) => {
+            let _ = pending
+                .route(
+                    generation,
+                    &chunk.request_id,
+                    Ok(AgentReply::Chunk(chunk.clone())),
+                )
+                .await;
+            RoutedFrame::Consumed
+        }
+        Some(conex_proto::message::Body::Failure(failure)) => {
+            if let Some(id) = failure.request_id.as_ref() {
+                let error = failure
+                    .error
+                    .clone()
+                    .map(CallError::from_wire)
+                    .unwrap_or_else(|| {
+                        CallError::new(conex_proto::ErrorCode::BadRequest, "remote failure")
+                    });
+                let _ = pending.route(generation, id, Err(error)).await;
+            }
+            RoutedFrame::Consumed
+        }
+        Some(conex_proto::message::Body::Notification(notification)) => {
+            route_s1_state_notification(state, generation, notification).await;
+            RoutedFrame::Consumed
+        }
+        Some(conex_proto::message::Body::Request(_)) => RoutedFrame::Request(Box::new(message)),
+        None => RoutedFrame::Consumed,
+    }
+}
+
+/// 统一的请求分派尾段（JSON 与 protobuf 业务帧共用）：会话活性、UI 方法
+/// 白名单、in-flight 准入（控制方法独占保留槽）、响应帧回写与 B2 屏障
+///（契约 §8.1 两跳同规则）。返回 `false` 表示链路必须关闭。
+#[allow(clippy::too_many_arguments)]
+async fn dispatch_frame_request(
+    state: &Arc<WssState>,
+    out_tx: &mpsc::Sender<(Message, usize)>,
+    queued_bytes: &Arc<AtomicUsize>,
+    close_tx: &mpsc::UnboundedSender<()>,
+    dispatch_tasks: &mut JoinSet<()>,
+    inflight: &Arc<Semaphore>,
+    control_slot: &Arc<Semaphore>,
+    max_frame: usize,
+    max_queued: usize,
+    frame: BrokerFrame,
+    business_profile: ProfileId,
+    generation: u64,
+    limits: conex_proto::Limits,
+    codec: WireCodec,
+) -> bool {
+    if let Some(session) = &state.web_session
+        && !session.is_active()
+    {
+        return false;
+    }
+    if state.role == "ui"
+        && (!crate::web_auth::allowed_ui_method(&frame.method)
+            || !state.capability_caps.iter().any(|cap| cap == &frame.method))
+    {
+        let failure = wire_failure(
+            Some(frame.request_id.clone()),
+            conex_proto::ErrorCode::Forbidden,
+            "method is not allowed on UI links",
+        );
+        if let Some(reply) = codec.encode_frame(&failure)
+            && !enqueue_message(out_tx, queued_bytes, max_queued, reply)
+        {
+            return false;
+        }
+        return true;
+    }
+    let request_id = frame.request_id.clone();
+    // T04: response_enqueued 键（response 帧移走 request_id 后仍需按消费者
+    // 请求 ID 找到 opening）。
+    let subscribe_key = request_id.clone();
+    let slot = if matches!(frame.method.as_str(), "module/cancel" | "state/unsubscribe") {
+        control_slot
+    } else {
+        inflight
+    };
+    let permit = match slot.clone().try_acquire_owned() {
+        Ok(permit) => permit,
+        Err(_) => {
+            let failure = conex_proto::Message {
+                body: Some(conex_proto::message::Body::Failure(conex_proto::Failure {
+                    request_id: Some(request_id),
+                    error: Some(to_wire_error(&CallError::new(
+                        conex_proto::ErrorCode::QuotaExceeded,
+                        "too many in-flight requests",
+                    ))),
+                })),
+            };
+            if let Some(reply) = codec.encode_frame(&failure)
+                && !enqueue_message(out_tx, queued_bytes, max_queued, reply)
+            {
+                return false;
+            }
+            return true;
+        }
+    };
+    let task_state = state.clone();
+    let task_tx = out_tx.clone();
+    let task_queued = queued_bytes.clone();
+    let close_task = close_tx.clone();
+    dispatch_tasks.spawn(async move {
+        let method = frame.method.clone();
+        let result =
+            dispatch_business(&task_state, frame, business_profile, generation, limits).await;
+        // T04：快照成功响应入消费者队列后，状态中继才放行该订阅的 update
+        //（B2 屏障，契约 §8.1 两跳同规则）。
+        let is_subscribe_ok = result.is_ok() && method == "state/subscribe";
+        let response = conex_proto::Message {
+            body: Some(match result {
+                Ok(value) => conex_proto::message::Body::Success(conex_proto::Success {
+                    request_id,
+                    result: Some(crate::http::json_to_pbjson(value)),
+                }),
+                Err(error) => conex_proto::message::Body::Failure(conex_proto::Failure {
+                    request_id: Some(request_id),
+                    error: Some(to_wire_error(&error)),
+                }),
+            }),
+        };
+        let response_enqueued = codec.encode_frame(&response).is_some_and(|reply| {
+            message_size(&reply) <= max_frame
+                && enqueue_message(&task_tx, &task_queued, max_queued, reply)
+        });
+        if response_enqueued {
+            if is_subscribe_ok && let Some(relay) = task_state.broker.deps().state.as_ref() {
+                relay.response_enqueued(generation, &subscribe_key).await;
+            }
+        } else {
+            let _ = close_task.send(());
+        }
+        drop(permit);
+    });
+    true
+}
+
 fn broker_frame_from_message(message: conex_proto::Message) -> CallResult<Option<BrokerFrame>> {
     let (request_id, method, call_params) = match message.body {
         Some(conex_proto::message::Body::Request(request)) => {
@@ -1987,10 +1950,10 @@ pub fn _unused_helper() {
                     action: String::new(),
                     subtree: false,
                 },
-                binding: Default::default(),
             })
         },
         validate_output: |_| Ok(()),
+        claim_post: None,
     };
 }
 

@@ -44,13 +44,18 @@ impl Host {
                 )
             })?;
 
-        let prepared = match (route.contract.prepare)(&input) {
+        let mut prepared = match (route.contract.prepare)(&input) {
             Ok(prepared) => prepared,
             Err(error) => {
                 self.deny(caller, &endpoint, method, "", 0, "prepare", &error);
                 return Err(error);
             }
         };
+        // Route-level claim policy (data on the contract, not a provider
+        // branch): the authorized scope may differ from the request anchor.
+        if let Some(claim_post) = route.contract.claim_post {
+            prepared.claim = claim_post(prepared.claim);
+        }
 
         if endpoint.plane != conex_proto::Plane::Broker {
             let error = CallError::new(
