@@ -485,6 +485,7 @@ fn instance_config(url: &str, prefix: &str, bindings: Vec<RemoteBinding>) -> Ins
         integration_id: "integration".into(),
         endpoint_prefix: prefix.into(),
         bindings,
+        consumer_application_id: None,
         exposure_principals: PRINCIPALS.iter().map(|p| p.to_string()).collect(),
         exposure_tenants: BTreeSet::from([TENANT.to_string()]),
     }

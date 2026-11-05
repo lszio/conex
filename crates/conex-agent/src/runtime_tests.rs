@@ -101,6 +101,7 @@ fn registration_payload_carries_per_endpoint_claims() {
                     tenant_id: String::new(),
                     space_id: String::new(),
                     registration_id: String::new(),
+                    consumer_module: String::new(),
                 }),
                 timeout_budget_ms: 8_000,
                 input: Some(serde_json::from_value(payload).unwrap()),

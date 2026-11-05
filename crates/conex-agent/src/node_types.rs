@@ -26,6 +26,8 @@ pub struct PreparedLocalModule {
     pub name: String,
     pub module_key: String,
     pub dependencies: BTreeMap<String, String>,
+    /// Fixed remote-dependency names declared by the implementation.
+    pub remote_deps: Vec<String>,
     pub permissions: BTreeSet<String>,
     pub relay_allowed: bool,
     pub exposed_methods: BTreeSet<String>,

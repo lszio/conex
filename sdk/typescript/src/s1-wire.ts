@@ -154,6 +154,8 @@ export interface S1Context {
   tenantId?: string;
   spaceId?: string;
   registrationId?: string;
+  /** 模块消费主体声明（contracts/s1-module-principals.md §2）；客户端可声明，控制方法禁止。 */
+  consumerModule?: string;
   [key: string]: unknown;
 }
 
@@ -181,6 +183,7 @@ const CONTEXT_KEYS: Record<string, true> = {
   tenantId: true,
   spaceId: true,
   registrationId: true,
+  consumerModule: true,
 };
 
 /** 本包边界的规范对象守卫（仅此一处定义，供 s1-wire 与测试共用）。 */
@@ -306,8 +309,8 @@ export function validateContext(method: string, context: S1Context | undefined, 
     method === METHOD_MODULE_UNREGISTER ||
     method === METHOD_MODULE_LIST;
   if (isControl) {
-    if (["providerEndpointId", "spaceId", "registrationId", "principalId", "tenantId"].some((key) => Object.hasOwn(context, key))) {
-      throw new S1WireError(RPC_BAD_REQUEST, "control method context must not carry providerEndpointId/spaceId/registrationId");
+    if (["providerEndpointId", "spaceId", "registrationId", "consumerModule", "principalId", "tenantId"].some((key) => Object.hasOwn(context, key))) {
+      throw new S1WireError(RPC_BAD_REQUEST, "control method context must not carry providerEndpointId/spaceId/registrationId/consumerModule");
     }
     return;
   }

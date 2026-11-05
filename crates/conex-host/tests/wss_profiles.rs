@@ -306,6 +306,7 @@ async fn wss_protobuf_profile_round_trip() {
     fields.insert("hostOrigin".into(), "conex://broker.local".into());
     let input = conex_proto::CallParams {
         context: Some(conex_proto::RequestContext {
+            consumer_module: String::new(),
             provider_endpoint_id: "agent-mgr".into(),
             plane: conex_proto::Plane::Broker as i32,
             binding_id: None,

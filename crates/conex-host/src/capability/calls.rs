@@ -151,6 +151,7 @@ impl CallRouter {
         provider_endpoint_id: &str,
         space_id: &str,
         registration_id: &str,
+        consumer_module: &str,
         input: Value,
         deadline: Instant,
     ) -> CallResult<Value> {
@@ -163,25 +164,26 @@ impl CallRouter {
                 forbidden("module is not registered or not visible to this principal")
             })?;
         // 2. 权限先于披露（契约 §6.3）：无消费批准 → forbidden，不泄漏
-        //    注册是否存在/是否过期。
+        //    注册是否存在/是否过期。consumer_module 声明先经形状与节点
+        //    归属判定（contracts/s1-module-principals.md §3）；批准匹配与
+        //    转发盖章都用有效消费主体。
         let contract = self
             .registry
             .contracts()
             .get(&record.contract_id)
             .ok_or_else(|| internal("contract for active registration is not installed"))?;
+        let consumer = super::effective_consumer(caller, consumer_module)?;
         let visible = self
             .registry
             .approvals()
             .visible(
-                &caller.principal_id,
+                &consumer,
                 &record.space_id,
                 &record.provider_endpoint_id,
                 &record.contract_id,
                 &contract,
             )
-            .ok_or_else(|| {
-                forbidden("consume approval is missing for this module or the caller")
-            })?;
+            .ok_or_else(|| forbidden("consume approval is missing for this consumer"))?;
         // 3. 注册实例匹配；不符 → stale_revision，不自动切到新提供者。
         if record.registration_id != registration_id {
             return Err(stale_revision(
@@ -261,7 +263,7 @@ impl CallRouter {
                     hop_request_id: hop.clone(),
                     target_node: record.node_id.clone(),
                     target_generation: record.generation,
-                    context: stamped_context(caller, &record),
+                    context: stamped_context(&consumer, &caller.tenant_id, &record),
                     deadline,
                     sent: false,
                     cancelled: false,
@@ -450,17 +452,20 @@ impl CallRouter {
     }
 }
 
-/// 中心盖章的转发上下文：身份与注册全部来自受信源。T04 状态中继复用。
+/// 中心盖章的转发上下文：消费主体（操作员 principal 或模块主体，已过
+/// 判定）、tenant 沿连接；注册目标全部来自受信记录。T04 状态中继复用。
 pub(crate) fn stamped_context(
-    caller: &Caller,
+    consumer: &str,
+    tenant_id: &str,
     record: &crate::capability::ModuleRecord,
 ) -> conex_proto::RequestContext {
     conex_proto::RequestContext {
+        consumer_module: String::new(),
         provider_endpoint_id: record.provider_endpoint_id.clone(),
         plane: conex_proto::Plane::Broker as i32,
         binding_id: None,
-        principal_id: caller.principal_id.clone(),
-        tenant_id: caller.tenant_id.clone(),
+        principal_id: consumer.to_string(),
+        tenant_id: tenant_id.to_string(),
         space_id: record.space_id.clone(),
         registration_id: record.registration_id.clone(),
     }

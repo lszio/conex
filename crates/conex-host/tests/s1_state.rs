@@ -190,6 +190,7 @@ async fn register_ok(broker: &Broker, who: &Caller, generation: u64, endpoint: &
         binding_id: None,
         space_id: String::new(),
         registration_id: String::new(),
+        consumer_module: String::new(),
     };
     broker.invoke(call).await.unwrap()["registrationId"]
         .as_str()
@@ -228,6 +229,7 @@ fn subscribe_call(
         binding_id: None,
         space_id: space_id.into(),
         registration_id: registration_id.into(),
+        consumer_module: String::new(),
     }
 }
 
@@ -238,6 +240,7 @@ fn unsubscribe_call(
     subscription_id: &str,
 ) -> BrokerCall {
     BrokerCall {
+        consumer_module: String::new(),
         caller: who.clone(),
         endpoint_id: String::new(),
         method: "state/unsubscribe".into(),
@@ -471,6 +474,7 @@ fn end_input(hop: &str, code: &str, message: &str) -> Value {
 /// 提供端通知上下文：注册实例归属由 registrationId/代次校验。
 fn provider_context(registration_id: &str) -> conex_proto::RequestContext {
     conex_proto::RequestContext {
+        consumer_module: String::new(),
         provider_endpoint_id: "counter-ts".into(),
         plane: conex_proto::Plane::Broker as i32,
         binding_id: None,

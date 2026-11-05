@@ -7,6 +7,7 @@ mod conformance;
 mod e2e;
 mod generate;
 mod landing_demo;
+mod module_principals_e2e;
 mod private_entities_e2e;
 mod private_network_e2e;
 mod private_runtime_e2e;

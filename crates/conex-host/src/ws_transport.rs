@@ -1301,6 +1301,11 @@ fn broker_frame_from_message(message: conex_proto::Message) -> CallResult<Option
                 .as_ref()
                 .map(|c| c.registration_id.clone())
                 .unwrap_or_default(),
+            // 模块消费主体声明：只透传，判定在 capability 层（§3）。
+            consumer_module: context
+                .as_ref()
+                .map(|c| c.consumer_module.clone())
+                .unwrap_or_default(),
         },
         params: Some(input),
     };
@@ -1657,6 +1662,7 @@ async fn dispatch_rpc(
         binding_id: None,
         space_id: frame.context.space_id.clone(),
         registration_id: frame.context.registration_id.clone(),
+        consumer_module: frame.context.consumer_module.clone(),
     };
     state.broker.invoke(call.clone()).await
 }

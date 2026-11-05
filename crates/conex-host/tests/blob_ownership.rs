@@ -91,6 +91,7 @@ async fn call(
 ) -> Result<Value, conex_core::CallError> {
     broker
         .invoke(BrokerCall {
+            consumer_module: String::new(),
             caller: who,
             endpoint_id: "blob-store".into(),
             method: method.into(),

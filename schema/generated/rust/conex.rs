@@ -2079,6 +2079,12 @@ pub struct RequestContext {
     pub space_id: ::prost::alloc::string::String,
     #[prost(string, tag = "7")]
     pub registration_id: ::prost::alloc::string::String,
+    /// S1 模块消费主体（contracts/s1-module-principals.md §2）：节点 SDK 为
+    /// 远程绑定的出站调用声明 `module/<nodeId>/<applicationId>/<moduleId>`；
+    /// 中心校验形状、节点归属与消费批准后转发。空 = 连接主体自身（操作员
+    /// 路径，行为不变）。
+    #[prost(string, tag = "8")]
+    pub consumer_module: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Success {

@@ -3988,6 +3988,9 @@
         "bindingId": {
           "type": "string"
         },
+        "consumerModule": {
+          "type": "string"
+        },
         "plane": {
           "enum": [
             "PLANE_UNSPECIFIED",

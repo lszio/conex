@@ -112,6 +112,7 @@ async fn invoke(
 ) -> Value {
     broker
         .invoke(BrokerCall {
+            consumer_module: String::new(),
             caller,
             endpoint_id: endpoint.into(),
             method: method.into(),
@@ -269,6 +270,7 @@ async fn session_lifecycle_and_binding_mismatch() {
             binding_id: None,
             space_id: String::new(),
             registration_id: String::new(),
+            consumer_module: String::new(),
         })
         .await
         .expect_err("binding mismatch must reject");

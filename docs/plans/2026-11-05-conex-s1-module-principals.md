@@ -1,6 +1,6 @@
 # Conex S1 模块消费主体 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `executing-plans` or `subagent-driven-development`，按任务执行；先读 [模块消费主体契约](../contracts/s1-module-principals.md)（已评审，2026-11-05 定案）与 [S1 契约](../contracts/s1-capabilities.md) §4/§5.2/§7。本文件是待执行计划，不是交付证据；验收只记录实际运行结果。
+> **For agentic workers:** REQUIRED SUB-SKILL: Use `executing-plans` or `subagent-driven-development`，按任务执行；先读 [模块消费主体契约](../contracts/s1-module-principals.md)（已评审，2026-11-05 定案）与 [S1 契约](../contracts/s1-capabilities.md) §4/§5.2/§7。**状态（2026-11-06）：M0–M3、M5 已实施**，实施中的设计修订（node 段取链路认证 peer、节点 remote_deps 启动语义）以 [证据页](../verification/s1-module-principals.md) §3 为准；M4 审计维度待统一 P1 audit sink。
 
 **Goal:** 组合模块经显式远程绑定消费能力时获得模块粒度的授权与归属：`ConsumeApproval` 接受模块主体，中心按「形状 → 节点归属 → 批准」三步判定，提供端转发上下文绑定真实消费者，为 A14 消费侧提供数据与验收。
 

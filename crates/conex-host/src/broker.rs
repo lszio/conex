@@ -48,6 +48,8 @@ pub struct BrokerCall {
     pub space_id: String,
     /// S1 调用目标 registrationId（ULID；与活动注册不符 → stale_revision）。
     pub registration_id: String,
+    /// S1 模块消费主体声明（contracts/s1-module-principals.md；空 = 操作员）。
+    pub consumer_module: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -62,6 +64,8 @@ pub struct BrokerContext {
     /// S1 调用/取消目标（T03，来自 RequestContext space_id/registration_id）。
     pub space_id: String,
     pub registration_id: String,
+    /// S1 模块消费主体声明（节点 SDK 填；中心判定后盖章转发）。
+    pub consumer_module: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -711,6 +715,7 @@ impl Broker {
                         &call.endpoint_id,
                         &call.space_id,
                         &call.registration_id,
+                        &call.consumer_module,
                         call.input.clone(),
                         call.deadline,
                     )
@@ -765,6 +770,7 @@ impl Broker {
                         &call.endpoint_id,
                         &call.space_id,
                         &call.registration_id,
+                        &call.consumer_module,
                         &state,
                         subscription_id,
                         argument,

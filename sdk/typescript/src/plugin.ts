@@ -127,6 +127,10 @@ export type PublicationState =
 export interface InstanceOptions {
   /** Stop cleanup budget in ms; default 30_000, caller may shorten but never extend past 30s (private-runtime §1). */
   stopDeadlineMs?: number;
+  /** 模块消费主体的应用段（contracts/s1-module-principals.md §4）：配置后远程绑定
+   *  出站在调用时声明 `module/<链路认证 peer>/<application>/<module>`——node 段由
+   *  SDK 取链路握手身份，配置不可声明；缺省 = 连接主体自身。 */
+  consumerApplicationId?: string;
 }
 
 /** Per-stop budget; defaults to the instance budget, clamped to (0, 30_000]. */
@@ -256,10 +260,12 @@ export class Instance<I = unknown> {
   readonly #cleanupErrors: unknown[] = [];
   #retryTimer?: ReturnType<typeof setInterval>;
   #stopDeadlineMs: number;
+  readonly #consumerApplicationId?: string;
   readonly #publicationListeners = new Set<(publication: PublicationState, error?: unknown) => void>();
 
   constructor(private readonly plugin: Plugin<I>, private readonly link: InstanceLink, options: InstanceOptions = {}) {
     this.#stopDeadlineMs = clampDeadline(options.stopDeadlineMs);
+    this.#consumerApplicationId = options.consumerApplicationId;
   }
 
   get state(): InstanceState { return this.#state; }
@@ -352,7 +358,6 @@ export class Instance<I = unknown> {
       // requires a pinned remote binding may await this bounded first contact.
       let contact: Promise<boolean> | undefined;
       this.#checkpoint();
-      const deps = this.#deps();
       for (const module of this.#order) {
         this.#checkpoint();
         if (module.depsRemote?.length) {
@@ -360,6 +365,9 @@ export class Instance<I = unknown> {
           if (!await contact) throw new PluginCompositeError({ kind: "start_failed", module: module.name,
             cause: new ConexError("required remote link unavailable", { code: -32005, execution: "not_started", retry: "never" }) });
         }
+        // 模块消费主体在调用时声明（contracts/s1-module-principals.md §4）：
+        // node 段取链路认证 peer，应用段/模块段来自组合上下文。
+        const deps = this.#deps(module.name);
         const context: ModuleContext = { deps };
         try {
           const handle = await module.start(context);
@@ -402,7 +410,7 @@ export class Instance<I = unknown> {
     if (this.#stopRequested) throw new StopRequested();
   }
 
-  #deps(): ModuleDeps {
+  #deps(moduleName: string): ModuleDeps {
     return {
       local: <H>(name: string): H => {
         if (!this.#handles.has(name)) throw new ConexError(`local dependency "${name}" has no handle`, { code: -32602, execution: "completed", retry: "never" });
@@ -412,10 +420,16 @@ export class Instance<I = unknown> {
         const reference = this.#remotes.get(name);
         if (!reference) throw new ConexError(`remote binding "${name}" is not configured`, { code: -32602, execution: "completed", retry: "never" });
         const client = this.#client!;
+        // node 段取链路认证 peer（hub 盖章）；未就绪时不声明——该调用本就
+        // 无法在未就绪链路上送达。
+        const peer = client.negotiation?.linkIdentity?.peerId;
+        const consumerModule = this.#consumerApplicationId !== undefined && peer
+          ? `module/${peer}/${this.#consumerApplicationId}/${moduleName}`
+          : undefined;
         return {
           reference,
-          invoke: (method, argument, options) => client.invoke(reference, method, argument, options),
-          subscribe: (state, argument, update, options) => client.subscribe(reference, state, argument, update, options),
+          invoke: (method, argument, options) => client.invoke(reference, method, argument, { ...options, consumerModule }),
+          subscribe: (state, argument, update, options) => client.subscribe(reference, state, argument, update, { ...options, consumerModule }),
         };
       },
     };

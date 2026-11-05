@@ -176,6 +176,7 @@ fn register_call(who: &Caller, generation: u64, endpoint: &str, contract: &str) 
         binding_id: None,
         space_id: String::new(),
         registration_id: String::new(),
+        consumer_module: String::new(),
     }
 }
 
@@ -202,11 +203,13 @@ fn unregister_call(
         binding_id: None,
         space_id: String::new(),
         registration_id: String::new(),
+        consumer_module: String::new(),
     }
 }
 
 fn list_call(who: &Caller, space: &str, max_frame_bytes: u32) -> BrokerCall {
     BrokerCall {
+        consumer_module: String::new(),
         caller: who.clone(),
         endpoint_id: String::new(),
         method: "module/list".into(),
@@ -478,6 +481,7 @@ async fn list_frame_overflow_is_rejected_explicitly() {
 async fn t03_wired_and_t04_unsupported_methods_fail_explicitly() {
     let broker = broker(Some(registry()));
     let call = BrokerCall {
+        consumer_module: String::new(),
         caller: caller("alice"),
         endpoint_id: String::new(),
         method: "module/invoke".into(),
@@ -499,6 +503,7 @@ async fn t03_wired_and_t04_unsupported_methods_fail_explicitly() {
         "module/invoke is wired (T03) and resolves the trusted registry first"
     );
     let call = BrokerCall {
+        consumer_module: String::new(),
         caller: caller("alice"),
         endpoint_id: String::new(),
         method: "module/cancel".into(),
@@ -520,6 +525,7 @@ async fn t03_wired_and_t04_unsupported_methods_fail_explicitly() {
         "module/cancel requires the original invoke requestId"
     );
     let call = BrokerCall {
+        consumer_module: String::new(),
         caller: caller("alice"),
         endpoint_id: String::new(),
         method: "state/subscribe".into(),

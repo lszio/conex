@@ -599,6 +599,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Local exposure ceiling: the two sample principals.
             exposure_principals: BTreeSet::from([endpoint.clone(), peer.clone()]),
             exposure_tenants: BTreeSet::from([space.clone()]),
+            consumer_application_id: None,
         },
     );
     // A graceful signal walks the same stop path (idempotent with main's stop);

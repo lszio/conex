@@ -254,6 +254,7 @@ fn s1_context_rules_split_client_and_host_boundaries() {
                 method: "module/invoke".into(),
                 params: Some(conex_proto::CallParams {
                     context: Some(conex_proto::RequestContext {
+                        consumer_module: String::new(),
                         provider_endpoint_id: "counter-rust".into(),
                         plane: conex_proto::Plane::Broker as i32,
                         binding_id: None,
