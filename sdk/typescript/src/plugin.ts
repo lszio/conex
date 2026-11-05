@@ -127,6 +127,10 @@ export type PublicationState =
 export interface InstanceOptions {
   /** Stop cleanup budget in ms; default 30_000, caller may shorten but never extend past 30s (private-runtime §1). */
   stopDeadlineMs?: number;
+  /** 模块消费主体来源（contracts/s1-module-principals.md §4）：两项齐备时远程绑定
+   *  出站自动声明 `module/<node>/<application>/<module>`；缺省 = 连接主体自身。 */
+  consumerNodeId?: string;
+  consumerApplicationId?: string;
 }
 
 /** Per-stop budget; defaults to the instance budget, clamped to (0, 30_000]. */
@@ -256,10 +260,14 @@ export class Instance<I = unknown> {
   readonly #cleanupErrors: unknown[] = [];
   #retryTimer?: ReturnType<typeof setInterval>;
   #stopDeadlineMs: number;
+  readonly #consumerIdentity?: { node: string; application: string };
   readonly #publicationListeners = new Set<(publication: PublicationState, error?: unknown) => void>();
 
   constructor(private readonly plugin: Plugin<I>, private readonly link: InstanceLink, options: InstanceOptions = {}) {
     this.#stopDeadlineMs = clampDeadline(options.stopDeadlineMs);
+    this.#consumerIdentity = options.consumerNodeId !== undefined && options.consumerApplicationId !== undefined
+      ? { node: options.consumerNodeId, application: options.consumerApplicationId }
+      : undefined;
   }
 
   get state(): InstanceState { return this.#state; }
@@ -352,7 +360,6 @@ export class Instance<I = unknown> {
       // requires a pinned remote binding may await this bounded first contact.
       let contact: Promise<boolean> | undefined;
       this.#checkpoint();
-      const deps = this.#deps();
       for (const module of this.#order) {
         this.#checkpoint();
         if (module.depsRemote?.length) {
@@ -360,6 +367,11 @@ export class Instance<I = unknown> {
           if (!await contact) throw new PluginCompositeError({ kind: "start_failed", module: module.name,
             cause: new ConexError("required remote link unavailable", { code: -32005, execution: "not_started", retry: "never" }) });
         }
+        // 模块消费主体按消费模块名派生（contracts/s1-module-principals.md §4）。
+        const consumerModule = this.#consumerIdentity
+          ? `module/${this.#consumerIdentity.node}/${this.#consumerIdentity.application}/${module.name}`
+          : "";
+        const deps = this.#deps(consumerModule);
         const context: ModuleContext = { deps };
         try {
           const handle = await module.start(context);
@@ -402,7 +414,7 @@ export class Instance<I = unknown> {
     if (this.#stopRequested) throw new StopRequested();
   }
 
-  #deps(): ModuleDeps {
+  #deps(consumerModule: string): ModuleDeps {
     return {
       local: <H>(name: string): H => {
         if (!this.#handles.has(name)) throw new ConexError(`local dependency "${name}" has no handle`, { code: -32602, execution: "completed", retry: "never" });
@@ -414,8 +426,8 @@ export class Instance<I = unknown> {
         const client = this.#client!;
         return {
           reference,
-          invoke: (method, argument, options) => client.invoke(reference, method, argument, options),
-          subscribe: (state, argument, update, options) => client.subscribe(reference, state, argument, update, options),
+          invoke: (method, argument, options) => client.invoke(reference, method, argument, { ...options, consumerModule }),
+          subscribe: (state, argument, update, options) => client.subscribe(reference, state, argument, update, { ...options, consumerModule }),
         };
       },
     };

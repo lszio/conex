@@ -534,6 +534,18 @@ impl Client {
         method: &str,
         argument: impl Serialize,
     ) -> Result<Call> {
+        self.invoke_as(target, contract, method, argument, "")
+    }
+    /// 带模块消费主体声明的 invoke（contracts/s1-module-principals.md §4）；
+    /// 空声明 = 连接主体自身。
+    pub fn invoke_as(
+        &self,
+        target: ModuleRef,
+        contract: Arc<Contract>,
+        method: &str,
+        argument: impl Serialize,
+        consumer_module: &str,
+    ) -> Result<Call> {
         if target.contract_id != contract.id {
             return Err(Error::bad_request("contract binding mismatch"));
         }
@@ -544,9 +556,11 @@ impl Client {
         let argument = json_value(argument)?;
         capability::validate(&descriptor.input_schema, &argument)?;
         let input = json!({"method":method,"argument":argument});
+        let mut context = target.context();
+        context.consumer_module = consumer_module.to_string();
         let mut call = self.core().request(
             "module/invoke",
-            target.context(),
+            context,
             input,
             PendingKind::Invoke {
                 execution: descriptor.execution,
@@ -564,6 +578,17 @@ impl Client {
         contract: Arc<Contract>,
         state: &str,
         argument: impl Serialize,
+    ) -> Result<Subscription> {
+        self.subscribe_as(target, contract, state, argument, "")
+    }
+    /// 带模块消费主体声明的 subscribe；空声明 = 连接主体自身。
+    pub fn subscribe_as(
+        &self,
+        target: ModuleRef,
+        contract: Arc<Contract>,
+        state: &str,
+        argument: impl Serialize,
+        consumer_module: &str,
     ) -> Result<Subscription> {
         if target.contract_id != contract.id {
             return Err(Error::bad_request("contract binding mismatch"));
@@ -597,9 +622,11 @@ impl Client {
                 },
             );
         }
+        let mut context = target.context();
+        context.consumer_module = consumer_module.to_string();
         let result = self.core().request(
             "state/subscribe",
-            target.context(),
+            context,
             json!({"subscriptionId":id,"state":state,"argument":argument}),
             PendingKind::Subscribe(id.clone()),
             false,

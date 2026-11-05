@@ -44,7 +44,7 @@ export interface Invocation<T> {
   readonly result: Promise<T>;
   cancel(): Promise<{ requested: boolean }>;
 }
-export interface InvokeOptions { timeoutMs?: number; signal?: AbortSignal }
+export interface InvokeOptions { timeoutMs?: number; signal?: AbortSignal; /** 模块消费主体声明（contracts/s1-module-principals.md §4）；空缺 = 连接主体自身。 */ consumerModule?: string }
 export interface CapabilityOptions {
   contracts: readonly CapabilityContract[];
   /** Installed local exposure, never supplied by a remote consumer. */
@@ -171,6 +171,7 @@ export class CapabilitySession {
   }
   invoke<I, O>(reference: ModuleReference, method: string, argument: I, options: InvokeOptions = {}): Invocation<O> {
     const context = targetContext(reference);
+    if (options.consumerModule) context.consumerModule = options.consumerModule;
     const descriptor = this.contracts.get(reference.contractId)?.methods[method];
     if (!descriptor || !reference.methods.includes(method)) throw new ConexError("method not installed or exposed", { code: -32004, execution: "not_started", retry: "never" });
     const input = descriptor.input(argument);
@@ -185,6 +186,7 @@ export class CapabilitySession {
   }
   subscribe<I, T>(reference: ModuleReference, state: string, argument: I, update: (sample: Sample<T>) => void, options: InvokeOptions = {}): StateSubscription<T> {
     const context = targetContext(reference);
+    if (options.consumerModule) context.consumerModule = options.consumerModule;
     const descriptor = this.contracts.get(reference.contractId)?.states[state];
     if (!descriptor || !reference.states.includes(state)) throw new ConexError("state not installed or exposed", { code: -32004 });
     if (!this.limits || this.consumers.size >= this.limits.maxSubscriptions) throw new ConexError("subscription limit", { code: -32008 });

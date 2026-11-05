@@ -134,6 +134,7 @@ export class ConexClient {
 
   invoke<I, O>(reference: ModuleReference, method: string, argument: I, options: InvokeOptions = {}): Invocation<O> {
     const context = targetContext(reference);
+    if (options.consumerModule) context.consumerModule = options.consumerModule;
     const descriptor = this.capabilities?.contracts.find(contract => contract.contractId === reference.contractId)?.methods[method];
     if (!descriptor || !reference.methods.includes(method)) throw new ConexError("method not installed or exposed", { code: -32004, execution: "not_started", retry: "never" });
     const input = descriptor.input(argument);
