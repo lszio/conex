@@ -302,6 +302,7 @@ async fn handle_request(
             binding_id: Some(binding_id.clone()),
             space_id: context.space_id.clone(),
             registration_id: context.registration_id.clone(),
+            consumer_module: context.consumer_module.clone(),
         };
         return match broker.invoke(call).await {
             Ok(value) => success(&request_id, value),

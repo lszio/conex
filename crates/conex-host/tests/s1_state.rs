@@ -190,6 +190,7 @@ async fn register_ok(broker: &Broker, who: &Caller, generation: u64, endpoint: &
         binding_id: None,
         space_id: String::new(),
         registration_id: String::new(),
+        consumer_module: String::new(),
     };
     broker.invoke(call).await.unwrap()["registrationId"]
         .as_str()
@@ -228,6 +229,7 @@ fn subscribe_call(
         binding_id: None,
         space_id: space_id.into(),
         registration_id: registration_id.into(),
+        consumer_module: String::new(),
     }
 }
 
@@ -238,6 +240,7 @@ fn unsubscribe_call(
     subscription_id: &str,
 ) -> BrokerCall {
     BrokerCall {
+        consumer_module: String::new(),
         caller: who.clone(),
         endpoint_id: String::new(),
         method: "state/unsubscribe".into(),

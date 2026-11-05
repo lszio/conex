@@ -111,6 +111,16 @@ fn registry() -> Arc<ModuleRegistry> {
                 methods: None,
                 states: None,
             },
+            // 模块消费主体（contracts/s1-module-principals.md）：仅 counter/read。
+            // 它不继承节点/操作员的批准；未列出的模块主体一律默认拒绝。
+            ConsumeApproval {
+                principal_id: "module/node-a/app-a/worker".into(),
+                space_id: "dev".into(),
+                provider_endpoint_id: "counter-ts".into(),
+                contract_id: "conex.counter".into(),
+                methods: Some(vec!["counter/read".into()]),
+                states: None,
+            },
         ],
     );
     approvals
@@ -180,6 +190,7 @@ async fn register_ok(broker: &Broker, who: &Caller, generation: u64, endpoint: &
         binding_id: None,
         space_id: String::new(),
         registration_id: String::new(),
+        consumer_module: String::new(),
     };
     broker.invoke(call).await.unwrap()["registrationId"]
         .as_str()
@@ -200,6 +211,7 @@ fn invoke_call(
     binding_id: Option<&str>,
 ) -> BrokerCall {
     BrokerCall {
+        consumer_module: String::new(),
         caller: who.clone(),
         endpoint_id: endpoint.into(),
         method: "module/invoke".into(),
@@ -265,6 +277,7 @@ fn cancel_call(
     binding_id: Option<&str>,
 ) -> BrokerCall {
     BrokerCall {
+        consumer_module: String::new(),
         caller: who.clone(),
         endpoint_id: String::new(),
         method: "module/cancel".into(),
@@ -283,6 +296,7 @@ fn cancel_call(
 
 fn list_call(who: &Caller, space: &str, binding_id: Option<&str>) -> BrokerCall {
     BrokerCall {
+        consumer_module: String::new(),
         caller: who.clone(),
         endpoint_id: String::new(),
         method: "module/list".into(),
@@ -304,6 +318,12 @@ fn spawn_invoke(
     call: BrokerCall,
 ) -> tokio::task::JoinHandle<CallResult<Value>> {
     tokio::spawn(async move { broker.invoke(call).await })
+}
+
+/// 在既有调用构造上声明模块消费主体（contracts/s1-module-principals.md §3）。
+fn with_consumer(mut call: BrokerCall, consumer_module: &str) -> BrokerCall {
+    call.consumer_module = consumer_module.into();
+    call
 }
 
 async fn wait_until(mut check: impl FnMut() -> bool) {
@@ -543,6 +563,139 @@ async fn forwarded_context_is_host_stamped_not_client_supplied() {
     assert_eq!(error.code_enum(), Some(conex_proto::ErrorCode::Forbidden));
     // 两个伪造尝试都没有产生额外业务帧。
     assert_eq!(provider.count("module/invoke"), 1);
+}
+
+// ---- 模块消费主体（contracts/s1-module-principals.md §3/§6）--------------
+
+/// M-A01：模块主体不继承节点/操作员批准——节点声明的未批准主体 forbidden，
+/// 提供端 handler 未执行。
+#[tokio::test]
+async fn module_consumer_requires_its_own_approval() {
+    let Setup {
+        broker,
+        registration_id,
+        provider,
+        ..
+    } = setup().await;
+    let call = with_consumer(
+        read_invoke(
+            &caller("node-a"),
+            11,
+            REQ_A,
+            &registration_id,
+            LONG_BUDGET,
+            None,
+        ),
+        "module/node-a/app-a/other",
+    );
+    let error = broker
+        .invoke(call)
+        .await
+        .expect_err("unapproved module principal must be forbidden");
+    assert_eq!(error.code_enum(), Some(conex_proto::ErrorCode::Forbidden));
+    assert_eq!(error.wire().execution, "not_started");
+    assert_eq!(provider.count("module/invoke"), 0);
+}
+
+/// M-A02：节点归属判定——连接认证主体与声明主体的 nodeId 段不符即
+/// forbidden，无论声明主体是否在批准表内。
+#[tokio::test]
+async fn module_consumer_cannot_claim_another_nodes_identity() {
+    let Setup {
+        broker,
+        registration_id,
+        provider,
+        ..
+    } = setup().await;
+    let call = with_consumer(
+        read_invoke(
+            &caller("bob"),
+            21,
+            REQ_A,
+            &registration_id,
+            LONG_BUDGET,
+            None,
+        ),
+        "module/node-a/app-a/worker",
+    );
+    let error = broker
+        .invoke(call)
+        .await
+        .expect_err("cross-node claim must be forbidden");
+    assert_eq!(error.code_enum(), Some(conex_proto::ErrorCode::Forbidden));
+    assert_eq!(provider.count("module/invoke"), 0);
+}
+
+/// M-A03：形状非法 → bad_request，先于一切披露（不区分节点/批准原因）。
+#[tokio::test]
+async fn malformed_module_principal_is_bad_request_before_disclosure() {
+    let Setup {
+        broker,
+        registration_id,
+        provider,
+        ..
+    } = setup().await;
+    for bad in [
+        "module/node-a/app",   // 缺 moduleId 段
+        "module/node-a/a/b/c", // 多一段
+        "node-a/app-a/worker", // 缺 module/ 前缀
+    ] {
+        let call = with_consumer(
+            read_invoke(
+                &caller("node-a"),
+                11,
+                REQ_A,
+                &registration_id,
+                LONG_BUDGET,
+                None,
+            ),
+            bad,
+        );
+        let error = broker.invoke(call).await.unwrap_err();
+        assert_eq!(error.code_enum(), Some(conex_proto::ErrorCode::BadRequest));
+        assert_eq!(error.wire().retry, "never");
+    }
+    assert_eq!(provider.count("module/invoke"), 0);
+}
+
+/// 正路径 + 盖章：批准的模块主体转发成功；提供端看到的 principalId 是
+/// 模块主体，声明字段不随转发（归属由盖章表达，契约 §3）。
+#[tokio::test]
+async fn approved_module_consumer_is_stamped_to_the_provider() {
+    let Setup {
+        broker,
+        registration_id,
+        provider,
+        ..
+    } = setup().await;
+    let task = spawn_invoke(
+        broker.clone(),
+        with_consumer(
+            read_invoke(
+                &caller("node-a"),
+                11,
+                REQ_A,
+                &registration_id,
+                LONG_BUDGET,
+                None,
+            ),
+            "module/node-a/app-a/worker",
+        ),
+    );
+    let frame = provider.wait_invoke().await;
+    let hop = frame["id"].as_str().unwrap().to_string();
+    let context = &frame["params"]["context"];
+    assert_eq!(context["principalId"], "module/node-a/app-a/worker");
+    assert_eq!(context["tenantId"], "tenant-a");
+    assert!(context.get("consumerModule").is_none());
+
+    provider
+        .reply(
+            &hop,
+            Ok(AgentReply::Value(json!({ "count": 3, "revision": "0" }))),
+        )
+        .await;
+    assert_eq!(task.await.unwrap().unwrap()["count"], 3);
 }
 
 /// T03 步骤 3（A04）：同一 requestId 在 `SourceKey::Link` 不同代次与

@@ -233,6 +233,7 @@ impl StateRelay {
         provider_endpoint_id: &str,
         space_id: &str,
         registration_id: &str,
+        consumer_module: &str,
         state_name: &str,
         consumer_subscription_id: String,
         argument: Value,
@@ -250,19 +251,20 @@ impl StateRelay {
             .contracts()
             .get(&record.contract_id)
             .ok_or_else(|| internal("contract for active registration is not installed"))?;
+        // 模块消费主体判定（contracts/s1-module-principals.md §3）：声明非空
+        // 时形状/节点归属先行，批准匹配与转发盖章都用有效消费主体。
+        let consumer = super::effective_consumer(caller, consumer_module)?;
         let visible = self
             .registry
             .approvals()
             .visible(
-                &caller.principal_id,
+                &consumer,
                 &record.space_id,
                 &record.provider_endpoint_id,
                 &record.contract_id,
                 &contract,
             )
-            .ok_or_else(|| {
-                forbidden("consume approval is missing for this module or the caller")
-            })?;
+            .ok_or_else(|| forbidden("consume approval is missing for this consumer"))?;
         if record.registration_id != registration_id {
             return Err(stale_revision(
                 "registrationId is not the current registration",
@@ -303,7 +305,7 @@ impl StateRelay {
             })?;
         // 5. opening 记录 + 每跳 subscriptionId（有界）。
         let hop = new_registration_id();
-        let upstream_context = stamped_context(caller, &record);
+        let upstream_context = stamped_context(&consumer, &caller.tenant_id, &record);
         let delivery_context = registration_context(&record);
         {
             let mut inner = self.inner.lock().await;

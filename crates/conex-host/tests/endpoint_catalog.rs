@@ -194,6 +194,7 @@ async fn broker_endpoint_list_strictly_decodes_input_and_hides_other_principals(
     let broker = built.broker.unwrap();
     let alice = caller("alice");
     let base = || BrokerCall {
+        consumer_module: String::new(),
         caller: alice.clone(),
         endpoint_id: String::new(),
         method: "endpoint/list".into(),
@@ -281,6 +282,7 @@ async fn connection_list_isolates_guest_visitors_and_hides_agent_links() {
     ui_links.register("alice", "tenant-a");
 
     let connection_list = |caller: Caller, link_id: String| BrokerCall {
+        consumer_module: String::new(),
         caller,
         endpoint_id: String::new(),
         method: "connection/list".into(),

@@ -234,6 +234,33 @@ pub fn is_valid_method_name(value: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' || c == '/')
 }
 
+/// 模块消费主体（contracts/s1-module-principals.md §2）：
+/// `module/<nodeId>/<applicationId>/<moduleId>`，三段均为合法标识符。
+/// 返回 `(nodeId, applicationId, moduleId)`；形状非法返回 `None`。
+pub fn parse_module_principal(value: &str) -> Option<(String, String, String)> {
+    let rest = value.strip_prefix("module/")?;
+    let mut segments = rest.split('/');
+    let (node, application, module, extra) = (
+        segments.next()?,
+        segments.next()?,
+        segments.next()?,
+        segments.next(),
+    );
+    if extra.is_some() {
+        return None;
+    }
+    for segment in [node, application, module] {
+        if !is_valid_identifier(segment) {
+            return None;
+        }
+    }
+    Some((
+        node.to_string(),
+        application.to_string(),
+        module.to_string(),
+    ))
+}
+
 // ---- 校验入口 ------------------------------------------------------------
 
 fn schema_error(message: impl Into<String>) -> CallError {
@@ -306,6 +333,8 @@ pub struct PublishApproval {
 
 /// Principal 可发现/调用/订阅的目标与契约成员（契约 §4.1-3）。
 /// `methods`/`states` 缺省表示整个契约；显式列表必须是契约成员。
+/// `principal_id` 是认证所得主体，或模块消费主体
+/// （[`parse_module_principal`]；节点为远程绑定消费声明的身份）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsumeApproval {
     pub principal_id: String,
@@ -491,5 +520,34 @@ impl ApprovalSet {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod principal_tests {
+    use super::parse_module_principal;
+
+    #[test]
+    fn module_principal_shape_is_strict() {
+        let (node, application, module) =
+            parse_module_principal("module/node-a/app.1/worker_2").expect("valid principal");
+        assert_eq!(
+            (node.as_str(), application.as_str(), module.as_str()),
+            ("node-a", "app.1", "worker_2")
+        );
+
+        for bad in [
+            "",
+            "node-a/app-a/worker",   // 缺 module/ 前缀
+            "module/node-a/app",     // 缺 moduleId
+            "module/node-a/a/b/c",   // 多一段
+            "module/node-a//worker", // 空段
+            "module/",               // 全空
+        ] {
+            assert!(
+                parse_module_principal(bad).is_none(),
+                "{bad} must not parse"
+            );
+        }
     }
 }
