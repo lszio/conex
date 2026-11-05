@@ -114,6 +114,7 @@ impl RemoteLink {
                 method: method.to_owned(),
                 params: Some(conex_proto::CallParams {
                     context: Some(conex_proto::RequestContext {
+                        consumer_module: String::new(),
                         provider_endpoint_id: endpoint_id.to_owned(),
                         plane: conex_proto::Plane::Broker as i32,
                         binding_id: None,
@@ -194,6 +195,7 @@ impl RemoteLink {
                 method: "blob/get".to_owned(),
                 params: Some(conex_proto::CallParams {
                     context: Some(conex_proto::RequestContext {
+                        consumer_module: String::new(),
                         provider_endpoint_id: endpoint_id.to_owned(),
                         plane: conex_proto::Plane::Broker as i32,
                         binding_id: None,

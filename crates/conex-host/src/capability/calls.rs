@@ -456,6 +456,7 @@ pub(crate) fn stamped_context(
     record: &crate::capability::ModuleRecord,
 ) -> conex_proto::RequestContext {
     conex_proto::RequestContext {
+        consumer_module: String::new(),
         provider_endpoint_id: record.provider_endpoint_id.clone(),
         plane: conex_proto::Plane::Broker as i32,
         binding_id: None,

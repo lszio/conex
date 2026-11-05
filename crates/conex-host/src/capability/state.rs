@@ -1300,6 +1300,7 @@ impl StateInner {
 /// 身份字段——消费者收到的通知不携带中心盖章身份。
 fn registration_context(record: &ModuleRecord) -> conex_proto::RequestContext {
     conex_proto::RequestContext {
+        consumer_module: String::new(),
         provider_endpoint_id: record.provider_endpoint_id.clone(),
         plane: conex_proto::Plane::Broker as i32,
         binding_id: None,

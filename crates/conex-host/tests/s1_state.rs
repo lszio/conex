@@ -471,6 +471,7 @@ fn end_input(hop: &str, code: &str, message: &str) -> Value {
 /// 提供端通知上下文：注册实例归属由 registrationId/代次校验。
 fn provider_context(registration_id: &str) -> conex_proto::RequestContext {
     conex_proto::RequestContext {
+        consumer_module: String::new(),
         provider_endpoint_id: "counter-ts".into(),
         plane: conex_proto::Plane::Broker as i32,
         binding_id: None,

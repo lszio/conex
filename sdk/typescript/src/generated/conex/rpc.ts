@@ -77,7 +77,16 @@ export interface RequestContext {
    * 客户端不得自行填充 principal/tenant，但必须携带这两个标识。
    */
   spaceId?: string | undefined;
-  registrationId?: string | undefined;
+  registrationId?:
+    | string
+    | undefined;
+  /**
+   * S1 模块消费主体（contracts/s1-module-principals.md §2）：节点 SDK 为
+   * 远程绑定的出站调用声明 `module/<nodeId>/<applicationId>/<moduleId>`；
+   * 中心校验形状、节点归属与消费批准后转发。空 = 连接主体自身（操作员
+   * 路径，行为不变）。
+   */
+  consumerModule?: string | undefined;
 }
 
 export interface Success {
@@ -586,6 +595,7 @@ function createBaseRequestContext(): RequestContext {
     tenantId: "",
     spaceId: "",
     registrationId: "",
+    consumerModule: "",
   };
 }
 
@@ -611,6 +621,9 @@ export const RequestContext: MessageFns<RequestContext> = {
     }
     if (message.registrationId !== undefined && message.registrationId !== "") {
       writer.uint32(58).string(message.registrationId);
+    }
+    if (message.consumerModule !== undefined && message.consumerModule !== "") {
+      writer.uint32(66).string(message.consumerModule);
     }
     return writer;
   },
@@ -684,6 +697,14 @@ export const RequestContext: MessageFns<RequestContext> = {
             message.registrationId = reader.string();
             continue;
           }
+          case 8: {
+            if (tag !== 66) {
+              break;
+            }
+
+            message.consumerModule = reader.string();
+            continue;
+          }
         }
         if ((tag & 7) === 4 || tag === 0) {
           break;
@@ -729,6 +750,11 @@ export const RequestContext: MessageFns<RequestContext> = {
         : isSet(object.registration_id)
         ? globalThis.String(object.registration_id)
         : "",
+      consumerModule: isSet(object.consumerModule)
+        ? globalThis.String(object.consumerModule)
+        : isSet(object.consumer_module)
+        ? globalThis.String(object.consumer_module)
+        : "",
     };
   },
 
@@ -755,6 +781,9 @@ export const RequestContext: MessageFns<RequestContext> = {
     if (message.registrationId !== undefined && message.registrationId !== "") {
       obj.registrationId = message.registrationId;
     }
+    if (message.consumerModule !== undefined && message.consumerModule !== "") {
+      obj.consumerModule = message.consumerModule;
+    }
     return obj;
   },
 
@@ -770,6 +799,7 @@ export const RequestContext: MessageFns<RequestContext> = {
     message.tenantId = object.tenantId ?? "";
     message.spaceId = object.spaceId ?? "";
     message.registrationId = object.registrationId ?? "";
+    message.consumerModule = object.consumerModule ?? "";
     return message;
   },
 };

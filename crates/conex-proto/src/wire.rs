@@ -233,6 +233,7 @@ pub fn decode_wire_for_boundary(
                     "providerEndpointId",
                     "spaceId",
                     "registrationId",
+                    "consumerModule",
                     "principalId",
                     "tenantId",
                 ]
@@ -563,6 +564,10 @@ struct RawContext {
     space_id: Option<String>,
     #[serde(rename = "registrationId", default)]
     registration_id: Option<String>,
+    // 模块消费主体（contracts/s1-module-principals.md §2）：JSON 面允许
+    // 携带，判定与盖章在 host；此处只透传，不因字段存在而信任。
+    #[serde(rename = "consumerModule", default)]
+    consumer_module: Option<String>,
 }
 
 fn parse_call_params(
@@ -628,6 +633,7 @@ fn parse_call_params(
             tenant_id: raw.context.tenant_id.unwrap_or_default(),
             space_id: raw.context.space_id.unwrap_or_default(),
             registration_id: raw.context.registration_id.unwrap_or_default(),
+            consumer_module: raw.context.consumer_module.unwrap_or_default(),
         }),
         timeout_budget_ms: raw.timeout_budget_ms.unwrap_or(0),
         input,
@@ -738,6 +744,13 @@ fn call_params_to_json(
         ctx.insert(
             "registrationId".into(),
             Value::String(context.registration_id.clone()),
+        );
+    }
+    // 模块消费主体按协商档位透传；判定与盖章是 host 的职责。
+    if !context.consumer_module.is_empty() {
+        ctx.insert(
+            "consumerModule".into(),
+            Value::String(context.consumer_module.clone()),
         );
     }
     let mut out = Map::new();

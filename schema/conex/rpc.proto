@@ -57,6 +57,11 @@ message RequestContext {
   // 客户端不得自行填充 principal/tenant，但必须携带这两个标识。
   string space_id = 6;
   string registration_id = 7;
+  // S1 模块消费主体（contracts/s1-module-principals.md §2）：节点 SDK 为
+  // 远程绑定的出站调用声明 `module/<nodeId>/<applicationId>/<moduleId>`；
+  // 中心校验形状、节点归属与消费批准后转发。空 = 连接主体自身（操作员
+  // 路径，行为不变）。
+  string consumer_module = 8;
 }
 
 message Success {

@@ -290,6 +290,7 @@ fn control_request(method: &str, input: Value, request_id: &str) -> conex_proto:
             method: method.into(),
             params: Some(conex_proto::CallParams {
                 context: Some(conex_proto::RequestContext {
+                    consumer_module: String::new(),
                     provider_endpoint_id: "agent-mgr".into(),
                     plane: conex_proto::Plane::Broker as i32,
                     binding_id: None,

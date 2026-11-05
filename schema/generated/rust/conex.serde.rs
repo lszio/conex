@@ -22099,6 +22099,9 @@ impl serde::Serialize for RequestContext {
         if !self.registration_id.is_empty() {
             len += 1;
         }
+        if !self.consumer_module.is_empty() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("conex.RequestContext", len)?;
         if !self.provider_endpoint_id.is_empty() {
             struct_ser.serialize_field("providerEndpointId", &self.provider_endpoint_id)?;
@@ -22123,6 +22126,9 @@ impl serde::Serialize for RequestContext {
         if !self.registration_id.is_empty() {
             struct_ser.serialize_field("registrationId", &self.registration_id)?;
         }
+        if !self.consumer_module.is_empty() {
+            struct_ser.serialize_field("consumerModule", &self.consumer_module)?;
+        }
         struct_ser.end()
     }
 }
@@ -22146,6 +22152,8 @@ impl<'de> serde::Deserialize<'de> for RequestContext {
             "spaceId",
             "registration_id",
             "registrationId",
+            "consumer_module",
+            "consumerModule",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -22157,6 +22165,7 @@ impl<'de> serde::Deserialize<'de> for RequestContext {
             TenantId,
             SpaceId,
             RegistrationId,
+            ConsumerModule,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -22185,6 +22194,7 @@ impl<'de> serde::Deserialize<'de> for RequestContext {
                             "tenantId" | "tenant_id" => Ok(GeneratedField::TenantId),
                             "spaceId" | "space_id" => Ok(GeneratedField::SpaceId),
                             "registrationId" | "registration_id" => Ok(GeneratedField::RegistrationId),
+                            "consumerModule" | "consumer_module" => Ok(GeneratedField::ConsumerModule),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -22211,6 +22221,7 @@ impl<'de> serde::Deserialize<'de> for RequestContext {
                 let mut tenant_id__ = None;
                 let mut space_id__ = None;
                 let mut registration_id__ = None;
+                let mut consumer_module__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::ProviderEndpointId => {
@@ -22255,6 +22266,12 @@ impl<'de> serde::Deserialize<'de> for RequestContext {
                             }
                             registration_id__ = Some(map_.next_value()?);
                         }
+                        GeneratedField::ConsumerModule => {
+                            if consumer_module__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("consumerModule"));
+                            }
+                            consumer_module__ = Some(map_.next_value()?);
+                        }
                     }
                 }
                 Ok(RequestContext {
@@ -22265,6 +22282,7 @@ impl<'de> serde::Deserialize<'de> for RequestContext {
                     tenant_id: tenant_id__.unwrap_or_default(),
                     space_id: space_id__.unwrap_or_default(),
                     registration_id: registration_id__.unwrap_or_default(),
+                    consumer_module: consumer_module__.unwrap_or_default(),
                 })
             }
         }
