@@ -148,7 +148,6 @@ pub fn instance_config(config: &PublicationConfig, app_id: &str) -> InstanceConf
         integration_id: config.integration_id.clone(),
         endpoint_prefix: format!("{}-{app_id}", config.endpoint_prefix),
         bindings: Vec::new(),
-        consumer_node_id: None,
         consumer_application_id: None,
         exposure_principals: config.exposure_principals.clone(),
         exposure_tenants: config.exposure_tenants.clone(),

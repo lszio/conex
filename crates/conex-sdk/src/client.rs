@@ -534,17 +534,19 @@ impl Client {
         method: &str,
         argument: impl Serialize,
     ) -> Result<Call> {
-        self.invoke_as(target, contract, method, argument, "")
+        self.invoke_as(target, contract, method, argument, None)
     }
-    /// 带模块消费主体声明的 invoke（contracts/s1-module-principals.md §4）；
-    /// 空声明 = 连接主体自身。
+    /// 带模块消费主体声明的 invoke（contracts/s1-module-principals.md §4）。
+    /// `consumer = Some((application, module))` 时声明
+    /// `module/<链路认证 peer>/<application>/<module>`——node 段取当前链路
+    /// 握手认证的 peer 身份（hub 盖章，配置不可声明）；`None` = 连接主体自身。
     pub fn invoke_as(
         &self,
         target: ModuleRef,
         contract: Arc<Contract>,
         method: &str,
         argument: impl Serialize,
-        consumer_module: &str,
+        consumer: Option<(&str, &str)>,
     ) -> Result<Call> {
         if target.contract_id != contract.id {
             return Err(Error::bad_request("contract binding mismatch"));
@@ -557,7 +559,14 @@ impl Client {
         capability::validate(&descriptor.input_schema, &argument)?;
         let input = json!({"method":method,"argument":argument});
         let mut context = target.context();
-        context.consumer_module = consumer_module.to_string();
+        if let Some((application, module)) = consumer {
+            context.consumer_module = format!(
+                "module/{}/{}/{}",
+                self.core().hub.peer_id,
+                application,
+                module
+            );
+        }
         let mut call = self.core().request(
             "module/invoke",
             context,
@@ -579,16 +588,16 @@ impl Client {
         state: &str,
         argument: impl Serialize,
     ) -> Result<Subscription> {
-        self.subscribe_as(target, contract, state, argument, "")
+        self.subscribe_as(target, contract, state, argument, None)
     }
-    /// 带模块消费主体声明的 subscribe；空声明 = 连接主体自身。
+    /// 带模块消费主体声明的 subscribe；node 段同 [`Client::invoke_as`]。
     pub fn subscribe_as(
         &self,
         target: ModuleRef,
         contract: Arc<Contract>,
         state: &str,
         argument: impl Serialize,
-        consumer_module: &str,
+        consumer: Option<(&str, &str)>,
     ) -> Result<Subscription> {
         if target.contract_id != contract.id {
             return Err(Error::bad_request("contract binding mismatch"));
@@ -623,7 +632,14 @@ impl Client {
             );
         }
         let mut context = target.context();
-        context.consumer_module = consumer_module.to_string();
+        if let Some((application, module)) = consumer {
+            context.consumer_module = format!(
+                "module/{}/{}/{}",
+                self.core().hub.peer_id,
+                application,
+                module
+            );
+        }
         let result = self.core().request(
             "state/subscribe",
             context,
@@ -745,6 +761,14 @@ fn context_json(context: &p::RequestContext, method: Option<&str>) -> Value {
         ctx.insert(
             "registrationId".into(),
             Value::String(context.registration_id.clone()),
+        );
+    }
+    // 模块消费主体声明（contracts/s1-module-principals.md §2）：节点 SDK
+    // 填充、中心判定；空 = 连接主体自身。
+    if !context.consumer_module.is_empty() {
+        ctx.insert(
+            "consumerModule".into(),
+            Value::String(context.consumer_module.clone()),
         );
     }
     Value::Object(ctx)

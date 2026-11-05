@@ -85,6 +85,11 @@ const STEPS: &[Step] = &[
         "cargo",
         &["xtask", "e2e", "--suite", "private-network"],
     ),
+    (
+        "Module principals (real host + two nodes, A14 consume side)",
+        "cargo",
+        &["xtask", "e2e", "--suite", "module-principals"],
+    ),
 ];
 
 pub fn run() -> Result<()> {

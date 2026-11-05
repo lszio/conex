@@ -380,7 +380,7 @@ impl Node {
             let decl = ModuleDecl::new(
                 module.name.clone(),
                 module.dependencies.values().cloned().collect(),
-                Vec::new(),
+                module.remote_deps.clone(),
                 move |context: ModuleContext| {
                     let factory = factory.clone();
                     let runtime = runtime.clone();
@@ -416,9 +416,8 @@ impl Node {
         let remote_bindings = !application.bindings.is_empty();
         let mut config = crate::publication::instance_config(&self.config.publication, app_id);
         config.bindings = application.bindings;
-        // 模块消费主体来源（contracts/s1-module-principals.md §4）：远程绑定
-        // 出站按组合身份声明 module/<node>/<app>/<module>，作者不手写。
-        config.consumer_node_id = Some(self.config.node_id.clone());
+        // 模块消费主体的应用段（contracts/s1-module-principals.md §4）：
+        // node 段由 SDK 在调用时取链路认证 peer，配置不可声明。
         config.consumer_application_id = Some(app_id.to_string());
         let sdk = Instance::new(Plugin::new(app_id, declarations), config);
         self.stop_targets

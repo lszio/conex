@@ -123,19 +123,20 @@ impl LinkSlot {
 /// Consumer handle bound to one dependency name's fixed `ModuleRef`. The
 /// target is pinned at composition and never re-resolved; calls ride the
 /// instance's current link and fail explicitly when that link is absent or the
-/// pinned registration is gone (stale/换代). 出站按组合身份声明模块消费主体
-/// （contracts/s1-module-principals.md §4）；身份在组合期注入，模块作者
-/// 不手写、不能声明他节点。
+/// pinned registration is gone (stale/换代). 出站在调用时声明模块消费主体：
+/// node 段取链路认证 peer（hub 盖章），app/module 段来自组合身份
+/// （contracts/s1-module-principals.md §4）；作者不手写、不能声明他节点。
 #[derive(Clone)]
 pub struct RemoteDep {
     slot: Arc<LinkSlot>,
     contract: Arc<Contract>,
     pub target: ModuleRef,
-    consumer_module: String,
+    /// `(application, module)`；`None` = 连接主体自身（操作员路径）。
+    consumer: Option<(String, String)>,
 }
 impl RemoteDep {
-    fn with_consumer(mut self, consumer_module: &str) -> Self {
-        self.consumer_module = consumer_module.into();
+    fn with_consumer(mut self, application: &str, module: &str) -> Self {
+        self.consumer = Some((application.into(), module.into()));
         self
     }
     fn link(&self) -> crate::Result<Client> {
@@ -155,7 +156,9 @@ impl RemoteDep {
             self.contract.clone(),
             method,
             argument,
-            &self.consumer_module,
+            self.consumer
+                .as_ref()
+                .map(|(a, m)| (a.as_str(), m.as_str())),
         )
     }
     pub fn subscribe(&self, state: &str, argument: impl Serialize) -> crate::Result<Subscription> {
@@ -165,7 +168,9 @@ impl RemoteDep {
             self.contract.clone(),
             state,
             argument,
-            &self.consumer_module,
+            self.consumer
+                .as_ref()
+                .map(|(a, m)| (a.as_str(), m.as_str())),
         )
     }
 }
@@ -313,10 +318,11 @@ pub struct InstanceConfig {
     /// distinct prefixes keep multiple instances separately approved.
     pub endpoint_prefix: String,
     pub bindings: Vec<RemoteBinding>,
-    /// 模块消费主体来源（contracts/s1-module-principals.md §4）：两项齐备时，
-    /// 远程绑定出站自动声明 `module/<node>/<application>/<module>`；缺省为
-    /// 空 = 连接主体自身（操作员路径，独立 SDK 实例不受影响）。
-    pub consumer_node_id: Option<String>,
+    /// 模块消费主体的应用段（contracts/s1-module-principals.md §4）：配置后，
+    /// 远程绑定出站在调用时声明
+    /// `module/<链路认证 peer>/<application>/<module>`——node 段由 SDK 取
+    /// 链路握手身份，配置不可声明；缺省 None = 连接主体自身（独立 SDK
+    /// 实例不受影响）。
     pub consumer_application_id: Option<String>,
     /// Provider-side local exposure allowlist for every published module.
     pub exposure_principals: BTreeSet<String>,
@@ -485,7 +491,7 @@ impl Instance {
                             slot: self.inner.slot.clone(),
                             contract: binding.contract.clone(),
                             target: binding.target.clone(),
-                            consumer_module: String::new(),
+                            consumer: None,
                         },
                     )
                 })
@@ -498,7 +504,11 @@ impl Instance {
         let mut stopping = self.inner.stopping.subscribe();
         for index in order {
             let decl = &plugin.modules[index];
-            if !decl.remote_deps.is_empty() && first_client.is_none() {
+            // 远程依赖需要一个链路承载出站调用。url 非空的独立实例在启动期
+            // 自建链路；空 url 的实例（节点内应用）借用共享发布链路——由
+            // 外部 attach_link 事后注入，启动期不自拨（空 url 拨号必然失败），
+            // RemoteDep 在链路缺失时按既有语义显式 Unavailable。
+            if !decl.remote_deps.is_empty() && first_client.is_none() && !config.url.is_empty() {
                 let mut options = ConnectOptions::new(&config.url, &config.bearer);
                 options.allow_loopback_ws = config.allow_loopback_ws;
                 let connected = tokio::select! {
@@ -520,24 +530,23 @@ impl Instance {
             }
             // 模块消费主体（contracts/s1-module-principals.md §4）：配置齐备
             // 时按消费模块名派生声明；缺省空 = 连接主体自身（操作员路径）。
-            let consumer_module = match (&config.consumer_node_id, &config.consumer_application_id)
-            {
-                (Some(node), Some(application)) => {
-                    format!("module/{node}/{application}/{}", decl.name)
-                }
-                _ => String::new(),
-            };
-            let module_remotes: Arc<BTreeMap<String, RemoteDep>> = if consumer_module.is_empty() {
-                remotes.clone()
-            } else {
-                Arc::new(
+            // 模块消费主体（contracts/s1-module-principals.md §4）：应用标识
+            // 配置齐备时按消费模块名派生 (application, module)；node 段在调用
+            // 时取链路认证 peer。缺省 None = 连接主体自身（操作员路径）。
+            let consumer = config
+                .consumer_application_id
+                .as_ref()
+                .map(|application| (application.clone(), decl.name.clone()));
+            let module_remotes: Arc<BTreeMap<String, RemoteDep>> = match &consumer {
+                None => remotes.clone(),
+                Some((application, module)) => Arc::new(
                     remotes
                         .iter()
                         .map(|(name, dep)| {
-                            (name.clone(), dep.clone().with_consumer(&consumer_module))
+                            (name.clone(), dep.clone().with_consumer(application, module))
                         })
                         .collect(),
-                )
+                ),
             };
             let context = ModuleContext {
                 deps: Deps {

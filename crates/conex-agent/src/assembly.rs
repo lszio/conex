@@ -85,6 +85,27 @@ pub fn load_applications(config: &NodeConfig) -> Result<Vec<PreparedApplication>
             SourceStrategy::RelayAllowed,
         )?);
     }
+    // 派生计数器（A14 骨架）：消费依赖名 `upstream` 的显式远程绑定并按同一
+    // 契约再发布；应用包必须以 [[remote_bindings]] name="upstream" 覆盖。
+    {
+        let factory: ApprovedFactory = Arc::new(|value| {
+            if !value.is_null() {
+                return Err("derived-counter implementation does not take package config".into());
+            }
+            Ok(crate::builtins::derived_factory())
+        });
+        entries.push(
+            ImplementationEntry::new(
+                "derived-counter",
+                factory,
+                contracts.clone(),
+                BTreeMap::new(),
+                config.permissions.clone(),
+                SourceStrategy::RelayAllowed,
+            )?
+            .with_remote_deps(&["upstream"]),
+        );
+    }
     // OMP 适配器仅在节点配置了 [omp] 后端时可用；应用包引用 "omp" 而节点
     // 未配置时 resolve 阶段即拒绝（unknown implementation），不静默降级。
     if let Some(omp) = &config.omp {
@@ -227,6 +248,7 @@ pub fn load_applications(config: &NodeConfig) -> Result<Vec<PreparedApplication>
                     .iter()
                     .map(|dependency| (dependency.alias.clone(), dependency.target_id.clone()))
                     .collect(),
+                remote_deps: registry.remote_deps(&module.implementation),
                 permissions: module.permissions.iter().cloned().collect(),
                 relay_allowed: module
                     .exports

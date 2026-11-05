@@ -89,6 +89,9 @@ pub struct ImplementationEntry {
     pub permission_ceiling: BTreeSet<String>,
     /// The implementation's own approved source-data policy.
     pub source_strategy: SourceStrategy,
+    /// Fixed remote-dependency names the implementation consumes via
+    /// `Deps::remote`; covered by approved `[[remote_bindings]]`.
+    pub remote_deps: Vec<String>,
 }
 impl ImplementationEntry {
     pub fn new(
@@ -142,7 +145,15 @@ impl ImplementationEntry {
             approved_config_refs,
             permission_ceiling,
             source_strategy,
+            remote_deps: Vec::new(),
         })
+    }
+
+    /// Declare the implementation's fixed remote-dependency names; application
+    /// packages must cover exactly these via `[[remote_bindings]]`.
+    pub fn with_remote_deps(mut self, deps: &[&str]) -> Self {
+        self.remote_deps = deps.iter().map(|dep| dep.to_string()).collect();
+        self
     }
 }
 
@@ -228,6 +239,15 @@ impl ImplementationRegistry {
                 )
             })?;
         (entry.factory)(&module.config)
+    }
+
+    /// The implementation's declared remote-dependency names; application
+    /// packages must cover exactly these via `[[remote_bindings]]`.
+    pub fn remote_deps(&self, implementation: &str) -> Vec<String> {
+        self.implementations
+            .get(implementation)
+            .map(|entry| entry.remote_deps.clone())
+            .unwrap_or_default()
     }
 }
 
@@ -728,6 +748,19 @@ pub fn resolve_application(
         });
     }
     bindings.sort_by(|a, b| a.name.cmp(&b.name));
+
+    // 实现声明的远程依赖必须被包的 [[remote_bindings]] 覆盖（与 SDK 组合期
+    // composite 校验同一规则，提前到 resolve 拒绝）。
+    for module in &package.modules {
+        for dep in registry.remote_deps(&module.implementation) {
+            if !bindings.iter().any(|binding| binding.name == dep) {
+                return Err(AppError::invalid_package(format!(
+                    "module {} implementation {} requires remote binding {dep:?}",
+                    module.id, module.implementation
+                )));
+            }
+        }
+    }
 
     // Assemble the immutable resolved application in the validated order.
     let mut ordered = Vec::with_capacity(order_ids.len());

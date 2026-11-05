@@ -259,3 +259,61 @@ pub fn factory(
         })
     })
 }
+
+/// 派生计数器（A14 骨架，contracts/s1-module-principals.md）：消费依赖名
+/// `upstream` 的显式远程绑定，按同一 `conex.counter` 契约再发布。read/add
+/// 透传上游；出站由 SDK 按组合身份自动声明模块消费主体（§4），本实现
+/// 不手写任何身份。上游不可用按 SDK 调用错误传播，不伪造本地成功。
+pub fn derived_factory() -> crate::node_types::RuntimeFactory {
+    Arc::new(move |_runtime, context| {
+        Box::pin(async move {
+            let upstream = context.deps.remote("upstream").ok_or_else(|| {
+                crate::node::failure("derived counter requires the upstream binding")
+            })?;
+            let read = upstream.clone();
+            let add = upstream.clone();
+            let contract = Arc::new(Contract::new(
+                "conex.counter",
+                BTreeMap::from([
+                    (
+                        "counter/read".into(),
+                        Method::new(
+                            "conex.CounterReadInput",
+                            "conex.CounterResult",
+                            Execution::ReadOnly,
+                        )
+                        .with_handler(move |_, _: p::CounterReadInput| {
+                            let upstream = read.clone();
+                            async move {
+                                // sdk Error 原样透传（码不塌缩）；hub 判定错误
+                                // 的 forbidden/bad_request 对调用者可见。
+                                let call = upstream.invoke("counter/read", p::CounterReadInput {})?;
+                                let result: p::CounterResult = call.result().await?;
+                                Ok(json!({"count":result.count,"revision":result.revision.to_string()}))
+                            }
+                        }),
+                    ),
+                    (
+                        "counter/add".into(),
+                        Method::new(
+                            "conex.CounterAddInput",
+                            "conex.CounterResult",
+                            Execution::NonReplayable,
+                        )
+                        .with_handler(move |_, input: p::CounterAddInput| {
+                            let upstream = add.clone();
+                            async move {
+                                let call = upstream
+                                    .invoke("counter/add", p::CounterAddInput { delta: input.delta })?;
+                                let result: p::CounterResult = call.result().await?;
+                                Ok(json!({"count":result.count,"revision":result.revision.to_string()}))
+                            }
+                        }),
+                    ),
+                ]),
+                BTreeMap::new(),
+            )?);
+            Ok(conex_sdk::StartedModule::new(contract))
+        })
+    })
+}
