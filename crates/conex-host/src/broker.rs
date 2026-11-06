@@ -24,6 +24,53 @@ use conex_core::{
 use conex_proto;
 use conex_proto::cid;
 
+/// Which subsystem owns a method — the single routing table shared by the
+/// broker's dispatch and the HTTP binding's admission gate. The prefix chain
+/// order is preserved from the original dispatch for reviewability; the
+/// families themselves are disjoint prefixes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MethodFamily {
+    EndpointList,
+    Blob,
+    Session,
+    Operation,
+    Agent,
+    ConnectionList,
+    Client,
+    Module,
+    Access,
+    State,
+    /// No subsystem claims the method: it falls through to the P0
+    /// capability host (and is refused at bindings that only serve P1).
+    Capability,
+}
+
+pub fn method_family(method: &str) -> MethodFamily {
+    if method == "endpoint/list" {
+        MethodFamily::EndpointList
+    } else if method.starts_with("blob/") {
+        MethodFamily::Blob
+    } else if method.starts_with("session/") {
+        MethodFamily::Session
+    } else if method.starts_with("operation/") {
+        MethodFamily::Operation
+    } else if method.starts_with("agent/") {
+        MethodFamily::Agent
+    } else if method == "connection/list" {
+        MethodFamily::ConnectionList
+    } else if method.starts_with("client/") {
+        MethodFamily::Client
+    } else if method.starts_with("module/") {
+        MethodFamily::Module
+    } else if method.starts_with("access/") {
+        MethodFamily::Access
+    } else if method.starts_with("state/") {
+        MethodFamily::State
+    } else {
+        MethodFamily::Capability
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct BrokerCall {
     pub caller: Caller,
@@ -151,40 +198,25 @@ impl Broker {
                 "conex/hello is handled by the transport, not the broker",
             ));
         }
-        if call.method == "endpoint/list" {
-            let catalog = self
-                .deps
-                .catalog
-                .as_ref()
-                .ok_or_else(|| unavailable("endpoint catalog is not configured"))?;
-            return catalog.list(&call.caller, call.input).await;
-        }
-        if call.method.starts_with("blob/") {
-            return self.dispatch_blob(&call).await;
-        }
-        if call.method.starts_with("session/") {
-            return self.dispatch_session(&call).await;
-        }
-        if call.method.starts_with("operation/") {
-            return self.dispatch_operation(&call).await;
-        }
-        if call.method.starts_with("agent/") {
-            return crate::agent::handle(self, call).await;
-        }
-        if call.method == "connection/list" {
-            return self.dispatch_connection_list(&call).await;
-        }
-        if call.method.starts_with("client/") {
-            return self.dispatch_client(&call).await;
-        }
-        if call.method.starts_with("module/") {
-            return self.dispatch_module(&call).await;
-        }
-        if call.method.starts_with("access/") {
-            return Self::dispatch_access(self, &call).await;
-        }
-        if call.method.starts_with("state/") {
-            return self.dispatch_state(&call).await;
+        match method_family(&call.method) {
+            MethodFamily::EndpointList => {
+                let catalog = self
+                    .deps
+                    .catalog
+                    .as_ref()
+                    .ok_or_else(|| unavailable("endpoint catalog is not configured"))?;
+                return catalog.list(&call.caller, call.input).await;
+            }
+            MethodFamily::Blob => return self.dispatch_blob(&call).await,
+            MethodFamily::Session => return self.dispatch_session(&call).await,
+            MethodFamily::Operation => return self.dispatch_operation(&call).await,
+            MethodFamily::Agent => return crate::agent::handle(self, call).await,
+            MethodFamily::ConnectionList => return self.dispatch_connection_list(&call).await,
+            MethodFamily::Client => return self.dispatch_client(&call).await,
+            MethodFamily::Module => return self.dispatch_module(&call).await,
+            MethodFamily::Access => return Self::dispatch_access(self, &call).await,
+            MethodFamily::State => return self.dispatch_state(&call).await,
+            MethodFamily::Capability => {}
         }
         let duration = call.deadline.saturating_duration_since(Instant::now());
         self.host
@@ -1528,5 +1560,35 @@ fn plane_to_enum(value: i32) -> conex_proto::Plane {
     match value {
         2 => conex_proto::Plane::Relay,
         _ => conex_proto::Plane::Broker,
+    }
+}
+
+#[cfg(test)]
+mod family_tests {
+    use super::*;
+
+    #[test]
+    fn method_family_matches_the_dispatch_prefixes() {
+        assert_eq!(method_family("endpoint/list"), MethodFamily::EndpointList);
+        assert_eq!(
+            method_family("connection/list"),
+            MethodFamily::ConnectionList
+        );
+        for (method, family) in [
+            ("blob/put", MethodFamily::Blob),
+            ("session/open", MethodFamily::Session),
+            ("operation/get", MethodFamily::Operation),
+            ("agent/submit", MethodFamily::Agent),
+            ("client/list", MethodFamily::Client),
+            ("module/invoke", MethodFamily::Module),
+            ("access/node-identity", MethodFamily::Access),
+            ("state/subscribe", MethodFamily::State),
+        ] {
+            assert_eq!(method_family(method), family, "{method}");
+        }
+        // Unclaimed families fall through to the P0 capability host —
+        // including conex/hello, which the broker guard rejects earlier.
+        assert_eq!(method_family("counter/add"), MethodFamily::Capability);
+        assert_eq!(method_family("conex/hello"), MethodFamily::Capability);
     }
 }
