@@ -575,6 +575,7 @@ dependencies = [
 name = "conex-sdk"
 version = "0.1.0"
 dependencies = [
+ "conex-core",
  "conex-host",
  "conex-proto",
  "futures",
