@@ -687,6 +687,7 @@ pub struct ClientHandshake {
     server_hello_id: Option<serde_json::Value>,
     request_counter: u64,
     client_requires: Vec<String>,
+    client_provides: Vec<String>,
     server_provides: Vec<String>,
     server_limits: Option<conex_proto::Limits>,
     proposed_limits: Option<conex_proto::Limits>,
@@ -712,6 +713,7 @@ impl ClientHandshake {
             server_hello_id: None,
             request_counter: 0,
             client_requires: Vec::new(),
+            client_provides: Vec::new(),
             server_provides: Vec::new(),
             server_limits: None,
             proposed_limits: None,
@@ -772,6 +774,7 @@ impl ClientHandshake {
             return Err(BootstrapError::BufferExceeded);
         }
         self.client_requires = requires;
+        self.client_provides = provides;
         self.agreed_profile = Some(profile);
         self.state = BootstrapState::SentHello;
         Ok(BootstrapFrame { json })
@@ -874,11 +877,20 @@ impl ClientHandshake {
                 self.server_hello_profile = profile_str.clone();
                 self.server_hello_id = parsed.get("id").cloned();
                 self.state = BootstrapState::AwaitingReady;
+                // The ready frame declares the client's capability set. S1
+                // servers check it set-equal against the client's own hello
+                // declaration; legacy servers require a byte match of the
+                // server's list.
+                let ready_provides = if s1_mode {
+                    self.client_provides.clone()
+                } else {
+                    provides_values
+                };
                 Ok(ReadyRequest {
                     negotiation_id,
                     profile_id: profile_str,
                     plane: plane as i32,
-                    provides: provides_values,
+                    provides: ready_provides,
                     limits: Some(proposal),
                 })
             }
@@ -1514,10 +1526,17 @@ mod tests {
             peer_id: "node-a".into(),
             tenant_id: "tenant-a".into(),
         };
+        // The server advertises more than the client declares; an S1 ready
+        // must carry the client's own set (set-equality server-side), not
+        // the server's list.
         let mut server = ServerHandshake::new_with_profiles_and_capabilities(
             &[ProfileId::ProtobufWss],
             conex_proto::Plane::Broker,
-            vec!["module/invoke".to_owned(), "state/subscribe".to_owned()],
+            vec![
+                "module/invoke".to_owned(),
+                "state/subscribe".to_owned(),
+                "agent/heartbeat".to_owned(),
+            ],
             "01ARZ3NDEKTSV4RRFFQ69G5FAV".into(),
         );
         server.configure_s1(offered, identity.clone());
@@ -1534,6 +1553,10 @@ mod tests {
         assert_eq!(
             returned.limits,
             Some(conex_proto::capability::lower_limits(&wanted, &offered))
+        );
+        assert_eq!(
+            returned.provides,
+            vec!["module/invoke".to_owned(), "state/subscribe".to_owned()]
         );
         let ready_result = server
             .ingest(client.build_ready_frame(&returned).unwrap())
