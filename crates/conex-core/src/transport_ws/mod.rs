@@ -191,6 +191,18 @@ fn limits_json(limits: conex_proto::Limits) -> serde_json::Value {
     value
 }
 
+/// Componentwise "a rises above b" test shared by both handshake sides: a
+/// negotiated limit must never exceed the counterpart's ceiling (S1 契约
+/// 「各方协商取可支持的下限」，下调合法，上调即违约).
+fn limits_exceed(a: &conex_proto::Limits, b: &conex_proto::Limits) -> bool {
+    a.max_frame_bytes > b.max_frame_bytes
+        || a.max_inflight > b.max_inflight
+        || a.max_queued_bytes > b.max_queued_bytes
+        || a.timeout_ms > b.timeout_ms
+        || a.max_subscriptions > b.max_subscriptions
+        || a.max_modules > b.max_modules
+}
+
 fn limits_from_json(value: &serde_json::Value) -> Result<conex_proto::Limits, BootstrapError> {
     let number = |field: &str| {
         value
@@ -582,13 +594,7 @@ impl ServerHandshake {
         if self.s1_client_provides.is_some() {
             conex_proto::capability::validate_limits(&limits)
                 .map_err(|_| BootstrapError::LimitsMismatch)?;
-            if limits.max_frame_bytes > self.limits.max_frame_bytes
-                || limits.max_inflight > self.limits.max_inflight
-                || limits.max_queued_bytes > self.limits.max_queued_bytes
-                || limits.timeout_ms > self.limits.timeout_ms
-                || limits.max_subscriptions > self.limits.max_subscriptions
-                || limits.max_modules > self.limits.max_modules
-            {
+            if limits_exceed(&limits, &self.limits) {
                 return Err(BootstrapError::LimitsMismatch);
             }
         } else if limits != self.limits {
@@ -640,6 +646,12 @@ impl ServerHandshake {
 }
 
 /// Client-side handshake.
+///
+/// Limits follow the S1 negotiation rule (契约「各方协商取可支持的下限」):
+/// without [`ClientHandshake::with_client_limits`] the ready proposal echoes
+/// the server's hello offer; with it, the proposal is the client's own
+/// limits lowered by the offer via [`lower_limits`]. The ready result must
+/// never rise above the offer or the recorded proposal.
 pub struct ClientHandshake {
     state: BootstrapState,
     expected_negotiation_id: String,
@@ -650,7 +662,9 @@ pub struct ClientHandshake {
     request_counter: u64,
     client_requires: Vec<String>,
     server_provides: Vec<String>,
-    server_limits: Option<serde_json::Value>,
+    server_limits: Option<conex_proto::Limits>,
+    proposed_limits: Option<conex_proto::Limits>,
+    client_limits: Option<conex_proto::Limits>,
 }
 
 impl Default for ClientHandshake {
@@ -672,7 +686,17 @@ impl ClientHandshake {
             client_requires: Vec::new(),
             server_provides: Vec::new(),
             server_limits: None,
+            proposed_limits: None,
+            client_limits: None,
         }
+    }
+
+    /// Declare the client's own limits before hello. The ready proposal
+    /// returned by `ingest` then becomes `lower_limits(client, server)`
+    /// instead of a plain echo of the server's offer.
+    pub fn with_client_limits(mut self, limits: conex_proto::Limits) -> Self {
+        self.client_limits = Some(limits);
+        self
     }
 
     pub fn state(&self) -> &BootstrapState {
@@ -779,9 +803,13 @@ impl ClientHandshake {
                     .get("limits")
                     .ok_or_else(|| BootstrapError::MalformedEnvelope("missing limits".into()))?;
                 let limits = limits_from_json(limits)?;
-                let limits_value = limits_json(limits);
+                let proposal = match self.client_limits {
+                    Some(client) => conex_proto::capability::lower_limits(&client, &limits),
+                    None => limits,
+                };
                 self.server_provides = provides_values.clone();
-                self.server_limits = Some(limits_value);
+                self.server_limits = Some(limits);
+                self.proposed_limits = Some(proposal);
                 self.expected_negotiation_id = negotiation_id.clone();
                 self.server_hello_plane = plane;
                 self.server_hello_profile = profile_str.clone();
@@ -792,7 +820,7 @@ impl ClientHandshake {
                     profile_id: profile_str,
                     plane: plane as i32,
                     provides: provides_values,
-                    limits: Some(limits),
+                    limits: Some(proposal),
                 })
             }
             BootstrapState::AwaitingReady => {
@@ -846,12 +874,18 @@ impl ClientHandshake {
                 }
                 let limits_value = result.get("limits").ok_or(BootstrapError::LimitsMismatch)?;
                 let limits = limits_from_json(limits_value)?;
-                let expected_limits = limits_from_json(
-                    self.server_limits
-                        .as_ref()
-                        .ok_or(BootstrapError::LimitsMismatch)?,
-                )?;
-                if limits != expected_limits {
+                // The server may lower further, never raise: the reply is
+                // bounded by both its hello offer and our recorded proposal.
+                let offered = self
+                    .server_limits
+                    .as_ref()
+                    .ok_or(BootstrapError::LimitsMismatch)?;
+                if limits_exceed(&limits, offered) {
+                    return Err(BootstrapError::LimitsMismatch);
+                }
+                if let Some(proposed) = self.proposed_limits.as_ref()
+                    && limits_exceed(&limits, proposed)
+                {
                     return Err(BootstrapError::LimitsMismatch);
                 }
                 self.state = BootstrapState::Ready {
@@ -874,9 +908,15 @@ impl ClientHandshake {
     }
 
     pub fn build_ready_frame(
-        &self,
+        &mut self,
         ready: &ReadyRequest,
     ) -> Result<BootstrapFrame, BootstrapError> {
+        // The invariant check on the ready result must compare against what
+        // actually went on the wire, so record the sent proposal (callers
+        // may have lowered the returned ReadyRequest further by hand).
+        if ready.limits.is_some() {
+            self.proposed_limits = ready.limits;
+        }
         let frame = serde_json::json!({
             "jsonrpc": "2.0",
             "id": self.server_hello_id.clone().unwrap_or(serde_json::Value::Null),
@@ -1231,6 +1271,133 @@ mod tests {
                 json: value.to_string(),
             }),
             Err(BootstrapError::UnsupportedCapability(_))
+        ));
+    }
+
+    #[test]
+    fn client_models_limits_lowering_and_rejects_raised_ready_result() {
+        // S1-mode servers speak the pbjson envelope (bindingId, numeric
+        // plane), which `ClientHandshake` does not parse yet — the SDK drives
+        // that shape today. Until the 4c migration, exercise the lowering
+        // semantics with hand-crafted legacy-shaped frames from a server that
+        // lowers, which is exactly what the state machine must accept.
+        let offered = conex_proto::Limits {
+            max_frame_bytes: 262_144,
+            max_inflight: 16,
+            max_queued_bytes: 1_048_576,
+            timeout_ms: 8_000,
+            max_subscriptions: 32,
+            max_modules: 16,
+        };
+        let wanted = conex_proto::Limits {
+            max_frame_bytes: 65_536,
+            timeout_ms: 4_000,
+            ..offered
+        };
+        let proposal = conex_proto::capability::lower_limits(&wanted, &offered);
+        let hello_result = || {
+            serde_json::json!({
+                "jsonrpc": "2.0", "id": "req-1",
+                "result": {
+                    "negotiationId": "neg-lowered",
+                    "profileId": "conex-jsonrpc2-wss",
+                    "plane": "broker",
+                    "provides": ["module/invoke", "state/subscribe"],
+                    "limits": limits_json(offered),
+                },
+            })
+            .to_string()
+        };
+        let ready_result = |limits: serde_json::Value| {
+            serde_json::json!({
+                "jsonrpc": "2.0", "id": "req-1",
+                "result": {
+                    "negotiationId": "neg-lowered",
+                    "profileId": "conex-jsonrpc2-wss",
+                    "plane": "broker",
+                    "provides": ["module/invoke", "state/subscribe"],
+                    "limits": limits,
+                },
+            })
+            .to_string()
+        };
+
+        // The proposal is the client's wish lowered by the offer; the ready
+        // frame carries it; an echoed lowered reply completes the handshake.
+        let mut client = ClientHandshake::new().with_client_limits(wanted);
+        client
+            .build_hello(
+                ProfileId::JsonRpc2Wss,
+                conex_proto::Plane::Broker,
+                vec!["module/invoke".to_owned(), "state/subscribe".to_owned()],
+                vec![],
+            )
+            .unwrap();
+        let returned = client
+            .ingest(BootstrapFrame {
+                json: hello_result(),
+            })
+            .unwrap();
+        assert_eq!(returned.limits, Some(proposal));
+        let ready_frame = client.build_ready_frame(&returned).unwrap();
+        let frame_value: serde_json::Value = serde_json::from_str(&ready_frame.json).unwrap();
+        assert_eq!(frame_value["params"]["limits"], limits_json(proposal));
+        client
+            .ingest(BootstrapFrame {
+                json: ready_result(limits_json(proposal)),
+            })
+            .unwrap();
+        assert!(matches!(client.state(), BootstrapState::Ready { .. }));
+
+        // A reply above the proposal (still within the offer) is a violation.
+        let mut client = ClientHandshake::new().with_client_limits(wanted);
+        client
+            .build_hello(
+                ProfileId::JsonRpc2Wss,
+                conex_proto::Plane::Broker,
+                vec![],
+                vec![],
+            )
+            .unwrap();
+        let returned = client
+            .ingest(BootstrapFrame {
+                json: hello_result(),
+            })
+            .unwrap();
+        client.build_ready_frame(&returned).unwrap();
+        let mut raised = limits_json(proposal);
+        // proposal 4000 < 6000 <= offered 8000: only the proposal bound trips.
+        raised["timeoutMs"] = serde_json::json!(6_000u64);
+        assert!(matches!(
+            client.ingest(BootstrapFrame {
+                json: ready_result(raised),
+            }),
+            Err(BootstrapError::LimitsMismatch)
+        ));
+
+        // A reply above the hello offer is a violation too.
+        let mut client = ClientHandshake::new().with_client_limits(wanted);
+        client
+            .build_hello(
+                ProfileId::JsonRpc2Wss,
+                conex_proto::Plane::Broker,
+                vec![],
+                vec![],
+            )
+            .unwrap();
+        let returned = client
+            .ingest(BootstrapFrame {
+                json: hello_result(),
+            })
+            .unwrap();
+        client.build_ready_frame(&returned).unwrap();
+        let mut raised = limits_json(proposal);
+        raised["timeoutMs"] = serde_json::json!(9_000u64);
+        assert!(matches!(
+            client.ingest(BootstrapFrame {
+                json: ready_result(raised),
+            }),
+            Err(BootstrapError::LimitsMismatch)
         ));
     }
 

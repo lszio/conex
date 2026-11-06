@@ -87,14 +87,7 @@ fn valid_limits(l: &p::Limits) -> Result<()> {
     Ok(())
 }
 fn lower(a: p::Limits, b: p::Limits) -> p::Limits {
-    p::Limits {
-        max_frame_bytes: a.max_frame_bytes.min(b.max_frame_bytes),
-        max_inflight: a.max_inflight.min(b.max_inflight),
-        max_queued_bytes: a.max_queued_bytes.min(b.max_queued_bytes),
-        timeout_ms: a.timeout_ms.min(b.timeout_ms),
-        max_subscriptions: a.max_subscriptions.min(b.max_subscriptions),
-        max_modules: a.max_modules.min(b.max_modules),
-    }
+    wire::lower_limits(&a, &b)
 }
 fn typed<T: DeserializeOwned>(value: Value) -> Result<T> {
     serde_json::from_value(value).map_err(Error::decode)
