@@ -258,42 +258,11 @@ fn new_jti() -> String {
     URL_SAFE.encode(bytes)
 }
 
-/// Approved credential source, identical rules to the node's secret reader:
-/// `env:NAME` or a regular 0600 file of at most 4096 bytes.
-fn decode_env64(value: String) -> Result<Vec<u8>, GrantError> {
-    base64::Engine::decode(&base64::engine::general_purpose::STANDARD, value.trim())
-        .map_err(|_| GrantError::Internal("approved credential env is not valid base64".into()))
-}
-
+/// Approved credential source — the canonical rules live in
+/// `conex_core::secrets` (this used to be a drifted copy: it followed
+/// symlinks on file reads and duplicated the env64 decoding).
 fn read_secret(backend: &str) -> Result<Vec<u8>, GrantError> {
-    if let Some(name) = backend.strip_prefix("env:") {
-        return std::env::var(name)
-            .map(|value| value.into_bytes())
-            .map_err(|_| GrantError::Internal("approved credential env missing".into()));
-    }
-    if let Some(name) = backend.strip_prefix("env64:") {
-        // Secret managers hold printable values; DER keys are binary. The
-        // base64 variant lets an operator pass the pkcs8 document through an
-        // environment variable without a temp file.
-        return std::env::var(name)
-            .map_err(|_| GrantError::Internal("approved credential env missing".into()))
-            .and_then(decode_env64);
-    }
-    if let Some(path) = backend.strip_prefix("file:") {
-        use std::os::unix::fs::MetadataExt;
-        let metadata = std::fs::metadata(path)
-            .map_err(|_| GrantError::Internal("approved credential file unavailable".into()))?;
-        if !metadata.is_file() || metadata.mode() & 0o077 != 0 || metadata.len() > 4096 {
-            return Err(GrantError::Internal(
-                "credential file must be regular, <=4096 bytes and 0600".into(),
-            ));
-        }
-        return std::fs::read(path)
-            .map_err(|_| GrantError::Internal("approved credential file unreadable".into()));
-    }
-    Err(GrantError::Internal(
-        "credential source requires env:NAME or file:PATH".into(),
-    ))
+    conex_core::secrets::read_secret_bytes(backend).map_err(GrantError::Internal)
 }
 
 /// The result of strict verification. `scope` is the decoded grant scope;
@@ -863,17 +832,14 @@ mod tests {
     }
 
     #[test]
-    fn env64_decode_roundtrip() {
-        // env64 is read_secret's base64 arm for secret managers; the decoder
-        // is pure, so the DER roundtrip is asserted without env mutation.
-        let document = test_pkcs8("env64-1");
-        let encoded = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &document);
-        assert_eq!(
-            decode_env64(encoded).unwrap(),
-            document,
-            "the decoded bytes must be the original DER document"
-        );
-        assert!(decode_env64("not-base64!!!".to_string()).is_err());
+    fn env64_backend_rejects_unknown_schemes() {
+        // The DER/base64 roundtrip now lives (and is tested) in
+        // `conex_core::secrets`; here only the delegation's error shape
+        // matters — an unknown scheme is refused, never guessed.
+        assert!(matches!(
+            read_secret("bogus:value"),
+            Err(GrantError::Internal(_))
+        ));
     }
 
     #[test]

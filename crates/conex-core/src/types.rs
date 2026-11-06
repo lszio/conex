@@ -6,6 +6,7 @@ use std::sync::Arc;
 use bytes::Bytes;
 use conex_proto;
 
+use crate::operation::{ExecutionState, RetryPolicy};
 use crate::ports::{Connection, Handler};
 
 pub type CallResult<T> = Result<T, CallError>;
@@ -61,13 +62,15 @@ impl CallError {
         self
     }
 
-    pub fn with_execution(mut self, execution: impl Into<String>) -> Self {
-        self.error.execution = execution.into();
+    /// The diagnostic `execution` stage shares one representation with the
+    /// operation store's record state, so the wire spelling has one home.
+    pub fn with_execution(mut self, execution: ExecutionState) -> Self {
+        self.error.execution = execution.as_str().to_owned();
         self
     }
 
-    pub fn with_retry(mut self, retry: impl Into<String>) -> Self {
-        self.error.retry = retry.into();
+    pub fn with_retry(mut self, retry: RetryPolicy) -> Self {
+        self.error.retry = retry.as_str().to_owned();
         self
     }
 }

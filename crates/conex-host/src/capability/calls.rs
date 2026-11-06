@@ -22,6 +22,7 @@ use std::sync::Arc;
 
 use conex_core::CallError;
 use conex_core::capability::{ExecutionClass, validate_method_input, validate_method_output};
+use conex_core::operation::{ExecutionState, RetryPolicy};
 use conex_core::{CallResult, Caller};
 use conex_proto;
 use serde_json::{Value, json};
@@ -236,8 +237,8 @@ impl CallRouter {
                     conex_proto::ErrorCode::Unavailable,
                     "provider link is offline",
                 )
-                .with_execution("not_started")
-                .with_retry("safe")
+                .with_execution(ExecutionState::NotStarted)
+                .with_retry(RetryPolicy::Safe)
             })?;
         // 6. 发送前预算：耗尽 → timeout/not_started/safe（排队期预算耗尽）。
         let remaining = remaining_budget_ms(deadline)?;
@@ -345,8 +346,8 @@ impl CallRouter {
                             .unwrap_or(conex_proto::ErrorCode::BadRequest),
                         error.message(),
                     )
-                    .with_execution("completed")
-                    .with_retry("never"));
+                    .with_execution(ExecutionState::Completed)
+                    .with_retry(RetryPolicy::Never));
                 }
                 Ok(value)
             }
@@ -499,8 +500,8 @@ pub(crate) fn remaining_budget_ms(deadline: Instant) -> CallResult<u32> {
             conex_proto::ErrorCode::Timeout,
             "request budget exhausted before send",
         )
-        .with_execution("not_started")
-        .with_retry("safe"));
+        .with_execution(ExecutionState::NotStarted)
+        .with_retry(RetryPolicy::Safe));
     }
     Ok(remaining.as_millis().clamp(1, u128::from(u32::MAX)) as u32)
 }
@@ -541,8 +542,8 @@ fn settle_link_lost(execution: ExecutionClass) -> CallError {
             conex_proto::ErrorCode::Unavailable,
             "provider link closed before a confirmed result",
         )
-        .with_execution("unknown")
-        .with_retry("safe")
+        .with_execution(ExecutionState::Unknown)
+        .with_retry(RetryPolicy::Safe)
     }
 }
 
@@ -554,8 +555,8 @@ fn settle_timeout(execution: ExecutionClass) -> CallError {
             conex_proto::ErrorCode::Timeout,
             "read_only invoke exceeded the budget after send",
         )
-        .with_execution("unknown")
-        .with_retry("safe")
+        .with_execution(ExecutionState::Unknown)
+        .with_retry(RetryPolicy::Safe)
     }
 }
 
@@ -572,8 +573,8 @@ fn enrich(error: CallError, execution: &str, retry: &str) -> CallError {
 
 pub(crate) fn not_started(code: conex_proto::ErrorCode, message: impl Into<String>) -> CallError {
     CallError::new(code, message)
-        .with_execution("not_started")
-        .with_retry("never")
+        .with_execution(ExecutionState::NotStarted)
+        .with_retry(RetryPolicy::Never)
 }
 
 pub(crate) fn cancelled_not_started() -> CallError {
@@ -581,14 +582,14 @@ pub(crate) fn cancelled_not_started() -> CallError {
         conex_proto::ErrorCode::Cancelled,
         "invoke was cancelled before it was sent",
     )
-    .with_execution("not_started")
-    .with_retry("never")
+    .with_execution(ExecutionState::NotStarted)
+    .with_retry(RetryPolicy::Never)
 }
 
 fn unknown_outcome(message: impl Into<String>) -> CallError {
     CallError::new(conex_proto::ErrorCode::OutcomeUnknown, message)
-        .with_execution("unknown")
-        .with_retry("never")
+        .with_execution(ExecutionState::Unknown)
+        .with_retry(RetryPolicy::Never)
 }
 
 pub(crate) fn forbidden(message: impl Into<String>) -> CallError {

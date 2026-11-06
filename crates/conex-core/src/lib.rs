@@ -16,6 +16,7 @@ pub mod operation;
 pub mod policy;
 pub mod ports;
 pub mod registry;
+pub mod secrets;
 pub mod session;
 pub mod stream;
 pub mod target_policy;

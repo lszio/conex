@@ -307,27 +307,10 @@ fn is_valid_origin(origin: &str) -> bool {
         && authority.chars().all(|c| !c.is_whitespace())
 }
 
+/// Approved token backends — the canonical rules live in
+/// `conex_core::secrets`; the agent adds only its config-level entry point.
 pub fn read_secret(backend: &str) -> Result<String, String> {
-    let secret = if let Some(name) = backend.strip_prefix("env:") {
-        std::env::var(name)
-            .map_err(|_| "approved credential environment variable missing".to_owned())?
-    } else if let Some(path) = backend.strip_prefix("file:") {
-        use std::os::unix::fs::MetadataExt;
-        let metadata = std::fs::symlink_metadata(path)
-            .map_err(|_| "approved credential file unavailable".to_owned())?;
-        if !metadata.is_file() || metadata.mode() & 0o077 != 0 || metadata.len() > 4096 {
-            return Err("credential file must be regular, <=4096 bytes and 0600".into());
-        }
-        std::fs::read_to_string(path)
-            .map_err(|_| "approved credential file unreadable".to_owned())?
-    } else {
-        return Err("credential source requires env:NAME or file:PATH".into());
-    };
-    let secret = secret.trim().to_owned();
-    if secret.is_empty() || secret.len() > 4096 {
-        return Err("invalid credential size".into());
-    }
-    Ok(secret)
+    conex_core::secrets::read_secret_string(backend)
 }
 
 #[cfg(test)]

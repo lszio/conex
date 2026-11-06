@@ -325,18 +325,25 @@ async fn handle_request(
     }
 }
 
+/// Admission to the broker from the HTTP binding. Routing knowledge lives
+/// in [`crate::broker::method_family`]; this function only states the HTTP
+/// exposure policy: every broker-owned family except the node-control ones
+/// (client/*, access/*), which stay WSS-only. No wildcard arm — a new
+/// family must be classified here explicitly. The per-method wire gates
+/// upstream still narrow S1 families further (module/list|invoke|cancel
+/// only; register/unregister and state/* are refused there).
 fn is_p1_method(method: &str) -> bool {
-    method == "endpoint/list"
-        || method == "connection/list"
-        || method.starts_with("blob/")
-        || method.starts_with("session/")
-        || method.starts_with("operation/")
-        || method.starts_with("agent/")
-        // S1（T03）：HTTP 支持 module/list|invoke|cancel；register/unregister
-        // 与 state/* 由上述 wire 门拒绝，未拒绝的 S1 方法经 broker 返回
-        // 显式 unsupported_capability，不落回 P0 host。
-        || method.starts_with("module/")
-        || method.starts_with("state/")
+    matches!(
+        crate::broker::method_family(method),
+        crate::broker::MethodFamily::EndpointList
+            | crate::broker::MethodFamily::ConnectionList
+            | crate::broker::MethodFamily::Blob
+            | crate::broker::MethodFamily::Session
+            | crate::broker::MethodFamily::Operation
+            | crate::broker::MethodFamily::Agent
+            | crate::broker::MethodFamily::Module
+            | crate::broker::MethodFamily::State
+    )
 }
 
 async fn handle_notification(
@@ -516,5 +523,31 @@ pub fn wire_limits(limits: Limits) -> conex_proto::Limits {
         // S1 订阅/注册上限由 T02+ 的配置装载填实际值；0 = 尚未协商 S1 能力。
         max_subscriptions: 0,
         max_modules: 0,
+    }
+}
+
+#[cfg(test)]
+mod p1_gate_tests {
+    use super::*;
+
+    #[test]
+    fn http_admits_business_families_and_refuses_node_control_ones() {
+        for method in [
+            "endpoint/list",
+            "connection/list",
+            "blob/put",
+            "session/open",
+            "operation/get",
+            "agent/submit",
+            "module/invoke",
+            "state/subscribe",
+        ] {
+            assert!(is_p1_method(method), "{method}");
+        }
+        // Node-control families stay WSS-only; unclaimed families belong to
+        // the P0 host path, which the HTTP wire gates refuse earlier.
+        for method in ["client/list", "access/node-identity", "counter/add"] {
+            assert!(!is_p1_method(method), "{method}");
+        }
     }
 }

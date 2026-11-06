@@ -64,11 +64,35 @@ pub enum RetryPolicy {
     WithOperationId,
 }
 
+impl RetryPolicy {
+    /// The spelling the S1 error diagnostic `retry` carries on the wire.
+    /// `WithOperationId` has no diagnostic call site yet; the spelling is
+    /// reserved so the first use cannot invent a divergent form.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            RetryPolicy::Never => "never",
+            RetryPolicy::Safe => "safe",
+            RetryPolicy::WithOperationId => "with_operation_id",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ExecutionState {
     NotStarted,
     Completed,
     Unknown,
+}
+
+impl ExecutionState {
+    /// The spelling the S1 error diagnostic `execution` carries on the wire.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ExecutionState::NotStarted => "not_started",
+            ExecutionState::Completed => "completed",
+            ExecutionState::Unknown => "unknown",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

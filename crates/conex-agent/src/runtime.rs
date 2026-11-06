@@ -24,7 +24,9 @@ const REGISTER_REQUEST_ID: &str = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
 const HEARTBEAT_REQUEST_ID: &str = "01ARZ3NDEKTSV4RRFFQ69G5FAW";
 
 pub async fn run(config: AgentConfig) -> Result<(), String> {
-    let token = read_secret(&config.token_backend)?;
+    // The approved token backend shares the canonical secret rules (this
+    // link used to have its own unchecked reader).
+    let token = crate::node_config::read_secret(&config.token_backend)?;
     let mut backoff_secs = 1;
     loop {
         match connect_once(&config, &token).await {
@@ -699,20 +701,6 @@ fn now_millis() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_millis() as u64)
         .unwrap_or(0)
-}
-fn read_secret(source: &str) -> Result<String, String> {
-    let value = if let Some(name) = source.strip_prefix("env:") {
-        std::env::var(name).map_err(|error| format!("read token env: {error}"))?
-    } else if let Some(path) = source.strip_prefix("file:") {
-        std::fs::read_to_string(path).map_err(|error| format!("read token file: {error}"))?
-    } else {
-        return Err("token_backend must be env:NAME or file:PATH".into());
-    };
-    let value = value.trim().to_string();
-    if value.is_empty() {
-        return Err("agent token is empty".into());
-    }
-    Ok(value)
 }
 #[cfg(test)]
 #[path = "runtime_tests.rs"]
