@@ -803,6 +803,13 @@ impl ClientHandshake {
                         BootstrapError::MalformedEnvelope("missing negotiationId".into())
                     })?
                     .to_string();
+                // SDK parity: an S1 binding is a ULID (the server enforces
+                // the same on its own negotiation id).
+                if s1_mode && !conex_proto::wire::is_ulid(&negotiation_id) {
+                    return Err(BootstrapError::MalformedEnvelope(
+                        "S1 bindingId must be a ULID".into(),
+                    ));
+                }
                 if let Some(rejected) = result.get("rejectedCapabilities") {
                     let rejected = rejected.as_array().ok_or_else(|| {
                         BootstrapError::MalformedEnvelope("invalid rejectedCapabilities".into())
@@ -848,6 +855,12 @@ impl ClientHandshake {
                     .get("limits")
                     .ok_or_else(|| BootstrapError::MalformedEnvelope("missing limits".into()))?;
                 let limits = limits_from_json(limits)?;
+                // SDK parity: an S1 offer must be six positive fields with
+                // the control reserve (legacy offers may omit the S1 caps).
+                if s1_mode {
+                    conex_proto::capability::validate_limits(&limits)
+                        .map_err(|_| BootstrapError::LimitsMismatch)?;
+                }
                 let proposal = match self.client_limits {
                     Some(client) => conex_proto::capability::lower_limits(&client, &limits),
                     None => limits,
@@ -932,6 +945,13 @@ impl ClientHandshake {
                     && limits_exceed(&limits, proposed)
                 {
                     return Err(BootstrapError::LimitsMismatch);
+                }
+                // SDK parity: the negotiated result itself must stay a valid
+                // six-field offer (a lower bound of valid limits is valid,
+                // but a misbehaving server could send zeros).
+                if self.s1_mode {
+                    conex_proto::capability::validate_limits(&limits)
+                        .map_err(|_| BootstrapError::LimitsMismatch)?;
                 }
                 // Authenticated hub identity (SDK parity): S1 requires it in
                 // the ready result — ULID linkId plus non-empty peer/tenant.
@@ -1638,6 +1658,100 @@ mod tests {
             .ingest(BootstrapFrame { json: hello_result })
             .unwrap();
         assert!(matches!(client.state(), BootstrapState::AwaitingReady));
+    }
+
+    #[test]
+    fn client_applies_sdk_parity_checks_in_s1_mode() {
+        let limits = serde_json::json!({
+            "maxFrameBytes": 262_144u64, "maxInflight": 16u64,
+            "maxQueuedBytes": 1_048_576u64, "timeoutMs": 8_000u64,
+            "maxSubscriptions": 4u64, "maxModules": 4u64,
+        });
+        let s1_hello = |binding: &str, limits: serde_json::Value| {
+            serde_json::json!({
+                "jsonrpc": "2.0", "id": "req-1",
+                "result": {
+                    "bindingId": binding,
+                    "expiresInMs": 0,
+                    "profileId": "conex-jsonrpc2-wss",
+                    "plane": "PLANE_BROKER",
+                    "provides": ["module/invoke"],
+                    "limits": limits,
+                },
+            })
+            .to_string()
+        };
+
+        // A non-ULID bindingId is not an S1 binding.
+        let mut client = ClientHandshake::new();
+        client
+            .build_hello(
+                ProfileId::JsonRpc2Wss,
+                conex_proto::Plane::Broker,
+                vec![],
+                vec![],
+            )
+            .unwrap();
+        assert!(matches!(
+            client.ingest(BootstrapFrame {
+                json: s1_hello("not-a-ulid", limits.clone()),
+            }),
+            Err(BootstrapError::MalformedEnvelope(_))
+        ));
+
+        // An S1 offer without the subscription cap (zero is not positive)
+        // is rejected before it can become a proposal.
+        let mut client = ClientHandshake::new();
+        client
+            .build_hello(
+                ProfileId::JsonRpc2Wss,
+                conex_proto::Plane::Broker,
+                vec![],
+                vec![],
+            )
+            .unwrap();
+        let mut capped = limits.clone();
+        capped.as_object_mut().unwrap().remove("maxSubscriptions");
+        assert!(matches!(
+            client.ingest(BootstrapFrame {
+                json: s1_hello("01ARZ3NDEKTSV4RRFFQ69G5FAV", capped),
+            }),
+            Err(BootstrapError::LimitsMismatch)
+        ));
+
+        // A ready result that lowers a cap to zero violates the negotiated
+        // validity even though it stays below the proposal.
+        let mut client = ClientHandshake::new();
+        client
+            .build_hello(
+                ProfileId::JsonRpc2Wss,
+                conex_proto::Plane::Broker,
+                vec!["module/invoke".to_owned()],
+                vec![],
+            )
+            .unwrap();
+        client
+            .ingest(BootstrapFrame {
+                json: s1_hello("01ARZ3NDEKTSV4RRFFQ69G5FAV", limits.clone()),
+            })
+            .unwrap();
+        let mut zeroed = limits;
+        zeroed.as_object_mut().unwrap().remove("maxSubscriptions");
+        let ready_result = serde_json::json!({
+            "jsonrpc": "2.0", "id": "req-1",
+            "result": {
+                "negotiationId": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+                "profileId": "conex-jsonrpc2-wss",
+                "plane": "PLANE_BROKER",
+                "provides": ["module/invoke"],
+                "limits": zeroed,
+            },
+        })
+        .to_string();
+        assert!(matches!(
+            client.ingest(BootstrapFrame { json: ready_result }),
+            Err(BootstrapError::LimitsMismatch)
+        ));
     }
 
     fn s1_handshake() -> (ServerHandshake, serde_json::Value, Vec<String>) {
