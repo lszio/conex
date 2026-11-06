@@ -8,6 +8,7 @@ repository.workspace = true
 description = "Embeddable symmetric conex S1 JSON WebSocket SDK"
 
 [dependencies]
+conex-core.workspace = true
 conex-proto.workspace = true
 futures = "0.3"
 serde.workspace = true

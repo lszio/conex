@@ -5,6 +5,7 @@ use crate::{
     },
     state::{ConsumerState, Sequence, StateEvent, StateLease, StateObserver, Subscription},
 };
+use conex_core::transport_ws::{BootstrapError, BootstrapFrame, ClientHandshake, ProfileId};
 use conex_proto::{self as p, capability as wire, message::Body};
 use futures::{SinkExt, StreamExt};
 use serde::{Serialize, de::DeserializeOwned};
@@ -85,9 +86,6 @@ fn valid_limits(l: &p::Limits) -> Result<()> {
         ));
     }
     Ok(())
-}
-fn lower(a: p::Limits, b: p::Limits) -> p::Limits {
-    wire::lower_limits(&a, &b)
 }
 fn typed<T: DeserializeOwned>(value: Value) -> Result<T> {
     serde_json::from_value(value).map_err(Error::decode)
@@ -319,60 +317,41 @@ impl Client {
                 "never",
             ));
         }
-        let hello = p::HelloRequest {
-            profile_id: PROFILE.into(),
-            plane: p::Plane::Broker as i32,
-            provides: PROVIDES.map(str::to_owned).to_vec(),
-            requires: REQUESTS.map(str::to_owned).to_vec(),
-        };
-        let result = handshake(&mut ws, "conex/hello", json_value(hello)?, timeout).await?;
-        let hello: p::HelloResponse = typed(result)?;
-        if hello.profile_id != PROFILE
-            || hello.plane != p::Plane::Broker as i32
-            || !p::wire::is_ulid(&hello.binding_id)
-            || REQUESTS
-                .iter()
-                .any(|m| !hello.provides.iter().any(|x| x == m))
-            || !hello.rejected_capabilities.is_empty()
-        {
-            return Err(Error::bad_request("S1 negotiation rejected or incomplete"));
-        }
-        let remote = hello
-            .limits
-            .ok_or_else(|| Error::bad_request("missing S1 limits"))?;
-        valid_limits(&remote)?;
-        let limits = lower(options.limits, remote);
-        valid_limits(&limits)?;
-        let ready = p::ReadyRequest {
-            negotiation_id: hello.binding_id.clone(),
-            profile_id: PROFILE.into(),
-            plane: p::Plane::Broker as i32,
-            provides: PROVIDES.map(str::to_owned).to_vec(),
-            limits: Some(limits),
-        };
-        let result = handshake(&mut ws, "conex/ready", json_value(ready)?, timeout).await?;
-        let ready: p::ReadyResponse = typed(result)?;
-        if ready.negotiation_id != hello.binding_id
-            || ready.profile_id != PROFILE
-            || ready.plane != p::Plane::Broker as i32
-            || REQUESTS
-                .iter()
-                .any(|m| !ready.provides.iter().any(|x| x == m))
-        {
-            return Err(Error::bad_request("ready does not match negotiation"));
-        }
-        let final_limits = ready
+        // The S1 negotiation is core's state machine now: one implementation
+        // for the agent runtime and this SDK (4c). Core checks the pbjson
+        // result shape, the ULID binding, capability sets, rejected caps,
+        // six-field limit validity, the lower(options, offer) proposal and
+        // the no-raise rule; the client only drives transport frames.
+        let mut handshake = ClientHandshake::new().with_client_limits(options.limits);
+        let hello = handshake
+            .build_hello(
+                ProfileId::JsonRpc2Wss,
+                p::Plane::Broker,
+                PROVIDES.map(str::to_owned).to_vec(),
+                REQUESTS.map(str::to_owned).to_vec(),
+            )
+            .map_err(bootstrap_error)?;
+        send_frame(&mut ws, hello.json, timeout).await?;
+        let proposal = handshake
+            .ingest(BootstrapFrame {
+                json: recv_frame(&mut ws, timeout).await?,
+            })
+            .map_err(bootstrap_error)?;
+        let frame = handshake
+            .build_ready_frame(&proposal)
+            .map_err(bootstrap_error)?;
+        send_frame(&mut ws, frame.json, timeout).await?;
+        let negotiated = handshake
+            .ingest(BootstrapFrame {
+                json: recv_frame(&mut ws, timeout).await?,
+            })
+            .map_err(bootstrap_error)?;
+        let final_limits = negotiated
             .limits
             .ok_or_else(|| Error::bad_request("missing ready limits"))?;
-        valid_limits(&final_limits)?;
-        if lower(limits, final_limits) != final_limits {
-            return Err(Error::bad_request("ready raised negotiated limits"));
-        }
-        let hub = ready
-            .link_identity
-            .filter(|h| {
-                p::wire::is_ulid(&h.link_id) && !h.peer_id.is_empty() && !h.tenant_id.is_empty()
-            })
+        let hub = handshake
+            .link_identity()
+            .cloned()
             .ok_or_else(|| Error::bad_request("missing authenticated hub identity"))?;
         let capacity = final_limits.max_queued_bytes as usize;
         // Byte permits bound payload storage; channel slots also bound tiny frames.
@@ -838,42 +817,46 @@ struct StateDelivery {
     stopped: Arc<AtomicBool>,
     slot: OwnedSemaphorePermit,
 }
-async fn handshake<S>(
+/// Map the core handshake state machine's verdicts onto SDK errors:
+/// capability refusals keep their code, everything else is a malformed
+/// negotiation (bad_request).
+fn bootstrap_error(error: BootstrapError) -> Error {
+    match error {
+        BootstrapError::UnsupportedCapability(_) => Error::new(
+            p::ErrorCode::UnsupportedCapability,
+            error.to_string(),
+            "not_started",
+            "never",
+        ),
+        _ => Error::bad_request(error.to_string()),
+    }
+}
+
+async fn send_frame<S>(
     ws: &mut tokio_tungstenite::WebSocketStream<S>,
-    method: &str,
-    input: Value,
+    json: String,
     timeout: Duration,
-) -> Result<Value>
+) -> Result<()>
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
-    let id = new_id();
-    let envelope = request_envelope(&id, method, broker(), input, timeout.as_millis() as u32);
-    let bytes = serde_json::to_vec(&envelope).map_err(Error::decode)?;
-    tokio::time::timeout(timeout, async {
-        ws.send(WsMessage::Text(
-            String::from_utf8(bytes).map_err(Error::decode)?.into(),
-        ))
+    tokio::time::timeout(timeout, ws.send(WsMessage::Text(json.into())))
         .await
-        .map_err(|_| Error::unavailable())?;
+        .map_err(|_| Error::unavailable())?
+        .map_err(|_| Error::unavailable())
+}
+
+async fn recv_frame<S>(
+    ws: &mut tokio_tungstenite::WebSocketStream<S>,
+    timeout: Duration,
+) -> Result<String>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    tokio::time::timeout(timeout, async {
         loop {
             match ws.next().await {
-                Some(Ok(WsMessage::Text(text))) => {
-                    eprintln!("conex-sdk handshake reply: {text}");
-                    let message = p::wire::decode_wire(text.as_bytes()).map_err(Error::protocol)?;
-                    let raw: Value = serde_json::from_str(&text).map_err(Error::decode)?;
-                    return match message.body {
-                        Some(Body::Success(s)) if s.request_id == id => {
-                            Ok(raw.get("result").cloned().unwrap_or(Value::Null))
-                        }
-                        Some(Body::Failure(f)) if f.request_id.as_deref() == Some(id.as_str()) => {
-                            Err(Error(Box::new(
-                                f.error.ok_or_else(|| Error::bad_request("missing error"))?,
-                            )))
-                        }
-                        _ => Err(Error::bad_request("unexpected handshake frame")),
-                    };
-                }
+                Some(Ok(WsMessage::Text(text))) => return Ok(text.to_string()),
                 Some(Ok(WsMessage::Ping(_))) | Some(Ok(WsMessage::Pong(_))) => continue,
                 _ => return Err(Error::unavailable()),
             }

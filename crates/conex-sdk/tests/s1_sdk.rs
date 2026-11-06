@@ -87,7 +87,9 @@ async fn ws_peer() -> (String, tokio::task::JoinHandle<Ws>) {
         let mut ws = accept_hdr_async(tcp, JsonProfile).await.unwrap();
         let hello: Value =
             serde_json::from_str(ws.next().await.unwrap().unwrap().to_text().unwrap()).unwrap();
-        let methods = hello["params"]["input"]["requires"].clone();
+        // The client handshake is core's flat legacy frame now (4c):
+        // requires sits directly under params.
+        let methods = hello["params"]["requires"].clone();
         send_text(&mut ws, json!({"jsonrpc":"2.0","id":hello["id"],"result":{"bindingId":REG,"profileId":"conex-jsonrpc2-wss","plane":"PLANE_BROKER","provides":methods,"limits":limits.clone()}}).to_string()).await;
         let ready: Value =
             serde_json::from_str(ws.next().await.unwrap().unwrap().to_text().unwrap()).unwrap();
