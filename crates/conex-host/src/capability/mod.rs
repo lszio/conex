@@ -22,6 +22,7 @@ use conex_core::capability::{
     ApprovalSet, CapabilityMethod, CapabilityState, ConsumeApproval, ContractDescription,
     ContractRegistry, ExecutionClass, PublishApproval, is_valid_identifier, parse_module_principal,
 };
+use conex_core::operation::{ExecutionState, RetryPolicy};
 use conex_proto;
 
 use crate::config::CapabilityConfig;
@@ -145,16 +146,16 @@ pub fn effective_consumer(caller: &Caller, consumer_module: &str) -> Result<Stri
             conex_proto::ErrorCode::BadRequest,
             "consumerModule is not a valid module principal",
         )
-        .with_execution("not_started")
-        .with_retry("never"));
+        .with_execution(ExecutionState::NotStarted)
+        .with_retry(RetryPolicy::Never));
     };
     if node != caller.principal_id {
         return Err(CallError::new(
             conex_proto::ErrorCode::Forbidden,
             "consumerModule does not match the authenticated node",
         )
-        .with_execution("not_started")
-        .with_retry("never"));
+        .with_execution(ExecutionState::NotStarted)
+        .with_retry(RetryPolicy::Never));
     }
     Ok(consumer_module.to_string())
 }

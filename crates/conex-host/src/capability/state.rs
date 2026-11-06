@@ -27,6 +27,7 @@ use std::sync::Arc;
 
 use conex_core::CallError;
 use conex_core::capability::validate_state_value;
+use conex_core::operation::{ExecutionState, RetryPolicy};
 use conex_core::{CallResult, Caller};
 use conex_proto;
 use conex_proto::capability::{
@@ -300,8 +301,8 @@ impl StateRelay {
                     conex_proto::ErrorCode::Unavailable,
                     "provider link is offline",
                 )
-                .with_execution("not_started")
-                .with_retry("safe")
+                .with_execution(ExecutionState::NotStarted)
+                .with_retry(RetryPolicy::Safe)
             })?;
         // 5. opening 记录 + 每跳 subscriptionId（有界）。
         let hop = new_registration_id();
@@ -328,8 +329,8 @@ impl StateRelay {
                     conex_proto::ErrorCode::Unavailable,
                     "consumer link is not attached",
                 )
-                .with_execution("not_started")
-                .with_retry("safe")
+                .with_execution(ExecutionState::NotStarted)
+                .with_retry(RetryPolicy::Safe)
             })?;
             if consumer.active >= consumer.max_subscriptions {
                 return Err(not_started(
@@ -520,8 +521,8 @@ impl StateRelay {
                             .unwrap_or(conex_proto::ErrorCode::Internal),
                         error.message(),
                     )
-                    .with_execution("unknown")
-                    .with_retry("safe")
+                    .with_execution(ExecutionState::Unknown)
+                    .with_retry(RetryPolicy::Safe)
                 } else {
                     error
                 };
@@ -537,8 +538,8 @@ impl StateRelay {
                             conex_proto::ErrorCode::Unavailable,
                             "provider link closed during subscription establishment",
                         )
-                        .with_execution("unknown")
-                        .with_retry("safe")
+                        .with_execution(ExecutionState::Unknown)
+                        .with_retry(RetryPolicy::Safe)
                     })
                 };
                 Err(self.establishment_failed(&hop, error).await)
@@ -550,8 +551,8 @@ impl StateRelay {
                         conex_proto::ErrorCode::Timeout,
                         "subscription establishment timed out",
                     )
-                    .with_execution("unknown")
-                    .with_retry("safe"),
+                    .with_execution(ExecutionState::Unknown)
+                    .with_retry(RetryPolicy::Safe),
                 )
                 .await),
         }

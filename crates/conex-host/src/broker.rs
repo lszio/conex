@@ -1415,7 +1415,7 @@ async fn operation_get(
         "expiresAtMs": record.expires_at_ms.to_string(),
         "success": success,
         "failure": failure.map(|e| serde_json::json!({"code": e.code, "message": e.message})),
-        "execution": execution_label(execution),
+        "execution": execution.as_str(),
         "acceptedAtMs": record.accepted_at_ms.to_string(),
         "settledAtMs": record.settled_at_ms.map(|n| n.to_string()),
     }))
@@ -1457,14 +1457,6 @@ fn parse_dedup_key(value: &Value) -> CallResult<DedupKey> {
         method: require_string(map, "method")?.to_string(),
         operation_id: require_string(map, "operationId")?.to_string(),
     })
-}
-
-fn execution_label(state: ExecutionState) -> &'static str {
-    match state {
-        ExecutionState::NotStarted => "not_started",
-        ExecutionState::Completed => "completed",
-        ExecutionState::Unknown => "unknown",
-    }
 }
 
 // -------------------- helpers --------------------
