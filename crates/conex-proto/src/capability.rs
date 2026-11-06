@@ -266,6 +266,23 @@ pub fn validate_limits(limits: &crate::Limits) -> Result<(), ProtocolError> {
     Ok(())
 }
 
+/// Componentwise negotiation floor (S1 契约「各方协商取可支持的下限」):
+/// the effective limits are the requesting side's wish capped by the
+/// offering side's hello. Lowering two limits that each pass
+/// [`validate_limits`] stays valid — every field remains positive and
+/// `max_queued_bytes >= 2 * max_frame_bytes` holds because each side
+/// already reserves that ratio on its own.
+pub fn lower_limits(requested: &crate::Limits, offered: &crate::Limits) -> crate::Limits {
+    crate::Limits {
+        max_frame_bytes: requested.max_frame_bytes.min(offered.max_frame_bytes),
+        max_inflight: requested.max_inflight.min(offered.max_inflight),
+        max_queued_bytes: requested.max_queued_bytes.min(offered.max_queued_bytes),
+        timeout_ms: requested.timeout_ms.min(offered.timeout_ms),
+        max_subscriptions: requested.max_subscriptions.min(offered.max_subscriptions),
+        max_modules: requested.max_modules.min(offered.max_modules),
+    }
+}
+
 /// Strict JSON limits before pbjson's permissive scalar conversion.
 pub fn limits_from_json(value: &Value) -> Result<crate::Limits, ProtocolError> {
     validate_domain_schema("conex.Limits", value)?;
@@ -733,4 +750,54 @@ pub fn state_end_input(
     let out = Value::Object(out);
     validate_input(METHOD_STATE_END, &out)?;
     Ok(out)
+}
+
+#[cfg(test)]
+mod lower_limits_tests {
+    use super::*;
+
+    fn limits(
+        max_frame_bytes: u32,
+        max_inflight: u32,
+        max_queued_bytes: u32,
+        timeout_ms: u32,
+        max_subscriptions: u32,
+        max_modules: u32,
+    ) -> crate::Limits {
+        crate::Limits {
+            max_frame_bytes,
+            max_inflight,
+            max_queued_bytes,
+            timeout_ms,
+            max_subscriptions,
+            max_modules,
+        }
+    }
+
+    #[test]
+    fn lower_takes_each_field_minimum() {
+        let a = limits(65_536, 8, 262_144, 4_000, 16, 8);
+        let b = limits(262_144, 32, 1_048_576, 8_000, 4, 64);
+        assert_eq!(
+            lower_limits(&a, &b),
+            limits(65_536, 8, 262_144, 4_000, 4, 8)
+        );
+        assert_eq!(lower_limits(&a, &b), lower_limits(&b, &a));
+    }
+
+    #[test]
+    fn lower_keeps_valid_limits_valid() {
+        // Both sides pass validate_limits → the floor does too: positivity
+        // and the control-reserve ratio are preserved componentwise.
+        let a = limits(4_096, 2, 65_536, 1_000, 1, 1);
+        let b = limits(1_048_576, 128, 16_777_216, 60_000, 512, 256);
+        validate_limits(&a).unwrap();
+        validate_limits(&b).unwrap();
+        validate_limits(&lower_limits(&a, &b)).unwrap();
+        let lowered = lower_limits(&a, &b);
+        assert!(lowered.max_frame_bytes <= a.max_frame_bytes);
+        assert!(lowered.max_frame_bytes <= b.max_frame_bytes);
+        assert!(lowered.max_queued_bytes <= a.max_queued_bytes);
+        assert!(lowered.max_queued_bytes <= b.max_queued_bytes);
+    }
 }
