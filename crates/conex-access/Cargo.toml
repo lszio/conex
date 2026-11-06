@@ -9,6 +9,7 @@ description = "conex private-access grants: strict Ed25519 compact JWS issue/ver
 publish = false
 
 [dependencies]
+conex-core.workspace = true
 conex-proto.workspace = true
 base64 = "0.22"
 hex.workspace = true

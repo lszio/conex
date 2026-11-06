@@ -629,11 +629,19 @@ fn build_installation(
                         name: name.clone(),
                         principal_id: None,
                     };
+                    // Text credentials only: an unknown scheme must be an
+                    // install error, never a silently misread file path
+                    // (env64: used to fall through to the file arm here).
                     let backend = match backend.strip_prefix("env:") {
                         Some(variable) => CredentialBackend::Env(variable.to_string()),
-                        None => CredentialBackend::File(PathBuf::from(
-                            backend.strip_prefix("file:").unwrap_or(backend),
-                        )),
+                        None => match backend.strip_prefix("file:") {
+                            Some(path) => CredentialBackend::File(PathBuf::from(path)),
+                            None => {
+                                return Err(invalid(
+                                    "credential_backend must be env:NAME or file:PATH",
+                                ));
+                            }
+                        },
                     };
                     (Some(key), Some(backend))
                 }
