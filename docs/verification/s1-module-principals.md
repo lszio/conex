@@ -21,6 +21,7 @@
 ```text
 M-A04 actual=approved module consumer passes judgment; derived read/add forward upstream; republished capability serves a third operator consumer ok
 M-A01 actual=unapproved module principal forbidden; operator approval on the same node does not extend to it ok
+M-A02/M-A03 actual=raw-frame foreign claim forbidden and malformed shape bad_request; catalog unchanged under probing ok
 M-A06 actual=module approval removal forbids new calls; operator direct approval unaffected; composite degrades explicitly ok
 module-principals acceptance: all scenarios passed
 ```
@@ -30,8 +31,8 @@ module-principals acceptance: all scenarios passed
 | 场景 | 覆盖 | 备注 |
 |---|---|---|
 | M-A01 | 未批准模块主体 forbidden，同节点操作员批准不外溢；hub 判定失败零业务帧 | e2e |
-| M-A02 | 冒认他节点 forbidden | **单元级**（`s1_calls::module_consumer_cannot_claim_another_nodes_identity`，真实 Broker+Router）；e2e 需原始帧客户端，未做 |
-| M-A03 | 形状非法 bad_request、先于披露 | **单元级**（同文件 `malformed_module_principal_is_bad_request_before_disclosure` + core `principal_tests`）；e2e 未做 |
+| M-A02 | 冒认他节点 forbidden | e2e（2026-11-08 原始帧探针：操作员连接声明他节点主体 → -32002）+ 单元级（`s1_calls`，真实 Broker+Router） |
+| M-A03 | 形状非法 bad_request、先于披露 | e2e（同原始帧探针：4 种畸形声明逐个 -32602，且探测前后 `module/list` 目录与注册恒等）+ 单元级（同文件 + core `principal_tests`） |
 | M-A04 | A14 骨架：批准的主体消费两个操作（read/add 转发上游）→ 再发布 → 第三操作员消费者 | e2e |
 | M-A05 | 本地依赖零帧直调 | 既有 S2-A02 回归（`xtask e2e --suite s2-plugins` 在全门禁内） |
 | M-A06 | 撤销模块批准 → 新调用 forbidden；操作员直连上游不受影响；**经组合的能力显式降级**（组合的上游授权被撤，其对外能力诚实失效，不伪造成功） | e2e（host 重启换配置 + 注册轮换重钉） |
@@ -48,6 +49,6 @@ module-principals acceptance: all scenarios passed
 
 ## 4. 未覆盖与边界
 
-- M-A02/M-A03 的 e2e 形态需原始 WSS 帧客户端（SDK 只会发合法声明）；以真实宿主单元测试覆盖判定语义，e2e 形态留待统一探针工具。
+- M-A02/M-A03 的原始 WSS 帧探针（2026-11-08）只覆盖操作员连接上的冒认与畸形声明；节点连接（发布链路）上的同型声明由单元级判定语义覆盖（SDK 不会发送非法声明，节点侧无探针形态）。
 - 绑定图落表（基线 §6 的图存储）仍是独立工作项；审计记录是它的原料，已随 P1 统一审计汇落地（[计划](../plans/2026-11-08-conex-p1-audit-sink.md)）。
 - e2e 的注册轮换由 host 重启驱动（静态批准无热重载）；"不重启撤权"语义仍属动态批准 API 的非目标（契约 §7）。
