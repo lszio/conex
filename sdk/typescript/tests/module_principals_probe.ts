@@ -2,8 +2,9 @@
 // Topology: one real host, two real nodes. Node B publishes a counter; node A
 // runs derived-counter apps that consume it over pinned remote bindings with
 // module consumer principals (contracts/s1-module-principals.md). M-A02/M-A03
-// are host-judgment behaviors covered at the real-Broker unit level
-// (crates/conex-host/tests/s1_calls.rs); this probe exercises the full wire +
+// were host-judgment behaviors covered at the real-Broker unit level
+// (crates/conex-host/tests/s1_calls.rs); since the raw-frame probe landed they
+// run here too against the real host. This probe exercises the full wire +
 // SDK identity chain (M-A01/M-A04/M-A06) plus the operator regression (M-A07).
 import { mkdtemp, writeFile, chmod, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -14,6 +15,7 @@ import type { Subprocess } from "bun";
 import Ajv from "ajv";
 import { isRecord, validateDomainSchema } from "../src/s1-wire";
 import { ConexWsClient } from "../src/ws-client";
+import { mintUlid } from "../src/client";
 import type { WebSocketLike } from "../src/ws-client";
 import type { CapabilityContract } from "../src/capability";
 
@@ -86,6 +88,107 @@ const hostBin = process.env.CONEX_HOST_BINARY!;
 const tokenA = "module-principals-node-a";
 const tokenB = "module-principals-node-b";
 const tokenOp = "module-principals-operator";
+// ---- Raw WSS frames (M-A02/M-A03) ------------------------------------------
+// The SDK identity chain refuses to send illegal declarations, so the
+// identity-spoofing scenarios speak the wire directly: an operator-
+// authenticated raw connection completes hello/ready and crafts module/invoke
+// frames with foreign or malformed consumerModule claims — the same judgment
+// the unit tests cover in s1_calls.rs, now against the real host.
+const RAW_PROVIDES = ["module/invoke", "module/list"];
+
+interface RawReply {
+  id: string;
+  result?: Record<string, unknown>;
+  error?: { code: number; message?: string };
+}
+
+function rawConnect(
+  url: string,
+  token: string,
+): Promise<{ socket: WebSocketLike; bindingId: string }> {
+  return new Promise((resolve, reject) => {
+    const socket = new ServiceSocket(url, { headers: { Authorization: `Bearer ${token}` } });
+    const HELLO_ID = mintUlid();
+    const READY_ID = mintUlid();
+    const fail = (error: unknown) => {
+      try { socket.close(); } catch {}
+      reject(error instanceof Error ? error : new Error(String(error)));
+    };
+    const timer = setTimeout(() => fail(new Error("raw S1 handshake timed out")), 10000);
+    socket.onmessage = (event: unknown) => {
+      const data = (event as { data?: unknown })?.data;
+      if (typeof data !== "string") return;
+      let frame: RawReply;
+      try { frame = JSON.parse(data) as RawReply; } catch { return; }
+      if (frame.id === HELLO_ID && frame.result) {
+        const result = frame.result as { bindingId: string; limits: Record<string, unknown> };
+        socket.send(JSON.stringify({
+          jsonrpc: "2.0", id: READY_ID, method: "conex/ready",
+          params: {
+            context: { plane: "broker" }, timeoutBudgetMs: 8000,
+            input: {
+              negotiationId: result.bindingId, profileId: "conex-jsonrpc2-wss",
+              plane: "PLANE_BROKER", provides: RAW_PROVIDES, limits: result.limits,
+            },
+          },
+        }));
+      } else if (frame.id === READY_ID && frame.result) {
+        // The pbjson ready reply names the binding "negotiationId".
+        const result = frame.result as { negotiationId: string };
+        clearTimeout(timer);
+        resolve({ socket, bindingId: result.negotiationId });
+      } else if (frame.error) {
+        fail(new Error(`raw S1 handshake rejected: ${JSON.stringify(frame.error)}`));
+      }
+    };
+    socket.onerror = () => fail(new Error("raw S1 socket errored"));
+    socket.onopen = () => {
+      socket.send(JSON.stringify({
+        jsonrpc: "2.0", id: HELLO_ID, method: "conex/hello",
+        params: {
+          context: { plane: "broker" }, timeoutBudgetMs: 8000,
+          input: {
+            profileId: "conex-jsonrpc2-wss", plane: "PLANE_BROKER",
+            provides: RAW_PROVIDES, requires: ["module/list"],
+          },
+        },
+      }));
+    };
+  });
+}
+
+function rawInvoke(id: string, registrationId: string, consumerModule: string): unknown {
+  return {
+    jsonrpc: "2.0", id, method: "module/invoke",
+    params: {
+      context: {
+        plane: "broker", spaceId: "dev",
+        providerEndpointId: providerEndpoint, registrationId,
+        consumerModule,
+      },
+      timeoutBudgetMs: 8000,
+      input: { method: "counter/read", argument: {} },
+    },
+  };
+}
+
+function rawAwait(socket: WebSocketLike, id: string, ms = 8000): Promise<RawReply> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`raw invoke ${id} timed out`)), ms);
+    const previous = socket.onmessage;
+    socket.onmessage = (event: unknown) => {
+      const data = (event as { data?: unknown })?.data;
+      if (typeof data !== "string") return;
+      let frame: RawReply;
+      try { frame = JSON.parse(data) as RawReply; } catch { return; }
+      if (frame.id !== id) return;
+      clearTimeout(timer);
+      socket.onmessage = previous;
+      resolve(frame);
+    };
+  });
+}
+
 const nodeIdA = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
 const nodeIdB = "01ARZ3NDEKTSV4RRFFQ69G5FB0";
 const principalA = "01ARZ3NDEKTSV4RRFFQ69G5FAW";
@@ -356,6 +459,47 @@ exports = [{contract_id="conex.counter",strategy="relay-allowed"}]
   );
   assert.equal(unapprovedError.code, -32002, `expected forbidden, got ${JSON.stringify(unapprovedError)}`);
   console.log("M-A01 actual=unapproved module principal forbidden; operator approval on the same node does not extend to it ok");
+
+  // M-A02/M-A03: raw frames against the real host. The connection is
+  // operator-authenticated, so a claim naming another node's principal fails
+  // the peer-attribution step and a malformed shape fails the shape step —
+  // both before any provider frame, and the catalog must not change under
+  // probing (M-A03's "no disclosure" is observable through module/list).
+  const catalogBefore = await operatorClient.listModules("dev");
+  const raw = await rawConnect(`ws://127.0.0.1:${port}/wss`, tokenOp);
+  assert(raw.bindingId.length > 0, "raw S1 handshake must bind");
+
+  // M-A02: a foreign-node module principal over this connection. Request
+  // ids are ULIDs everywhere on the wire (bootstrap and business alike).
+  const foreignId = mintUlid();
+  raw.socket.send(JSON.stringify(rawInvoke(foreignId, upstreamReference.registrationId, `module/${principalB}/provider/counter`)));
+  const foreignReply = await rawAwait(raw.socket, foreignId);
+  assert(foreignReply.error, `foreign-node claim must be refused: ${JSON.stringify(foreignReply)}`);
+  assert.equal(foreignReply.error!.code, -32002, `expected forbidden, got ${JSON.stringify(foreignReply.error)}`);
+
+  // M-A03: malformed shapes are bad_request before any disclosure.
+  const malformedClaims = [
+    "module/only-two",
+    "not-a-module-principal",
+    "module//app/m",
+    `module/${principalA}/app/m/extra`,
+  ];
+  for (const [index, claim] of malformedClaims.entries()) {
+    const id = mintUlid();
+    raw.socket.send(JSON.stringify(rawInvoke(id, upstreamReference.registrationId, claim)));
+    const reply = await rawAwait(raw.socket, id);
+    assert(reply.error, `malformed claim must be refused: ${claim} -> ${JSON.stringify(reply)}`);
+    assert.equal(reply.error!.code, -32602, `expected bad_request for ${claim}, got ${JSON.stringify(reply.error)}`);
+  }
+  raw.socket.close();
+
+  const catalogAfter = await operatorClient.listModules("dev");
+  assert.deepEqual(
+    catalogAfter.map(module => [module.providerEndpointId, module.registrationId]),
+    catalogBefore.map(module => [module.providerEndpointId, module.registrationId]),
+    "probing must not change the catalog or registrations",
+  );
+  console.log("M-A02/M-A03 actual=raw-frame foreign claim forbidden and malformed shape bad_request; catalog unchanged under probing ok");
 
   // M-A06: revocation = config without the module approval. The provider's
   // registration rotates on reconnect, so node A is re-pinned and restarted
