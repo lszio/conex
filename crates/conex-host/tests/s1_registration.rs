@@ -133,6 +133,7 @@ fn broker(registry: Option<Arc<ModuleRegistry>>) -> Arc<Broker> {
     Arc::new(Broker::new(
         host,
         BrokerDeps {
+            audit: std::sync::Arc::new(conex_host::NullAudit),
             content: None,
             session: None,
             operation: None,

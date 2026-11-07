@@ -14,6 +14,10 @@ pub struct AuditStart {
     pub plane: i32,
     pub policy_version: u64,
     pub phase: String,
+    /// S1 模块消费主体（contracts/s1-module-principals.md §3）；None = 连接主体自身。
+    pub consumer_module: Option<String>,
+    /// WSS 链路代次（绑定图/审计用，不参与授权）；非链路路径为 0。
+    pub generation: u64,
 }
 
 #[derive(Debug, Clone)]

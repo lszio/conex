@@ -56,7 +56,7 @@ impl FileAuditSink {
 }
 
 impl AuditSink for FileAuditSink {
-    fn reserve(&self, _start: &AuditStart) -> CallResult<Box<dyn AuditReservation>> {
+    fn reserve(&self, start: &AuditStart) -> CallResult<Box<dyn AuditReservation>> {
         if self.pending.load(Ordering::SeqCst) >= self.capacity {
             return Err(CallError::new(
                 conex_proto::ErrorCode::Unavailable,
@@ -67,6 +67,7 @@ impl AuditSink for FileAuditSink {
         Ok(Box::new(FileReservation {
             file: self.file.clone(),
             pending: self.pending.clone(),
+            start: start.clone(),
         }))
     }
 }
@@ -74,11 +75,29 @@ impl AuditSink for FileAuditSink {
 struct FileReservation {
     file: Arc<Mutex<File>>,
     pending: Arc<AtomicUsize>,
+    start: AuditStart,
 }
 
 impl AuditReservation for FileReservation {
     fn finish(self: Box<Self>, end: AuditEnd) -> CallResult<()> {
+        // One line carries who/what (the reserved start) together with the
+        // outcome; before the P1 audit sink this file only held the End
+        // summary, so it could account capacity but not answer "who did
+        // what" (contracts/s1-module-principals.md §3).
+        let start = &self.start;
         let record = json!({
+            "eventId": start.event_id,
+            "traceId": start.trace_id,
+            "principalId": start.principal_id,
+            "tenantId": start.tenant_id,
+            "actorPeerId": start.actor_peer_id,
+            "endpointId": start.endpoint_id,
+            "method": start.method,
+            "resourceScope": start.resource_scope,
+            "plane": start.plane,
+            "policyVersion": start.policy_version,
+            "consumerModule": start.consumer_module,
+            "generation": start.generation,
             "phase": end.phase,
             "outcome": end.outcome,
             "errorCode": end.error_code,
@@ -114,6 +133,8 @@ mod tests {
             plane: 1,
             policy_version: 1,
             phase: phase.into(),
+            consumer_module: None,
+            generation: 0,
         }
     }
 
@@ -145,5 +166,11 @@ mod tests {
             .unwrap();
         let content = std::fs::read_to_string(&path).unwrap();
         assert!(content.contains("\"phase\":\"authorize\""));
+        // The reserved start lands in the same line: the record answers
+        // "who did what", not just the outcome summary.
+        assert!(content.contains("\"principalId\":\"p\""));
+        assert!(content.contains("\"method\":\"m\""));
+        assert!(content.contains("\"consumerModule\":null"));
+        assert!(content.contains("\"generation\":0"));
     }
 }

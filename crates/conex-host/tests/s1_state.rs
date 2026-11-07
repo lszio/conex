@@ -153,6 +153,7 @@ fn broker_with_state(registry: Arc<ModuleRegistry>, relay: Arc<StateRelay>) -> A
     Arc::new(Broker::new(
         host,
         BrokerDeps {
+            audit: std::sync::Arc::new(conex_host::NullAudit),
             content: None,
             session: None,
             operation: None,

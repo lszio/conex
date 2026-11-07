@@ -58,6 +58,7 @@ async fn make_broker(
     );
     let side = HostSide::new();
     let deps = BrokerDeps {
+        audit: std::sync::Arc::new(conex_host::NullAudit),
         clients: None,
         content: Some(Arc::new(content)),
         session: Some(Arc::new(session)),

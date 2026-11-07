@@ -124,8 +124,10 @@ pub struct BrokerFrame {
     pub params: Option<Value>,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct BrokerDeps {
+    /// P1 统一审计汇（agent.rs:745 的待办落点）；与 P0 Host 共享同一实例。
+    pub audit: Arc<dyn conex_core::audit::AuditSink>,
     pub content: Option<Arc<ContentStore>>,
     pub session: Option<Arc<SessionStore>>,
     pub operation: Option<Arc<OperationStore>>,
@@ -198,7 +200,68 @@ impl Broker {
                 "conex/hello is handled by the transport, not the broker",
             ));
         }
-        match method_family(&call.method) {
+        let started = Instant::now();
+        let family = method_family(&call.method);
+        // Reserve audit capacity before any dispatch effect. The Capability
+        // fallback is excluded: it re-enters the P0 Host, which owns that
+        // path's audit record — auditing here too would double-record.
+        let terminal = if family != MethodFamily::Capability {
+            Some(self.deps.audit.reserve(&self.audit_start(&call))?)
+        } else {
+            None
+        };
+        let result = self.dispatch(call, family).await;
+        if let Some(terminal) = terminal {
+            // The error's own diagnostic stage is the honest `execution`:
+            // judgment denials never started, executed failures completed.
+            let execution = match &result {
+                Ok(_) => ExecutionState::Completed.as_str().to_owned(),
+                Err(error) => error.wire().execution.clone(),
+            };
+            let _ = terminal.finish(conex_core::audit::AuditEnd {
+                phase: "broker_dispatch".into(),
+                outcome: if result.is_ok() { "allow" } else { "error" }.into(),
+                error_code: result.as_ref().err().map(CallError::code),
+                execution,
+                latency_ms: started.elapsed().as_millis() as u64,
+            });
+        }
+        result
+    }
+
+    /// The P1 audit record's identity fields: the connection principal
+    /// stays here (never forwarded downstream), the module consumer rides
+    /// alongside when the call declared one
+    /// (contracts/s1-module-principals.md §3).
+    fn audit_start(&self, call: &BrokerCall) -> conex_core::audit::AuditStart {
+        let resource_scope = if call.registration_id.is_empty() {
+            call.endpoint_id.clone()
+        } else {
+            format!("{}/{}", call.space_id, call.registration_id)
+        };
+        conex_core::audit::AuditStart {
+            event_id: crate::capability::registry::new_registration_id(),
+            trace_id: call.request_id.clone(),
+            principal_id: call.caller.principal_id.clone(),
+            tenant_id: call.caller.tenant_id.clone(),
+            actor_peer_id: call.caller.actor_peer_id.clone(),
+            endpoint_id: call.endpoint_id.clone(),
+            method: call.method.clone(),
+            resource_scope,
+            plane: conex_proto::Plane::Broker as i32,
+            policy_version: 0,
+            phase: "broker_dispatch".into(),
+            consumer_module: if call.consumer_module.is_empty() {
+                None
+            } else {
+                Some(call.consumer_module.clone())
+            },
+            generation: call.generation,
+        }
+    }
+
+    async fn dispatch(&self, call: BrokerCall, family: MethodFamily) -> CallResult<Value> {
+        match family {
             MethodFamily::EndpointList => {
                 let catalog = self
                     .deps

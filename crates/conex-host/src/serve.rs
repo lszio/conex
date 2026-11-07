@@ -173,6 +173,8 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
     };
     let connector = Arc::new(HttpConnector::new(trust, 1024 * 1024)?);
     let credentials = Arc::new(EnvFileStore::new(credential_bindings)?);
+    // One audit sink serves both planes: the P0 Host and the P1 broker
+    // share capacity and the same file.
     let audit: Arc<dyn AuditSink> = match &config.audit_file {
         Some(path) => Arc::new(FileAuditSink::open(
             path,
@@ -180,6 +182,7 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
         )?),
         None => Arc::new(NullAudit),
     };
+    let broker_audit = audit.clone();
 
     let host = Arc::new(Host::new(
         registry,
@@ -305,6 +308,7 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
 
     let broker = if p1_active {
         let deps = BrokerDeps {
+            audit: broker_audit,
             content: content_store.clone(),
             session: session_store.clone(),
             operation: operation_store.clone(),

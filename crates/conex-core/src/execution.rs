@@ -340,6 +340,8 @@ impl Host {
             plane: endpoint.plane as i32,
             policy_version,
             phase: phase.to_string(),
+            consumer_module: None,
+            generation: 0,
         }
     }
 
