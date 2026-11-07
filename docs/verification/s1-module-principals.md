@@ -10,7 +10,7 @@
 | M0 | `RequestContext.consumer_module = 8`（唯一新 wire 字段）；JSON 双向编解码；控制方法 context 拒绝该字段 | 生成链 `xtask generate --check` 过；全门禁绿 |
 | M1 | 中心三步判定（形状→节点归属→批准）于 `module/invoke`/`state/subscribe`；转发 `principal_id` 盖章模块主体；配置接受模块主体 | 单元：`s1_calls` 19/19（含 M-A01/A02/A03 语义） |
 | M2/M3 | 双 SDK 组合身份 + 节点接线（详见 §3 设计修订） | `module-principals` e2e |
-| M4 | **未实施**：S1 能力路径当前没有审计出口（`agent.rs:745` 已注明统一 P1 audit sink 为待办）；consumer 审计维度随该工作项落地，本包不伪造 | 本节声明 |
+| M4 | **已实施（2026-11-08）**：P1 统一审计汇落 `Broker::invoke`（预留先于分发、收尾含错误自带诊断阶段）；判定拒绝记录含契约 §3 四元组（连接主体、模块主体、generation、spaceId/registrationId+方法）；`FileAuditSink` 由 End 摘要改为完整记录 | `s1_calls::audit_record_captures_module_consumer_denial` / `audit_record_allows_operator_calls_without_module_dimension` |
 | M5 | 新 e2e 套件 `cargo xtask e2e --suite module-principals`（真实 host + 两个真实节点 + TS 第三消费者） | 实际输出见 §2 |
 | M6 | 契约交叉引用随 M1 提交；本页为证据页 | — |
 
@@ -49,5 +49,5 @@ module-principals acceptance: all scenarios passed
 ## 4. 未覆盖与边界
 
 - M-A02/M-A03 的 e2e 形态需原始 WSS 帧客户端（SDK 只会发合法声明）；以真实宿主单元测试覆盖判定语义，e2e 形态留待统一探针工具。
-- S1 路径审计/绑定图记录（M4）待统一 P1 audit sink；当前 hub 判定失败与转发不留审计痕迹。
+- 绑定图落表（基线 §6 的图存储）仍是独立工作项；审计记录是它的原料，已随 P1 统一审计汇落地（[计划](../plans/2026-11-08-conex-p1-audit-sink.md)）。
 - e2e 的注册轮换由 host 重启驱动（静态批准无热重载）；"不重启撤权"语义仍属动态批准 API 的非目标（契约 §7）。

@@ -742,8 +742,8 @@ pub fn parse_endpoints(map: &Map<String, Value>) -> Result<Vec<EndpointRegistrat
 }
 
 /// Dispatch agent wire methods to the in-process registry. The handler runs
-/// inside the broker; audit/limits are wrapped in `BrokerDeps` once the
-/// unified P1 audit sink lands.
+/// inside the broker; the P1 unified audit sink wraps `BrokerDeps`, so every
+/// agent/* call lands in the same audit file as the P0 capability path.
 pub async fn handle(broker: &Broker, call: BrokerCall) -> Result<Value, CallError> {
     let map = match call.input.as_object() {
         Some(map) => map,

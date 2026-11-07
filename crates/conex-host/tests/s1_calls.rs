@@ -130,7 +130,52 @@ fn registry() -> Arc<ModuleRegistry> {
     ModuleRegistry::new(contracts, Arc::new(approvals))
 }
 
+/// M4 验收汇：把预留的 Start 与收尾的 End 成对留档，供断言「谁对谁做了什么」。
+type RecordingLog =
+    std::sync::Arc<std::sync::Mutex<Vec<(conex_core::AuditStart, conex_core::AuditEnd)>>>;
+
+#[derive(Default)]
+struct RecordingSink {
+    records: RecordingLog,
+}
+
+struct RecordingReservation {
+    records: RecordingLog,
+    start: conex_core::AuditStart,
+}
+
+impl conex_core::AuditSink for RecordingSink {
+    fn reserve(
+        &self,
+        start: &conex_core::AuditStart,
+    ) -> CallResult<Box<dyn conex_core::AuditReservation>> {
+        Ok(Box::new(RecordingReservation {
+            records: self.records.clone(),
+            start: start.clone(),
+        }))
+    }
+}
+
+impl conex_core::AuditReservation for RecordingReservation {
+    fn finish(self: Box<Self>, end: conex_core::AuditEnd) -> CallResult<()> {
+        self.records.lock().unwrap().push((self.start, end));
+        Ok(())
+    }
+}
+
 fn broker_with(registry: Arc<ModuleRegistry>, calls: Option<Arc<CallRouter>>) -> Arc<Broker> {
+    broker_with_audit(
+        registry,
+        calls,
+        std::sync::Arc::new(conex_host::audit_file::NullAudit),
+    )
+}
+
+fn broker_with_audit(
+    registry: Arc<ModuleRegistry>,
+    calls: Option<Arc<CallRouter>>,
+    audit: std::sync::Arc<dyn conex_core::AuditSink>,
+) -> Arc<Broker> {
     let host = Arc::new(
         conex_core::Host::new(
             conex_core::Registry::new(),
@@ -153,6 +198,7 @@ fn broker_with(registry: Arc<ModuleRegistry>, calls: Option<Arc<CallRouter>>) ->
     Arc::new(Broker::new(
         host,
         BrokerDeps {
+            audit,
             content: None,
             session: None,
             operation: None,
@@ -357,9 +403,13 @@ struct Setup {
 }
 
 async fn setup() -> Setup {
+    setup_with_audit(std::sync::Arc::new(conex_host::audit_file::NullAudit)).await
+}
+
+async fn setup_with_audit(audit: std::sync::Arc<dyn conex_core::AuditSink>) -> Setup {
     let registry = registry();
     let router = CallRouter::new(registry.clone());
-    let broker = broker_with(registry.clone(), Some(router.clone()));
+    let broker = broker_with_audit(registry.clone(), Some(router.clone()), audit);
     let provider = Provider::new(11);
     router.attach("node-a", 11, provider.link.clone()).await;
     let registration_id = register_ok(&broker, &caller("node-a"), 11, "counter-ts").await;
@@ -595,6 +645,99 @@ async fn module_consumer_requires_its_own_approval() {
     assert_eq!(error.code_enum(), Some(conex_proto::ErrorCode::Forbidden));
     assert_eq!(error.wire().execution, "not_started");
     assert_eq!(provider.count("module/invoke"), 0);
+}
+
+/// M4（P1 统一审计汇）：判定拒绝留审计——记录含契约 §3 四元组（连接主体、
+/// 模块主体、generation、目标/方法），outcome=error，execution=not_started。
+#[tokio::test]
+async fn audit_record_captures_module_consumer_denial() {
+    let sink = std::sync::Arc::new(RecordingSink::default());
+    let Setup {
+        broker,
+        registration_id,
+        provider,
+        ..
+    } = setup_with_audit(sink.clone()).await;
+    let call = with_consumer(
+        read_invoke(
+            &caller("node-a"),
+            11,
+            REQ_A,
+            &registration_id,
+            LONG_BUDGET,
+            None,
+        ),
+        "module/node-a/app-a/other",
+    );
+    let error = broker
+        .invoke(call)
+        .await
+        .expect_err("unapproved module principal must be forbidden");
+    assert_eq!(error.code_enum(), Some(conex_proto::ErrorCode::Forbidden));
+    assert_eq!(provider.count("module/invoke"), 0, "handler not executed");
+
+    let records = sink.records.lock().unwrap();
+    // register（allow）+ 被拒的 invoke，一条调用一条记录。
+    assert_eq!(records.len(), 2, "register plus the denied invoke");
+    let (start, end) = &records[1];
+    assert_eq!(start.method, "module/invoke");
+    assert_eq!(start.principal_id, "node-a");
+    assert_eq!(
+        start.consumer_module.as_deref(),
+        Some("module/node-a/app-a/other")
+    );
+    assert_eq!(start.generation, 11);
+    assert_eq!(
+        start.resource_scope,
+        format!("dev/{registration_id}"),
+        "S1 目标 = spaceId/registrationId"
+    );
+    assert_eq!(end.outcome, "error");
+    assert_eq!(
+        end.error_code,
+        Some(conex_proto::ErrorCode::Forbidden as i32)
+    );
+    assert_eq!(end.execution, "not_started");
+}
+
+/// M4：批准路径 outcome=allow；无模块声明时 consumerModule 缺省（记录口径与
+/// 转发口径一致——操作员调用不留模块维度）。
+#[tokio::test]
+async fn audit_record_allows_operator_calls_without_module_dimension() {
+    let registry = registry();
+    let sink = std::sync::Arc::new(RecordingSink::default());
+    let broker = broker_with_audit(registry.clone(), None, sink.clone());
+    register_ok(&broker, &caller("node-a"), 11, "counter-ts").await;
+    let list = BrokerCall {
+        caller: caller("node-a"),
+        endpoint_id: String::new(),
+        method: "module/list".into(),
+        input: json!({"spaceId": "dev", "registrationId": null}),
+        deadline: deadline(),
+        role: "service".into(),
+        link_id: None,
+        generation: 11,
+        max_frame_bytes: Limits::default().max_frame_bytes,
+        request_id: "req-list-1".into(),
+        binding_id: None,
+        space_id: "dev".into(),
+        registration_id: String::new(),
+        consumer_module: String::new(),
+    };
+    broker.invoke(list).await.expect("module/list succeeds");
+
+    let records = sink.records.lock().unwrap();
+    assert!(
+        records.iter().any(|(start, end)| {
+            start.method == "module/list"
+                && start.generation == 11
+                && start.trace_id == "req-list-1"
+                && start.consumer_module.is_none()
+                && end.outcome == "allow"
+                && end.error_code.is_none()
+        }),
+        "module/list must audit as an allowed operator call"
+    );
 }
 
 /// M-A02：节点归属判定——连接认证主体与声明主体的 nodeId 段不符即
