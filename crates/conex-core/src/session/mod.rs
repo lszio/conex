@@ -240,10 +240,16 @@ impl SessionStore {
         ensure_safe(&binding.provider_endpoint_id)?;
         ensure_safe(attachment_id)?;
         ensure_safe(peer_role)?;
-        let granted = match requested {
-            RecoveryLevel::Persistent => RecoveryLevel::InProcess, // downgrade in P1
-            other => other,
-        };
+        if requested == RecoveryLevel::Persistent {
+            // P1 does not support persistent recovery: reject explicitly
+            // instead of downgrading, so a rejected open never leaves an
+            // already-persisted orphan session behind.
+            return Err(SessionError::UnsupportedRecovery {
+                requested,
+                granted: RecoveryLevel::InProcess,
+            });
+        }
+        let granted = requested; // only None | InProcess reach this point
         let session_id = format!(
             "ses-{}-{}-{}",
             sanitize_id(&binding.tenant_id),
@@ -263,14 +269,14 @@ impl SessionStore {
             created_at_ms: now_ms(),
             attachments: vec![attachment],
         };
-        self.persist(&record)?;
-        self.with_state(|s| {
+        // Persist and register under the same critical section (same
+        // ordering as `operation::accept`): no window where the record
+        // exists on disk but not in memory or vice versa.
+        self.with_state(|s| -> Result<(), SessionError> {
+            self.persist(&record)?;
             s.sessions.insert(session_id.clone(), record);
-        });
-        if requested == RecoveryLevel::Persistent {
-            // We downgrade; surface that explicitly.
-            return Err(SessionError::UnsupportedRecovery { requested, granted });
-        }
+            Ok(())
+        })?;
         Ok((session_id, granted))
     }
 
@@ -282,21 +288,22 @@ impl SessionStore {
         expected_epoch: u64,
         current_binding: &SessionBinding,
     ) -> Result<u64, SessionError> {
-        let mut new_epoch = 0u64;
+        // Mutate and persist inside the same critical section: a concurrent
+        // close that removes the session between mutate and persist must not
+        // resurrect it on disk (and the stale-clone `.unwrap()` re-read must
+        // never panic).
         self.with_state(|s| {
             let record = s
                 .sessions
-                .get(session_id)
-                .cloned()
+                .get_mut(session_id)
                 .ok_or_else(|| SessionError::NotFound(session_id.to_string()))?;
             if record.binding != *current_binding {
                 return Err(SessionError::BindingMismatch);
             }
             let attach = record
                 .attachments
-                .iter()
+                .iter_mut()
                 .find(|a| a.attachment_id == attachment_id)
-                .cloned()
                 .ok_or_else(|| SessionError::AttachmentNotFound(attachment_id.to_string()))?;
             if now_ms() > attach.lease_until_ms {
                 return Err(SessionError::LeaseExpired);
@@ -307,20 +314,12 @@ impl SessionStore {
                     actual: attach.epoch,
                 });
             }
-            new_epoch = attach.epoch + 1;
-            let record = s.sessions.get_mut(session_id).unwrap();
-            let attach = record
-                .attachments
-                .iter_mut()
-                .find(|a| a.attachment_id == attachment_id)
-                .unwrap();
-            attach.epoch = new_epoch;
+            attach.epoch += 1;
             attach.lease_until_ms = now_ms().saturating_add(self.lease_ms);
-            Ok(())
-        })?;
-        let persisted = self.with_state(|s| s.sessions.get(session_id).cloned().unwrap());
-        self.persist(&persisted)?;
-        Ok(new_epoch)
+            let new_epoch = attach.epoch;
+            self.persist(record)?;
+            Ok(new_epoch)
+        })
     }
 
     /// Renew a single attachment's lease without advancing the epoch.
@@ -330,7 +329,9 @@ impl SessionStore {
         attachment_id: &str,
         expected_epoch: u64,
     ) -> Result<u64, SessionError> {
-        let new_lease = now_ms().saturating_add(self.lease_ms);
+        // Mutate and persist inside the same critical section (see `resume`):
+        // a concurrent close must never be followed by a stale re-persist that
+        // resurrects the session on disk.
         self.with_state(|s| {
             let record = s
                 .sessions
@@ -347,12 +348,11 @@ impl SessionStore {
                     actual: attach.epoch,
                 });
             }
-            attach.lease_until_ms = new_lease;
-            Ok(())
-        })?;
-        let persisted = self.with_state(|s| s.sessions.get(session_id).cloned().unwrap());
-        self.persist(&persisted)?;
-        Ok(new_lease)
+            attach.lease_until_ms = now_ms().saturating_add(self.lease_ms);
+            let new_lease = attach.lease_until_ms;
+            self.persist(record)?;
+            Ok(new_lease)
+        })
     }
 
     /// Close an attachment; on the final attachment the session is dropped.
@@ -362,7 +362,11 @@ impl SessionStore {
         attachment_id: &str,
         expected_epoch: u64,
     ) -> Result<u64, SessionError> {
-        let final_epoch = self.with_state(|s| {
+        // Single critical section: validate, remove the attachment, and either
+        // persist the remaining record or drop the session (memory + disk)
+        // without ever releasing the lock in between. This keeps a concurrent
+        // resume/renew from observing (and re-persisting) a half-closed state.
+        self.with_state(|s| {
             let record = s
                 .sessions
                 .get_mut(session_id)
@@ -380,23 +384,14 @@ impl SessionStore {
             }
             let final_epoch = record.attachments[pos].epoch;
             record.attachments.remove(pos);
-            Ok(final_epoch)
-        })?;
-        if self.with_state(|s| {
-            s.sessions
-                .get(session_id)
-                .map(|r| r.attachments.is_empty())
-                .unwrap_or(true)
-        }) {
-            self.with_state(|s| {
+            if record.attachments.is_empty() {
                 s.sessions.remove(session_id);
-            });
-            self.drop_persisted(session_id);
-        } else {
-            let persisted = self.with_state(|s| s.sessions.get(session_id).cloned().unwrap());
-            self.persist(&persisted)?;
-        }
-        Ok(final_epoch)
+                self.drop_persisted(session_id);
+            } else {
+                self.persist(record)?;
+            }
+            Ok(final_epoch)
+        })
     }
 
     pub fn get(&self, session_id: &str) -> Result<SessionRecord, SessionError> {
@@ -411,24 +406,28 @@ impl SessionStore {
     /// Drop sessions whose attachments have all expired.
     pub fn collect_garbage(&self) -> Result<usize, SessionError> {
         let now = now_ms();
-        let mut to_drop = Vec::new();
-        self.with_state(|s| {
-            for (id, record) in &s.sessions {
-                if record.attachments.is_empty()
-                    || record.attachments.iter().all(|a| a.lease_until_ms <= now)
-                {
-                    to_drop.push(id.clone());
+        // Collect and remove in one critical section, re-checking each
+        // session right before removal: a lease renewed between listing and
+        // dropping must keep the session alive (no TOCTOU window).
+        Ok(self.with_state(|s| {
+            let mut dropped = 0usize;
+            let ids: Vec<String> = s.sessions.keys().cloned().collect();
+            for id in ids {
+                let expired = match s.sessions.get(&id) {
+                    Some(record) => {
+                        record.attachments.is_empty()
+                            || record.attachments.iter().all(|a| a.lease_until_ms <= now)
+                    }
+                    None => false,
+                };
+                if expired {
+                    s.sessions.remove(&id);
+                    self.drop_persisted(&id);
+                    dropped += 1;
                 }
             }
-        });
-        let dropped = to_drop.len();
-        for id in &to_drop {
-            self.with_state(|s| {
-                s.sessions.remove(id);
-            });
-            self.drop_persisted(id);
-        }
-        Ok(dropped)
+            dropped
+        }))
     }
 
     fn with_state<R>(&self, f: impl FnOnce(&mut State) -> R) -> R {
