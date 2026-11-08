@@ -21,6 +21,7 @@ use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use bytes::Bytes;
@@ -155,9 +156,16 @@ impl LocalBlockStore {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
+        // The tmp name is unique per call: two writers of one destination
+        // (concurrent commits of the same root) must not share a tmp path, or
+        // one rename would consume the other's file and fail with NotFound.
+        // The name keeps the `.tmp` suffix, so the GC residue sweep still
+        // matches it and recovery never reads a half-written file.
+        static TMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
         let tmp = path.with_extension(format!(
-            "{}.tmp",
-            path.extension().and_then(|s| s.to_str()).unwrap_or("dat")
+            "{}.{}.tmp",
+            path.extension().and_then(|s| s.to_str()).unwrap_or("dat"),
+            TMP_SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));
         {
             let mut f = fs::File::create(&tmp)?;
@@ -369,11 +377,23 @@ impl LocalBlockStore {
             }
             upload.insert_chunk(index, cid)?;
             upload.received_bytes = new_total;
+            // Serialize from the authoritative in-memory state and hit disk
+            // while still holding the lock, so a concurrent record_chunk can
+            // never overwrite this receipt with a stale snapshot (D1).
+            let receipt = self
+                .join(Path::new("staging").join(upload_id).as_path())
+                .join("receipt.json");
+            let json = serde_json::to_string_pretty(&*upload)?;
+            if let Err(error) = Self::atomic_write(&receipt, json.as_bytes()) {
+                // A failed write means the chunk is not persisted: roll the
+                // memory state back, so retrying the same index is not
+                // misread as a DuplicateChunk.
+                upload.received_bytes -= byte_len as u64;
+                upload.received_chunks.retain(|chunk| chunk.index != index);
+                return Err(error);
+            }
             Ok(())
-        })?;
-        // Persist the updated receipt so a crash recovers the same state.
-        let upload = self.get_upload(upload_id)?;
-        self.record_upload(upload)
+        })
     }
 
     /// Atomic commit (design §5.5, docs/contracts/p1-blob.md §5).
@@ -389,6 +409,21 @@ impl LocalBlockStore {
         let upload = self.get_upload(upload_id)?;
         if upload.is_expired() {
             return Err(ContentError::UploadExpired);
+        }
+        // Idempotency guard: this upload's content is already committed under
+        // the same owner, so adopt the existing record instead of rewriting
+        // the ref files and counting its blocks a second time (D7). The
+        // staging upload is cleaned up either way. A commit by a *different*
+        // owner is not adopted — the cross-owner overwrite quirk stays as is.
+        if let Some(existing) = self.get_commit(&upload.declared_root_cid)
+            && existing.owner == upload.owner
+        {
+            self.with_refs(|r| {
+                r.uploads.remove(upload_id);
+            });
+            let staging_path = self.join(Path::new("staging").join(upload_id).as_path());
+            let _ = fs::remove_dir_all(&staging_path);
+            return Ok(existing);
         }
         let total_bytes = upload.declared_size_bytes;
         let leaves = upload.leaves_in_order()?;
@@ -489,20 +524,37 @@ impl LocalBlockStore {
         )?;
         Self::atomic_write(&committed_path, b"committed\n")?;
 
-        self.with_refs(|r| {
-            for object in &objects {
-                *r.counts.entry(object.clone()).or_insert(0) += 1;
-            }
-            r.blocks_by_root
-                .entry(root_cid.clone())
-                .or_default()
-                .extend(objects.iter().cloned());
-            r.commits.insert(root_cid.clone(), record.clone());
+        let committed = self.with_refs(|r| {
+            // Critical-section guard against a concurrent commit of the same
+            // root by the same owner: it may have landed between our entry
+            // checks and here, and only this atomic check-and-insert keeps the
+            // block reference counts from being added twice (D7).
+            let existing = r
+                .commits
+                .get(&root_cid)
+                .filter(|commit| commit.owner == upload.owner)
+                .cloned();
+            let committed = match existing {
+                Some(existing) => existing,
+                None => {
+                    for object in &objects {
+                        *r.counts.entry(object.clone()).or_insert(0) += 1;
+                    }
+                    r.blocks_by_root
+                        .entry(root_cid.clone())
+                        .or_default()
+                        .extend(objects.iter().cloned());
+                    r.commits.insert(root_cid.clone(), record.clone());
+                    record
+                }
+            };
+            // Either way this upload has left staging.
             r.uploads.remove(upload_id);
+            committed
         });
         let staging_path = self.join(Path::new("staging").join(upload_id).as_path());
         let _ = fs::remove_dir_all(&staging_path);
-        Ok(record)
+        Ok(committed)
     }
 
     pub fn has_commit(&self, root_cid: &str) -> bool {

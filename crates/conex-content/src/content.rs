@@ -133,6 +133,10 @@ impl ContentStore {
     /// Commit an upload (`BlobCommitRequest`): the declared root and kind must
     /// match the ones recorded at `blob/put`; the store then re-derives and
     /// verifies everything from the upload's own received chunks.
+    ///
+    /// Idempotency guard: content already committed under this root by the
+    /// same owner is adopted, never committed a second time — the caller gets
+    /// the existing record back.
     pub fn commit(
         &self,
         upload_id: &str,
@@ -140,6 +144,18 @@ impl ContentStore {
         declared_root_kind: &str,
         owner: &crate::receipt::Owner,
     ) -> Result<CommitRecord, ContentError> {
+        // Fast path: the authoritative in-memory commit map already holds this
+        // root under the caller's identity. Cancel our own staging and adopt
+        // the record. Cancelling is best-effort: UnknownUpload means a
+        // concurrent commit already cleaned the staging up, and Forbidden
+        // means the staging upload belongs to another principal and must never
+        // be touched — neither changes that the content itself is committed.
+        if let Some(existing) = self.inner.get_commit(declared_root_cid)
+            && existing.owner.as_ref() == Some(owner)
+        {
+            let _ = self.cancel_upload(upload_id, owner);
+            return Ok(existing);
+        }
         let upload = self.inner.get_upload(upload_id)?;
         if upload.owner.as_ref() != Some(owner) {
             return Err(ContentError::Forbidden);

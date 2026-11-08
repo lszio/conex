@@ -1,6 +1,8 @@
 //! P1-03 session/attachment state machine tests.
+use std::sync::{Arc, Barrier};
+use std::thread;
 use std::thread::sleep;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use conex_core::session::{
     RecoveryLevel, SessionBinding, SessionError, SessionStore, read_session_file,
@@ -15,6 +17,31 @@ fn binding() -> SessionBinding {
         workspace_peer_id: Some("workspace-1".into()),
         human_peer_id: Some("ui-1".into()),
     }
+}
+
+/// Number of persisted session files (`*.json`) in a store directory.
+/// The `.json.tmp` write intermediates are excluded on purpose.
+fn json_file_count(dir: &std::path::Path) -> usize {
+    dir.read_dir()
+        .unwrap()
+        .flatten()
+        .filter(|e| {
+            e.path()
+                .extension()
+                .and_then(|s| s.to_str())
+                .map(|s| s == "json")
+                .unwrap_or(false)
+        })
+        .count()
+}
+
+/// Errors a racing resume/renew/close may legitimately observe when another
+/// thread wins the critical section first.
+fn racing_error_is_legal(err: &SessionError) -> bool {
+    matches!(
+        err,
+        SessionError::EpochMismatch { .. } | SessionError::NotFound(_)
+    )
 }
 
 #[test]
@@ -201,4 +228,142 @@ fn path_traversal_in_attachment_id_rejected() {
     let store = SessionStore::open(tmp.path()).unwrap();
     let err = store.open_session(binding(), RecoveryLevel::InProcess, "../escape", "consumer");
     assert!(matches!(err, Err(SessionError::PathTraversal(_))));
+}
+
+#[test]
+fn concurrent_resume_and_renew_keep_memory_and_disk_consistent() {
+    for i in 0..200 {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Arc::new(SessionStore::open(tmp.path()).unwrap());
+        // Unique principal per round keeps the session_id unique even when two
+        // rounds land in the same millisecond.
+        let mut bind = binding();
+        bind.principal_id = format!("alice-{i}");
+        let (sid, _) = store
+            .open_session(
+                bind.clone(),
+                RecoveryLevel::InProcess,
+                "attach-1",
+                "consumer",
+            )
+            .unwrap();
+        let barrier = Arc::new(Barrier::new(2));
+        let store_a = store.clone();
+        let barrier_a = barrier.clone();
+        let sid_a = sid.clone();
+        let bind_a = bind.clone();
+        let t_resume = thread::spawn(move || {
+            barrier_a.wait();
+            store_a.resume(&sid_a, "attach-1", 1, &bind_a)
+        });
+        let store_b = store.clone();
+        let barrier_b = barrier.clone();
+        let sid_b = sid.clone();
+        let t_renew = thread::spawn(move || {
+            barrier_b.wait();
+            store_b.renew(&sid_b, "attach-1", 1)
+        });
+        // A pre-fix panic (stale-clone `.unwrap()` re-read outside the lock)
+        // surfaces here as a join error.
+        let resume_res = t_resume.join().expect("resume thread panicked");
+        let renew_res = t_renew.join().expect("renew thread panicked");
+        for (name, res) in [("resume", &resume_res), ("renew", &renew_res)] {
+            match res {
+                Ok(_) => {}
+                Err(e) if racing_error_is_legal(e) => {}
+                Err(e) => panic!("round {i}: {name} failed unexpectedly: {e:?}"),
+            }
+        }
+        // Final state must be consistent: the in-memory snapshot equals the
+        // persisted file (both present and identical, or both absent).
+        let mem = store.get(&sid).ok();
+        let disk = read_session_file(&tmp.path().join(format!("{sid}.json"))).ok();
+        assert_eq!(
+            mem.is_some(),
+            disk.is_some(),
+            "round {i}: memory/disk presence diverged (mem={mem:?}, disk={disk:?})"
+        );
+        if let (Some(m), Some(d)) = (mem, disk) {
+            assert_eq!(m, d, "round {i}: memory and disk records diverged");
+        }
+    }
+}
+
+#[test]
+fn close_racing_renew_never_panics_and_never_leaves_a_session_file() {
+    for i in 0..200 {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Arc::new(SessionStore::open(tmp.path()).unwrap());
+        let mut bind = binding();
+        bind.principal_id = format!("alice-{i}");
+        let (sid, _) = store
+            .open_session(bind, RecoveryLevel::InProcess, "attach-1", "consumer")
+            .unwrap();
+        let barrier = Arc::new(Barrier::new(2));
+        let store_a = store.clone();
+        let barrier_a = barrier.clone();
+        let sid_a = sid.clone();
+        let t_close = thread::spawn(move || {
+            barrier_a.wait();
+            store_a.close(&sid_a, "attach-1", 1)
+        });
+        let store_b = store.clone();
+        let barrier_b = barrier.clone();
+        let sid_b = sid.clone();
+        let t_renew = thread::spawn(move || {
+            barrier_b.wait();
+            store_b.renew(&sid_b, "attach-1", 1)
+        });
+        let close_res = t_close.join().expect("close thread panicked");
+        let renew_res = t_renew.join().expect("renew thread panicked");
+        for (name, res) in [("close", &close_res), ("renew", &renew_res)] {
+            match res {
+                Ok(_) => {}
+                Err(e) if racing_error_is_legal(e) => {}
+                Err(e) => panic!("round {i}: {name} failed unexpectedly: {e:?}"),
+            }
+        }
+        // Invariant: the session is absent from memory if and only if there is
+        // no session file left on disk (no ghost resurrection, no orphan file).
+        let memory_gone = matches!(store.get(&sid), Err(SessionError::NotFound(_)));
+        let files = json_file_count(tmp.path());
+        assert_eq!(
+            memory_gone,
+            files == 0,
+            "round {i}: memory gone={memory_gone}, session files on disk={files}"
+        );
+    }
+}
+
+#[test]
+fn a_rejected_persistent_open_persists_nothing() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = SessionStore::open(tmp.path()).unwrap();
+    let ms_before = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    let err = store.open_session(binding(), RecoveryLevel::Persistent, "attach-1", "consumer");
+    let ms_after = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    assert!(matches!(
+        err,
+        Err(SessionError::UnsupportedRecovery {
+            requested: RecoveryLevel::Persistent,
+            granted: RecoveryLevel::InProcess,
+        })
+    ));
+    // A session_id (had one been created) would be ses-tenant-a-alice-{ms}
+    // for some ms in [ms_before, ms_after]; none of them may exist in memory.
+    for ms in ms_before..=ms_after {
+        let sid = format!("ses-tenant-a-alice-{ms}");
+        assert!(
+            matches!(store.get(&sid), Err(SessionError::NotFound(_))),
+            "rejected persistent open left session {sid} in memory"
+        );
+    }
+    // Nothing on disk either: no orphan session file may survive a rejection.
+    assert_eq!(json_file_count(tmp.path()), 0);
 }
