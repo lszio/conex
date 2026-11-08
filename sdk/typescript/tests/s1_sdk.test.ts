@@ -61,24 +61,27 @@ async function peer() {
     websocket: {
       open(ws) { socket = ws; connections++; },
       async message(ws, data) {
-        const frame = JSON.parse(String(data)) as { id: string; method: string; params: { input: Record<string, unknown>; context: unknown } };
+        const frame = JSON.parse(String(data)) as { id: string; method: string; params: Record<string, unknown> };
         const reply = (result: unknown) => ws.send(JSON.stringify({ jsonrpc: "2.0", id: frame.id, result }));
         if (frame.method === "conex/hello") {
-          expect(frame.params.context).toEqual({ plane: "broker" });
-          expect(frame.params.input.plane).toBe("PLANE_BROKER");
-          helloProvides = frame.params.input.provides ?? [];
+          // Bootstrap frames are the flat legacy projection (the same shape
+          // the Rust SDK and agent send); results stay pbjson.
+          const params = frame.params as { plane: string; provides?: string[] };
+          expect(params.plane).toBe("broker");
+          helloProvides = params.provides ?? [];
           reply({ bindingId, expiresInMs: 0, profileId: "conex-jsonrpc2-wss", plane: "PLANE_BROKER", provides: methods, limits });
           return;
         }
         if (frame.method === "conex/ready") {
-          expect(frame.params.input.negotiationId).toBe(bindingId);
-          expect(frame.params.input.plane).toBe("PLANE_BROKER");
-          readyProvides = frame.params.input.provides ?? [];
+          const params = frame.params as { plane: string; negotiationId: string; provides?: string[] };
+          expect(params.plane).toBe("broker");
+          expect(params.negotiationId).toBe(bindingId);
+          readyProvides = params.provides ?? [];
           expect(readyProvides).toEqual(helloProvides);
           reply({ negotiationId: bindingId, profileId: "conex-jsonrpc2-wss", plane: "PLANE_BROKER", provides: methods, limits, linkIdentity });
           return;
         }
-        const input = frame.params.input;
+        const input = frame.params.input as Record<string, unknown>;
         if (frame.method === "module/list") { reply({ modules: [reference] }); return; }
         if (frame.method === "module/cancel") { reply({ requested: true }); return; }
         if (frame.method === "state/unsubscribe") {
