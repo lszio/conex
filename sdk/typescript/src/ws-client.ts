@@ -5,7 +5,6 @@ import type { Sample, StateSubscription } from "./state";
 import { ConexError, toConexError } from "./errors";
 import type { Limits } from "./generated/conex/common";
 import { Plane } from "./generated/conex/common";
-import { HelloRequest, ReadyRequest } from "./generated/conex/control";
 import { isUlid, validateDomainSchema } from "./s1-wire";
 import type { LinkIdentity } from "./generated/conex/control";
 import { mintUlid } from "./client";
@@ -447,17 +446,19 @@ export class ConexWsClient {
     };
     socket.onopen = () => {
       try {
-        const hello = this.s1 ? HelloRequest.toJSON({
-          profileId: PROFILE_ID, plane: Plane.PLANE_BROKER,
-          provides: this.s1.provides, requires: this.s1.requires,
-        }) : undefined;
+        // Outgoing bootstrap frames use the flat legacy projection — the
+        // same shape the Rust SDK and agent runtime send (the host accepts
+        // both; results still come back in the pbjson projection for S1).
         socket.send(JSON.stringify({
           jsonrpc: "2.0",
           id: helloId,
           method: "conex/hello",
-          params: this.s1
-            ? { context: { plane: PLANE }, timeoutBudgetMs: this.timeoutMs, input: hello }
-            : { profileId: PROFILE_ID, plane: PLANE, provides: [], requires: [] },
+          params: {
+            profileId: PROFILE_ID,
+            plane: PLANE,
+            provides: this.s1?.provides ?? [],
+            requires: this.s1?.requires ?? [],
+          },
         }));
       } catch (error) {
         fail(new ConexError("websocket send failed", { details: String(error) }));
@@ -528,19 +529,20 @@ export class ConexWsClient {
       handshake.step = "ready";
       handshake.negotiationId = negotiationId;
       handshake.helloResult = result;
-      const ready = {
-        negotiationId,
-        profileId: PROFILE_ID,
-        plane: Plane.PLANE_BROKER,
-        provides: this.s1?.provides,
-        limits: normalizeLimits(result.limits),
-      };
       socket.send(JSON.stringify({
         jsonrpc: "2.0",
         id: readyId,
         method: "conex/ready",
         params: this.s1
-          ? { context: { plane: PLANE }, timeoutBudgetMs: this.timeoutMs, input: ReadyRequest.toJSON(ready) }
+          ? {
+            negotiationId,
+            profileId: PROFILE_ID,
+            plane: PLANE,
+            // The ready declaration is the client's own capability set
+            // (S1 servers check it set-equal against the hello claims).
+            provides: this.s1.provides,
+            limits: normalizeLimits(result.limits),
+          }
           : {
             negotiationId,
             profileId: PROFILE_ID,
