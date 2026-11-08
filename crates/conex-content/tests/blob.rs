@@ -720,6 +720,210 @@ fn a_restart_with_no_live_holders_reclaims_what_survived() {
     assert!(count_block_files(&tmp.path().join("blocks")) == 0);
 }
 
+/// Distinct deterministic bytes for one chunk index, so every index records
+/// its own CID.
+fn chunk_bytes_for(index: u32) -> Vec<u8> {
+    vec![index as u8; 64]
+}
+
+#[test]
+fn concurrent_chunks_on_one_upload_all_survive_in_memory_and_on_disk() {
+    let tmp = tempfile::tempdir().unwrap();
+    let s = std::sync::Arc::new(store(&tmp));
+    const THREADS: u32 = 8;
+    const PER_THREAD: u32 = 16;
+    let total = THREADS * PER_THREAD;
+    let payload_len = u64::from(total) * 64;
+    // The declared root is never committed here; only chunk recording races.
+    let root = cid_for_raw(b"concurrent-chunks");
+    let upload = s
+        .begin_upload(
+            1,
+            DEFAULT_CHUNK_SIZE,
+            payload_len,
+            "manifest",
+            &root,
+            Some(600_000),
+            owner(),
+            "notes/test",
+            // The P1 channel declares its leaves as it goes, so it has none up front.
+            &[],
+        )
+        .unwrap();
+    let upload_id = upload.upload_id().to_string();
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(THREADS as usize));
+    let mut handles = Vec::new();
+    for thread in 0..THREADS {
+        let s = s.clone();
+        let barrier = barrier.clone();
+        let upload_id = upload_id.clone();
+        handles.push(std::thread::spawn(move || {
+            for i in 0..PER_THREAD {
+                let index = thread * PER_THREAD + i;
+                let bytes = chunk_bytes_for(index);
+                let cid = cid_for_raw(&bytes);
+                barrier.wait();
+                s.block_store()
+                    .record_chunk(&upload_id, index, &cid, bytes.len())
+                    .unwrap();
+            }
+        }));
+    }
+    for handle in handles {
+        handle.join().unwrap();
+    }
+    let state = s.block_store().get_upload(&upload_id).unwrap();
+    assert_eq!(
+        state.received_chunks.len() as u64,
+        u64::from(total),
+        "no chunk may be lost from memory"
+    );
+    assert_eq!(state.received_bytes, payload_len, "byte total is exact");
+    let mut indexes: Vec<u32> = state.received_chunks.iter().map(|c| c.index).collect();
+    indexes.sort_unstable();
+    assert_eq!(indexes, (0..total).collect::<Vec<u32>>());
+    // The receipt on disk must equal the in-memory state exactly: the last
+    // writer serialized the authoritative state under the lock, so no stale
+    // snapshot may have overwritten it.
+    let text = fs::read_to_string(
+        tmp.path()
+            .join("staging")
+            .join(&upload_id)
+            .join("receipt.json"),
+    )
+    .unwrap();
+    let on_disk: conex_content::UploadState = serde_json::from_str(&text).unwrap();
+    assert_eq!(on_disk, state, "receipt.json matches the memory map");
+}
+
+#[test]
+fn a_second_commit_of_the_same_content_does_not_double_count() {
+    let tmp = tempfile::tempdir().unwrap();
+    let s = store(&tmp);
+    let payload = vec![0x77u8; 64];
+    let root = cid_for_raw(&payload);
+    let upload1 = s
+        .begin_upload(
+            1,
+            DEFAULT_CHUNK_SIZE,
+            64,
+            "raw",
+            &root,
+            Some(60_000),
+            owner(),
+            "notes/test",
+            // The P1 channel declares its leaves as it goes, so it has none up front.
+            &[],
+        )
+        .unwrap();
+    upload1.put_chunk(0, &payload).unwrap();
+    let first = s
+        .commit(upload1.upload_id(), &root, "raw", &owner())
+        .unwrap();
+    // The same bytes offered again by the same owner: the leaf block already
+    // exists (put_block is idempotent), and the second commit must adopt the
+    // first record instead of counting the root a second time.
+    let upload2 = s
+        .begin_upload(
+            1,
+            DEFAULT_CHUNK_SIZE,
+            64,
+            "raw",
+            &root,
+            Some(60_000),
+            owner(),
+            "notes/test",
+            // The P1 channel declares its leaves as it goes, so it has none up front.
+            &[],
+        )
+        .unwrap();
+    upload2.put_chunk(0, &payload).unwrap();
+    let second = s
+        .commit(upload2.upload_id(), &root, "raw", &owner())
+        .unwrap();
+    assert_eq!(first.commit_id, second.commit_id);
+    assert_eq!(first.receipt_id, second.receipt_id);
+    assert_eq!(first.root_cid, second.root_cid);
+    // The second staging upload is gone, memory and directory both.
+    assert!(s.block_store().get_upload(upload2.upload_id()).is_err());
+    assert!(
+        !tmp.path()
+            .join("staging")
+            .join(upload2.upload_id())
+            .exists()
+    );
+    // One release frees everything: the reference count was added once, so
+    // retracting the root reclaims the leaf and drops the commit.
+    s.block_store().retract_root(&root).unwrap();
+    assert!(!s.has_block(&root).unwrap());
+    assert!(s.get_commit(&root).is_none());
+}
+
+#[test]
+fn concurrent_commits_of_one_upload_are_counted_once() {
+    let tmp = tempfile::tempdir().unwrap();
+    let s = std::sync::Arc::new(store(&tmp));
+    let payload = vec![0x9Du8; DEFAULT_CHUNK_SIZE as usize * 2];
+    let root = content_cid(&payload, DEFAULT_CHUNK_SIZE as usize);
+    let upload = s
+        .begin_upload(
+            1,
+            DEFAULT_CHUNK_SIZE,
+            payload.len() as u64,
+            "manifest",
+            &root,
+            Some(600_000),
+            owner(),
+            "notes/test",
+            // The P1 channel declares its leaves as it goes, so it has none up front.
+            &[],
+        )
+        .unwrap();
+    let leaf_a = upload
+        .put_chunk(0, &payload[..DEFAULT_CHUNK_SIZE as usize])
+        .unwrap();
+    upload
+        .put_chunk(1, &payload[DEFAULT_CHUNK_SIZE as usize..])
+        .unwrap();
+    let upload_id = upload.upload_id().to_string();
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+    let mut handles = Vec::new();
+    for _ in 0..2 {
+        let s = s.clone();
+        let barrier = barrier.clone();
+        let upload_id = upload_id.clone();
+        let root = root.clone();
+        handles.push(std::thread::spawn(move || {
+            barrier.wait();
+            s.commit(&upload_id, &root, "manifest", &owner())
+        }));
+    }
+    let mut ok = Vec::new();
+    for result in handles.into_iter().map(|h| h.join().unwrap()) {
+        match result {
+            Ok(record) => ok.push(record),
+            // A concurrent commit may already have consumed the upload; that
+            // loser is allowed to report it.
+            Err(ContentError::UnknownUpload(_)) => {}
+            Err(other) => panic!("unexpected commit error: {other:?}"),
+        }
+    }
+    assert!(!ok.is_empty(), "at least one commit must succeed");
+    let first = ok.first().unwrap();
+    assert!(
+        ok.iter()
+            .all(|r| r.commit_id == first.commit_id && r.receipt_id == first.receipt_id),
+        "every success reports the same record"
+    );
+    // One release frees everything: the concurrent commits counted the blocks
+    // once, not twice.
+    s.block_store().retract_root(&root).unwrap();
+    assert!(!s.has_block(&leaf_a).unwrap());
+    assert!(s.get_commit(&root).is_none());
+    // The staging upload is gone either way.
+    assert!(!tmp.path().join("staging").join(&upload_id).exists());
+}
+
 fn count_block_files(dir: &std::path::Path) -> usize {
     fn walk(dir: &std::path::Path) -> usize {
         std::fs::read_dir(dir)
