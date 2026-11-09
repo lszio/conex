@@ -2,8 +2,8 @@ use std::net::{SocketAddr, TcpListener};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use conex_host::agent::now_ms;
 use conex_host::ui_links::UiLinkRegistry;
+use conex_proto::now_ms;
 use futures::{SinkExt, StreamExt};
 use reqwest::header::{COOKIE, ORIGIN, SET_COOKIE};
 use serde_json::{Value, json};

@@ -47,10 +47,10 @@ use super::{
     bad_request, file_to_json, no_link, notify_group_changed, own_entry, refresh_shared_counters,
     status_for, unavailable,
 };
-use crate::agent::now_ms;
 use crate::http::HttpState;
 use crate::share::{Offer, ShareItemKind};
 use crate::share_blocks::SHARE_CHUNK_SIZE;
+use conex_proto::now_ms;
 
 /// Body limit for one chunk route. A chunk is `SHARE_CHUNK_SIZE` bytes, and the
 /// slack covers a client that misreads the size; anything past it is a refusal,

@@ -104,7 +104,7 @@ pub async fn list_files(Extension(state): Extension<Arc<HttpState>>, request: Re
     };
     // Reading the listing is what expires an aged-out clip, so `now` is the
     // request's own clock rather than a stored value.
-    let now = crate::agent::now_ms();
+    let now = conex_proto::now_ms();
     let limits = state.shares.limits();
     // An unchanged listing is answered with a `304` and no body, which is what
     // keeps the cheap poll cheap: the page falls back to polling only when a
@@ -230,7 +230,7 @@ pub async fn upload_file(
         mime: &mime,
         kind: crate::share::ShareItemKind::File,
         size_bytes: stored.size_bytes,
-        now_ms: crate::agent::now_ms(),
+        now_ms: conex_proto::now_ms(),
     };
     let file = match state.shares.admit(&stored.root_cid, &offered) {
         Ok(file) => file,

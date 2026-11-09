@@ -13,6 +13,7 @@
 //!   CONEX_ENDPOINT      own provider endpoint id (counter-rust)
 //!   CONEX_PEER_ENDPOINT peer endpoint id to consume (counter-ts)
 
+use conex_proto::now_ms;
 use conex_sdk::proto as p;
 use conex_sdk::{
     Client, ConnectOptions, Contract, Error as SdkError, Execution, Exposure, InvocationContext,
@@ -22,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 const CONTRACT_ID: &str = "conex.counter";
 const INTEGRATION_ID: &str = "integration";
@@ -43,13 +44,6 @@ fn env(name: &str) -> String {
         eprintln!("missing {name}");
         std::process::exit(2);
     })
-}
-
-fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
 }
 
 /// Domain state. Every add and every snapshot registration take this lock, so

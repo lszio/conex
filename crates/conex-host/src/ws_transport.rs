@@ -1555,8 +1555,8 @@ async fn dispatch_agent(
                 principal_id: state.caller.principal_id.clone(),
                 tenant_id: state.caller.tenant_id.clone(),
                 endpoints: crate::agent::parse_endpoints(map)?,
-                registered_at_ms: crate::agent::now_ms(),
-                last_heartbeat_at_ms: crate::agent::now_ms(),
+                registered_at_ms: conex_proto::now_ms(),
+                last_heartbeat_at_ms: conex_proto::now_ms(),
                 host_origin,
             };
             let review = match side.register_agent_link(registration.clone(), generation) {

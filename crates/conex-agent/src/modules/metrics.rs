@@ -21,12 +21,7 @@ const SAMPLE_INTERVAL: Duration = Duration::from_secs(5);
 /// 投影过期窗口：样本 older than this 转 stale（P6 计划 §5）。
 const STALE_AFTER_MS: u64 = 30_000;
 
-fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
-        .unwrap_or(0)
-}
+use conex_proto::now_ms;
 
 struct SampleRing {
     samples: Mutex<VecDeque<p::MetricSample>>,

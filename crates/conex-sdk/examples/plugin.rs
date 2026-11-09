@@ -21,6 +21,7 @@
 //!   CONEX_ENDPOINT       own endpoint prefix (s2-rust)
 //!   CONEX_PEER_ENDPOINT  peer endpoint prefix (s2-ts)
 
+use conex_proto::now_ms;
 use conex_sdk::proto as p;
 use conex_sdk::{
     Client, ConnectOptions, Contract, Error as SdkError, Execution, Instance, InstanceConfig,
@@ -32,7 +33,7 @@ use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::{Arc, Mutex},
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant},
 };
 use tokio::sync::watch;
 
@@ -52,13 +53,6 @@ fn env(name: &str) -> String {
         eprintln!("missing {name}");
         std::process::exit(2);
     })
-}
-
-fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
 }
 
 fn emit(event: &str, node: &str, fields: Value) {

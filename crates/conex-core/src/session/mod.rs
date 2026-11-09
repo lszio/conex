@@ -14,13 +14,13 @@ use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::types::CallError;
 use conex_proto;
+use conex_proto::now_ms;
 
 /// Default lease per attachment: 120 s (design §7.1).
 pub const DEFAULT_ATTACHMENT_LEASE_MS: u64 = 120_000;
@@ -130,13 +130,6 @@ impl SessionError {
             }
         }
     }
-}
-
-fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
 }
 
 fn sanitize_id(name: &str) -> String {

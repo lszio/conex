@@ -388,6 +388,40 @@ async fn blob_entry_and_cumulative_limits_are_enforced() {
     );
 }
 
+/// Requested leases below the broker floor are clamped up to MIN_LEASE_MS,
+/// not rejected, and blob/put echoes the effective lease (D4). The upper
+/// bound (>24h) stays a rejection — covered by
+/// `blob_entry_and_cumulative_limits_are_enforced`.
+#[tokio::test]
+async fn requested_lease_below_floor_is_clamped() {
+    let dir = tmp();
+    let roots = broker_roots(&dir);
+    let broker = make_broker(roots.0, roots.1, roots.2).await;
+    let alice = caller("alice", "tenant-a");
+
+    let mut one_ms = blob_put(&cid_for_raw(b"x"), 64);
+    one_ms["requestedLeaseMs"] = json!("1");
+    let put = call(&broker, alice.clone(), "blob/put", one_ms)
+        .await
+        .expect("below-floor lease must be clamped, not rejected");
+    assert_eq!(
+        put["leaseMs"].as_str().unwrap(),
+        "10000",
+        "requested 1ms lease must be clamped to the 10s floor"
+    );
+
+    let mut zero_ms = blob_put(&cid_for_raw(b"y"), 64);
+    zero_ms["requestedLeaseMs"] = json!("0");
+    let put = call(&broker, alice, "blob/put", zero_ms)
+        .await
+        .expect("zero lease must be clamped, not rejected");
+    assert_eq!(
+        put["leaseMs"].as_str().unwrap(),
+        "10000",
+        "requested 0ms lease must be clamped to the 10s floor"
+    );
+}
+
 /// Ownership rules survive a restart: the same staging stays sealed against
 /// foreign principals while the owner can still resume it.
 #[tokio::test]

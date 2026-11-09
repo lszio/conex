@@ -43,6 +43,7 @@
 //! - close            closes the SDK link; inspect still works
 //! - shutdown         clean close + exit 0
 
+use conex_proto::now_ms;
 use conex_sdk::proto as p;
 use conex_sdk::{
     CallControl, Client, ConnectOptions, Contract, Error as SdkError, Execution, Exposure,
@@ -54,7 +55,7 @@ use serde_json::{Map, Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{BufRead, Write};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 use tokio::sync::{Notify, mpsc, oneshot};
 
 const CONTRACT_ID: &str = "conex.counter";
@@ -68,13 +69,6 @@ fn env(name: &str) -> String {
 
 fn env_or(name: &str, default: &str) -> String {
     std::env::var(name).unwrap_or_else(|_| default.to_string())
-}
-
-fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
 }
 
 #[derive(Deserialize)]

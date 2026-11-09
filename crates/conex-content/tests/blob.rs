@@ -445,7 +445,7 @@ fn staging_lease_expires_without_commit() {
             3,
             "raw",
             &cid,
-            Some(10),
+            Some(60_000),
             owner(),
             "notes/test",
             // The P1 channel declares its leaves as it goes, so it has none up front.
@@ -453,9 +453,51 @@ fn staging_lease_expires_without_commit() {
         )
         .unwrap();
     upload.put_chunk(0, &payload).unwrap();
-    conex_content::store::sleep_ms(20);
-    let _ = s.collect_garbage();
-    assert!(s.block_store().get_upload(upload.upload_id()).is_err());
+    drop(s);
+
+    // Age the staging receipt past its lease by rewriting it on disk instead
+    // of sleeping on the wall clock: no sleeps, no races. The open-time scan
+    // (store.rs) prunes any staging whose lease_until_ms has passed.
+    let staging_dir = tmp.path().join("staging").join(upload.upload_id());
+    let receipt_path = staging_dir.join("receipt.json");
+    let mut receipt: Value =
+        serde_json::from_str(&fs::read_to_string(&receipt_path).unwrap()).unwrap();
+    receipt["lease_until_ms"] = Value::from(1u64);
+    fs::write(&receipt_path, serde_json::to_string(&receipt).unwrap()).unwrap();
+
+    let s2 = store(&tmp);
+    assert!(s2.block_store().get_upload(upload.upload_id()).is_err());
+    assert!(
+        !staging_dir.exists(),
+        "expired staging must be pruned at open"
+    );
+}
+
+#[test]
+fn put_chunk_rejects_expired_lease() {
+    let tmp = tempfile::tempdir().unwrap();
+    let s = store(&tmp);
+    let payload = b"abc".to_vec();
+    let cid = cid_for_raw(&payload);
+    // A zero lease makes lease_until_ms == started_at_ms (T0); now >= T0 holds
+    // deterministically within the same process, so put_chunk must refuse at
+    // once instead of persisting the block.
+    let upload = s
+        .begin_upload(
+            1,
+            DEFAULT_CHUNK_SIZE,
+            3,
+            "raw",
+            &cid,
+            Some(0),
+            owner(),
+            "notes/test",
+            // The P1 channel declares its leaves as it goes, so it has none up front.
+            &[],
+        )
+        .unwrap();
+    let err = upload.put_chunk(0, &payload).unwrap_err();
+    assert!(matches!(err, ContentError::UploadExpired));
 }
 
 #[test]

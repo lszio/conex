@@ -6,11 +6,40 @@ use serde_json::Value;
 use tokio::time::Instant;
 
 use crate::aggregate::{AggregateResult, ProviderResult, TargetCall};
-use crate::audit::{AuditEnd, AuditStart};
+use crate::audit::{AuditEnd, AuditReservation, AuditStart};
 use crate::host::Host;
 use crate::registry::{P0_PROTOCOL, P0_VERSION};
 use crate::target_policy;
 use crate::types::{CallContext, CallError, CallResult, Caller, Endpoint, ExecutionIo};
+
+/// 终局审计守卫:持有 invoke 的终局预留,直到显式 [`TerminalGuard::release`]
+/// 交还给正常终局路径;否则 Drop 收口——错误早退(`?`、deny-return)与 panic
+/// 都会写一条 `execution="aborted"` 的 `audit_finish` 终局行,保证每条敏感
+/// 调用路径恰有一条终局审计,且预留不会无终局行地悬空。
+struct TerminalGuard {
+    terminal: Option<Box<dyn AuditReservation>>,
+    started: Instant,
+}
+
+impl TerminalGuard {
+    fn release(mut self) -> Box<dyn AuditReservation> {
+        self.terminal.take().expect("terminal taken twice")
+    }
+}
+
+impl Drop for TerminalGuard {
+    fn drop(&mut self) {
+        if let Some(terminal) = self.terminal.take() {
+            let _ = terminal.finish(AuditEnd {
+                phase: "audit_finish".into(),
+                outcome: "error".into(),
+                error_code: Some(conex_proto::ErrorCode::Internal as i32),
+                execution: "aborted".into(),
+                latency_ms: self.started.elapsed().as_millis() as u64,
+            });
+        }
+    }
+}
 
 impl Host {
     pub async fn invoke(
@@ -106,15 +135,21 @@ impl Host {
             }
         };
 
-        // Reserve audit capacity before any side effect.
-        let terminal = self.audit.reserve(&self.audit_start(
-            caller,
-            &endpoint,
-            method,
-            &prepared.claim.resource_id,
-            grant.policy_version,
-            "audit_finish",
-        ))?;
+        // Reserve audit capacity before any side effect. The reservation is
+        // wrapped in a guard: the `?` below evaluates before the guard exists,
+        // so a failed reserve leaks nothing, and every later early exit goes
+        // through the guard's Drop (one aborted audit_finish line).
+        let terminal = TerminalGuard {
+            terminal: Some(self.audit.reserve(&self.audit_start(
+                caller,
+                &endpoint,
+                method,
+                &prepared.claim.resource_id,
+                grant.policy_version,
+                "audit_finish",
+            ))?),
+            started,
+        };
         self.record(
             caller,
             &endpoint,
@@ -247,6 +282,11 @@ impl Host {
         {
             result = Err(error);
         }
+
+        // Take the reservation out of the guard: the explicit finish in each
+        // branch below becomes the terminal line, and the guard no longer
+        // owns it.
+        let terminal = terminal.release();
 
         match result {
             Ok(value) => {

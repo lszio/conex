@@ -473,7 +473,7 @@ pub fn build_router(config: &HostConfig) -> Result<Router, CallError> {
         ticker.tick().await;
         loop {
             ticker.tick().await;
-            let now = crate::agent::now_ms();
+            let now = conex_proto::now_ms();
             for dropped in sweep_shares.sweep_expired(now) {
                 sweep_shares.release(&dropped.root_cid);
                 // The group the clip belonged to learns it went away, so a page

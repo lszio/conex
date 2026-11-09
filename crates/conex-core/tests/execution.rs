@@ -109,6 +109,62 @@ async fn policy_revoked_during_handshake_blocks_credentials_and_execute() {
 }
 
 #[tokio::test]
+async fn post_reserve_failure_releases_audit_slot_and_finishes() {
+    let rig = TestRig::failing_connect(true);
+    let result = rig
+        .host
+        .invoke(
+            &rig.caller(),
+            "test",
+            "test/read",
+            json!({"resourceId": "ok.md"}),
+            Duration::from_secs(1),
+        )
+        .await;
+    assert_eq!(
+        result.unwrap_err().code_enum(),
+        Some(conex_proto::ErrorCode::PeerUntrusted)
+    );
+    // The terminal reservation must be handed back on the error early-return,
+    // otherwise audit capacity leaks monotonically until Unavailable.
+    assert_eq!(rig.live(), 0);
+    // The guard writes the missing terminal audit line on the way out.
+    let events = rig.events();
+    let last = events.last().unwrap();
+    assert_eq!(last.phase, "audit_finish");
+    assert_eq!(last.outcome, "error");
+}
+
+#[tokio::test]
+async fn post_reserve_deny_finishes_terminal() {
+    let rig = TestRig::revoked_during_connect();
+    let result = rig
+        .host
+        .invoke(
+            &rig.caller(),
+            "test",
+            "test/read",
+            json!({"resourceId": "ok.md"}),
+            Duration::from_secs(1),
+        )
+        .await;
+    assert_eq!(
+        result.unwrap_err().code_enum(),
+        Some(conex_proto::ErrorCode::Forbidden)
+    );
+    assert_eq!(rig.live(), 0);
+    // The handshake-revocation deny line must be followed immediately by a
+    // terminal audit_finish line: every sensitive path ends with exactly one.
+    let events = rig.events();
+    assert!(events.len() >= 2, "expected deny + terminal lines");
+    let n = events.len();
+    assert_eq!(events[n - 2].phase, "authorize");
+    assert_eq!(events[n - 2].outcome, "deny");
+    assert_eq!(events[n - 1].phase, "audit_finish");
+    assert_eq!(events[n - 1].outcome, "error");
+}
+
+#[tokio::test]
 async fn local_route_does_not_touch_remote_ports() {
     let rig = TestRig::local_only(true);
     rig.host

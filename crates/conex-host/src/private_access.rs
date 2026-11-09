@@ -14,6 +14,8 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
+use conex_proto::now_ms;
+
 use crate::grants::{
     AccessGrantResponse, AccessGrantScope, GrantIssuer, GrantPolicy, PURPOSE_DIRECT,
     VerifiedPrincipal,
@@ -624,13 +626,6 @@ pub fn ensure_private_dir(path: &std::path::Path) -> Result<(), conex_core::Call
 
 fn store_failure(message: String) -> conex_core::CallError {
     conex_core::CallError::new(conex_proto::ErrorCode::Internal, message)
-}
-
-pub fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
-        .unwrap_or(0)
 }
 
 pub fn parse_u64(text: &str) -> Option<u64> {
