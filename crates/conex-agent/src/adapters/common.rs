@@ -45,12 +45,7 @@ pub(crate) fn stable_ulid(seed: &str) -> String {
     String::from_utf8(out.to_vec()).expect("crockford alphabet is ASCII")
 }
 
-pub(crate) fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
-        .unwrap_or(0)
-}
+pub(crate) use conex_proto::now_ms;
 
 pub(crate) fn store_error(error: conex_agent_domain::StoreError) -> Error {
     use conex_agent_domain::StoreError as E;

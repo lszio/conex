@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use base64::Engine;
 use serde::{Deserialize, Serialize};
@@ -16,6 +16,7 @@ use sha2::{Digest, Sha256};
 
 use conex_core::CallError;
 use conex_proto;
+use conex_proto::now_ms;
 
 use crate::broker::{Broker, BrokerCall};
 use crate::remote::{RemoteConnections, RemoteLink};
@@ -646,13 +647,6 @@ impl OidcRegistry {
         }
         Ok(entry)
     }
-}
-
-pub fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
 }
 
 pub fn is_safe_component(value: &str) -> bool {

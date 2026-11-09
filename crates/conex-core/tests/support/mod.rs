@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 use std::collections::HashMap;
 use std::net::IpAddr;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
@@ -179,11 +179,15 @@ impl CredentialStore for FakeCredentials {
 
 struct TestAudit {
     events: Arc<Mutex<Vec<TestEvent>>>,
+    /// Number of outstanding (reserved but unfinished) audit reservations.
+    live: Arc<AtomicUsize>,
     fail: bool,
 }
 
 struct TestReservation {
     events: Arc<Mutex<Vec<TestEvent>>>,
+    live: Arc<AtomicUsize>,
+    done: AtomicBool,
 }
 
 impl AuditReservation for TestReservation {
@@ -193,7 +197,20 @@ impl AuditReservation for TestReservation {
             outcome: end.outcome,
             error_code: end.error_code,
         });
+        self.done.store(true, Ordering::SeqCst);
+        self.live.fetch_sub(1, Ordering::SeqCst);
         Ok(())
+    }
+}
+
+impl Drop for TestReservation {
+    fn drop(&mut self) {
+        // Mirrors the production FileReservation: a reservation dropped
+        // without finish (error early-return, panic) still releases its
+        // slot; the flag prevents a double decrement after finish.
+        if !self.done.swap(true, Ordering::SeqCst) {
+            self.live.fetch_sub(1, Ordering::SeqCst);
+        }
     }
 }
 
@@ -205,8 +222,11 @@ impl AuditSink for TestAudit {
                 "audit sink unavailable",
             ));
         }
+        self.live.fetch_add(1, Ordering::SeqCst);
         Ok(Box::new(TestReservation {
             events: self.events.clone(),
+            live: self.live.clone(),
+            done: AtomicBool::new(false),
         }))
     }
 }
@@ -330,6 +350,7 @@ pub struct TestRig {
     pub policy: Arc<StaticPolicy>,
     counts: Arc<Counters>,
     events: Arc<Mutex<Vec<TestEvent>>>,
+    live: Arc<AtomicUsize>,
     caller: Caller,
 }
 
@@ -421,6 +442,7 @@ impl TestRig {
     fn build(config: RigConfig) -> Self {
         let counts = Arc::new(Counters::new());
         let events = Arc::new(Mutex::new(Vec::new()));
+        let live = Arc::new(AtomicUsize::new(0));
 
         let rules = if config.allow {
             vec![
@@ -505,6 +527,7 @@ impl TestRig {
             }),
             Arc::new(TestAudit {
                 events: events.clone(),
+                live: live.clone(),
                 fail: config.fail_audit,
             }),
             HostLimits::default(),
@@ -516,6 +539,7 @@ impl TestRig {
             policy,
             counts,
             events,
+            live,
             caller: Caller {
                 principal_id: "alice".into(),
                 tenant_id: "tenant-a".into(),
@@ -534,5 +558,11 @@ impl TestRig {
 
     pub fn events(&self) -> Vec<TestEvent> {
         self.events.lock().unwrap().clone()
+    }
+
+    /// Outstanding audit reservations: reserved but not yet finished. Must
+    /// return to 0 after every invoke, whatever its outcome.
+    pub fn live(&self) -> usize {
+        self.live.load(Ordering::SeqCst)
     }
 }

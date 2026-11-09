@@ -17,13 +17,13 @@ use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::types::CallError;
 use conex_proto;
+use conex_proto::now_ms;
 
 /// 24h default TTL for dedup records (design §7.3).
 pub const DEFAULT_TTL_HOURS: u64 = 24;
@@ -217,13 +217,6 @@ impl OperationError {
             }
         }
     }
-}
-
-fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
 }
 
 #[derive(Default)]

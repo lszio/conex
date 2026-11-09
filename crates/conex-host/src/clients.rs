@@ -27,7 +27,7 @@ use conex_content::Owner as ContentOwner;
 use conex_core::CallError;
 use conex_proto;
 
-use crate::agent::now_ms;
+use conex_proto::now_ms;
 
 /// Frame size accounting matches the WSS writer's budget: a pushed hello is
 /// tiny, and a caller must not be able to fill another client's queue.

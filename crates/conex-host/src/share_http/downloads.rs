@@ -97,7 +97,7 @@ pub async fn download_file(
     };
     // An item outside the caller's group is reported as unknown, not as
     // forbidden: a different answer would confirm the id exists.
-    let now = crate::agent::now_ms();
+    let now = conex_proto::now_ms();
     let Some(file) = state.shares.content(&query.id, &entry.group_key, now) else {
         return not_found();
     };

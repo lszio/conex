@@ -13,12 +13,7 @@ use std::sync::Arc;
 
 pub const CONTRACT_ID: &str = "conex.relations";
 
-fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
-        .unwrap_or(0)
-}
+use conex_proto::now_ms;
 
 pub fn factory(_config: crate::node_config::MetricsModuleConfig) -> RuntimeFactory {
     Arc::new(move |runtime, _context| {

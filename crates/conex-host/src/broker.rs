@@ -1000,10 +1000,9 @@ async fn blob_put(
         ));
     }
     let declared_size_bytes = require_u64(map, "declaredSizeBytes")?;
-    const MAX_BLOB_BYTES: u64 = 1_073_741_824;
-    if declared_size_bytes > MAX_BLOB_BYTES {
+    if declared_size_bytes > conex_content::MAX_BLOB_BYTES {
         return Err(content_to_call(conex_content::ContentError::TooLarge {
-            limit: MAX_BLOB_BYTES,
+            limit: conex_content::MAX_BLOB_BYTES,
             actual: declared_size_bytes,
         }));
     }
@@ -1014,12 +1013,11 @@ async fn blob_put(
             conex_proto::cid::CHUNK_SIZE
         )));
     }
-    const MAX_LEASE_MS: u64 = 24 * 60 * 60 * 1000;
     let requested_lease_ms = map
         .get("requestedLeaseMs")
         .and_then(Value::as_str)
         .and_then(|raw| raw.parse::<u64>().ok());
-    if requested_lease_ms.is_some_and(|lease| lease > MAX_LEASE_MS) {
+    if requested_lease_ms.is_some_and(|lease| lease > conex_content::MAX_LEASE_MS) {
         return Err(bad_req("requestedLeaseMs must not exceed 24h"));
     }
     let expected_root = require_string(map, "expectedRootCid")?.to_string();
@@ -1037,7 +1035,11 @@ async fn blob_put(
             declared_size_bytes,
             root_kind_for(&expected_root, declared_size_bytes, declared_chunk_size),
             &expected_root,
-            requested_lease_ms,
+            // Clamp short leases up to the floor instead of rejecting (D4):
+            // a tiny lease would expire before the first blob/chunk arrives.
+            // ContentStore itself never clamps; tests pass Some(0)/Some(10)
+            // there to reach expiry deterministically.
+            requested_lease_ms.map(|lease| lease.max(conex_content::MIN_LEASE_MS)),
             owner.clone(),
             &resource_id,
             // The P1 channel declares its leaves as it goes, so it has none up
@@ -1053,12 +1055,17 @@ async fn blob_put(
         .iter()
         .map(|chunk| chunk.cid.clone())
         .collect();
+    // Echo the effective lease (default applied, floor clamped), not the raw
+    // request, so clients see the deadline the store actually enforces (D4).
+    let effective_lease_ms = requested_lease_ms.map_or(conex_content::DEFAULT_LEASE_MS, |lease| {
+        lease.max(conex_content::MIN_LEASE_MS)
+    });
     Ok(json!({
         "uploadId": upload.upload_id(),
         "chunkSize": declared_chunk_size.to_string(),
-        "leaseMs": requested_lease_ms.unwrap_or(60 * 60 * 1000).to_string(),
-        "maxBlobBytes": "1073741824",
-        "inlineThresholdBytes": "65536",
+        "leaseMs": effective_lease_ms.to_string(),
+        "maxBlobBytes": conex_content::MAX_BLOB_BYTES.to_string(),
+        "inlineThresholdBytes": conex_content::DEFAULT_INLINE_THRESHOLD_BYTES.to_string(),
         "alreadyHaveChunkCids": already_have,
         "resourceId": resource_id,
     }))
@@ -1574,12 +1581,7 @@ fn root_kind_for(_root: &str, total_bytes: u64, chunk_size: u32) -> &'static str
     }
 }
 
-fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
-}
+use conex_proto::now_ms;
 
 fn ui_link_to_json(link: crate::ui_links::UiLink) -> Value {
     json!({

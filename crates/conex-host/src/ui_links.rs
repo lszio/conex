@@ -10,7 +10,7 @@ use std::sync::Mutex;
 
 use serde::Serialize;
 
-use crate::agent::now_ms;
+use conex_proto::now_ms;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct UiLink {

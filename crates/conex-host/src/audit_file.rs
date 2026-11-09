@@ -2,7 +2,7 @@
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::Path;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use conex_core::{AuditEnd, AuditReservation, AuditSink, AuditStart, CallError, CallResult};
@@ -68,6 +68,7 @@ impl AuditSink for FileAuditSink {
             file: self.file.clone(),
             pending: self.pending.clone(),
             start: start.clone(),
+            done: AtomicBool::new(false),
         }))
     }
 }
@@ -76,6 +77,8 @@ struct FileReservation {
     file: Arc<Mutex<File>>,
     pending: Arc<AtomicUsize>,
     start: AuditStart,
+    /// Set before the capacity is returned, so Drop never double-decrements.
+    done: AtomicBool,
 }
 
 impl AuditReservation for FileReservation {
@@ -111,8 +114,20 @@ impl AuditReservation for FileReservation {
                 format!("write audit record: {error}"),
             )
         })?;
+        self.done.store(true, Ordering::SeqCst);
         self.pending.fetch_sub(1, Ordering::SeqCst);
         Ok(())
+    }
+}
+
+impl Drop for FileReservation {
+    fn drop(&mut self) {
+        // 未 finish 的预留(错误早退、panic、finish 写失败)必须归还容量,
+        // 否则 pending 只增不减,容量耗尽后所有敏感调用被 Unavailable 拒绝。
+        // Drop 只回滚计数,不写文件。
+        if !self.done.swap(true, Ordering::SeqCst) {
+            self.pending.fetch_sub(1, Ordering::SeqCst);
+        }
     }
 }
 
@@ -172,5 +187,24 @@ mod tests {
         assert!(content.contains("\"method\":\"m\""));
         assert!(content.contains("\"consumerModule\":null"));
         assert!(content.contains("\"generation\":0"));
+    }
+
+    #[test]
+    fn drop_without_finish_releases_capacity() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("audit.log");
+        let sink = FileAuditSink::open(&path, 1).unwrap();
+        let reservation = sink.reserve(&start("authorize")).unwrap();
+        // Drop without finish (error early-return, panic, failed write in
+        // finish) must hand the capacity slot back, otherwise pending only
+        // grows and every sensitive call ends up rejected with Unavailable.
+        drop(reservation);
+        assert!(
+            sink.reserve(&start("execute")).is_ok(),
+            "dropped reservation must release its capacity slot"
+        );
+        // Drop only rolls back the counter; it must not write a record.
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(content.lines().count(), 0);
     }
 }
