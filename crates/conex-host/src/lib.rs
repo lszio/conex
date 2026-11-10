@@ -15,6 +15,7 @@ pub mod credentials;
 pub mod grants;
 pub mod http;
 pub mod oidc_jwt;
+pub mod password;
 pub mod private_access;
 pub mod private_store;
 pub mod remote;

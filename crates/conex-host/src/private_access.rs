@@ -50,6 +50,8 @@ pub struct PrivateAccess {
     pub issuer: GrantIssuer,
     pub store: PrivateStore,
     web_auth: Mutex<Option<Arc<WebAuth>>>,
+    /// Brute-force throttle for account-password logins (route A).
+    throttle: crate::password::LoginThrottle,
     /// node publication principal -> identity learned from the node link.
     nodes: Mutex<BTreeMap<String, NodeIdentity>>,
 }
@@ -81,6 +83,7 @@ impl PrivateAccess {
             issuer,
             store,
             web_auth: Mutex::new(None),
+            throttle: crate::password::LoginThrottle::new(),
             nodes: Mutex::new(BTreeMap::new()),
         })
     }
@@ -310,6 +313,13 @@ pub async fn private_session(
         Ok(session) => session,
         Err(error) => return crate::web_auth::error_response(error),
     };
+    session_response(&web, &session)
+}
+
+/// The cookie+CSRF session payload every private login path returns. The
+/// shape is shared by the bootstrap and account-password entries so the web
+/// client treats them identically once authenticated.
+fn session_response(web: &WebAuth, session: &crate::web_auth::WebSession) -> Response {
     let mut response = (
         StatusCode::OK,
         axum::Json(json!({
@@ -323,8 +333,208 @@ pub async fn private_session(
         .into_response();
     response
         .headers_mut()
-        .insert(header::SET_COOKIE, web.set_cookie(&session));
+        .insert(header::SET_COOKIE, web.set_cookie(session));
     response
+}
+
+// ---------------------------------------------------------------------------
+// account entries (route A: local admin accounts)
+// ---------------------------------------------------------------------------
+
+/// The account fact the login page needs before rendering: does a local
+/// admin account exist? A bare boolean — no usernames, no counts.
+pub async fn account_status(
+    axum::extract::Extension(state): axum::extract::Extension<Arc<crate::http::HttpState>>,
+) -> Response {
+    let Some(private) = state.private.as_ref() else {
+        return not_found();
+    };
+    match private.store.count_accounts().await {
+        Ok(count) => (
+            StatusCode::OK,
+            axum::Json(json!({ "accountExists": count > 0 })),
+        )
+            .into_response(),
+        Err(error) => crate::web_auth::error_response(error),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct PasswordSessionBody {
+    username: String,
+    password: String,
+}
+
+/// `POST /private/account/password-session`: username+password login for an
+/// already-provisioned local account. Failures are indistinguishable between
+/// "unknown username" and "wrong password" (no enumeration), and every
+/// attempt passes the throttle first; failures extend its backoff.
+pub async fn account_password_session(
+    axum::extract::Extension(state): axum::extract::Extension<Arc<crate::http::HttpState>>,
+    headers: HeaderMap,
+    Json(body): Json<PasswordSessionBody>,
+) -> Response {
+    let Some(private) = state.private.as_ref() else {
+        return not_found();
+    };
+    let web = match private.web() {
+        Ok(web) => web,
+        Err(error) => return crate::web_auth::error_response(error),
+    };
+    if let Err(error) = web.check_origin(&headers) {
+        return crate::web_auth::error_response(error);
+    }
+    if body.username.len() > crate::password::MAX_USERNAME_BYTES
+        || body.password.len() > crate::password::MAX_PASSWORD_BYTES
+    {
+        return crate::web_auth::error_response(unauthorized("username or password is invalid"));
+    }
+    if !private.throttle.admit(&body.username) {
+        return crate::web_auth::error_response(conex_core::CallError::new(
+            conex_proto::ErrorCode::QuotaExceeded,
+            "login attempts are throttled; wait and retry",
+        ));
+    }
+    let account = match private.store.get_account(body.username.clone()).await {
+        Ok(account) => account,
+        Err(error) => return crate::web_auth::error_response(error),
+    };
+    let verified = account
+        .filter(|account| account.kind == "local")
+        .filter(|account| {
+            account
+                .password_hash
+                .as_deref()
+                .is_some_and(|stored| crate::password::verify_password(&body.password, stored))
+        })
+        .is_some();
+    if !verified {
+        private.throttle.punish(&body.username);
+        return crate::web_auth::error_response(unauthorized("username or password is invalid"));
+    }
+    private.throttle.absolve(&body.username);
+    let observed = headers
+        .get(header::ORIGIN)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default();
+    let session = match web.login_private_with(
+        private.settings.principal.clone(),
+        private.settings.tenant.clone(),
+        observed,
+        "private-account",
+    ) {
+        Ok(session) => session,
+        Err(error) => return crate::web_auth::error_response(error),
+    };
+    session_response(&web, &session)
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct ProvisionBody {
+    username: String,
+    password: String,
+}
+
+/// `POST /private/account`: first-run provisioning. Reachable only with a
+/// live private session — and before any account exists, the only way to
+/// hold one is a bootstrap code, so possession of the code is exactly the
+/// authority to create the admin account. Once provisioned this refuses, and
+/// later changes go through `/private/account/password`.
+pub async fn account_provision(
+    axum::extract::Extension(state): axum::extract::Extension<Arc<crate::http::HttpState>>,
+    headers: HeaderMap,
+    Json(body): Json<ProvisionBody>,
+) -> Response {
+    let Some(private) = state.private.as_ref() else {
+        return not_found();
+    };
+    let web = match private.web() {
+        Ok(web) => web,
+        Err(error) => return crate::web_auth::error_response(error),
+    };
+    if let Err(error) = web.check_mutation(&headers) {
+        return crate::web_auth::error_response(error);
+    }
+    if !crate::password::valid_username(&body.username) {
+        return crate::web_auth::error_response(forbidden(
+            "username must be 1..=64 of [A-Za-z0-9_.-]",
+        ));
+    }
+    if !crate::password::valid_password(&body.password) {
+        return crate::web_auth::error_response(forbidden("password must be 8..=1024 bytes"));
+    }
+    let count = match private.store.count_accounts().await {
+        Ok(count) => count,
+        Err(error) => return crate::web_auth::error_response(error),
+    };
+    if count > 0 {
+        return crate::web_auth::error_response(forbidden(
+            "an admin account is already provisioned",
+        ));
+    }
+    let hash = match crate::password::hash_password(&body.password) {
+        Ok(hash) => hash,
+        Err(message) => {
+            return crate::web_auth::error_response(store_failure(message));
+        }
+    };
+    let now = now_ms();
+    let row = crate::private_store::AccountRow {
+        username: body.username,
+        kind: "local".into(),
+        password_hash: Some(hash),
+        role: "admin".into(),
+        created_at_ms: now,
+        updated_at_ms: now,
+    };
+    match private.store.put_account(row).await {
+        Ok(()) => (StatusCode::OK, axum::Json(json!({"provisioned": true}))).into_response(),
+        Err(error) => crate::web_auth::error_response(error),
+    }
+}
+
+/// `POST /private/account/password`: set or reset the local admin password.
+/// Any authenticated private session qualifies: before provisioning that is
+/// bootstrap-only, afterwards it is the owner's own session (single-principal
+/// MVP). This is the recovery path when the password is lost.
+pub async fn account_set_password(
+    axum::extract::Extension(state): axum::extract::Extension<Arc<crate::http::HttpState>>,
+    headers: HeaderMap,
+    Json(body): Json<ProvisionBody>,
+) -> Response {
+    let Some(private) = state.private.as_ref() else {
+        return not_found();
+    };
+    let web = match private.web() {
+        Ok(web) => web,
+        Err(error) => return crate::web_auth::error_response(error),
+    };
+    if let Err(error) = web.check_mutation(&headers) {
+        return crate::web_auth::error_response(error);
+    }
+    if !crate::password::valid_username(&body.username)
+        || !crate::password::valid_password(&body.password)
+    {
+        return crate::web_auth::error_response(forbidden(
+            "username or password violates the account rules",
+        ));
+    }
+    let hash = match crate::password::hash_password(&body.password) {
+        Ok(hash) => hash,
+        Err(message) => {
+            return crate::web_auth::error_response(store_failure(message));
+        }
+    };
+    match private
+        .store
+        .set_password_hash(body.username, hash, now_ms())
+        .await
+    {
+        Ok(()) => (StatusCode::OK, axum::Json(json!({"updated": true}))).into_response(),
+        Err(error) => crate::web_auth::error_response(error),
+    }
 }
 
 #[derive(Deserialize)]

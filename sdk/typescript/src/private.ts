@@ -203,6 +203,51 @@ export class PrivateHubClient {
     return body as unknown as Directory;
   }
 
+  /** 账号路由 A：是否已存在本地管理员账号（登录页据此选表单）。 */
+  async accountStatus(): Promise<{ accountExists: boolean }> {
+    const response = await this.fetchImpl(this.url("/private/account/status"), {
+      credentials: "include",
+      redirect: "error",
+    });
+    if (!response.ok) throw await readError(response);
+    const body = (await response.json()) as Record<string, unknown>;
+    return { accountExists: body.accountExists === true };
+  }
+
+  /** 账号密码登录（仅已建号的部署）；失败不区分用户名与密码错误。 */
+  async loginPassword(username: string, password: string): Promise<PrivateSessionInfo> {
+    const response = await this.post(
+      "/private/account/password-session",
+      { username, password },
+      false,
+    );
+    if (!response.ok) throw await readError(response);
+    const body = (await response.json()) as Record<string, unknown>;
+    if (typeof body.csrf !== "string" || body.csrf === "") {
+      throw directError("session response is missing csrf", ErrorCode.ERROR_CODE_INTERNAL, "never");
+    }
+    this.csrf = body.csrf;
+    return {
+      principalId: String(body.principalId ?? ""),
+      tenantId: String(body.tenantId ?? ""),
+      role: String(body.role ?? ""),
+      csrf: body.csrf,
+      expiresAtMs: String(body.expiresAtMs ?? "0"),
+    };
+  }
+
+  /** 首次建号：仅引导码会话且账号表为空时成功（服务端强校验）。 */
+  async createAccount(username: string, password: string): Promise<void> {
+    const response = await this.post("/private/account", { username, password }, true);
+    if (!response.ok) throw await readError(response);
+  }
+
+  /** 设置/重置本地账号密码；需要已认证的私有会话（引导码恢复路径同样适用）。 */
+  async setAccountPassword(username: string, password: string): Promise<void> {
+    const response = await this.post("/private/account/password", { username, password }, true);
+    if (!response.ok) throw await readError(response);
+  }
+
   async grant(nodeId: string, scope: GrantScopeBody): Promise<Grant> {
     const response = await this.post("/private/grant", { nodeId, scope }, true);
     if (!response.ok) throw await readError(response);

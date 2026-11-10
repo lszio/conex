@@ -12,7 +12,21 @@ use rusqlite::Connection;
 const DB_QUEUE_CAPACITY: usize = 64;
 pub const MAX_REVOKE_PAGE: usize = 128;
 const MAX_PAGE_BYTES: usize = 196_608;
-pub const SCHEMA_VERSION: i64 = 1;
+pub const SCHEMA_VERSION: i64 = 2;
+
+/// One stored account. `kind` keeps local and future OIDC identities in one
+/// table without pretending they authenticate the same way: `local` rows
+/// carry an Argon2id PHC string, `oidc` rows carry (issuer, subject) and no
+/// password. The authorization principal is unrelated to this table.
+#[derive(Debug, Clone)]
+pub struct AccountRow {
+    pub username: String,
+    pub kind: String,
+    pub password_hash: Option<String>,
+    pub role: String,
+    pub created_at_ms: u64,
+    pub updated_at_ms: u64,
+}
 
 #[derive(Debug, Clone)]
 pub struct GrantLedgerRow {
@@ -46,6 +60,8 @@ type ResultReply = tokio::sync::oneshot::Sender<Result<(), CallError>>;
 type BoolReply = tokio::sync::oneshot::Sender<Result<bool, CallError>>;
 type RevisionReply = tokio::sync::oneshot::Sender<Result<u64, CallError>>;
 type PageReply = tokio::sync::oneshot::Sender<Result<RevocationPage, CallError>>;
+type CountReply = tokio::sync::oneshot::Sender<Result<usize, CallError>>;
+type AccountReply = tokio::sync::oneshot::Sender<Result<Option<AccountRow>, CallError>>;
 
 enum Job {
     PutBootstrap {
@@ -74,6 +90,21 @@ enum Job {
         reply: PageReply,
     },
     LatestRevision(RevisionReply),
+    CountAccounts(CountReply),
+    GetAccount {
+        username: String,
+        reply: AccountReply,
+    },
+    PutAccount {
+        row: AccountRow,
+        reply: ResultReply,
+    },
+    SetPasswordHash {
+        username: String,
+        password_hash: String,
+        updated_at_ms: u64,
+        reply: ResultReply,
+    },
 }
 
 struct Database {
@@ -89,21 +120,22 @@ impl Database {
             .map_err(|error| store_error(format!("private store open: {error}")))?;
         set_mode(&connection, path)?;
         connection
-            .execute_batch(&format!(
+            .execute_batch(
                 "PRAGMA journal_mode=WAL;
                  PRAGMA synchronous=FULL;
-                 PRAGMA foreign_keys=ON;
-                 PRAGMA user_version={SCHEMA_VERSION};"
-            ))
+                 PRAGMA foreign_keys=ON;",
+            )
             .map_err(|error| store_error(format!("private store pragmas: {error}")))?;
+        // The version is read before anything writes it: a database from a
+        // newer build must fail closed here instead of being silently
+        // downgraded (contract §6). The historical code set user_version in
+        // the pragma batch above, which made this check unreachable.
         let version: i64 = connection
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .map_err(|error| store_error(format!("private store version: {error}")))?;
-        if version != SCHEMA_VERSION {
-            // Refuse to run on a database this program does not know instead
-            // of "upgrading" it blindly (contract §6: fail closed).
+        if version > SCHEMA_VERSION {
             return Err(store_error(format!(
-                "private store user_version {version} is not {SCHEMA_VERSION}"
+                "private store user_version {version} is newer than {SCHEMA_VERSION}"
             )));
         }
         connection
@@ -132,6 +164,17 @@ impl Database {
                 );",
             )
             .map_err(|error| store_error(format!("private store schema: {error}")))?;
+        // v1 -> v2 is purely additive: the accounts table appears next to the
+        // untouched v1 tables, so an upgrade preserves bootstrap codes, the
+        // grant ledger and revocations verbatim.
+        if version < 2 {
+            connection
+                .execute_batch(SCHEMA_V2_ACCOUNTS)
+                .map_err(|error| store_error(format!("private store v2 accounts: {error}")))?;
+        }
+        connection
+            .execute_batch(&format!("PRAGMA user_version={SCHEMA_VERSION};"))
+            .map_err(|error| store_error(format!("private store version write: {error}")))?;
         Ok(Self { connection })
     }
 
@@ -270,7 +313,114 @@ impl Database {
             .map_err(|error| store_error(format!("revocation head: {error}")))?;
         Ok(revision.unwrap_or(0) as u64)
     }
+
+    fn count_accounts(&self) -> Result<usize, CallError> {
+        let count: i64 = self
+            .connection
+            .query_row("SELECT COUNT(*) FROM accounts", [], |row| row.get(0))
+            .map_err(|error| store_error(format!("account count: {error}")))?;
+        Ok(count as usize)
+    }
+
+    fn get_account(&self, username: &str) -> Result<Option<AccountRow>, CallError> {
+        let mut statement = self
+            .connection
+            .prepare(
+                "SELECT username, kind, password_hash, role, created_at_ms, updated_at_ms
+                 FROM accounts WHERE username = ?1",
+            )
+            .map_err(|error| store_error(format!("account select: {error}")))?;
+        let row = statement
+            .query_row([username], |row| {
+                Ok(AccountRow {
+                    username: row.get(0)?,
+                    kind: row.get(1)?,
+                    password_hash: row.get(2)?,
+                    role: row.get(3)?,
+                    created_at_ms: row.get::<_, i64>(4)? as u64,
+                    updated_at_ms: row.get::<_, i64>(5)? as u64,
+                })
+            })
+            .optional()
+            .map_err(|error| store_error(format!("account query: {error}")))?;
+        Ok(row)
+    }
+
+    fn put_account(&self, row: &AccountRow) -> Result<(), CallError> {
+        let inserted = self
+            .connection
+            .execute(
+                "INSERT INTO accounts(username, kind, password_hash, issuer, subject,
+                    role, created_at_ms, updated_at_ms)
+                 VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                rusqlite::params![
+                    row.username,
+                    row.kind,
+                    row.password_hash,
+                    Option::<String>::None,
+                    Option::<String>::None,
+                    row.role,
+                    row.created_at_ms as i64,
+                    row.updated_at_ms as i64,
+                ],
+            )
+            .map_err(|error| {
+                let conflict = matches!(
+                    &error,
+                    rusqlite::Error::SqliteFailure(ffi, _)
+                        if ffi.code == rusqlite::ErrorCode::ConstraintViolation
+                );
+                if conflict {
+                    store_error("account already provisioned or username taken".into())
+                } else {
+                    store_error(format!("account insert: {error}"))
+                }
+            })?;
+        if inserted != 1 {
+            return Err(store_error("account insert inserted no row".into()));
+        }
+        Ok(())
+    }
+
+    fn set_password_hash(
+        &self,
+        username: &str,
+        password_hash: &str,
+        updated_at_ms: u64,
+    ) -> Result<(), CallError> {
+        let updated = self
+            .connection
+            .execute(
+                "UPDATE accounts SET password_hash = ?2, updated_at_ms = ?3
+                 WHERE username = ?1 AND kind = 'local'",
+                rusqlite::params![username, password_hash, updated_at_ms as i64],
+            )
+            .map_err(|error| store_error(format!("account update: {error}")))?;
+        if updated == 0 {
+            return Err(store_error("no local account carries this username".into()));
+        }
+        Ok(())
+    }
 }
+
+/// The v2 accounts table. Local rows must carry a password hash; OIDC rows
+/// (route B, not provisioned yet) must carry issuer+subject and are unique
+/// per identity so a future IdP login can look itself up.
+const SCHEMA_V2_ACCOUNTS: &str = "CREATE TABLE IF NOT EXISTS accounts(
+    username TEXT PRIMARY KEY,
+    kind TEXT NOT NULL CHECK(kind IN ('local','oidc')),
+    password_hash TEXT,
+    issuer TEXT,
+    subject TEXT,
+    role TEXT NOT NULL DEFAULT 'admin' CHECK(role IN ('admin')),
+    created_at_ms INTEGER NOT NULL,
+    updated_at_ms INTEGER NOT NULL,
+    CHECK(kind <> 'local' OR password_hash IS NOT NULL),
+    CHECK(kind <> 'oidc' OR (issuer IS NOT NULL AND subject IS NOT NULL))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS accounts_oidc_identity
+    ON accounts(issuer, subject)
+    WHERE kind = 'oidc' AND issuer IS NOT NULL AND subject IS NOT NULL;";
 
 trait OptionalRow<T> {
     fn optional(self) -> Result<Option<T>, rusqlite::Error>;
@@ -409,6 +559,46 @@ impl PrivateStore {
         wait.await
             .map_err(|_| store_error("private store stopped".into()))?
     }
+
+    /// The number of stored accounts. The private login page uses it to pick
+    /// first-provisioning vs password login; zero reveals nothing sensitive.
+    pub async fn count_accounts(&self) -> Result<usize, CallError> {
+        let (reply, wait) = tokio::sync::oneshot::channel();
+        self.send(Job::CountAccounts(reply))?;
+        wait.await
+            .map_err(|_| store_error("private store stopped".into()))?
+    }
+
+    pub async fn get_account(&self, username: String) -> Result<Option<AccountRow>, CallError> {
+        let (reply, wait) = tokio::sync::oneshot::channel();
+        self.send(Job::GetAccount { username, reply })?;
+        wait.await
+            .map_err(|_| store_error("private store stopped".into()))?
+    }
+
+    pub async fn put_account(&self, row: AccountRow) -> Result<(), CallError> {
+        let (reply, wait) = tokio::sync::oneshot::channel();
+        self.send(Job::PutAccount { row, reply })?;
+        wait.await
+            .map_err(|_| store_error("private store stopped".into()))?
+    }
+
+    pub async fn set_password_hash(
+        &self,
+        username: String,
+        password_hash: String,
+        updated_at_ms: u64,
+    ) -> Result<(), CallError> {
+        let (reply, wait) = tokio::sync::oneshot::channel();
+        self.send(Job::SetPasswordHash {
+            username,
+            password_hash,
+            updated_at_ms,
+            reply,
+        })?;
+        wait.await
+            .map_err(|_| store_error("private store stopped".into()))?
+    }
 }
 
 fn run_job(database: &Database, job: Job) {
@@ -447,6 +637,24 @@ fn run_job(database: &Database, job: Job) {
         }
         Job::LatestRevision(reply) => {
             let _ = reply.send(database.latest_revision());
+        }
+        Job::CountAccounts(reply) => {
+            let _ = reply.send(database.count_accounts());
+        }
+        Job::GetAccount { username, reply } => {
+            let _ = reply.send(database.get_account(&username));
+        }
+        Job::PutAccount { row, reply } => {
+            let _ = reply.send(database.put_account(&row));
+        }
+        Job::SetPasswordHash {
+            username,
+            password_hash,
+            updated_at_ms,
+            reply,
+        } => {
+            let _ =
+                reply.send(database.set_password_hash(&username, &password_hash, updated_at_ms));
         }
     }
 }

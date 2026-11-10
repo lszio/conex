@@ -120,6 +120,22 @@ pub fn attach_p1(base: Router) -> Router {
             "/private/session",
             post(crate::private_access::private_session),
         )
+        .route(
+            "/private/account/status",
+            get(crate::private_access::account_status),
+        )
+        .route(
+            "/private/account/password-session",
+            post(crate::private_access::account_password_session),
+        )
+        .route(
+            "/private/account",
+            post(crate::private_access::account_provision),
+        )
+        .route(
+            "/private/account/password",
+            post(crate::private_access::account_set_password),
+        )
         .route("/private/grant", post(crate::private_access::private_grant))
         .route(
             "/private/directory",

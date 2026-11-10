@@ -28,15 +28,21 @@
 
 2. **持久卷（已完成）**：`conex-data` 卷已挂载 `/var/lib/conex`（含 `private.sqlite`、content/session/operation 根）。容器内明文监听由 Dokploy 反代终结 TLS（`allow_plaintext_bind`）。
 
-3. **引导码登录**（每次 hub 重启后会话失效，需重新引导）：
+3. **登录**（账号为主，引导码为首次建号与恢复凭证）：
 
    ```sh
-   # Dokploy 容器控制台执行：
+   # Dokploy 容器控制台执行（也可 ssh labray.lan docker exec 代取）：
    conex-host private-bootstrap --config=/etc/conex/host.toml
    # stdout 打印 43 位引导码，5 分钟有效、单次消费
    ```
 
-   打开 https://conex.lszio.space 输入引导码即进入工作台。引导码不进 URL/日志，库中只存哈希。
+   - **首次部署**：打开 https://conex.lszio.space 输入引导码 → 页面转为"设置管理员账号"（用户名 + 密码，Argon2id 存储，账号表只存 PHC 串）→ 此后日常用账号密码登录，**hub 重启不再需要引导码**。
+   - **日常登录**：账号密码。失败统一 401（不区分用户名/密码错误），按用户名指数退避（0.5s 起倍增，上限 15s）+ 全局 60 次/分钟限速。
+   - **忘记密码**：容器终端取一条新引导码 → 登录页"使用引导码登录" → 重置密码 → 进入。
+   - 会话仍在 hub 内存（重启即失效），重新登录即可，无需再引导。引导码不进 URL/日志，库中只存哈希。
+   - 会话内改密：`POST /private/account/password`（登录页引导码路径同款表单）。
+
+   路线 B（OIDC，预留未启用）：`accounts.kind='oidc'` 行带 `(issuer, subject)` 唯一索引，`oidc_jwt.rs` 已有 RS256/JWKS 验签器；接入时新增 IdP 登录回调把身份映射到账号行即可，本地账号与 OIDC 身份互不混用。
 
 部署后验证：
 
