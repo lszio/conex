@@ -32,7 +32,7 @@
 
    ```sh
    # Dokploy 容器控制台执行：
-   conex-host private-bootstrap --config /etc/conex/host.toml
+   conex-host private-bootstrap --config=/etc/conex/host.toml
    # stdout 打印 43 位引导码，5 分钟有效、单次消费
    ```
 
@@ -70,7 +70,7 @@ echo node/snapshot | 私有 socket ~/.conex/home-node/data/operator.sock  # 实�
 1. ~~push dev → Dokploy 构建完成。~~（已上线）
 2. ~~Dokploy 设置 `CONEX_HUB_SIGNING_KEY`，重启应用。~~（已配置）
 3. **待用户执行**：Dokploy 面板 → conex 应用 → 容器终端执行
-   `conex-host private-bootstrap --config /etc/conex/host.toml`
+   `conex-host private-bootstrap --config=/etc/conex/host.toml`
    → 43 位引导码（5 分钟、单次消费）→ https://conex.lszio.space 登录。
 4. ~~本机 `~/.conex/home-node/start.sh` 启动节点~~（已在运行并注册；hub 重启后会自动重连重注册）。
 5. 登录后工作台出现节点身份与"直连"徽标 → 选端点/Workspace → 新建会话发消息。
