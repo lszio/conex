@@ -423,6 +423,19 @@ impl WebAuth {
         tenant: String,
         observed_origin: &str,
     ) -> Result<Arc<WebSession>, CallError> {
+        self.login_private_with(principal, tenant, observed_origin, "private-bootstrap")
+    }
+
+    /// Same session shape with the authentication path recorded on the
+    /// caller: the audit-visible difference between a bootstrap-code login
+    /// and an account-password login.
+    pub fn login_private_with(
+        &self,
+        principal: String,
+        tenant: String,
+        observed_origin: &str,
+        actor_peer_id: &str,
+    ) -> Result<Arc<WebSession>, CallError> {
         let mut sessions = self.sessions.lock().expect("web session registry poisoned");
         let now = now_ms();
         sessions.retain(|_, session| session.is_active());
@@ -442,7 +455,7 @@ impl WebAuth {
             caller: conex_core::Caller {
                 principal_id: principal,
                 tenant_id: tenant,
-                actor_peer_id: "private-bootstrap".into(),
+                actor_peer_id: actor_peer_id.to_owned(),
             },
             role: "ui".into(),
             origin: if self.accepts_origin(observed_origin) {

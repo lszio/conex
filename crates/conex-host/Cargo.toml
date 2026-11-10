@@ -13,6 +13,8 @@ name = "conex-host"
 path = "src/main.rs"
 
 [dependencies]
+argon2.workspace = true
+rand_core.workspace = true
 async-trait.workspace = true
 axum = { version = "0.8", features = ["ws"] }
 axum-server.workspace = true
