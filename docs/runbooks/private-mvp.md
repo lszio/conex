@@ -9,13 +9,15 @@
 ```
 浏览器 ──HTTPS──▶ 公网 hub（Dokploy, conex.lszio.space）
                      │  ▲
-        WSS 出站(节点主动)  │ grant/票据后直连（loopback，仅同机浏览器）
-                     ▼  │
+        WSS 出站(节点主动)  │ grant/票据后直连
+                     ▼  │   （同机 loopback / 跨机经家中反代子域）
                   私网节点（Mac，conex-agent：OMP/metrics/relations）
 ```
 
 - hub 不落对话正文（全部私有模块 direct-only），只持有目录/授权/撤权。
-- 节点主动 WSS 出站，无需入站端口；浏览器经 hub 登录、取 grant，然后**直连节点**（当前节点与浏览器同机时为 `http://127.0.0.1:7451`，地址按 nodeId 记忆在工作台"节点地址"输入框）。
+- 节点主动 WSS 出站，无需入站端口；浏览器经 hub 登录、取 grant，然后**直连节点**。直连地址按 nodeId 记忆在工作台"节点地址"输入框：
+  - **同机浏览器**（浏览器与节点同一台 Mac）：`http://127.0.0.1:7451`。
+  - **跨机/公网浏览器**（2026-11-12 起支持）：节点 `direct_listen` 已放开到内网网卡 `192.168.8.228:7451` + `allow_remote_direct = true`（`node_config.rs` 校验非 loopback 必须带此开关；TLS 由家中公网反代在子域上终结——与 hub 的明文监听+Dokploy 反代终结 TLS 同一模式）。家中反代加一条 `conex-node.lszio.space → http://192.168.8.228:7451`（须支持 WebSocket 升级，现有入口已验证支持），工作台"节点地址"填 `https://conex-node.lszio.space` 即可。路由器建议为 Mac 固定 DHCP 保留 `192.168.8.228`，地址一变监听会 fail-fast。
 
 ## 1. hub（Dokploy）
 
@@ -61,13 +63,13 @@ curl -s -o /dev/null -w '%{http_code}\n' https://conex.lszio.space/private/direc
 
 - 发布凭据经 `CONEX_NODE_TOKEN` 环境变量注入（hub 端只存其 sha256）。
 - Agent 工作区是 `~/conex-workspace`；模型为 `deepseek/deepseek-flash`（本机 `omp` 环境授权，凭据不离开节点）。
-- 直连入口 `127.0.0.1:7451`（仅 loopback 明文；跨机直连需 TLS + `allow_remote_direct`，归 P9）。
+- 直连入口 `192.168.8.228:7451`（内网网卡明文，`allow_remote_direct = true`；公网 TLS 由家中反代子域终结，同机浏览器仍可用 `127.0.0.1:7451`）。
 - 节点重启 = 新 epoch：所有旧 grant 失效（预期），浏览器刷新页面即恢复。
 
 节点健康：
 
 ```sh
-curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:7451/wss   # 400（入口在，需升级头）
+curl -s -o /dev/null -w '%{http_code}\n' http://192.168.8.228:7451/wss   # 400（入口在，需升级头；同机另可探 127.0.0.1:7451）
 echo node/snapshot | 私有 socket ~/.conex/home-node/data/operator.sock  # 实例/模块/代际
 ```
 
