@@ -97,6 +97,16 @@ pub struct HostConfig {
     /// half-open switch. Mutually exclusive with `web_guest` at load.
     #[serde(default)]
     pub private: Option<PrivateConfig>,
+    /// P10 OpenAI 兼容网关（docs/design/2026-11-12-conex-llm-provider-relay.md
+    /// §5）。Present = `/v1/models` 与 `/v1/chat/completions` 挂载； absent 时
+    /// 不存在这些路由，不是开关半开。
+    #[serde(default)]
+    pub llm_gateway: Option<LlmGatewayConfig>,
+    /// WSS 链路协商超时上限（毫秒）。默认 8s 满足短调用；LLM 中继等长调用
+    /// 需要显式抬高（允许 1000..=600000）。逐调用预算仍由调用方携带并受此
+    /// 上限约束——抬高上限不自动拉长任何单个调用。
+    #[serde(default)]
+    pub wss_link_timeout_ms: Option<u64>,
 }
 
 /// 私有入口配置（docs/plans/2026-10-29-conex-mvp-p5.md §2/P5.2）。
@@ -122,6 +132,55 @@ pub struct PrivateConfig {
     /// Publication-credential principals allowed to announce node identity.
     #[serde(default)]
     pub node_principals: Vec<String>,
+}
+
+/// P10 OpenAI 兼容网关配置。网关是 hub 内的受约束翻译边缘：把已获准的
+/// `conex.llm` 能力（relay-allowed）经中心转发路径暴露成 `/v1/*`。目标
+/// 注册、消费主体与 key 全部由管理员固定；正文只在转发期间内存处理，
+/// 不落盘、不进日志。
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LlmGatewayConfig {
+    /// 转发目标的已注册提供端；contract 固定 `conex.llm`，不设成配置项。
+    pub space_id: String,
+    pub provider_endpoint_id: String,
+    /// 网关作为消费者使用的主体；须同时被 hub 的 `consume` 批准与节点的
+    /// `exposure_principals` 接受。缺省取 `[private].principal` + `.tenant`。
+    #[serde(default)]
+    pub consumer_principal: Option<String>,
+    #[serde(default)]
+    pub consumer_tenant: Option<String>,
+    /// 一次调用（含转发排队）的总预算；缺省 150s，允许 5s..=600s。
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
+    /// 单 key 并发补全上限（providers/list 不计入）。
+    #[serde(default = "default_llm_max_concurrent_per_key")]
+    pub max_concurrent_per_key: usize,
+    /// 请求体上限（OpenAI messages 可长）。
+    #[serde(default = "default_llm_max_body_bytes")]
+    pub max_body_bytes: usize,
+    /// 对外凭据；SHA-256 摘要入库，明文只在签发时显示一次。
+    pub keys: Vec<LlmGatewayKeyConfig>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LlmGatewayKeyConfig {
+    /// 管理名；可进日志与审计，不是秘密。
+    pub name: String,
+    /// SHA-256 hex（64 字符）。
+    pub token_hash: String,
+    /// 该 key 允许的模型白名单；空 = 全部已发布模型。
+    #[serde(default)]
+    pub models: Vec<String>,
+}
+
+fn default_llm_max_concurrent_per_key() -> usize {
+    4
+}
+
+fn default_llm_max_body_bytes() -> usize {
+    1_048_576
 }
 
 /// S1 静态批准与预安装契约（docs/plans/2026-10-17-conex-s1.md T02）。
@@ -655,6 +714,82 @@ impl HostConfig {
                     "private.node_principals must not include ui-role token principals",
                 ));
             }
+        }
+        if let Some(gateway) = &self.llm_gateway {
+            if gateway.space_id.trim().is_empty() || gateway.provider_endpoint_id.trim().is_empty()
+            {
+                return Err(invalid(
+                    "llm_gateway requires space_id and provider_endpoint_id",
+                ));
+            }
+            if gateway.keys.is_empty() {
+                return Err(invalid("llm_gateway requires at least one key"));
+            }
+            let mut names = HashSet::new();
+            let mut hashes = HashSet::new();
+            for key in &gateway.keys {
+                if key.name.trim().is_empty() || !names.insert(key.name.clone()) {
+                    return Err(invalid(
+                        "llm_gateway key names must be non-empty and unique",
+                    ));
+                }
+                let hash = key.token_hash.trim();
+                if hash.len() != 64 || !hash.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                    return Err(invalid(
+                        "llm_gateway key token_hash must be 64 hex characters",
+                    ));
+                }
+                if !hashes.insert(hash.to_string()) {
+                    return Err(invalid("llm_gateway key token_hash values must be unique"));
+                }
+                if key.models.iter().any(|model| model.trim().is_empty()) {
+                    return Err(invalid("llm_gateway key model entries must be non-empty"));
+                }
+            }
+            if let Some(timeout) = gateway.timeout_ms
+                && !(5_000..=600_000).contains(&timeout)
+            {
+                return Err(invalid("llm_gateway timeout_ms must be 5000..=600000"));
+            }
+            if gateway.max_concurrent_per_key == 0 || gateway.max_concurrent_per_key > 64 {
+                return Err(invalid("llm_gateway max_concurrent_per_key must be 1..=64"));
+            }
+            if gateway.max_body_bytes < 1024 || gateway.max_body_bytes > 16 * 1024 * 1024 {
+                return Err(invalid("llm_gateway max_body_bytes must be 1024..16777216"));
+            }
+            if gateway
+                .consumer_principal
+                .as_ref()
+                .is_some_and(|principal| principal.trim().is_empty())
+                || gateway
+                    .consumer_tenant
+                    .as_ref()
+                    .is_some_and(|tenant| tenant.trim().is_empty())
+            {
+                return Err(invalid(
+                    "llm_gateway consumer principal/tenant must not be empty",
+                ));
+            }
+            // 消费者主体缺省取 [private]；两者都缺时无法建立受信调用身份。
+            let principal = gateway.consumer_principal.clone().or_else(|| {
+                self.private
+                    .as_ref()
+                    .map(|private| private.principal.clone())
+            });
+            let tenant = gateway
+                .consumer_tenant
+                .clone()
+                .or_else(|| self.private.as_ref().map(|private| private.tenant.clone()));
+            if principal.is_none() || tenant.is_none() {
+                return Err(invalid(
+                    "llm_gateway requires consumer_principal/consumer_tenant or a [private] section to derive them",
+                ));
+            }
+        }
+        if let Some(timeout) = self.wss_link_timeout_ms
+            && !(1_000..=600_000).contains(&timeout)
+        {
+            return Err(invalid("wss_link_timeout_ms must be 1000..=600000"));
         }
         if self.tls.is_none() && !self.allow_loopback_http && !self.allow_plaintext_bind {
             return Err(invalid(

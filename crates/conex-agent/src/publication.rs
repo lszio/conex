@@ -215,7 +215,13 @@ async fn reconcile(
                 export.exposure.clone(),
             )
             .await
-            .map_err(|error| format!("publication rejected: code {}", error.code()))?;
+            .map_err(|error| {
+                format!(
+                    "publication rejected: code {} message {:?}",
+                    error.code(),
+                    error.0.message
+                )
+            })?;
         let reference = ModuleRef::from(&registered);
         // A stop or replacement can happen while registration is in flight.
         // The old reply never installs a reference for the new lease.
@@ -317,6 +323,9 @@ async fn run(
             shared.lock().unwrap().status = "registering";
             let mut options = ConnectOptions::new(&config.url, &token);
             options.allow_loopback_ws = config.allow_loopback_ws;
+            if let Some(timeout) = config.link_timeout_ms {
+                options.limits.timeout_ms = u32::try_from(timeout).unwrap_or(u32::MAX);
+            }
             let connected = tokio::select! {
                 biased;
                 _ = cancelled(&mut cancel) => break,

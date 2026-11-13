@@ -1804,6 +1804,102 @@ pub struct AgentEventReadResult {
     #[prost(bool, tag = "5")]
     pub has_more: bool,
 }
+/// 上游暴露的一个模型。ownedBy 为空表示上游未报告；contextWindow 上游未
+/// 提供则省略；tools 取 supported/unsupported/unknown，不按在线文档断言。
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct LlmModel {
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub owned_by: ::prost::alloc::string::String,
+    #[prost(uint64, optional, tag = "3")]
+    pub context_window: ::core::option::Option<u64>,
+    #[prost(string, tag = "4")]
+    pub tools: ::prost::alloc::string::String,
+}
+/// 一个 provider 的投影。health=live（缓存新鲜）/stale（超过刷新窗口）/
+/// unreachable（上游不可达）；latencyMs 只在最近一次成功探测存在；
+/// detail 只放不可达原因摘要，绝不含凭据或正文。
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct LlmProviderInfo {
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub kind: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub base_url: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub health: ::prost::alloc::string::String,
+    #[prost(uint64, optional, tag = "5")]
+    pub checked_at_ms: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "6")]
+    pub latency_ms: ::core::option::Option<u64>,
+    #[prost(message, repeated, tag = "7")]
+    pub models: ::prost::alloc::vec::Vec<LlmModel>,
+    #[prost(string, optional, tag = "8")]
+    pub detail: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct LlmProvidersListInput {}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct LlmProvidersListResult {
+    #[prost(message, repeated, tag = "1")]
+    pub items: ::prost::alloc::vec::Vec<LlmProviderInfo>,
+}
+/// 首版纯文本消息；多模态 part 与 tool 消息属后续契约扩展，不在本版承诺。
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct LlmChatMessage {
+    #[prost(string, tag = "1")]
+    pub role: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub content: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "3")]
+    pub tool_call_id: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct LlmChatInput {
+    /// 空 = 节点只配置了一个 provider 时的默认；多 provider 必须显式指定，
+    /// 歧义由节点拒绝（bad_request），不静默选择。
+    #[prost(string, tag = "1")]
+    pub provider_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub model: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "3")]
+    pub messages: ::prost::alloc::vec::Vec<LlmChatMessage>,
+    #[prost(double, optional, tag = "4")]
+    pub temperature: ::core::option::Option<f64>,
+    #[prost(uint32, optional, tag = "5")]
+    pub max_tokens: ::core::option::Option<u32>,
+    /// 首版仅支持 false/省略（一次返回完整结果）；true 在节点侧显式拒绝。
+    /// 增量流式经后续契约扩展（llm/chat/stream）接入，不改变本消息形状。
+    #[prost(bool, optional, tag = "6")]
+    pub stream: ::core::option::Option<bool>,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct LlmChatUsage {
+    #[prost(uint32, optional, tag = "1")]
+    pub prompt_tokens: ::core::option::Option<u32>,
+    #[prost(uint32, optional, tag = "2")]
+    pub completion_tokens: ::core::option::Option<u32>,
+    #[prost(uint32, optional, tag = "3")]
+    pub total_tokens: ::core::option::Option<u32>,
+}
+/// 一次补全的终态。content 是完整文本（首版无增量）；finish_reason 取
+/// stop/length/content_filter/tool_calls/unknown；usage 上游未报告则省略，
+/// 不估算。model 是上游实际服务的模型名（可能与请求不同，回退场景）。
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct LlmChatResult {
+    #[prost(string, tag = "1")]
+    pub content: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub finish_reason: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "3")]
+    pub usage: ::core::option::Option<LlmChatUsage>,
+    #[prost(string, tag = "4")]
+    pub model: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub provider_id: ::prost::alloc::string::String,
+}
 /// 能力端点自描述。仅建模可公布的安装清单字段；
 /// 源码路径、进程命令、凭据后端与允许地址属于管理员安装配置，不进入本消息。
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]

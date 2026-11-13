@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package conex;
+
+// LLM 提供者领域（MVP-P10：docs/design/2026-11-12-conex-llm-provider-relay.md）。
+// 无会话对象：一次补全是一次能力调用，对话历史由调用方自带；正文只存在于
+// 调用期间，任何一端不落盘。节点侧适配器对接 OpenAI 兼容上游（首实例
+// omniroute）；上游内部路由/回退对 conex 透明。
+//
+// 语义沿用 entities.proto 惯例：枚举型语义（health/tools/finish_reason/role）
+// 外部表示为小写字符串，由节点与网关的验证器限制，不用生成器默认枚举；
+// uint64 为规范十进制字符串。未知信息显式标 unknown/空，不伪造。
+
+// 上游暴露的一个模型。ownedBy 为空表示上游未报告；contextWindow 上游未
+// 提供则省略；tools 取 supported/unsupported/unknown，不按在线文档断言。
+message LlmModel {
+  string id = 1;
+  string owned_by = 2;
+  optional uint64 context_window = 3;
+  string tools = 4;
+}
+
+// 一个 provider 的投影。health=live（缓存新鲜）/stale（超过刷新窗口）/
+// unreachable（上游不可达）；latencyMs 只在最近一次成功探测存在；
+// detail 只放不可达原因摘要，绝不含凭据或正文。
+message LlmProviderInfo {
+  string id = 1;
+  string kind = 2;
+  string base_url = 3;
+  string health = 4;
+  optional uint64 checked_at_ms = 5;
+  optional uint64 latency_ms = 6;
+  repeated LlmModel models = 7;
+  optional string detail = 8;
+}
+
+message LlmProvidersListInput {}
+
+message LlmProvidersListResult {
+  repeated LlmProviderInfo items = 1;
+}
+
+// 首版纯文本消息；多模态 part 与 tool 消息属后续契约扩展，不在本版承诺。
+message LlmChatMessage {
+  string role = 1;
+  string content = 2;
+  optional string tool_call_id = 3;
+}
+
+message LlmChatInput {
+  // 空 = 节点只配置了一个 provider 时的默认；多 provider 必须显式指定，
+  // 歧义由节点拒绝（bad_request），不静默选择。
+  string provider_id = 1;
+  string model = 2;
+  repeated LlmChatMessage messages = 3;
+  optional double temperature = 4;
+  optional uint32 max_tokens = 5;
+  // 首版仅支持 false/省略（一次返回完整结果）；true 在节点侧显式拒绝。
+  // 增量流式经后续契约扩展（llm/chat/stream）接入，不改变本消息形状。
+  optional bool stream = 6;
+}
+
+message LlmChatUsage {
+  optional uint32 prompt_tokens = 1;
+  optional uint32 completion_tokens = 2;
+  optional uint32 total_tokens = 3;
+}
+
+// 一次补全的终态。content 是完整文本（首版无增量）；finish_reason 取
+// stop/length/content_filter/tool_calls/unknown；usage 上游未报告则省略，
+// 不估算。model 是上游实际服务的模型名（可能与请求不同，回退场景）。
+message LlmChatResult {
+  string content = 1;
+  string finish_reason = 2;
+  optional LlmChatUsage usage = 3;
+  string model = 4;
+  string provider_id = 5;
+}

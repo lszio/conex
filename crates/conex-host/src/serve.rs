@@ -40,6 +40,7 @@ pub struct BuiltHost {
     pub clients: Arc<crate::clients::ClientRegistry>,
     pub p1_provides: Vec<String>,
     pub private: Option<Arc<crate::private_access::PrivateAccess>>,
+    pub llm_gateway: Option<Arc<crate::llm_gateway::LlmGateway>>,
 }
 
 pub const P1_PROVIDES: &[&str] = &[
@@ -305,6 +306,29 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
         }
         None => None,
     };
+    // P10 OpenAI 兼容网关：依赖 S1 能力后端（注册表 + 调用路由）。配置存在
+    // 而后端缺失是装载错误，不是静默不挂载。
+    let llm_gateway = match config.llm_gateway.as_ref() {
+        Some(gateway_config) if p1_active => {
+            let registry = capability_registry
+                .clone()
+                .ok_or_else(|| invalid("llm_gateway requires the capability registry"))?;
+            let calls = call_router
+                .clone()
+                .ok_or_else(|| invalid("llm_gateway requires the S1 call router"))?;
+            Some(Arc::new(crate::llm_gateway::LlmGateway::new(
+                gateway_config,
+                registry,
+                calls,
+            )))
+        }
+        Some(_) => {
+            return Err(invalid(
+                "llm_gateway requires content_root/session_root/operation_root",
+            ));
+        }
+        None => None,
+    };
 
     let broker = if p1_active {
         let deps = BrokerDeps {
@@ -405,6 +429,7 @@ pub fn build(config: &HostConfig) -> Result<BuiltHost, CallError> {
         clients,
         p1_provides,
         private,
+        llm_gateway,
     })
 }
 
@@ -501,6 +526,12 @@ pub fn build_router(config: &HostConfig) -> Result<Router, CallError> {
         clients: built.clients.clone(),
         shares,
         private: built.private.clone(),
+        llm_gateway: built.llm_gateway.clone(),
+        wss_limits: conex_core::Limits {
+            timeout_ms: u32::try_from(config.wss_link_timeout_ms.unwrap_or(8_000))
+                .unwrap_or(u32::MAX),
+            ..conex_core::Limits::default()
+        },
     });
     let mut base = build_p0_router();
     if built.broker.is_some() && built.host_side.is_some() {

@@ -17804,6 +17804,1140 @@ impl<'de> serde::Deserialize<'de> for LinkIdentity {
         deserializer.deserialize_struct("conex.LinkIdentity", FIELDS, GeneratedVisitor)
     }
 }
+impl serde::Serialize for LlmChatInput {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.provider_id.is_empty() {
+            len += 1;
+        }
+        if !self.model.is_empty() {
+            len += 1;
+        }
+        if !self.messages.is_empty() {
+            len += 1;
+        }
+        if self.temperature.is_some() {
+            len += 1;
+        }
+        if self.max_tokens.is_some() {
+            len += 1;
+        }
+        if self.stream.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.LlmChatInput", len)?;
+        if !self.provider_id.is_empty() {
+            struct_ser.serialize_field("providerId", &self.provider_id)?;
+        }
+        if !self.model.is_empty() {
+            struct_ser.serialize_field("model", &self.model)?;
+        }
+        if !self.messages.is_empty() {
+            struct_ser.serialize_field("messages", &self.messages)?;
+        }
+        if let Some(v) = self.temperature.as_ref() {
+            struct_ser.serialize_field("temperature", v)?;
+        }
+        if let Some(v) = self.max_tokens.as_ref() {
+            struct_ser.serialize_field("maxTokens", v)?;
+        }
+        if let Some(v) = self.stream.as_ref() {
+            struct_ser.serialize_field("stream", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for LlmChatInput {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "provider_id",
+            "providerId",
+            "model",
+            "messages",
+            "temperature",
+            "max_tokens",
+            "maxTokens",
+            "stream",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            ProviderId,
+            Model,
+            Messages,
+            Temperature,
+            MaxTokens,
+            Stream,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "providerId" | "provider_id" => Ok(GeneratedField::ProviderId),
+                            "model" => Ok(GeneratedField::Model),
+                            "messages" => Ok(GeneratedField::Messages),
+                            "temperature" => Ok(GeneratedField::Temperature),
+                            "maxTokens" | "max_tokens" => Ok(GeneratedField::MaxTokens),
+                            "stream" => Ok(GeneratedField::Stream),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = LlmChatInput;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.LlmChatInput")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<LlmChatInput, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut provider_id__ = None;
+                let mut model__ = None;
+                let mut messages__ = None;
+                let mut temperature__ = None;
+                let mut max_tokens__ = None;
+                let mut stream__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::ProviderId => {
+                            if provider_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("providerId"));
+                            }
+                            provider_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Model => {
+                            if model__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("model"));
+                            }
+                            model__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Messages => {
+                            if messages__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("messages"));
+                            }
+                            messages__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Temperature => {
+                            if temperature__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("temperature"));
+                            }
+                            temperature__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                        GeneratedField::MaxTokens => {
+                            if max_tokens__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("maxTokens"));
+                            }
+                            max_tokens__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                        GeneratedField::Stream => {
+                            if stream__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("stream"));
+                            }
+                            stream__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(LlmChatInput {
+                    provider_id: provider_id__.unwrap_or_default(),
+                    model: model__.unwrap_or_default(),
+                    messages: messages__.unwrap_or_default(),
+                    temperature: temperature__,
+                    max_tokens: max_tokens__,
+                    stream: stream__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.LlmChatInput", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for LlmChatMessage {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.role.is_empty() {
+            len += 1;
+        }
+        if !self.content.is_empty() {
+            len += 1;
+        }
+        if self.tool_call_id.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.LlmChatMessage", len)?;
+        if !self.role.is_empty() {
+            struct_ser.serialize_field("role", &self.role)?;
+        }
+        if !self.content.is_empty() {
+            struct_ser.serialize_field("content", &self.content)?;
+        }
+        if let Some(v) = self.tool_call_id.as_ref() {
+            struct_ser.serialize_field("toolCallId", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for LlmChatMessage {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "role",
+            "content",
+            "tool_call_id",
+            "toolCallId",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Role,
+            Content,
+            ToolCallId,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "role" => Ok(GeneratedField::Role),
+                            "content" => Ok(GeneratedField::Content),
+                            "toolCallId" | "tool_call_id" => Ok(GeneratedField::ToolCallId),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = LlmChatMessage;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.LlmChatMessage")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<LlmChatMessage, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut role__ = None;
+                let mut content__ = None;
+                let mut tool_call_id__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Role => {
+                            if role__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("role"));
+                            }
+                            role__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Content => {
+                            if content__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("content"));
+                            }
+                            content__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ToolCallId => {
+                            if tool_call_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("toolCallId"));
+                            }
+                            tool_call_id__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(LlmChatMessage {
+                    role: role__.unwrap_or_default(),
+                    content: content__.unwrap_or_default(),
+                    tool_call_id: tool_call_id__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.LlmChatMessage", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for LlmChatResult {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.content.is_empty() {
+            len += 1;
+        }
+        if !self.finish_reason.is_empty() {
+            len += 1;
+        }
+        if self.usage.is_some() {
+            len += 1;
+        }
+        if !self.model.is_empty() {
+            len += 1;
+        }
+        if !self.provider_id.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.LlmChatResult", len)?;
+        if !self.content.is_empty() {
+            struct_ser.serialize_field("content", &self.content)?;
+        }
+        if !self.finish_reason.is_empty() {
+            struct_ser.serialize_field("finishReason", &self.finish_reason)?;
+        }
+        if let Some(v) = self.usage.as_ref() {
+            struct_ser.serialize_field("usage", v)?;
+        }
+        if !self.model.is_empty() {
+            struct_ser.serialize_field("model", &self.model)?;
+        }
+        if !self.provider_id.is_empty() {
+            struct_ser.serialize_field("providerId", &self.provider_id)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for LlmChatResult {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "content",
+            "finish_reason",
+            "finishReason",
+            "usage",
+            "model",
+            "provider_id",
+            "providerId",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Content,
+            FinishReason,
+            Usage,
+            Model,
+            ProviderId,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "content" => Ok(GeneratedField::Content),
+                            "finishReason" | "finish_reason" => Ok(GeneratedField::FinishReason),
+                            "usage" => Ok(GeneratedField::Usage),
+                            "model" => Ok(GeneratedField::Model),
+                            "providerId" | "provider_id" => Ok(GeneratedField::ProviderId),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = LlmChatResult;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.LlmChatResult")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<LlmChatResult, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut content__ = None;
+                let mut finish_reason__ = None;
+                let mut usage__ = None;
+                let mut model__ = None;
+                let mut provider_id__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Content => {
+                            if content__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("content"));
+                            }
+                            content__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::FinishReason => {
+                            if finish_reason__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("finishReason"));
+                            }
+                            finish_reason__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Usage => {
+                            if usage__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("usage"));
+                            }
+                            usage__ = map_.next_value()?;
+                        }
+                        GeneratedField::Model => {
+                            if model__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("model"));
+                            }
+                            model__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ProviderId => {
+                            if provider_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("providerId"));
+                            }
+                            provider_id__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(LlmChatResult {
+                    content: content__.unwrap_or_default(),
+                    finish_reason: finish_reason__.unwrap_or_default(),
+                    usage: usage__,
+                    model: model__.unwrap_or_default(),
+                    provider_id: provider_id__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.LlmChatResult", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for LlmChatUsage {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.prompt_tokens.is_some() {
+            len += 1;
+        }
+        if self.completion_tokens.is_some() {
+            len += 1;
+        }
+        if self.total_tokens.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.LlmChatUsage", len)?;
+        if let Some(v) = self.prompt_tokens.as_ref() {
+            struct_ser.serialize_field("promptTokens", v)?;
+        }
+        if let Some(v) = self.completion_tokens.as_ref() {
+            struct_ser.serialize_field("completionTokens", v)?;
+        }
+        if let Some(v) = self.total_tokens.as_ref() {
+            struct_ser.serialize_field("totalTokens", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for LlmChatUsage {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "prompt_tokens",
+            "promptTokens",
+            "completion_tokens",
+            "completionTokens",
+            "total_tokens",
+            "totalTokens",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            PromptTokens,
+            CompletionTokens,
+            TotalTokens,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "promptTokens" | "prompt_tokens" => Ok(GeneratedField::PromptTokens),
+                            "completionTokens" | "completion_tokens" => Ok(GeneratedField::CompletionTokens),
+                            "totalTokens" | "total_tokens" => Ok(GeneratedField::TotalTokens),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = LlmChatUsage;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.LlmChatUsage")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<LlmChatUsage, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut prompt_tokens__ = None;
+                let mut completion_tokens__ = None;
+                let mut total_tokens__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::PromptTokens => {
+                            if prompt_tokens__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("promptTokens"));
+                            }
+                            prompt_tokens__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                        GeneratedField::CompletionTokens => {
+                            if completion_tokens__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("completionTokens"));
+                            }
+                            completion_tokens__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                        GeneratedField::TotalTokens => {
+                            if total_tokens__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("totalTokens"));
+                            }
+                            total_tokens__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                    }
+                }
+                Ok(LlmChatUsage {
+                    prompt_tokens: prompt_tokens__,
+                    completion_tokens: completion_tokens__,
+                    total_tokens: total_tokens__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.LlmChatUsage", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for LlmModel {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.id.is_empty() {
+            len += 1;
+        }
+        if !self.owned_by.is_empty() {
+            len += 1;
+        }
+        if self.context_window.is_some() {
+            len += 1;
+        }
+        if !self.tools.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.LlmModel", len)?;
+        if !self.id.is_empty() {
+            struct_ser.serialize_field("id", &self.id)?;
+        }
+        if !self.owned_by.is_empty() {
+            struct_ser.serialize_field("ownedBy", &self.owned_by)?;
+        }
+        if let Some(v) = self.context_window.as_ref() {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("contextWindow", ToString::to_string(&v).as_str())?;
+        }
+        if !self.tools.is_empty() {
+            struct_ser.serialize_field("tools", &self.tools)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for LlmModel {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "id",
+            "owned_by",
+            "ownedBy",
+            "context_window",
+            "contextWindow",
+            "tools",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Id,
+            OwnedBy,
+            ContextWindow,
+            Tools,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "id" => Ok(GeneratedField::Id),
+                            "ownedBy" | "owned_by" => Ok(GeneratedField::OwnedBy),
+                            "contextWindow" | "context_window" => Ok(GeneratedField::ContextWindow),
+                            "tools" => Ok(GeneratedField::Tools),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = LlmModel;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.LlmModel")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<LlmModel, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut id__ = None;
+                let mut owned_by__ = None;
+                let mut context_window__ = None;
+                let mut tools__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Id => {
+                            if id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("id"));
+                            }
+                            id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::OwnedBy => {
+                            if owned_by__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("ownedBy"));
+                            }
+                            owned_by__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::ContextWindow => {
+                            if context_window__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("contextWindow"));
+                            }
+                            context_window__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                        GeneratedField::Tools => {
+                            if tools__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("tools"));
+                            }
+                            tools__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(LlmModel {
+                    id: id__.unwrap_or_default(),
+                    owned_by: owned_by__.unwrap_or_default(),
+                    context_window: context_window__,
+                    tools: tools__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.LlmModel", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for LlmProviderInfo {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.id.is_empty() {
+            len += 1;
+        }
+        if !self.kind.is_empty() {
+            len += 1;
+        }
+        if !self.base_url.is_empty() {
+            len += 1;
+        }
+        if !self.health.is_empty() {
+            len += 1;
+        }
+        if self.checked_at_ms.is_some() {
+            len += 1;
+        }
+        if self.latency_ms.is_some() {
+            len += 1;
+        }
+        if !self.models.is_empty() {
+            len += 1;
+        }
+        if self.detail.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.LlmProviderInfo", len)?;
+        if !self.id.is_empty() {
+            struct_ser.serialize_field("id", &self.id)?;
+        }
+        if !self.kind.is_empty() {
+            struct_ser.serialize_field("kind", &self.kind)?;
+        }
+        if !self.base_url.is_empty() {
+            struct_ser.serialize_field("baseUrl", &self.base_url)?;
+        }
+        if !self.health.is_empty() {
+            struct_ser.serialize_field("health", &self.health)?;
+        }
+        if let Some(v) = self.checked_at_ms.as_ref() {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("checkedAtMs", ToString::to_string(&v).as_str())?;
+        }
+        if let Some(v) = self.latency_ms.as_ref() {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("latencyMs", ToString::to_string(&v).as_str())?;
+        }
+        if !self.models.is_empty() {
+            struct_ser.serialize_field("models", &self.models)?;
+        }
+        if let Some(v) = self.detail.as_ref() {
+            struct_ser.serialize_field("detail", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for LlmProviderInfo {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "id",
+            "kind",
+            "base_url",
+            "baseUrl",
+            "health",
+            "checked_at_ms",
+            "checkedAtMs",
+            "latency_ms",
+            "latencyMs",
+            "models",
+            "detail",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Id,
+            Kind,
+            BaseUrl,
+            Health,
+            CheckedAtMs,
+            LatencyMs,
+            Models,
+            Detail,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "id" => Ok(GeneratedField::Id),
+                            "kind" => Ok(GeneratedField::Kind),
+                            "baseUrl" | "base_url" => Ok(GeneratedField::BaseUrl),
+                            "health" => Ok(GeneratedField::Health),
+                            "checkedAtMs" | "checked_at_ms" => Ok(GeneratedField::CheckedAtMs),
+                            "latencyMs" | "latency_ms" => Ok(GeneratedField::LatencyMs),
+                            "models" => Ok(GeneratedField::Models),
+                            "detail" => Ok(GeneratedField::Detail),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = LlmProviderInfo;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.LlmProviderInfo")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<LlmProviderInfo, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut id__ = None;
+                let mut kind__ = None;
+                let mut base_url__ = None;
+                let mut health__ = None;
+                let mut checked_at_ms__ = None;
+                let mut latency_ms__ = None;
+                let mut models__ = None;
+                let mut detail__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Id => {
+                            if id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("id"));
+                            }
+                            id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Kind => {
+                            if kind__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("kind"));
+                            }
+                            kind__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::BaseUrl => {
+                            if base_url__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("baseUrl"));
+                            }
+                            base_url__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Health => {
+                            if health__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("health"));
+                            }
+                            health__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::CheckedAtMs => {
+                            if checked_at_ms__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("checkedAtMs"));
+                            }
+                            checked_at_ms__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                        GeneratedField::LatencyMs => {
+                            if latency_ms__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("latencyMs"));
+                            }
+                            latency_ms__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                        GeneratedField::Models => {
+                            if models__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("models"));
+                            }
+                            models__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Detail => {
+                            if detail__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("detail"));
+                            }
+                            detail__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(LlmProviderInfo {
+                    id: id__.unwrap_or_default(),
+                    kind: kind__.unwrap_or_default(),
+                    base_url: base_url__.unwrap_or_default(),
+                    health: health__.unwrap_or_default(),
+                    checked_at_ms: checked_at_ms__,
+                    latency_ms: latency_ms__,
+                    models: models__.unwrap_or_default(),
+                    detail: detail__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.LlmProviderInfo", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for LlmProvidersListInput {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let len = 0;
+        let struct_ser = serializer.serialize_struct("conex.LlmProvidersListInput", len)?;
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for LlmProvidersListInput {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                            Err(serde::de::Error::unknown_field(value, FIELDS))
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = LlmProvidersListInput;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.LlmProvidersListInput")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<LlmProvidersListInput, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                while map_.next_key::<GeneratedField>()?.is_some() {
+                    let _ = map_.next_value::<serde::de::IgnoredAny>()?;
+                }
+                Ok(LlmProvidersListInput {
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.LlmProvidersListInput", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for LlmProvidersListResult {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.items.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("conex.LlmProvidersListResult", len)?;
+        if !self.items.is_empty() {
+            struct_ser.serialize_field("items", &self.items)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for LlmProvidersListResult {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "items",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Items,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl serde::de::Visitor<'_> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "items" => Ok(GeneratedField::Items),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = LlmProvidersListResult;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct conex.LlmProvidersListResult")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<LlmProvidersListResult, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut items__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Items => {
+                            if items__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("items"));
+                            }
+                            items__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(LlmProvidersListResult {
+                    items: items__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("conex.LlmProvidersListResult", FIELDS, GeneratedVisitor)
+    }
+}
 impl serde::Serialize for Manifest {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>

@@ -33,6 +33,10 @@ pub struct NodeConfig {
     /// installable.
     #[serde(default)]
     pub metrics: Option<MetricsModuleConfig>,
+    /// P10 LLM provider module. Present = the "node-llm" implementation is
+    /// installable (OpenAI 兼容上游，首实例 omniroute)。
+    #[serde(default)]
+    pub llm: Option<LlmModuleConfig>,
 }
 
 /// 指标模块配置（P6.1）。采样间隔与保留上限当前为编译期常量（有界）；
@@ -42,6 +46,34 @@ pub struct NodeConfig {
 pub struct MetricsModuleConfig {
     #[serde(default)]
     pub enabled: bool,
+}
+
+/// LLM 提供者模块配置（P10.2）。上游地址与凭据由管理员固定；凭据经
+/// secret backend 读取（env:/file:），不进配置明文、不投影给任何调用方。
+/// 模型白名单为空 = 发布上游全量列表（omniroute 模型面是动态的）。
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LlmModuleConfig {
+    #[serde(default)]
+    pub providers: Vec<LlmProviderConfig>,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LlmProviderConfig {
+    /// 管理员命名的稳定 provider id；调用方经它消歧。
+    pub id: String,
+    /// OpenAI 兼容根（含 `/v1`），http(s)，无 query/fragment。
+    pub base_url: String,
+    /// 可选凭据 secret backend；omniroute 等需要，本地 ollama 可省。
+    #[serde(default)]
+    pub api_key_backend: Option<String>,
+    /// 发布/可调用的模型白名单；空 = 上游列表全量。
+    #[serde(default)]
+    pub models_allowlist: Vec<String>,
+    /// 单次补全上游预算；缺省 120s，允许 1s..=600s。
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
 }
 
 /// Codex 适配器批准配置（docs/plans/2026-10-31-conex-mvp-p4.md §1）。
@@ -158,6 +190,11 @@ pub struct PublicationConfig {
     pub allow_loopback_ws: bool,
     pub exposure_principals: BTreeSet<String>,
     pub exposure_tenants: BTreeSet<String>,
+    /// 发布链路协商超时上限（毫秒）。默认 8s；LLM 中继等长调用需要显式
+    /// 抬高（允许 1000..=600000），与 hub 的 wss_link_timeout_ms 共同决定
+    /// 协商值（取小）。逐调用预算仍受转发侧约束。
+    #[serde(default)]
+    pub link_timeout_ms: Option<u64>,
 }
 
 impl NodeConfig {
@@ -200,6 +237,11 @@ impl NodeConfig {
             endpoints: Vec::new(),
         };
         transport.validate()?;
+        if let Some(timeout) = config.publication.link_timeout_ms
+            && !(1_000..=600_000).contains(&timeout)
+        {
+            return Err("publication link_timeout_ms must be 1000..=600000".into());
+        }
         for value in config.configs.values() {
             if value.external_socket.is_some() != value.external_token_backend.is_some() {
                 return Err("external counter needs both approved socket and token backend".into());
@@ -287,6 +329,55 @@ impl NodeConfig {
                 }
                 if !workspace.root.is_absolute() {
                     return Err("omp workspace root must be an absolute path".into());
+                }
+            }
+        }
+        if let Some(llm) = &config.llm {
+            if llm.providers.is_empty() {
+                return Err("llm section requires at least one provider".into());
+            }
+            let mut seen = std::collections::BTreeSet::new();
+            for provider in &llm.providers {
+                if provider.id.is_empty() || !seen.insert(provider.id.clone()) {
+                    return Err("llm provider ids must be non-empty and unique".into());
+                }
+                if !provider.base_url.starts_with("http://")
+                    && !provider.base_url.starts_with("https://")
+                {
+                    return Err(format!(
+                        "llm provider {} base_url must start with http:// or https://",
+                        provider.id
+                    ));
+                }
+                if provider.base_url.contains(['?', '#', ' ', '\t']) {
+                    return Err(format!(
+                        "llm provider {} base_url must be a bare origin path without query or fragment",
+                        provider.id
+                    ));
+                }
+                if let Some(backend) = &provider.api_key_backend
+                    && backend.trim().is_empty()
+                {
+                    return Err(format!(
+                        "llm provider {} api_key_backend must not be empty",
+                        provider.id
+                    ));
+                }
+                for model in &provider.models_allowlist {
+                    if model.trim().is_empty() {
+                        return Err(format!(
+                            "llm provider {} models_allowlist entries must be non-empty",
+                            provider.id
+                        ));
+                    }
+                }
+                if let Some(timeout) = provider.timeout_ms
+                    && !(1_000..=600_000).contains(&timeout)
+                {
+                    return Err(format!(
+                        "llm provider {} timeout_ms must be 1000..=600000",
+                        provider.id
+                    ));
                 }
             }
         }

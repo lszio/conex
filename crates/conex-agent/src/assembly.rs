@@ -192,6 +192,29 @@ pub fn load_applications(config: &NodeConfig) -> Result<Vec<PreparedApplication>
             SourceStrategy::DirectOnly,
         )?);
     }
+    // P10 LLM 提供者：OpenAI 兼容上游适配（首实例 omniroute）。RelayAllowed
+    // 是本模块的存在目的——hub 网关经中心转发调用；应用包 permissions 需含
+    // 字面点号权限 llm.providers.list / llm.chat。
+    if let Some(llm) = &config.llm {
+        let llm = llm.clone();
+        let factory: ApprovedFactory = Arc::new(move |value| {
+            if !value.is_null() {
+                return Err("node-llm implementation does not take package config".into());
+            }
+            Ok(crate::modules::llm::factory(llm.clone()))
+        });
+        entries.push(ImplementationEntry::new(
+            "node-llm",
+            factory,
+            BTreeMap::from([(
+                "conex.llm".to_string(),
+                BTreeSet::from(["llm/providers/list".to_string(), "llm/chat".to_string()]),
+            )]),
+            BTreeMap::new(),
+            config.permissions.clone(),
+            SourceStrategy::RelayAllowed,
+        )?);
+    }
     let approved_remotes = config
         .remote_endpoints
         .iter()

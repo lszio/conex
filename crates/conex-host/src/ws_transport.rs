@@ -345,7 +345,7 @@ pub async fn ws_handler_with_state(
         state.p1_provides.clone()
     };
     let mut wss_state =
-        WssState::new_with_capabilities(broker, conex_core::Limits::default(), caller, advertised);
+        WssState::new_with_capabilities(broker, state.wss_limits, caller, advertised);
     wss_state.role = role;
     wss_state.capability_caps = capability_caps;
     wss_state.host_side = state.host_side.clone();

@@ -83,7 +83,91 @@ echo node/snapshot | 私有 socket ~/.conex/home-node/data/operator.sock  # 实�
 4. ~~本机 `~/.conex/home-node/start.sh` 启动节点~~（已在运行并注册；hub 重启后会自动重连重注册）。
 5. 登录后工作台出现节点身份与"直连"徽标 → 选端点/Workspace → 新建会话发消息。
 
-## 4. 边界与回退
+## 4. LLM 提供者与中继（P10，2026-11-13 地基已交付）
+
+节点把 OpenAI 兼容上游（首实例 omniroute）发布为 `conex.llm` 能力（relay-allowed），hub 经既有转发路径暴露 `/v1/models` 与 `/v1/chat/completions`；外部任意 OpenAI 兼容客户端配 `base_url = https://conex.lszio.space/v1` + API key 即可调用家里模型。流式为整段单帧 + 终帧 + `[DONE]`（中继上结果已完整到达，不伪装增量）。
+
+hub `host.toml` 增补（全部为管理员批准项，缺一不可）：
+
+```toml
+wss_link_timeout_ms = 300000        # 链路协商超时上限；LLM 调用 > 8s 必须抬高
+
+[[capabilities.contracts]]
+contract_id = "conex.llm"
+[[capabilities.contracts.methods]]
+name = "llm/providers/list"
+input_schema = "conex.LlmProvidersListInput"
+output_schema = "conex.LlmProvidersListResult"
+action = "llm.providers.list"
+execution = "read_only"
+[[capabilities.contracts.methods]]
+name = "llm/chat"
+input_schema = "conex.LlmChatInput"
+output_schema = "conex.LlmChatResult"
+action = "llm.chat"
+execution = "non_replayable"
+
+# node_id 填节点发布链路的 principal（hub [[tokens]] 里的 principal_id），不是节点 ULID。
+[[capabilities.publish]]
+node_id = "<node-link-principal>"
+space_id = "private"
+integration_id = "local-apps"
+provider_endpoint_id = "<endpoint-prefix>-<app-id>-llm"
+contract_id = "conex.llm"
+
+[[capabilities.consume]]
+principal_id = "<gateway-consumer-principal>"   # 缺省取 [private].principal
+space_id = "private"
+provider_endpoint_id = "<endpoint-prefix>-<app-id>-llm"
+contract_id = "conex.llm"
+methods = ["llm/providers/list", "llm/chat"]
+
+[llm_gateway]
+space_id = "private"
+provider_endpoint_id = "<endpoint-prefix>-<app-id>-llm"
+# consumer_principal/consumer_tenant 缺省取 [private]；显式覆盖亦可
+timeout_ms = 180000                # ≤ wss_link_timeout_ms
+max_concurrent_per_key = 4
+keys = [
+  # printf %s "明文" | sha256sum；明文只显示一次，永不落盘
+  { name = "primary", token_hash = "<64-hex>" },
+  # 可选：受限 key（models 为空 = 全部已发布模型）
+  { name = "restricted", token_hash = "<64-hex>", models = ["qwen3:8b"] },
+]
+```
+
+节点 `node.toml` 增补：
+
+```toml
+[publication]
+# ... 既有字段 ...
+link_timeout_ms = 300000           # 与 hub 侧共同决定协商值（取小）
+exposure_principals = ["<gateway-consumer-principal>"]   # 中继调用主体的节点侧准入
+exposure_tenants = ["<hub tenant>"]
+
+[llm]
+[[llm.providers]]
+id = "omniroute"
+base_url = "http://<omniroute>/v1"  # OpenAI 兼容根；凭据经 api_key_backend = "env:..." / "file:..."
+models_allowlist = ["qwen3:8b"]     # 空 = 上游全量列表（omniroute 模型面是动态的）
+# timeout_ms = 180000               # 单次补全上游预算，缺省 120s
+```
+
+应用包（`application.toml`）追加模块：
+
+```toml
+[[modules]]
+id = "llm"
+implementation = "node-llm"
+permissions = ["llm.providers.list", "llm.chat"]
+exports = [{ contract_id = "conex.llm", strategy = "relay-allowed" }]
+```
+
+签发 key：本地生成强随机串 → `printf %s "<key>" | sha256sum` → 哈希填入 `keys` → 明文交给调用方一次。撤销 = 从配置移除该 key 并重启 hub。网关负路径行为：无/错 key → 401；key 未授权该模型 → 403；模型未发布 → 400；节点离线 → 503；生成中断 → 502（结果未知，不自动重试）。
+
+验收：`cargo xtask e2e --suite private-llm`（真实 hub + 真实节点 + fixture 上游，L01–L04 可自动化部分）。真实 omniroute 接入与两机公网 live（L05–L07）待执行；反代需确认 SSE 不被缓冲（`stream:true` 响应为 text/event-stream）。
+
+## 5. 边界与回退
 
 - 本部署替换了原访客演示（`docker/host.toml` 的 `[web_guest]` 已移除）。回退需要恢复旧配置并重建镜像，属显式动作。
 - 撤权/轮换/故障排查见 [P5 手册](private-network.md)；撤销 owner 主体会同时注销全部浏览器会话。

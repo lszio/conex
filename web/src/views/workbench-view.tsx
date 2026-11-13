@@ -5,12 +5,14 @@ import { Badge } from "@/components/ui/card";
 import { ConversationView } from "@/views/conversation-view";
 import { ServersView } from "@/views/servers-view";
 import { GraphView } from "@/views/graph-view";
+import { ModelsView } from "@/views/models-view";
 import { useWorkbench } from "@/hooks/use-workbench";
 import type { PrivateHubClient } from "@conex/sdk";
 
 const VIEWS = [
   ["conversation", "会话"],
   ["servers", "服务器"],
+  ["models", "模型服务"],
   ["graph", "图谱"],
 ] as const;
 
@@ -102,6 +104,7 @@ export function WorkbenchView({ hub }: { hub: PrivateHubClient }) {
       <main>
         {bench.view === "conversation" ? <ConversationView bench={bench} /> : null}
         {bench.view === "servers" ? <ServersView bench={bench} /> : null}
+        {bench.view === "models" ? <ModelsView bench={bench} /> : null}
         {bench.view === "graph" ? <GraphView bench={bench} /> : null}
       </main>
     </div>

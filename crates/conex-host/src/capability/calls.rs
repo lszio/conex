@@ -365,6 +365,24 @@ impl CallRouter {
         }
     }
 
+    /// 中心内部消费者（如 llm_gateway）的注册定位：按 space+endpoint 取现行
+    /// 注册 ID。目标记录只来自受信注册表，调用方不能自选注册实例。
+    pub fn registration_for(
+        &self,
+        space_id: &str,
+        provider_endpoint_id: &str,
+    ) -> Result<String, CallError> {
+        self.registry
+            .active_record(space_id, provider_endpoint_id)
+            .map(|record| record.registration_id)
+            .ok_or_else(|| {
+                CallError::new(
+                    conex_proto::ErrorCode::Unavailable,
+                    "provider registration is not active",
+                )
+            })
+    }
+
     /// 消费端 `module/cancel`（契约 §7.3）：返回 `{requested}`，表示中心
     /// 已受理停止请求；原 invoke 保持自己的终结结果。无活动记录 → false。
     pub async fn cancel(&self, source: SourceKey, deadline: Instant) -> CallResult<Value> {

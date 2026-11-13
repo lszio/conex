@@ -3197,6 +3197,166 @@
       },
       "type": "object"
     },
+    "conex.LlmChatInput": {
+      "additionalProperties": false,
+      "properties": {
+        "maxTokens": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "messages": {
+          "items": {
+            "$ref": "#/$defs/conex.LlmChatMessage"
+          },
+          "type": "array"
+        },
+        "model": {
+          "type": "string"
+        },
+        "providerId": {
+          "type": "string"
+        },
+        "stream": {
+          "type": "boolean"
+        },
+        "temperature": {
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "conex.LlmChatMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "toolCallId": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "conex.LlmChatResult": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "finishReason": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "providerId": {
+          "type": "string"
+        },
+        "usage": {
+          "$ref": "#/$defs/conex.LlmChatUsage"
+        }
+      },
+      "type": "object"
+    },
+    "conex.LlmChatUsage": {
+      "additionalProperties": false,
+      "properties": {
+        "completionTokens": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "promptTokens": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "totalTokens": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "conex.LlmModel": {
+      "additionalProperties": false,
+      "properties": {
+        "contextWindow": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "ownedBy": {
+          "type": "string"
+        },
+        "tools": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "conex.LlmProviderInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "baseUrl": {
+          "type": "string"
+        },
+        "checkedAtMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "health": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "latencyMs": {
+          "format": "uint64",
+          "pattern": "^[0-9]+$",
+          "type": "string"
+        },
+        "models": {
+          "items": {
+            "$ref": "#/$defs/conex.LlmModel"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "conex.LlmProvidersListInput": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    },
+    "conex.LlmProvidersListResult": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/conex.LlmProviderInfo"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
     "conex.Manifest": {
       "additionalProperties": false,
       "properties": {

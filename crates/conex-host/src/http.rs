@@ -52,6 +52,11 @@ pub struct HttpState {
     /// Private product entry (MVP-P5). `None` keeps every `/private/*`
     /// route unavailable; the historical landing behavior is untouched.
     pub private: Option<Arc<crate::private_access::PrivateAccess>>,
+    /// P10 OpenAI 兼容网关。`None` 时 `/v1/*` 显式 404（网关未配置），
+    /// 不是半开的开关。
+    pub llm_gateway: Option<Arc<crate::llm_gateway::LlmGateway>>,
+    /// WSS 链路协商上限（默认值可被 wss_link_timeout_ms 抬高 timeout 项）。
+    pub wss_limits: conex_core::Limits,
 }
 
 /// Build the P0 `/rpc` router without any shared state attached. Callers
@@ -147,6 +152,14 @@ pub fn attach_p1(base: Router) -> Router {
         )
         .route("/oidc/authorize", post(tickets::oidc_authorize))
         .route("/oidc/token", post(tickets::oidc_token))
+        // P10 OpenAI 兼容网关（llm_gateway 未配置时处理器显式 404）。
+        // 请求体上限取网关配置允许的最大值；更小的部署限额在处理器内检查。
+        .route("/v1/models", get(crate::llm_gateway::v1_models))
+        .route(
+            "/v1/chat/completions",
+            post(crate::llm_gateway::v1_chat_completions)
+                .layer(DefaultBodyLimit::max(crate::llm_gateway::MAX_BODY_LIMIT)),
+        )
 }
 
 async fn rpc(
@@ -506,7 +519,7 @@ pub fn pbjson_to_json(value: &pbjson_types::Value) -> Value {
 }
 
 /// Re-tag whole-number floats as integers (the pbjson → JSON round trip).
-fn normalize_numbers(value: Value) -> Value {
+pub fn normalize_numbers(value: Value) -> Value {
     match value {
         Value::Number(number) => match number.as_f64() {
             Some(float) if float.fract() == 0.0 && float.abs() < 9.007_199_254_740_992e15 => {

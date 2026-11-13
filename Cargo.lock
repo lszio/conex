@@ -432,6 +432,7 @@ dependencies = [
  "hex",
  "http",
  "prost",
+ "reqwest",
  "ring",
  "rustls",
  "rustls-pemfile",

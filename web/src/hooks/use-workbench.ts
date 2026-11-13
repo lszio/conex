@@ -31,6 +31,7 @@ import { loadNodeAddress, saveNodeAddress } from "@/domain/session";
 const CONTRACT_AGENT = "conex.agent";
 const CONTRACT_METRICS = "conex.metrics";
 const CONTRACT_RELATIONS = "conex.relations";
+const CONTRACT_LLM = "conex.llm";
 
 export interface ModuleTarget {
   instance: DirectoryInstance;
@@ -80,7 +81,7 @@ export function useWorkbench(hub: PrivateHubClient) {
   const [directoryError, setDirectoryError] = useState<string | null>(null);
   const [nodeId, setNodeId] = useState<string | null>(null);
   const [address, setAddress] = useState<string>("http://127.0.0.1:7451");
-  const [view, setView] = useState<"conversation" | "servers" | "graph">("conversation");
+  const [view, setView] = useState<"conversation" | "servers" | "graph" | "models">("conversation");
   const [channelInfo, setChannelInfo] = useState<Record<string, ChannelInfo>>({});
 
   const directoryRef = useRef<Directory | null>(null);
@@ -426,6 +427,34 @@ export function useWorkbench(hub: PrivateHubClient) {
     };
   }, [view, invokeModule]);
 
+  // --- 模型服务（P10）：节点直连读取 provider/模型/健康投影 ---------------
+  const [llmProviders, setLlmProviders] = useState<LlmProviderInfo[]>([]);
+  useEffect(() => {
+    if (view !== "models") return;
+    let stopped = false;
+    const poll = async () => {
+      try {
+        const result = (await invokeModule(CONTRACT_LLM, "llm/providers/list", {})) as {
+          items?: LlmProviderInfo[];
+        };
+        if (!stopped) {
+          setLlmProviders(result.items ?? []);
+          setLoadError(null);
+        }
+      } catch (cause) {
+        if (!stopped) {
+          setLoadError(cause instanceof Error ? cause.message : String(cause));
+        }
+      }
+    };
+    void poll();
+    const timer = setInterval(poll, 10_000);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+  }, [view, invokeModule]);
+
   // --- 关系与标注 --------------------------------------------------------
   const [tags, setTags] = useState<Array<Record<string, unknown>>>([]);
   const refreshTags = useCallback(
@@ -496,6 +525,7 @@ export function useWorkbench(hub: PrivateHubClient) {
       if (endpointId) void refreshConversations(endpointId, workspaceId);
     },
     metrics,
+    llmProviders,
     tags,
     refreshTags,
     putTag,
@@ -506,3 +536,23 @@ export function useWorkbench(hub: PrivateHubClient) {
 }
 
 export type Workbench = ReturnType<typeof useWorkbench>;
+
+// LLM 提供者投影（schema/conex/llm.proto 的 JSON 形状；未知信息保持节点
+// 原样：health=live/stale/unreachable，tools=unknown 不冒充支持）。
+export interface LlmModelInfo {
+  id: string;
+  ownedBy: string;
+  tools: string;
+  contextWindow?: string | undefined;
+}
+
+export interface LlmProviderInfo {
+  id: string;
+  kind: string;
+  baseUrl: string;
+  health: string;
+  checkedAtMs?: string | undefined;
+  latencyMs?: number | undefined;
+  detail?: string | undefined;
+  models: LlmModelInfo[];
+}

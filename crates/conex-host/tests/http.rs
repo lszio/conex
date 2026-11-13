@@ -175,6 +175,8 @@ impl HttpFixture {
                 ui_links: Arc::new(conex_host::ui_links::UiLinkRegistry::new()),
                 shares: Arc::new(conex_host::share::ShareStore::new()),
                 private: None,
+                llm_gateway: None,
+                wss_limits: conex_core::Limits::default(),
             }),
             build_p0_router(),
         );

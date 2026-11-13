@@ -25,6 +25,8 @@ fn config(temp: &tempfile::TempDir) -> HostConfig {
         allow_loopback_http: true,
         allow_plaintext_bind: false,
         private: None,
+        llm_gateway: None,
+        wss_link_timeout_ms: None,
         audience: Some("test-host".into()),
         tls: None,
         audit_file: None,

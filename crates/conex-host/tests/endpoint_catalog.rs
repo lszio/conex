@@ -20,6 +20,8 @@ fn config(dir: &TempDir) -> HostConfig {
         allow_loopback_http: true,
         allow_plaintext_bind: false,
         private: None,
+        llm_gateway: None,
+        wss_link_timeout_ms: None,
         audience: Some("host.local".into()),
         tls: None,
         audit_file: None,
