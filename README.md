@@ -7,9 +7,9 @@
 让独立模块与已有服务通过契约连接和组合，由不同客户端统一观察和操作。
 首个目标应用是个人工作台：Agent 对话与关系图谱、服务器状态，MVP 同时支持 Web 与 Emacs。
 
-**目标基线已确认（2026-10-29）：** 单用户私有、自治节点、协调入口；私网节点主动 WSS 接入公网，支持获准直连与转发。领域契约连接 OMP/Codex 等适配器和不同客户端，组合可以继续导出能力。见 [MVP 架构基线](docs/design/2026-10-29-conex-private-platform.md) 与 [实施总计划](docs/plans/2026-10-29-conex-private-mvp.md)。**这是目标，不是已交付能力**；下方演示、命令与证据描述现有实现。
+**目标基线已确认（2026-10-29）：** 单用户私有、自治节点、协调入口；私网节点主动 WSS 接入公网，支持获准直连与转发。领域契约连接 OMP/Codex 等适配器和不同客户端，组合可以继续导出能力。见 [MVP 架构基线](docs/design/2026-10-29-conex-private-platform.md) 与 [LLM 提供者架构增补](docs/design/2026-11-12-conex-llm-provider-relay.md)。**这是目标，不是已交付能力**；下方演示、命令与证据描述现有实现。
 
-**当前实施进度：** 私有平台 MVP 的 P0–P7 已按各自证据页交付——[P0 协议调查](docs/plans/2026-10-29-conex-mvp-p0.md)、[P1 领域存储](docs/verification/agent-domain-p1.md)、[P2 自治节点](docs/verification/private-runtime-p2.md)、[P3 OMP 适配器](docs/verification/agent-omp-p3.md)、[P4 Codex 适配器（离线）](docs/verification/agent-codex-p4.md)、[P5 私有认证与直连](docs/verification/private-network-p5.md)、[P6 指标与关系](docs/verification/private-entities-p6.md)、[P7 Web 工作台](docs/verification/web-p7.md)。P8（Emacs）与 P9（两机公网全链路）未开始。线上已部署私有形态（引导码登录 + 节点直连），见 [私有 MVP 运行手册](docs/runbooks/private-mvp.md)。
+**当前实施进度：** 私有平台 MVP 的 P0–P7 已按各自证据页交付——[P1 领域存储](docs/verification/agent-domain-p1.md)、[P2 自治节点](docs/verification/private-runtime-p2.md)、[P3 OMP 适配器](docs/verification/agent-omp-p3.md)、[P4 Codex 适配器（离线）](docs/verification/agent-codex-p4.md)、[P5 私有认证与直连](docs/verification/private-network-p5.md)、[P6 指标与关系](docs/verification/private-entities-p6.md)、[P7 Web 工作台](docs/verification/web-p7.md)。LLM 提供者与中继（P10）地基已交付——领域契约、节点 OpenAI 兼容适配、hub `/v1` 网关与工作台模型服务视图，验收 `cargo xtask e2e --suite private-llm`（设计见[架构增补](docs/design/2026-11-12-conex-llm-provider-relay.md)，部署见[运行手册 §4](docs/runbooks/private-mvp.md)）。未完成：P8（Emacs）、P9 两机公网全链路、P10 的 omniroute 实接与两机 live。线上已部署私有形态（账号登录 + 节点直连），见 [私有 MVP 运行手册](docs/runbooks/private-mvp.md)。
 
 **S1 既有实现：** TS/JS 与独立 Rust SDK 已实现同连接发布/发现/调用/取消/状态订阅。共同传输为 JSON WSS；HTTP 仅消费目录/调用/取消，不支持订阅。使用预安装契约和静态批准，不代表新私有平台的节点侧离线授权已经完成；禁止据此公开多用户服务。见 [三进程样例](examples/s1/README.md)、[运行手册](docs/runbooks/s1-capabilities.md) 与 [实际验证记录](docs/verification/s1-capabilities.md)。
 
@@ -254,7 +254,7 @@ cargo xtask check                     # 上面全部 + fmt + clippy -D warnings
 ## 贡献
 
 **在动手之前先说明变更范围**，尤其是契约变更：扩展在已定义契约内新增实现与注册项；增加新语义先演化契约，再迁移调用方。
-先读 [当前架构基线](docs/design/2026-10-29-conex-private-platform.md)、[实施总计划](docs/plans/2026-10-29-conex-private-mvp.md) 与对应 [wire 契约](docs/contracts/)；旧设计用于追溯现有实现，不再决定新方向。
+先读 [当前架构基线](docs/design/2026-10-29-conex-private-platform.md) 与对应 [wire 契约](docs/contracts/)；旧设计用于追溯现有实现，不再决定新方向。
 
 约定（仓库已在执行）：
 
@@ -282,7 +282,7 @@ cargo xtask check                     # 上面全部 + fmt + clippy -D warnings
 
 ## 路线图
 
-当前推进顺序以 [私有 MVP 实施总计划](docs/plans/2026-10-29-conex-private-mvp.md) 为准：契约与协议探针 → 自治节点/事件与存储 → Agent 适配器 → 安全直连和转发 → Web/Emacs → 组合与全链路验收。工作包尚未实施；下表仅保留既有阶段记录，不是新方向的执行顺序。
+推进以已确认的设计为准：[MVP 架构基线](docs/design/2026-10-29-conex-private-platform.md)（A01–A16）与 [LLM 提供者架构增补](docs/design/2026-11-12-conex-llm-provider-relay.md)（L01–L07）。阶段计划文档已移除（历史在 git），交付状态以验证记录为准。
 
 | 阶段 | 范围 | 状态 |
 |---|---|---|
@@ -290,28 +290,29 @@ cargo xtask check                     # 上面全部 + fmt + clippy -D warnings
 | P1 | 私有 agent 反连、独立二进制上传、网络恢复、受控写入 | ✅ 已交付 |
 | 中心服务与落地页 | 中心 host + 反连 agent + 浏览器会话/ticket + 端点目录 | ✅ 已交付 |
 | 多主机内容 M0–M5 | 内容契约、访客配额、blob 所有权、二进制通道、`/content`、浏览页面 | ✅ 已交付 |
-| 多主机内容 M4 / M6 | Notez 接入（需真实 Notez 仓库与实例）、验收收口 | ⏳ 未开始 |
-| P2 | ACP CLI 网关与 MCP 适配 | ⏳ 未开始 |
-| P3 | 自有空间加密历史、可选发现与受控中继 | ⏳ 未开始 |
-| P4 | 单项生产能力（HA、更多承载） | ⏳ 未开始 |
+| MVP P1–P7 | 领域存储 → 自治节点 → OMP/Codex 适配 → 私有网络 → 指标关系 → Web 工作台 | ✅ 已交付（P4 live 缺口见证据页） |
+| MVP-P10 地基 | LLM 契约 + 节点 OpenAI 兼容适配 + hub `/v1` 网关 + 模型服务视图 | ✅ 已交付 |
+| MVP-P10 收尾 | omniroute 实接、usage 计数、工作台总览页、两机公网 live（L05–L07） | ⏳ 未开始 |
+| P8 / P9 | Emacs 客户端；组合摘要与两机故障全链路 | ⏳ 未开始 |
+| 多主机内容 M4 / M6 | Notez 接入、验收收口 | ⏳ 未开始 |
 
-旧阶段依赖与工作包见 [历史路线图](docs/plans/2026-09-15-conex-roadmap.md) 和 [多主机内容计划](docs/plans/2026-10-01-conex-multi-host-content.md)；历史未交付项不自动成为本轮前置条件。复用约束见 [当前架构基线 §13](docs/design/2026-10-29-conex-private-platform.md#13-现有实现复用与迁移原则)。
+复用约束见 [当前架构基线 §13](docs/design/2026-10-29-conex-private-platform.md#13-现有实现复用与迁移原则)。
 
 ## 文档
 
 | 文档 | 内容 |
 |---|---|
-| [docs/README.md](docs/README.md) | 文档导航入口（规范 / 契约 / 计划 / 证据 / 操作） |
+| [docs/README.md](docs/README.md) | 文档导航入口（规范 / 契约 / 证据 / 操作） |
 | [MVP 架构基线](docs/design/2026-10-29-conex-private-platform.md) | 当前定位、领域与运行边界、双客户端、安全及 A01–A16 验收 |
-| [MVP 实施总计划](docs/plans/2026-10-29-conex-private-mvp.md) | 迁移盘点、工作包、依赖与验收覆盖；尚未实施 |
-| [首批执行计划](docs/plans/2026-10-29-conex-mvp-p0.md) | 契约冻结、真实协议探针与进入实现的门槛 |
+| [LLM 提供者架构增补](docs/design/2026-11-12-conex-llm-provider-relay.md) | LLM 领域、OpenAI 兼容网关、工作台模型服务视图与 L01–L07 |
 | [上一版架构](docs/design/2026-10-17-conex-architecture.md) / [旧迁移盘点](docs/design/2026-10-17-conex-migration-assessment.md) | 历史决策与当时的静态证据，不代表当前缺口 |
-| [S1 契约](docs/contracts/s1-capabilities.md) / [实施计划](docs/plans/2026-10-17-conex-s1.md) | 现有双向注册、调用取消、状态订阅；状态以验证记录为准 |
+| [S1 契约](docs/contracts/s1-capabilities.md) | 现有双向注册、调用取消、状态订阅；状态以验证记录为准 |
 | [旧设计](docs/design/2026-09-14-conex-design.md) | 既有实现与历史阶段设计依据 |
 | [P0 wire 契约](docs/contracts/p0-wire.md) | JSON-RPC 2.0 信封、参数、错误码、HTTP 行为 |
 | [Connected landing 契约](docs/contracts/connected-landing.md) | 中心 host、浏览器会话/ticket、agent 反连、客户端契约 |
 | [P1 契约](docs/contracts/p1-stream.md) | Stream 信用/ACK/重放状态机（blob / operation / session 同目录） |
 | [P0 运行手册](docs/runbooks/p0.md) | broker 模式：生成、启动、token、凭据、SDK 调用 |
+| [私有 MVP 运行手册](docs/runbooks/private-mvp.md) | 公网 hub + 私网节点部署形态、LLM 网关配置与 key 签发 |
 | [Connected landing 运行手册](docs/runbooks/connected-landing.md) | 三进程演示、token 三元组、日志与门禁 |
 | [Dokploy 运行手册](docs/runbooks/dokploy.md) | 单容器公开演示形态与多主机生产形态 |
 | [验证记录](docs/verification/) | 每个阶段的实际执行结果与已知缺口 |

@@ -1,8 +1,8 @@
 # connected-landing 运行手册
 
-> 状态：**本轮落地页已可在 loopback 多进程环境验证**（2026-09-21）。`cargo xtask landing-demo` 与 `cargo xtask e2e --suite connected-landing(-web)` 是当前可重复的真实证据。跨主机 / 真实证书 / 真实浏览器可访问部署仍待环境具备后补做，详见 [verification](verification/connected-landing.md) §未验证项。
+> 状态：**本轮落地页已可在 loopback 多进程环境验证**（2026-09-21）。`cargo xtask landing-demo` 与 `cargo xtask e2e --suite connected-landing(-web)` 是当前可重复的真实证据。跨主机 / 真实证书 / 真实浏览器可访问部署仍待环境具备后补做，详见 [verification](../verification/connected-landing.md) §未验证项。
 >
-> 上游：[中心服务与交互落地页计划](../../plans/2026-09-20-conex-connected-landing.md)、[Connected landing 契约](../../contracts/connected-landing.md)、[P1 运行手册](p1.md)。
+> 上游：[Connected landing 契约](../contracts/connected-landing.md)、[P1 运行手册](p1.md)。
 
 ## 1. 范围（当前实际可达）
 
@@ -185,16 +185,16 @@ curl -X POST http://127.0.0.1:<port>/web/logout \
 
 | 项 | 落地证据 |
 |---|---|
-| `cargo xtask e2e --suite connected-landing` 通过 | [verification §1](../../verification/connected-landing.md#1-cargo-xtask-e2e---suite-connected-landing) |
-| `cargo xtask e2e --suite connected-landing-web` 通过 | [verification §2](../../verification/connected-landing.md#2-cargo-xtask-e2e---suite-connected-landing-web) |
-| `cargo xtask e2e --suite connected-landing-connections` 通过 | [verification §2b](../../verification/connected-landing.md#2b-cargo-xtask-e2e---suite-connected-landing-connections) |
-| `cargo build -p xtask --locked` 无警告 | [verification §3](../../verification/connected-landing.md#3-cargo-build--p-xtask---locked) |
-| `cargo test -p conex-host --offline --test connected_landing_config` 通过 | [verification §4](../../verification/connected-landing.md#4-cargo-test--p-conex-host---offline---test-connected_landing_config) |
-| `cargo test -p conex-host --offline --test web_auth` 通过 | [verification §5](../../verification/connected-landing.md#5-cargo-test--p-conex-host---offline---test-web_auth) |
-| `cargo test -p conex-host --offline --test ui_links` 通过 | [verification §5b](../../verification/connected-landing.md#5b-cargo-test--p-conex-host---offline---test-ui_links) |
-| `bun test sdk/typescript/tests/` 通过 | [verification §6](../../verification/connected-landing.md#6-bun-test-sdktypescripttests) |
-| `bun run typecheck` 通过 | [verification §7](../../verification/connected-landing.md#7-bun-run-typecheck) |
-| 跨主机真实网络验收 | **未验证**（环境未具备，见 [verification §未验证项](../../verification/connected-landing.md#未验证项)） |
+| `cargo xtask e2e --suite connected-landing` 通过 | [verification §1](../verification/connected-landing.md#1-cargo-xtask-e2e---suite-connected-landing) |
+| `cargo xtask e2e --suite connected-landing-web` 通过 | [verification §2](../verification/connected-landing.md#2-cargo-xtask-e2e---suite-connected-landing-web) |
+| `cargo xtask e2e --suite connected-landing-connections` 通过 | [verification §2b](../verification/connected-landing.md#2b-cargo-xtask-e2e---suite-connected-landing-connections) |
+| `cargo build -p xtask --locked` 无警告 | [verification §3](../verification/connected-landing.md#3-cargo-build--p-xtask---locked) |
+| `cargo test -p conex-host --offline --test connected_landing_config` 通过 | [verification §4](../verification/connected-landing.md#4-cargo-test--p-conex-host---offline---test-connected_landing_config) |
+| `cargo test -p conex-host --offline --test web_auth` 通过 | [verification §5](../verification/connected-landing.md#5-cargo-test--p-conex-host---offline---test-web_auth) |
+| `cargo test -p conex-host --offline --test ui_links` 通过 | [verification §5b](../verification/connected-landing.md#5b-cargo-test--p-conex-host---offline---test-ui_links) |
+| `bun test sdk/typescript/tests/` 通过 | [verification §6](../verification/connected-landing.md#6-bun-test-sdktypescripttests) |
+| `bun run typecheck` 通过 | [verification §7](../verification/connected-landing.md#7-bun-run-typecheck) |
+| 跨主机真实网络验收 | **未验证**（环境未具备，见 [verification §未验证项](../verification/connected-landing.md#未验证项)） |
 
 ## 10. 已知缺口
 

@@ -1,86 +1,63 @@
 # conex 文档导航
 
-conex 的文档按「规范 / 契约 / 计划 / 证据 / 操作」分层，每类有明确权威来源。本页是入口；根 [README](../README.md) 是项目门面，区分已确认目标与现有可运行实现。
+conex 的文档按「规范 / 契约 / 证据 / 操作」分层，每类有明确权威来源。本页是入口；根 [README](../README.md) 是项目门面，区分已确认目标与现有可运行实现。
 
-## 当前目标与计划（2026-10-29）
+> 文档口径（2026-11-13 整理）：阶段实施计划已从仓库移除（含 `plans/archive/`），
+> 计划内容的长期价值并入架构设计与功能契约；执行证据只保留在各验证记录。
+> 历史计划全文在 git 历史可追溯（`git log -- docs/plans/`）。旧文档（历史设计、
+> 验证记录）中的计划链接指向已移除文件，属历史记录的一部分，不改写。
 
-已确认 [私有分布式能力组合平台 MVP 架构基线](design/2026-10-29-conex-private-platform.md)：单用户私有、自治节点与协调入口、私网主动 WSS 接入、获准直连/转发、OMP/Codex 适配器、对话及图谱、服务器指标；MVP 同时支持 Web 与最小 Emacs 原生客户端。Desktop/Mobile 后续扩展；不把 Astro、多用户治理、自动打洞或插件市场作为前置条件。
+## 架构与功能设计（权威来源）
 
-按 [实施总计划](plans/2026-10-29-conex-private-mvp.md) 推进；[P0 调查](verification/agent-protocol-probes.md)、[P1 领域存储](verification/agent-domain-p1.md)、[P2 自治节点](verification/private-runtime-p2.md)、[P5 私有访问](verification/private-network-p5.md)、[P3 OMP 适配器](verification/agent-omp-p3.md) 已实现;[P4 Codex 适配器](verification/agent-codex-p4.md) 离线已实现、live 被后端形态漂移阻断。P5 已验证私有登录/Ed25519 grant/中心票据/节点直连 WSS/revision 撤权同步与跨重启语义（loopback 真实进程；真实 TLS 与公网入口归 P9）。**完整 MVP 尚未交付**；P4 live、Linux 采样核对（P9）、Web/Emacs 与产品 A01–A16 仍按后续包验收，三者的文件级计划已落盘（2026-10-31）：[P3 OMP](plans/2026-10-31-conex-mvp-p3.md)、[P4 Codex](plans/2026-10-31-conex-mvp-p4.md)、[P6 指标与关系](plans/2026-10-31-conex-mvp-p6.md)。
+| 文档 | 内容 |
+|---|---|
+| [MVP 架构基线](design/2026-10-29-conex-private-platform.md) | 当前定位、SICP 模型、对象/事件、所有权、数据边界和 A01–A16 产品验收 |
+| [LLM 提供者架构增补](design/2026-11-12-conex-llm-provider-relay.md) | LLM 提供者领域、OpenAI 兼容网关、工作台模型服务视图与 L01–L07 验收（2026-11-12 用户确认；地基已实现，见 [运行手册 §4](runbooks/private-mvp.md)） |
+| [Agent 领域契约](contracts/agent-domain.md) | 精确操作、身份、busy/幂等、取消、审批 CAS 与后端边界 |
+| [事件恢复契约](contracts/event-recovery.md) | 节点持久流、快照边界、有界补读、head 提示、游标失效 |
+| [私有运行契约](contracts/private-runtime.md) | 应用包、所有权、认证、直连/转发、离线授权与数据边界 |
+| [S1 双向能力与状态订阅](contracts/s1-capabilities.md) | 通用注册、调用、取消、状态快照与更新、限额和验收场景 |
+| [S1 模块消费主体](contracts/s1-module-principals.md) | 组合模块远程消费的模块粒度授权与归属（A14 消费侧） |
+| [S2 插件运行时与能力组合](contracts/s2-plugins.md) | 插件/实例、本地 DI、显式远程绑定、派生模块、停止释放 |
+| [Connected landing 契约](contracts/connected-landing.md) | 中心 Host、浏览器会话/ticket、Agent 反连与只读端点目录 |
+| [P0 wire 契约](contracts/p0-wire.md) | `conex-jsonrpc2-http` 信封、参数、错误码、HTTP 行为 |
+| [P1 流契约族](contracts/p1-stream.md)（chunking/blob/operation 同目录） | Stream 信用/ACK/重放状态机 |
 
-既有 [S1 契约](contracts/s1-capabilities.md) 保持 wire/代次语义；[S2 契约](contracts/s2-plugins.md) 已迁移为业务/发布分离。历史证据见 [S1](verification/s1-capabilities.md)、[S2](verification/s2-plugins.md)，自治迁移见 [P2](verification/private-runtime-p2.md)。静态中心批准仍不能代替节点离线 grant 授权。
+历史设计（[旧设计](design/2026-09-14-conex-design.md)、[2026-10-17 架构](design/2026-10-17-conex-architecture.md) 及其迁移盘点）保留为追溯依据，不决定当前方向。
 
-[2026-10-17 架构](design/2026-10-17-conex-architecture.md)、[迁移盘点](design/2026-10-17-conex-migration-assessment.md) 及 S1–S5 路线是历史基线，不再决定当前 MVP 范围。旧 Paca 编号仅属于原阶段；新工作包未在本轮登记。
+## 实现进度与证据
 
-现有操作入口：[自治节点运行手册](runbooks/private-runtime.md)、[私有网络运行手册](runbooks/private-network.md)、[S1 运行手册](runbooks/s1-capabilities.md)、[S2 运行手册](runbooks/s2-plugins.md)、[双实例样例](../examples/s2/README.md)。
+已交付且有真实验证记录的能力（详见各记录的「实际执行结果与已知缺口」）：
 
-## 历史实现状态（2026-10-04 复核及后续补记）
+| 阶段 | 证据 |
+|---|---|
+| P0 broker 只读数据连接 | [P0 验证记录](verification/p0.md) |
+| P1 私有侧反连、二进制通道、OIDC | [P1 验证记录](verification/p1.md) |
+| Connected landing（中心 + 反连 agent + 工作台雏形） | [验证记录](verification/connected-landing.md)、[落地页](verification/landing-page.md) |
+| 多主机内容 M0–M5 | [验证记录](verification/multi-host-content.md) |
+| S1 能力 / S2 插件组合 | [S1](verification/s1-capabilities.md)、[S2](verification/s2-plugins.md) |
+| MVP-P1 领域存储 / P2 自治节点 | [P1](verification/agent-domain-p1.md)、[P2](verification/private-runtime-p2.md) |
+| MVP-P3 OMP / P4 Codex 适配器 | [P3](verification/agent-omp-p3.md)（live 全过）、[P4](verification/agent-codex-p4.md)（离线交付，live 被后端形态漂移阻断） |
+| MVP-P5 私有访问与网络 / P6 指标关系 | [P5](verification/private-network-p5.md)、[P6](verification/private-entities-p6.md) |
+| MVP-P7 Web 工作台 | [P7](verification/web-p7.md)（真实 Chrome 11/11） |
+| S1 模块消费主体 / 统一审计汇 | [证据页](verification/s1-module-principals.md) |
+| MVP-P10 LLM 中继地基（契约 + 节点模块 + hub 网关 + 模型服务视图） | `cargo xtask e2e --suite private-llm`；证据页待两机 live 后落盘 |
+| 协议探针（OMP/Codex 安装版本实调） | [探针记录](verification/agent-protocol-probes.md) |
 
-- **P0 已交付**（提交 `e649ded`）：broker 只读数据连接，JSON-RPC/HTTP 与 inproc 共用同一授权执行路径；fs 与 HTTP catalog 两个 provider；TypeScript consumer；P0 门禁与 CI。
-- **P1 已交付**：两条 WSS Profile 真实握手（JSON text + protobuf 二进制，bearer 在 upgrade 认证）；`/wss` `/tickets` `/oidc/*` 挂入 host；`blob/session/operation/agent` 经 broker 派发并强制 bearer 主体绑定；P1-04 Stream 状态机（信用/ACK/重放/reset/slow_consumer）与 `stream.json` 行为测试；1 GiB 经 Stream 弱网续传 e2e（坏块 + 断线续传）；`[oidc]` 配置下 RS256 id_token 验签。见 [P1 验证记录](verification/p1.md)、[P1 运行手册](runbooks/p1.md)。
-- **Connected landing 已交付**：中心 Host + 反连 Agent + 浏览器会话/ticket + 端点目录 + 连接面板；三条 e2e 套件（landing / landing-web / landing-connections，含真停 Agent 进程的生命周期场景）。见 [验证记录](verification/connected-landing.md)、[运行手册](runbooks/connected-landing.md)。
-- **多主机内容 M0–M5 已交付**：`refactor/arch` 已合入 `dev`。内容契约冻结（endpointId+revision 定位、blob/get 互斥目标、二进制 DataChunk 通道）、访客会话与 blob 所有权授权、逐端点注册生命周期、Agent 复用 provider 机制、同源 `/content`（Range/ETag/防注入/流式取消）、公共浏览页面（文本/图片/视频/DOCX/ZIP 受限预览，1440/390 双视口 38 项浏览器检查全过）。逐项证据见 [多主机内容验证记录](verification/multi-host-content.md)。
-- **原阶段未完成项**：M4（Notez 接入）与 M6（验收收口），见 [多主机内容计划](plans/2026-10-01-conex-multi-host-content.md)。这些不是当前私有 MVP 的默认下一步或前置条件。
-- **落地页工作台（2026-10-05）**：**一个标签页就是一个客户端**——链接改在取 WSS 票据时铸造，同一浏览器的两个标签页共享 cookie 却是两条链接、两个独立客户端（`x-conex-link-id` 让同源 HTTP 路由认出是哪个标签页在请求）。页面从标签改为工作台：顶部状态栏常驻本标签页名字、短链接、分组 key 与在线数，问候从消息泡泡改为右上角 toast。`client/hello` 新增 `payload` / `answer`：带参数即**提问**，目标 SDK 不再自动确认，回答由页面通知里的「确认并回复」给出。契约 `ClientHelloRequest.payload` / `ClientHelloResult.answer` 与链接铸造时机见 [connected-landing §9](contracts/connected-landing.md)，28 项真浏览器验收见 [验证记录](verification/landing-page.md)。
-- **hello 页面已部署（2026-10-04）**：<https://conex.lszio.space>。契约 `ClientProfile` / `ClientSummary` / `client/*`（`connected-landing` §9），访客免凭据。见 [hello 页面验证记录](verification/landing-page.md)、[Dokploy 部署运行手册](runbooks/dokploy.md)。
-- 完成状态与证据以各 [验证记录](verification/) 为准。
-
-## 文档地图
-
-| 类别 | 文档 | 作用 | 何时读 |
-|---|---|---|---|
-| 规范 | [MVP 架构基线](design/2026-10-29-conex-private-platform.md) | 当前定位、SICP 模型、对象/事件、所有权、数据边界和 A01–A16 | 新设计与实施前必读 |
-| 计划 | [MVP 实施总计划](plans/2026-10-29-conex-private-mvp.md) | 本轮迁移盘点、完整工作包、依赖与验收覆盖 | 了解全局顺序与文件责任 |
-| 计划 | [首批 P0 执行计划](plans/2026-10-29-conex-mvp-p0.md) | 领域/网络契约冻结、真实协议探针、进入编码门槛 | 开始本轮实施准备 |
-| 契约 | [Agent 领域](contracts/agent-domain.md) | 精确操作、身份、busy/幂等、取消、审批 CAS 与后端边界 | P1/P3/P4 与客户端实施 |
-| 契约 | [事件恢复](contracts/event-recovery.md) | 节点持久流、快照边界、有界补读、head 提示、游标失效 | P1/P5/P7/P8 实施 |
-| 契约 | [私有运行](contracts/private-runtime.md) | 应用包、所有权、认证、直连/转发、离线授权与数据边界 | P2/P5 实施 |
-| 证据 | [Agent 协议探针](verification/agent-protocol-probes.md) | 安装版本/schema、元数据与实际 live 结果、未覆盖项 | 区分协议可用与产品交付 |
-| 计划 | [MVP-P1 领域存储](plans/2026-10-29-conex-mvp-p1.md) | proto、SQLite 事务/CAS、事件补读与 TS 绑定 | 已实现，见 [P1 实施记录](verification/agent-domain-p1.md) |
-| 计划 | [MVP-P2 自治运行](plans/2026-10-29-conex-mvp-p2.md) | 本地生命周期、应用装配及发布解耦 | 已实现，见 [P2 证据](verification/private-runtime-p2.md) 与 [运行手册](runbooks/private-runtime.md) |
-| 计划 | [MVP-P5 私有访问](plans/2026-10-29-conex-mvp-p5.md) | 节点/客户端授权、真实直连/转发与安全迁移 | 已实现 loopback 范围，见 [P5 证据](verification/private-network-p5.md) 与 [运行手册](runbooks/private-network.md) |
-| 计划 | [MVP-P3 OMP 适配器](plans/2026-10-31-conex-mvp-p3.md) | OMP RPC 进程监管、会话映射、领域操作与 live 验收 | 已实现,见 [P3 实施记录](verification/agent-omp-p3.md) |
-| 计划 | [MVP-P4 Codex 适配器](plans/2026-10-31-conex-mvp-p4.md) | thread/turn/item 协议、外部服务所有权与 live 验收 | 离线已实现;live 被后端形态漂移阻断,见 [P4 实施记录](verification/agent-codex-p4.md) |
-| 计划 | [MVP-P6 指标与关系](plans/2026-10-31-conex-mvp-p6.md) | 指标采集、关系/Tags/绑定投影与查询 | 已实现,见 [P6 实施记录](verification/private-entities-p6.md)（Linux 采样核对归 P9） |
-| 历史设计 | [上一版架构](design/2026-10-17-conex-architecture.md) | 2026-10-17 方向和 S1–S5 切片 | 追溯既有决策 |
-| 历史盘点 | [旧迁移盘点](design/2026-10-17-conex-migration-assessment.md) | 当时的静态源码证据，缺口可能已由 S1/S2 填补 | 追溯迁移，不能据此重做已交付功能 |
-| 契约 | [S1 双向能力与状态订阅](contracts/s1-capabilities.md) | 通用注册、调用、取消、状态快照与更新、限额和验收场景 | S1 实施、对接与验收 |
-| 契约 | [S1 模块消费主体](contracts/s1-module-principals.md) | 组合模块远程消费的模块粒度授权与归属；A14 消费侧前置 | 已实施，见 [证据页](verification/s1-module-principals.md) |
-| 证据 | [S1 模块消费主体验证记录](verification/s1-module-principals.md) | 真实两节点 e2e（M-A01/A04/A06）+ 真实宿主单元（M-A02/A03）+ 实施修订记录 | 验收与排障 |
-| 计划 | [S1 模块消费主体实施计划](plans/2026-11-05-conex-s1-module-principals.md) | schema tag8 → 中心三步判定 → 双 SDK 身份 → 审计/向量/证据 | 已实施（含 M4 审计维度），见 [证据页](verification/s1-module-principals.md) |
-| 计划 | [P1 统一审计汇](plans/2026-11-08-conex-p1-audit-sink.md) | Broker 分发路径预留/收尾审计、记录含模块消费主体四元组、FileSink 写完整记录 | 已实施，见 [证据页](verification/s1-module-principals.md) M4 行 |
-| 历史计划 | [S1 实施计划](plans/2026-10-17-conex-s1.md) | 九个任务、A01–A12 覆盖及原 Paca 编号；已交付证据另见验证记录 | 追溯 S1 实施 |
-| 证据 | [S1 验证记录](verification/s1-capabilities.md) | 真实命令、A01–A12 跨进程与 SUPPORT 行为证据、总门禁状态 | 验收与排障 |
-| 操作 | [S1 运行手册](runbooks/s1-capabilities.md) | TS/Rust 三进程样例、静态批准、HTTP 限制、取消和未知结果 | 本机联调与 SDK 接入 |
-| 契约 | [S2 插件运行时与能力组合](contracts/s2-plugins.md) | 插件/实例、本地 DI、显式远程绑定、派生模块、停止释放与 S2-A01…A08 | S2 实施、对接与验收 |
-| 证据 | [S2 验证记录](verification/s2-plugins.md) | s2-plugins e2e 实际输出、总门禁状态、遗留边界 | 验收与排障 |
-| 操作 | [S2 运行手册](runbooks/s2-plugins.md) | 双实例插件样例三进程、组合拒绝与新代次排障 | 本机联调与插件接入 |
-| 历史设计 | [旧设计](design/2026-09-14-conex-design.md) | 现有实现的设计依据与历史阶段验收 | 追溯既有 wire 与实现决定时 |
-| 契约 | [P0 wire 契约](contracts/p0-wire.md) | `conex-jsonrpc2-http` 信封、参数、错误码、HTTP 行为 | 实现或对接 wire 时 |
-| 历史计划 | [路线图](plans/2026-09-15-conex-roadmap.md) | 旧 P0–P4 阶段、依赖与工作包 | 追溯历史顺序 |
-| 历史计划 | [P1 执行计划](plans/2026-09-15-conex-p1.md) | 旧 P1 范围、P1-01 细化与里程碑 | 追溯既有流与会话机制 |
-| 历史计划 | [中心服务与交互落地页](plans/2026-09-20-conex-connected-landing.md) | 已实现的中心、反连 Agent、浏览器接入与路由范围 | 维护对应既有实现 |
-| 历史计划 | [多主机数据与公共内容页面](plans/2026-10-01-conex-multi-host-content.md) | 原 M0–M6 内容能力工作包与当时状态 | 维护既有内容能力，不作为私有 MVP 前置 |
-| 历史计划 | [文件传输、预览与剪贴板](plans/2026-10-13-conex-share-transfer.md) | 原文件场景工作包，范围不因新定位自动删除 | 维护对应能力时单独安排 |
-| 证据 | [多主机内容验证记录](verification/multi-host-content.md) | M0–M5 实际交付、测试文件索引、已知缺口（M4/M6 未开始、fmt 全仓债） | 验收、排障、追溯契约变更 |
-| 契约 | [Connected landing](contracts/connected-landing.md) | 中心 Host、浏览器会话/ticket、Agent 反连与只读端点目录的 L01 冻结契约 | 实施 connected landing 或校验信任边界时 |
-| 计划 | [P0 执行计划（归档）](plans/archive/2026-09-15-conex-p0.md) | 已完成的 P0 计划：冻结决定、任务→提交→证据、遗留缺口 | 追溯 P0 决策 |
-| 证据 | [P0 验证记录](verification/p0.md) | 环境、命令、结果、逐任务已知缺口 | 验收、排障、审计 |
-| 操作 | [P0 运行手册](runbooks/p0.md) | 生成、启动、入站 token / 出站凭据、SDK 调用 | 部署与联调 |
-| 操作 | [Connected landing 运行手册](runbooks/connected-landing.md) | `cargo xtask landing-demo` 三进程、token 三元组、docker-compose、日志、门禁 | 部署 / 演示 / 联调多 Agent 场景 |
-| 操作 | [Dokploy 部署运行手册](runbooks/dokploy.md) | 公开演示单容器形态与多主机生产形态、两个明文开关的区别、web_origin、故障排查 | 把落地页推到 Dokploy 时 |
-| 证据 | [落地页验证记录](verification/landing-page.md) | 客户端契约、推送字节预算下溢与死链残留、文本预览乱码／后台标签页不轮询文件／撤回先删后校验三个缺陷、一 cookie 挤成两标签页的根因修复与 28 项浏览器验收（含提问-回答往返）、上一版部署故障根因 | 验收、追溯本轮修复时 |
-| 证据 | [Connected landing 验证记录](verification/connected-landing.md) | 两条 e2e + Rust 单测 + bun 测试实际输出、未验证项 | 验收、排障 |
+线上部署形态与操作见 [私有 MVP 运行手册](runbooks/private-mvp.md)；其余操作入口：
+[自治节点](runbooks/private-runtime.md)、[私有网络](runbooks/private-network.md)、
+[P0](runbooks/p0.md)、[P1](runbooks/p1.md)、[S1](runbooks/s1-capabilities.md)、
+[S2](runbooks/s2-plugins.md)、[Connected landing](runbooks/connected-landing.md)、
+[Dokploy](runbooks/dokploy.md)。
 
 ## 阅读顺序
 
-1. **了解当前方向**：根 [README](../README.md) → [MVP 架构基线](design/2026-10-29-conex-private-platform.md) → [实施总计划](plans/2026-10-29-conex-private-mvp.md) → [首批 P0 计划](plans/2026-10-29-conex-mvp-p0.md)。
-2. **维护现有实现**：对应 wire 契约 → 历史设计/验证记录 → 运行手册；迁移前不把新目标当作已生效 wire。
-3. **验收与审计**：新 MVP 按架构 A01–A16 和工作包实际命令核对；旧阶段证据单独保留，静态盘点和元数据握手不替代运行证据。
+1. **了解当前方向**：根 [README](../README.md) → [MVP 架构基线](design/2026-10-29-conex-private-platform.md) → [LLM 提供者架构增补](design/2026-11-12-conex-llm-provider-relay.md)。
+2. **实现与对接**：对应功能契约 → 验证记录（证据口径）→ 运行手册。
+3. **验收与审计**：架构 A01–A16 与设计增补 L01–L07 对照各验证记录的实际命令与结果。
 
 ## 文档规则
 
 - 结构类型只有一个源：`schema/conex/*.proto`；Rust/TS 类型与 JSON Schema 都是生成产物，禁止手改。权威严格解码点是 `MethodContract.prepare`/`validate_output`。
-- **设计是规范，计划是执行范围与顺序，验证记录只写实际执行并通过的结果**；未实现能力必须明确标注，不把计划的 "Expected" 复制成结果。
-- 已完成的阶段计划移入 `plans/archive/`，只保留冻结决定与证据索引；原全文见对应完成提交（P0 为 `e649ded`）。
-- 文档命名：设计/专项规范用 `<日期>-<主题>.md`；阶段计划用 `<日期>-conex-<阶段>.md`。
+- **设计是规范，验证记录只写实际执行并通过的结果**；未实现能力必须明确标注，不把计划的 "Expected" 复制成结果。
+- 文档命名：设计/专项规范用 `<日期>-<主题>.md`；新领域设计入 `docs/design/`，功能契约入 `docs/contracts/`，不再新建计划文档。

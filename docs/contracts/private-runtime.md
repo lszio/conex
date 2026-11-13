@@ -1,6 +1,6 @@
 # Conex 私有运行与安全契约
 
-日期：2026-10-29。状态：P2 自治节点/应用包装配/本地受限入口已实现，P5 网络授权仍为规范。依据：[架构基线](../design/2026-10-29-conex-private-platform.md)、[P0](../plans/2026-10-29-conex-mvp-p0.md)、[Agent](agent-domain.md)、[事件恢复](event-recovery.md)；当前实际证据见 [P2 记录](../verification/private-runtime-p2.md)。
+日期：2026-10-29。状态：P2 自治节点/应用包装配/本地受限入口已实现，P5 网络授权仍为规范。依据：[架构基线](../design/2026-10-29-conex-private-platform.md)、[Agent](agent-domain.md)、[事件恢复](event-recovery.md)；当前实际证据见 [P2 记录](../verification/private-runtime-p2.md)。
 
 证据用语：**源码观察**不等于运行验证；**规范决策**是后续实现输入。适配器协议调查见 [探针记录](../verification/agent-protocol-probes.md)，自治真实进程验证见 [P2](../verification/private-runtime-p2.md)。本契约没有证明公网授权/Web 直连已交付。
 
